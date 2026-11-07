@@ -369,6 +369,56 @@ it('stores multiple independent product labels and copies both layouts without i
       .status,
   ).toBe(400)
 })
+it('reopens independent page backgrounds and preserves them in duplicates and print snapshots', async () => {
+  const document: LabelDocument = {
+    ...label(),
+    background: '#ffd08a',
+    format: 'front-back',
+    back: {
+      ...labelLayout(label()),
+      background: '#9dd8f0',
+      elements: [newElement('text', 'Back details')],
+    },
+  }
+  let result = await request('labelSave', { document, expectedRevision: 0 })
+  expect(result.status, result.error).toBe(200)
+  let reopened = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === document.id,
+  ) as LabelDocument
+  expect(labelContent(reopened)).toBe(labelContent(document))
+  const before = structuredClone(reopened)
+  reopened.back!.background = '#b8dfef'
+  result = await request('labelSave', { document: reopened, expectedRevision: 1 })
+  expect(result.status, result.error).toBe(200)
+  reopened = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === document.id,
+  )
+  expect(reopened.background).toBe(before.background)
+  expect(reopened.back).toEqual({ ...before.back, background: '#b8dfef' })
+  expect(reopened.elements).toEqual(before.elements)
+  const copy = duplicateSavedLabel(reopened, reopened.source!)
+  result = await request('labelSave', { document: copy, expectedRevision: 0 })
+  expect(result.status, result.error).toBe(200)
+  const savedCopy = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === copy.id,
+  )
+  expect(savedCopy.background).toBe('#ffd08a')
+  expect(savedCopy.back).toEqual(reopened.back)
+  const printed = await request('labelPrint', {
+    templateId: copy.id,
+    source: copy.source,
+    copies: 1,
+    parts: 'both',
+    order: 'paired',
+    layout: { ...defaultSheet, mode: 'roll' },
+  })
+  expect(printed.status, printed.error).toBe(200)
+  const job = printed.workspace.label_print_jobs.at(-1)
+  expect(job.sequence).toEqual(['front', 'back'])
+  expect(job.documentSnapshot.background).toBe('#ffd08a')
+  expect(job.documentSnapshot.back.background).toBe('#b8dfef')
+})
+
 it('rejects unsaved checkpoints and product changes without manual review, then resolves the new saved source', async () => {
   const document = label()
   expect(

@@ -1,5 +1,7 @@
 # Cloudflare deployment evidence
 
+Update from the supplied failed-build log: Wrangler **4.158.0** executed `npx wrangler preview` after a successful Netlify-adapter build in `/opt/buildhome/repo`. Worker Previews is supported in that version; Cloudflare documents it as a separate Preview-build command. No active configuration path or verified Worker entry was identified. The concrete, separate adapter/configuration proposal and resource cost review are now in [cloudflare-preview-proposal.md](cloudflare-preview-proposal.md). The historical observations below do not establish the current remote deployment's configuration.
+
 The test site is `https://mycottagepantry.curly-bread-52df.workers.dev/`. Its deployed commit, Worker entry point, authentication environment, database environment, and binding configuration remain **unknown**. The setup-screen commands are not evidence of the active deployment.
 
 Repository inspection found `main`, the repository root, pnpm, and the build script `pnpm run build` → `vite build`. The Vite configuration uses the Netlify adapter. Client assets are in `dist/client`; the existing `dist/server/server.js` is a Netlify/TanStack server artifact, not a verified Cloudflare Worker entry. No Wrangler configuration, Cloudflare adapter, or full Cloudflare API implementation exists in this checkout.
@@ -26,7 +28,7 @@ The current checkout is **not ready for a complete Cloudflare test deployment**.
 | Wrangler configuration path | None exists. Do not enter a guessed file path. |
 | Worker entry point | None is implemented/configured in this checkout. `dist/server/server.js` is not a verified Worker entry. |
 | Deploy command | No working full-app command can be supplied yet. `npx wrangler deploy` needs a valid Worker configuration/entry or assets configuration; neither provides the missing APIs automatically. |
-| Preview command | No supported Cloudflare preview command is defined. The shown `npx wrangler preview` is unverified. Choose a supported preview/version workflow after selecting and implementing the Worker adapter. |
+| Preview command | The follow-up log verified execution of `npx wrangler preview` with Wrangler 4.158.0, which supports Worker Previews. It failed the required `previews` block check. This command was absent from repository scripts and was consistent with Cloudflare's documented Preview-build setting; the exact dashboard setting remained unverified. See the separate proposal for explicit configuration selection after adapter implementation. |
 | Preview builds | Keep disabled for further automatic test deployment until authentication, data isolation, backend routing, and external-write controls are verified. |
 | Cloudflare Access | Recommended enabled for a private test, if the account supports it. It is an additional site gate and does not repair application login or grant business membership. No setting was changed. |
 | Advanced runtime settings | No verified compatibility date/flags, assets binding, database binding, storage binding, service binding, or runtime secret mapping exists. There are no safe exact values to invent. These require the actual Worker implementation and environment decision first. |

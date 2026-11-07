@@ -7,6 +7,8 @@ import {
   PDFArray,
   PDFDocument,
   PDFRawStream,
+  PDFDict,
+  PDFName,
   decodePDFRawStream,
 } from 'pdf-lib'
 import { LabelCanvas } from '../components/label-canvas'
@@ -23,6 +25,7 @@ import { labelContent } from './label-persistence'
 import { exportLabelPdf } from './label-export'
 import { defaultSheet } from './label-print-layout'
 import { printPageHtml } from './label-browser-print'
+import { exportSvgLabelPdf } from '../../netlify/lib/label-svg-output'
 
 const data: LabelData = {
   values: {},
@@ -155,3 +158,67 @@ it.each([false, true])(
     expect(pdf.getPage(0).node.Resources()!.toString()).toContain('/ca 1')
   },
 )
+
+it('renders each saved side color in SVG, PNG, browser print and the actual paired PDF renderer', async () => {
+  const document: LabelDocument = {
+    ...blankLabel(),
+    format: 'front-back',
+    background: '#ffd08a',
+    back: { ...labelLayout(blankLabel()), background: '#9dd8f0' },
+  }
+  const sides = [labelSide(document, 'front'), labelSide(document, 'back')]
+  const pixels = [
+    [255, 208, 138],
+    [157, 216, 240],
+  ]
+  const markup: string[] = []
+  for (const [i, side] of sides.entries()) {
+    const svg = renderToStaticMarkup(
+      <LabelCanvas document={side} data={data} />,
+    )
+    markup.push(svg)
+    expect(svg).toContain(`fill="${side.background}" fill-opacity="1"`)
+    const pixel = await sharp(new Resvg(svg).render().asPng())
+      .ensureAlpha()
+      .extract({ left: 20, top: 20, width: 1, height: 1 })
+      .raw()
+      .toBuffer()
+    expect([...pixel]).toEqual([...pixels[i], 255])
+  }
+  const printed = printPageHtml(
+    markup[0],
+    sides[0],
+    2,
+    { ...defaultSheet, mode: 'roll' },
+    undefined,
+    markup,
+  )
+  expect(printed).toContain('fill="#ffd08a"')
+  expect(printed).toContain('fill="#9dd8f0"')
+  const pdf = await PDFDocument.load(
+    await exportSvgLabelPdf(
+      sides,
+      data,
+      [],
+      { ...defaultSheet, mode: 'roll' },
+      {
+        fonts: [],
+        font: async () => {
+          throw new Error('No fonts in this fixture')
+        },
+        image: async () => {
+          throw new Error('No images in this fixture')
+        },
+      },
+    ),
+  )
+  expect(pdf.getPageCount()).toBe(2)
+  for (const [i, page] of pdf.getPages().entries()) {
+    const images = page.node.Resources()!.lookup(PDFName.of('XObject'), PDFDict)
+    const embedded = images.lookup(images.keys()[0])
+    if (!(embedded instanceof PDFRawStream))
+      throw new Error('Expected an embedded label image')
+    const pixelsInPdf = decodePDFRawStream(embedded).decode()
+    expect([...pixelsInPdf.slice(0, 3)]).toEqual(pixels[i])
+  }
+})
