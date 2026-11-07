@@ -22,6 +22,7 @@ export function OnboardingPage() {
   const [message, setMessage] = useState('')
   const [plan, setPlan] = useState('free')
   const [selection, setSelection] = useState<SignupSelection | null>(null)
+  const [setupAttempt, setSetupAttempt] = useState(0)
   const [profile, setProfile] = useState<Record<string, string>>({
     name: '',
     country: 'US',
@@ -45,6 +46,7 @@ export function OnboardingPage() {
     )
       return
     setLoading(true)
+    setError('')
     const setup = account.access.privateTest
       ? registrationRequest().then(async (result) => ({
           ...result,
@@ -88,7 +90,7 @@ export function OnboardingPage() {
     return () => {
       active = false
     }
-  }, [account.loading, account.error, account.access])
+  }, [account.loading, account.error, account.access, setupAttempt])
   const change = (key: string, value: string) =>
     setProfile((old) => ({ ...old, [key]: value }))
   async function save(event: FormEvent) {
@@ -160,11 +162,17 @@ export function OnboardingPage() {
     account.access.status !== 'no_workspace'
   )
     return <AccountAccessStatus {...account} />
-  if (loading) return <AccountAccessStatus {...account} loading />
   if (!account.access.privateTest)
     return (
-      <FreeWorkspaceSetup onCreated={account.retry} selection={selection} />
+      <FreeWorkspaceSetup
+        onCreated={account.retry}
+        selection={selection}
+        setupError={error}
+        setupLoading={loading}
+        onRetrySetup={() => setSetupAttempt((n) => n + 1)}
+      />
     )
+  if (loading) return <AccountAccessStatus {...account} loading />
   return (
     <PublicSite>
       <section className="registration-shell">
@@ -192,7 +200,7 @@ export function OnboardingPage() {
               <button
                 className="public-button secondary"
                 type="button"
-                onClick={() => window.location.reload()}
+                onClick={() => setSetupAttempt((n) => n + 1)}
               >
                 Retry access check
               </button>

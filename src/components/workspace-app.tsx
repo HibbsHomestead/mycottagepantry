@@ -9,6 +9,11 @@ import { ProductCostCards } from './product-cost-cards'
 import { AddItemDialog } from './add-item-dialog'
 import { InventoryPreview } from './inventory-preview'
 import { stockReceiptPreview } from '@/lib/inventory-browse'
+import { IngredientStockAdjustment } from './ingredient-stock-adjustment'
+import {
+  inventoryAdjustmentPlan,
+  inventoryMovementView,
+} from '@/lib/inventory-adjustment'
 import { defaultItemType } from '@/lib/add-item'
 import { ovenToday } from '@/lib/oven-dates'
 import { InventoryProductFields } from './inventory-product-fields'
@@ -860,6 +865,16 @@ export function WorkspaceApp() {
                   purchaseDate: '',
                 }
               : {}),
+            ...(kind === 'adjust' && original
+              ? {
+                  unit: original.storageUnit || original.unit,
+                  adjustmentMode: 'change',
+                  type: 'adjustment',
+                  reason: '',
+                  quantity: '',
+                  expectedInventoryRevision: original.inventoryRevision,
+                }
+              : {}),
           }
         : {
             ...(kind === 'ingredient'
@@ -1067,6 +1082,13 @@ export function WorkspaceApp() {
           throw new Error(
             'Confirm purchase quantity and price paid; enter zero explicitly only for a free receipt.',
           )
+        if (modal === 'adjust') {
+          if (!selected)
+            throw new Error(
+              'Ingredient unavailable. Reopen it before adjusting.',
+            )
+          inventoryAdjustmentPlan(selected, draft)
+        }
         await mutate(modal, 'ingredients', {
           ...draft,
           id: selected?.id,
@@ -1488,7 +1510,7 @@ export function WorkspaceApp() {
                 />
               ) : sub === 'Inventory ledger' ? (
                 <DataTable
-                  rows={state.ledger}
+                  rows={state.ledger.map(inventoryMovementView)}
                   columns={[
                     ['name', 'Item'],
                     ['quantity', 'Change'],
@@ -1802,9 +1824,11 @@ export function WorkspaceApp() {
                     </Btn>
                   </div>
                   <DataTable
-                    rows={state.ledger.filter((l) =>
-                      ['waste', 'spoilage', 'adjustment'].includes(l.type),
-                    )}
+                    rows={state.ledger
+                      .filter((l) =>
+                        ['waste', 'spoilage', 'adjustment'].includes(l.type),
+                      )
+                      .map(inventoryMovementView)}
                     columns={[
                       ['name', 'Item'],
                       ['quantity', 'Change'],
@@ -3357,41 +3381,12 @@ export function WorkspaceApp() {
                   </div>
                 </>
               )}
-              {modal === 'adjust' && (
-                <>
-                  <div className="selected-item">
-                    <Package size={24} />
-                    <span>
-                      <strong>{selected?.name}</strong>
-                      <small>
-                        {selected?.quantity} {selected?.unit} on hand
-                      </small>
-                    </span>
-                  </div>
-                  <Field
-                    label={`Quantity change (${selected?.unit})`}
-                    hint="Use a negative number to remove stock, e.g. -0.5."
-                  >
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={draft.quantity ?? ''}
-                      onChange={(e) => change('quantity', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Adjustment type">
-                    {select('type', ['adjustment', 'waste', 'spoilage'])}
-                  </Field>
-                  <Field label="Reason (required)">
-                    <textarea
-                      required
-                      value={draft.reason || ''}
-                      onChange={(e) => change('reason', e.target.value)}
-                      placeholder="What happened?"
-                    />
-                  </Field>
-                </>
+              {modal === 'adjust' && selected && (
+                <IngredientStockAdjustment
+                  item={selected}
+                  draft={draft}
+                  change={change}
+                />
               )}
               {modal === 'recipe' && (
                 <>

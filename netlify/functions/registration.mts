@@ -6,6 +6,7 @@ import { ZodError } from 'zod'
 import type { Config } from '@netlify/functions'
 import { squareReconciliationWorker } from '../lib/square-reconcile-worker'
 import { registrationReadiness } from '../../src/lib/registration'
+import { publicRegistrationPolicy } from '../lib/registration-policies'
 import { createFreeWorkspace } from '../lib/free-registration'
 import {
   registrationActor,
@@ -40,9 +41,16 @@ export default async (request: Request) => {
     const url = new URL(request.url)
     if (
       request.method === 'GET' &&
-      url.searchParams.get('view') === 'readiness'
-    )
-      return Response.json(registrationReadiness, { headers })
+      ['readiness', 'policies'].includes(url.searchParams.get('view') || '')
+    ) {
+      const policy = await publicRegistrationPolicy()
+      return Response.json(
+        url.searchParams.get('view') === 'policies'
+          ? { policy }
+          : registrationReadiness(!!policy),
+        { headers },
+      )
+    }
     if (!['GET', 'POST'].includes(request.method))
       return Response.json(
         { error: 'Method not allowed.' },
@@ -279,6 +287,15 @@ export default async (request: Request) => {
           code: 'INVALID_REGISTRATION_INPUT',
           error:
             'Check your business details and explicitly accept the current policies.',
+          fields:
+            error instanceof ZodError
+              ? Object.fromEntries(
+                  error.issues.map((issue) => [
+                    issue.path.join('.'),
+                    issue.message,
+                  ]),
+                )
+              : undefined,
         },
         { status: 400, headers },
       )

@@ -1,14 +1,10 @@
-/** Owner-approved public policy text belongs here; placeholders are never consent. */
-export const freeRegistrationPolicy: {
-  revision: string
-  terms: string
-  privacy: string
-} = { revision: '', terms: '', privacy: '' }
+import { z } from 'zod'
 
-export function freeRegistrationPolicyReady() {
-  return Boolean(
-    freeRegistrationPolicy.revision &&
-    freeRegistrationPolicy.terms &&
-    freeRegistrationPolicy.privacy,
-  )
-}
+export const registrationPolicySchema = z
+  .object({
+    revision: z.string().trim().min(1).max(100),
+    terms: z.string().trim().min(1).max(100000),
+    privacy: z.string().trim().min(1).max(100000),
+  })
+  .strict()
+export type RegistrationPolicy = z.infer<typeof registrationPolicySchema>

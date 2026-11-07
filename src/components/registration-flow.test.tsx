@@ -15,6 +15,14 @@ vi.mock('@/lib/account-access-client', () => ({
 vi.mock('@/lib/registration-client', () => ({
   registrationRequest: api.request,
 }))
+vi.mock('@/lib/registration-policy-client', () => ({
+  useRegistrationPolicy: () => ({
+    policy: null,
+    loading: false,
+    error: '',
+    retry: vi.fn(),
+  }),
+}))
 vi.mock('@/lib/session.functions', () => ({
   getSessionStatus: async () => ({ signedIn: true }),
 }))
@@ -54,6 +62,30 @@ it('does not expose the private form or acceptance to an unauthorized visitor', 
     screen.queryByLabelText('Business/display name'),
   ).not.toBeInTheDocument()
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+})
+
+it('shows a failed ordinary setup lookup and preserves business details during Retry', async () => {
+  api.account.access.privateTest = false
+  api.resume
+    .mockRejectedValueOnce(new Error('Unavailable'))
+    .mockResolvedValueOnce(null)
+  render(<OnboardingPage />)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'saved setup could not be checked',
+  )
+  const user = userEvent.setup()
+  await user.type(
+    screen.getByLabelText('Business/display name'),
+    'Synthetic Kitchen',
+  )
+  await user.click(screen.getByRole('button', { name: 'Retry setup check' }))
+  await waitFor(() => expect(api.resume).toHaveBeenCalledTimes(2))
+  await waitFor(() =>
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
+  )
+  expect(screen.getByLabelText('Business/display name')).toHaveValue(
+    'Synthetic Kitchen',
+  )
 })
 it('resumes safe server fields, saves edits and leaves marketing optional', async () => {
   const state = {
@@ -170,12 +202,15 @@ it('shows uncertain payment without offering another charge or fabricated invoic
     ),
   ).toBe(true)
 })
-it('does not claim verification or recovery mail delivery from an unconfigured page', () => {
+it('offers recovery without claiming that mail was already requested or delivered', () => {
   render(<VerificationPage recovery />)
   expect(
     screen.getByRole('heading', { name: 'Recover your account.' }),
   ).toBeInTheDocument()
-  expect(screen.getByText(/No email has been requested/)).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Send reset link' }),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
   expect(api.request).not.toHaveBeenCalled()
 })
 

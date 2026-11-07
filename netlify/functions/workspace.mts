@@ -74,6 +74,7 @@ import {
   countQuantity,
   assertCountUnchanged,
 } from '../../src/lib/inventory-count'
+import { inventoryAdjustmentPlan } from '../../src/lib/inventory-adjustment'
 import { updateProductRecipe } from '../../src/lib/product-recipe-links'
 import { handleCottageAssistant } from '../lib/cottage-assistant-handler'
 import { fetchRecipeUrl } from '../lib/recipe-import'
@@ -4163,6 +4164,11 @@ export default async (req: Request, context: Context) => {
               data.receivedDate,
               data.purchaseDate,
               data.productDetails,
+              ...(action === 'adjust' &&
+              (data.adjustmentMode !== undefined ||
+                data.expectedInventoryRevision !== undefined)
+                ? [data.adjustmentMode, data.expectedInventoryRevision]
+                : []),
             ]),
           )
           .digest('hex')
@@ -4191,6 +4197,7 @@ export default async (req: Request, context: Context) => {
             throw new Error('Choose a photo from this oven.')
           let change: number
           let costChange: number
+          let adjustment: ReturnType<typeof inventoryAdjustmentPlan> | undefined
           if (action === 'receive') {
             if (data.price === '' || data.price == null)
               throw new Error(
@@ -4218,16 +4225,35 @@ export default async (req: Request, context: Context) => {
               throw new Error('Unsupported adjustment type.')
             if (!String(data.reason || '').trim())
               throw new Error('A reason is required.')
-            change = number(data.quantity, 'Adjustment quantity', -Infinity)
-            if (!Number.isFinite(change) || change === 0)
-              throw new Error('Enter a non-zero quantity.')
+            if (
+              (data.adjustmentMode === 'total' &&
+                !data.expectedInventoryRevision) ||
+              (data.adjustmentMode !== undefined &&
+                data.unit !== (i.storageUnit || i.unit)) ||
+              (data.expectedInventoryRevision &&
+                data.expectedInventoryRevision !==
+                  inventoryRevision(i, state.ledger))
+            )
+              throw new Error(
+                'Stock or inventory units changed. Reopen the adjustment and review the balance before saving.',
+              )
+            if (
+              data.adjustmentMode === 'total' &&
+              data.type &&
+              data.type !== 'adjustment'
+            )
+              throw new Error('Opening counts use the adjustment type.')
+            adjustment = inventoryAdjustmentPlan(i, data)
+            change = adjustment.change
             costChange = change * i.cost
           }
           if (i.quantity + change < 0)
             throw new Error(
               'Insufficient stock. Reduce the adjustment or receive stock first.',
             )
-          i.quantity += change
+          i.quantity = adjustment
+            ? adjustment.resultingQuantity
+            : i.quantity + change
           await save('ingredients', i)
           await save('ledger', {
             id: operationId ? 'stock-' + operationId : randomUUID(),
@@ -4239,6 +4265,21 @@ export default async (req: Request, context: Context) => {
             amount: costChange,
             enteredQuantity: data.quantity,
             enteredUnit: data.unit || i.unit,
+            ...(adjustment
+              ? {
+                  adjustmentMode: adjustment.mode,
+                  inventoryQuantity: adjustment.inventoryQuantity,
+                  inventoryUnit: adjustment.inventoryUnit,
+                  previousInventoryQuantity:
+                    adjustment.previousInventoryQuantity,
+                  resultingInventoryQuantity:
+                    adjustment.resultingInventoryQuantity,
+                  previousQuantity: adjustment.previousQuantity,
+                  resultingQuantity: adjustment.resultingQuantity,
+                  normalizedQuantity: change,
+                  normalizedUnit: i.unit,
+                }
+              : {}),
             purchasePrice: action === 'receive' ? data.price : undefined,
             date: data.receivedDate || today,
             receivedDate: data.receivedDate || today,

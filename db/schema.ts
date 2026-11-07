@@ -987,3 +987,15 @@ export const photoPilotGrants = orgTable('photo_pilot_grants').enableRLS()
 export const photoExtractionAttempts = orgTable(
   'photo_extraction_attempts',
 ).enableRLS()
+
+// Published legal versions are public and append-only; consent retains revision.
+export const registrationPolicies = pgTable('registration_policies', {
+  id: serial().primaryKey(),
+  revision: text().notNull().unique(),
+  terms: text().notNull(),
+  privacy: text().notNull(),
+  publishedBy: text('published_by').notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}).enableRLS()

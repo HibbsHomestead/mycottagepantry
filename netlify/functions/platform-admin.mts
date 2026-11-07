@@ -1,4 +1,5 @@
 import { handleAdminCatalog } from '../lib/catalog-admin'
+import { handleRegistrationPolicies } from '../lib/registration-policies'
 import type { Context } from '@netlify/functions'
 import { login, requestPasswordRecovery } from '@netlify/identity'
 import { z, ZodError } from 'zod'
@@ -659,6 +660,8 @@ export default async (request: Request, context: Context) => {
       }
       if (action === 'catalog')
         return handleAdminCatalog(c, request, session, reference)
+      if (action === 'registration-policies')
+        return handleRegistrationPolicies(c, request, session, reference)
       if (action)
         throw new AdminError(
           404,

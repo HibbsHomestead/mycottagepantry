@@ -5,7 +5,7 @@ import { signupSteps } from '@/lib/registration'
 import { launchPricing, planUserLabel, type PlanId } from '@/lib/launch-plans'
 import { signupPlan, signupPlanHref } from '@/lib/signup-plan'
 import { signupPlanRequest } from '@/lib/signup-plan-client'
-import { freeRegistrationPolicyReady } from '@/lib/free-registration-policy'
+import { useRegistrationPolicy } from '@/lib/registration-policy-client'
 import { useSyncExternalStore, useState, type FormEvent } from 'react'
 import './registration.css'
 
@@ -15,6 +15,7 @@ function subscribeToSearch(listener: () => void) {
 }
 
 export function SignupPage() {
+  const policies = useRegistrationPolicy()
   const account = useAccountAccess('signup')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -97,7 +98,7 @@ export function SignupPage() {
             is not yet available. Creating an account does not activate a paid
             plan or collect payment.
           </p>
-          {!freeRegistrationPolicyReady() && (
+          {!policies.loading && !policies.error && !policies.policy && (
             <p className="registration-notice">
               Account creation is open. Oven setup needs owner-approved Terms
               and Privacy content before you can complete it.

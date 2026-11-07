@@ -1,15 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react'
 import { getSessionStatus } from '@/lib/session.functions'
-import {
-  freeRegistrationPolicy,
-  freeRegistrationPolicyReady,
-} from '@/lib/free-registration-policy'
+import { useRegistrationPolicy } from '@/lib/registration-policy-client'
 import { ProductTour } from './product-tour'
 import { PricingComparison } from './pricing-comparison'
 import './public-site.css'
 
 export function PublicSite({ children }: { children: ReactNode }) {
+  const policies = useRegistrationPolicy()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -109,7 +107,7 @@ export function PublicSite({ children }: { children: ReactNode }) {
           Monthly plans in USD. Paid subscriptions are not yet available for
           purchase.
         </p>
-        {!freeRegistrationPolicyReady() && (
+        {!policies.loading && !policies.error && !policies.policy && (
           <p className="public-fine">
             Account creation is open. Creating a business oven currently
             requires publication of approved <a href="/terms">Terms</a> and{' '}
@@ -403,16 +401,33 @@ export function HelpPage() {
   )
 }
 export function LegalPage({ kind }: { kind: 'Privacy' | 'Terms' }) {
-  if (freeRegistrationPolicyReady())
+  const { policy, loading, error, retry } = useRegistrationPolicy()
+  if (loading || error)
     return (
       <PublicSite>
         <section className="public-width public-page-intro narrow">
           <h1>{kind}</h1>
-          <p>Revision {freeRegistrationPolicy.revision}</p>
+          {loading ? (
+            <p role="status">Loading published policy…</p>
+          ) : (
+            <>
+              <p role="alert">{error}</p>
+              <button type="button" className="public-button" onClick={retry}>
+                Retry policy check
+              </button>
+            </>
+          )}
+        </section>
+      </PublicSite>
+    )
+  if (policy)
+    return (
+      <PublicSite>
+        <section className="public-width public-page-intro narrow">
+          <h1>{kind}</h1>
+          <p>Revision {policy.revision}</p>
           <p style={{ whiteSpace: 'pre-wrap' }}>
-            {kind === 'Terms'
-              ? freeRegistrationPolicy.terms
-              : freeRegistrationPolicy.privacy}
+            {kind === 'Terms' ? policy.terms : policy.privacy}
           </p>
         </section>
       </PublicSite>

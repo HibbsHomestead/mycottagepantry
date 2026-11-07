@@ -184,7 +184,7 @@ beforeAll(async () => {
 }, 30000)
 beforeEach(async () => {
   await database.exec(
-    'TRUNCATE platform_sessions,platform_credentials,platform_admins,platform_limits,platform_audit CASCADE',
+    'TRUNCATE platform_sessions,platform_credentials,platform_admins,platform_limits,platform_audit,registration_policies RESTART IDENTITY CASCADE',
   )
   await database.query(
     "INSERT INTO platform_admins(identity_id,role,enrollment_until,granted_by,reason) VALUES('platform-owner','owner',NOW()+INTERVAL '1 day','verified-operator','Test fixture'),('platform-agent','admin',NULL,'platform-owner','Test fixture')",
@@ -212,6 +212,237 @@ beforeEach(async () => {
 afterAll(async () => {
   await database.close()
   vi.unstubAllGlobals()
+})
+
+it('publishes legal documents only for an owner with MFA and exposes the same public revision', async () => {
+  const payload = {
+    policy: {
+      revision: 'synthetic-v1',
+      terms: 'Synthetic Terms, isolated fixture only.',
+      privacy: 'Synthetic Privacy, isolated fixture only.',
+    },
+    approved: true,
+    expectedRevision: null,
+  }
+  const postPolicy = (value = token) =>
+    handler(
+      request('action=registration-policies', payload, { token: value }),
+      context,
+    )
+  expect((await postPolicy()).status).toBe(401)
+  await session(false)
+  expect((await postPolicy()).status).toBe(403)
+  const agentToken = 'A'.repeat(43)
+  await session(true, 'platform-agent', agentToken)
+  expect((await postPolicy(agentToken)).status).toBe(403)
+  await database.query('DELETE FROM platform_sessions WHERE token_hash=$1', [
+    hash(token),
+  ])
+  await session(true)
+  const published = await postPolicy()
+  expect(published.status).toBe(200)
+  expect((await published.json()).policy).toEqual(payload.policy)
+  const policies = await registration(
+    new Request('https://mycottagepantry.com/api/registration?view=policies'),
+  )
+  expect(await policies.json()).toEqual({ policy: payload.policy })
+  const readiness = await registration(
+    new Request('https://mycottagepantry.com/api/registration?view=readiness'),
+  )
+  expect(await readiness.json()).toMatchObject({
+    policyAcceptance: true,
+    activation: true,
+    liveCheckout: false,
+  })
+  const auditRow: any = (
+    await database.query(
+      "SELECT after FROM platform_audit WHERE action='publish:registration-policies'",
+    )
+  ).rows[0]
+  expect(auditRow.after).toEqual({ revision: 'synthetic-v1' })
+  expect(JSON.stringify(auditRow)).not.toContain('Synthetic Terms')
+  const stale = await postPolicy()
+  expect(stale.status).toBe(409)
+  expect((await stale.json()).code).toBe('POLICY_CHANGED')
+  const duplicate = await handler(
+    request(
+      'action=registration-policies',
+      { ...payload, expectedRevision: 'synthetic-v1' },
+      { token },
+    ),
+    context,
+  )
+  expect(duplicate.status).toBe(409)
+  expect((await duplicate.json()).code).toBe('REVISION_EXISTS')
+  await expect(
+    database.query("UPDATE registration_policies SET terms='changed'"),
+  ).rejects.toThrow('immutable')
+  await expect(
+    database.query('DELETE FROM registration_policies'),
+  ).rejects.toThrow('immutable')
+})
+
+it('reports unpublished policies without opening activation and rejects cross-origin publication', async () => {
+  const readiness = await registration(
+    new Request('https://mycottagepantry.com/api/registration?view=readiness'),
+  )
+  expect(await readiness.json()).toMatchObject({
+    policyAcceptance: false,
+    activation: false,
+  })
+  await session(true)
+  const denied = await handler(
+    request(
+      'action=registration-policies',
+      {
+        policy: { revision: 'fixture', terms: 'Fixture', privacy: 'Fixture' },
+        approved: true,
+        expectedRevision: null,
+      },
+      { token, origin: 'https://foreign.invalid' },
+    ),
+    context,
+  )
+  expect(denied.status).toBe(403)
+  expect(
+    (await database.query('SELECT revision FROM registration_policies')).rows,
+  ).toHaveLength(0)
+  await database.exec('BEGIN; SET LOCAL ROLE portal_test;')
+  try {
+    await expect(
+      database.query(
+        "INSERT INTO registration_policies(revision,terms,privacy,published_by) VALUES('untrusted','Fixture','Fixture','untrusted')",
+      ),
+    ).rejects.toThrow('row-level security')
+  } finally {
+    await database.exec('ROLLBACK')
+  }
+})
+
+it('keeps a pending verified registration out of customer accounts, then lists its own created business and restores its membership after sign-in', async () => {
+  // Provider/session transitions are fixtures. This does not send real signup or verification email.
+  const identity = 'isolated-onboarding-owner'
+  runtime.identities[identity] = {
+    id: identity,
+    email: 'isolated@example.invalid',
+    confirmedAt: '2026-01-01T00:00:00Z',
+    roles: [],
+  }
+  runtime.loginId = identity
+  await session(true)
+  const list = () =>
+    handler(
+      request('section=customers&kind=accounts&q=' + identity, undefined, {
+        token,
+      }),
+      context,
+    )
+  const pending = await list()
+  expect((await pending.json()).rows).toHaveLength(0)
+  expect(
+    (
+      await database.query('SELECT id FROM users WHERE identity_id=$1', [
+        identity,
+      ])
+    ).rows,
+  ).toHaveLength(0)
+  await handler(
+    request(
+      'action=registration-policies',
+      {
+        policy: {
+          revision: 'isolated-v1',
+          terms: 'Synthetic Terms for isolated testing.',
+          privacy: 'Synthetic Privacy for isolated testing.',
+        },
+        approved: true,
+        expectedRevision: null,
+      },
+      { token },
+    ),
+    context,
+  )
+  const create = () =>
+    registration(
+      new Request('https://mycottagepantry.com/api/registration?view=free', {
+        method: 'POST',
+        headers: { origin: 'https://mycottagepantry.com' },
+        body: JSON.stringify({
+          action: 'createFreeWorkspace',
+          profile: {
+            name: 'Isolated Kitchen',
+            country: 'US',
+            timezone: 'America/Chicago',
+            currency: 'USD',
+            measurements: 'us',
+          },
+          consent: { accepted: true, revision: 'isolated-v1' },
+        }),
+      }),
+    )
+  let workspaceId: string | undefined
+  try {
+    const response = await create()
+    expect(response.status).toBe(200)
+    workspaceId = (await response.json()).workspaceId
+    expect((await (await create()).json()).workspaceId).toBe(workspaceId)
+    const accounts = await (await list()).json()
+    expect(accounts.rows).toEqual([
+      expect.objectContaining({
+        identity_id: identity,
+        oven_count: 1,
+        active_memberships: 1,
+      }),
+    ])
+    expect(
+      (
+        await database.query(
+          'SELECT identity_owner FROM businesses WHERE id=$1',
+          [workspaceId],
+        )
+      ).rows,
+    ).toEqual([{ identity_owner: identity }])
+    const access = () =>
+      registration(
+        new Request('https://mycottagepantry.com/api/registration?view=access'),
+      )
+    expect((await (await access()).json()).memberships).toEqual([
+      expect.objectContaining({ id: workspaceId, role: 'Owner' }),
+    ])
+    runtime.loginId = 'signed-out-fixture'
+    expect((await access()).status).toBe(401)
+    runtime.loginId = identity
+    expect((await (await access()).json()).memberships).toEqual([
+      expect.objectContaining({ id: workspaceId, role: 'Owner' }),
+    ])
+    expect(
+      (
+        await database.query(
+          'SELECT business_id FROM workspace_billing WHERE business_id=$1',
+          [workspaceId],
+        )
+      ).rows,
+    ).toHaveLength(0)
+    const settings: any = (
+      await database.query(
+        "SELECT data FROM settings WHERE business_id=$1 AND id='business'",
+        [workspaceId],
+      )
+    ).rows[0]
+    expect(settings.data.freeRegistration).toMatchObject({
+      plan: 'free',
+      identityId: identity,
+      acceptedPolicyRevision: 'isolated-v1',
+    })
+  } finally {
+    if (workspaceId) {
+      for (const table of ['units', 'settings', 'users'])
+        await database.query(`DELETE FROM ${table} WHERE business_id=$1`, [
+          workspaceId,
+        ])
+      await database.query('DELETE FROM businesses WHERE id=$1', [workspaceId])
+    }
+  }
 })
 
 it('denies every admin data view to logged-out users and to customer cookies or browser role flags', async () => {
@@ -335,7 +566,10 @@ it.each(['none', 'expired', 'enrolled'])(
 it('rejects incorrect passwords, unconfirmed identities and disabled grants without creating sessions', async () => {
   const { login } = await import('@netlify/identity')
   vi.mocked(login).mockRejectedValueOnce(new Error('Invalid credentials'))
-  const input = { email: 'owner@example.invalid', password: 'fixture-password' }
+  const input = {
+    email: 'owner@example.invalid',
+    password: 'fixture-password',
+  }
   const invalid = await handler(request('action=login', input), context)
   expect(invalid.status).toBe(401)
   expect((await invalid.json()).code).toBe('LOGIN_FAILED')
