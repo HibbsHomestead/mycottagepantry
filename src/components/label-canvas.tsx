@@ -3,6 +3,7 @@ import { withLibraryArtwork } from '../lib/artwork-library'
 import { effectiveFill } from '../lib/label-colors'
 import {
   bakeryGraphics,
+  labelBackground,
   elementAssetId,
   elementVisible,
   labelTextLines,
@@ -213,8 +214,8 @@ export function LabelCanvas({
           width={d.width}
           height={d.height}
           rx={d.round ? d.width / 2 : 0}
-          fill={d.background}
-          fillOpacity={d.backgroundOpacity ?? 1}
+          fill={labelBackground(d).background}
+          fillOpacity={labelBackground(d).backgroundOpacity}
         />
         {grid && (
           <g data-editor-only="true" opacity=".15">

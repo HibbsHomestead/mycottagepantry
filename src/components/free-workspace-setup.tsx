@@ -28,15 +28,12 @@ export function FreeWorkspaceSetup({
   const policies = useRegistrationPolicy()
   const policy = policies.policy
   const ready =
-    !!policy &&
-    !policies.loading &&
-    !policies.error &&
-    !setupError &&
-    !setupLoading
+    !policies.loading && !policies.error && !setupError && !setupLoading
   const accepted = !!policy && acceptedRevision === policy.revision
+  const consentRequired = !!policy
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (lock.current || !accepted || !ready || !policy) return
+    if (lock.current || (consentRequired && !accepted) || !ready) return
     const fields = new FormData(event.currentTarget)
     const profile = businessProfile.safeParse({
       name: String(fields.get('name')),
@@ -70,7 +67,9 @@ export function FreeWorkspaceSetup({
       await registrationRequest('free', {
         action: 'createFreeWorkspace',
         profile: profile.data,
-        consent: { accepted: true, revision: policy.revision },
+        ...(policy
+          ? { consent: { accepted: true, revision: policy.revision } }
+          : {}),
       })
       onCreated()
     } catch (failure) {
@@ -120,8 +119,8 @@ export function FreeWorkspaceSetup({
             implemented Free access rules; it does not activate a paid plan.
             Review <a href="/pricing">View Plans</a> for monthly pricing and
             proposed features. Paid checkout is not yet available. Business oven
-            setup requires approved Terms and Privacy. Proposed Free count
-            limits and feature restrictions are not active.
+            setup requires a verified email and valid business details. Proposed
+            Free count limits and feature restrictions are not active.
           </p>
           {policies.loading && (
             <p role="status">Checking published Terms and Privacy…</p>
@@ -138,13 +137,6 @@ export function FreeWorkspaceSetup({
               >
                 Retry setup check
               </button>
-            </p>
-          )}
-          {!policies.loading && !policies.error && !policy && (
-            <p role="status" className="registration-notice">
-              The owner needs to publish approved Terms and Privacy content
-              before oven creation can open. Your account remains intact; no
-              oven or subscription has been created.
             </p>
           )}
           <button
@@ -268,7 +260,7 @@ export function FreeWorkspaceSetup({
                 </label>
               </>
             )}
-            {ready && !accepted && (
+            {ready && consentRequired && !accepted && (
               <p role="status">
                 Review the documents and check the agreement above to enable
                 business creation.
@@ -277,7 +269,7 @@ export function FreeWorkspaceSetup({
             <button
               className="public-button"
               type="submit"
-              disabled={busy || !ready || !accepted}
+              disabled={busy || !ready || (consentRequired && !accepted)}
             >
               {busy ? 'Creating oven…' : 'Create your business'}
             </button>

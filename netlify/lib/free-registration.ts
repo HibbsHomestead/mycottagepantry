@@ -16,7 +16,8 @@ const freeSetup = z
     profile: businessProfile,
     consent: z
       .object({ accepted: z.literal(true), revision: z.string().min(1) })
-      .strict(),
+      .strict()
+      .optional(),
   })
   .strict()
 
@@ -33,13 +34,13 @@ export async function createFreeWorkspace(
     "SELECT pg_advisory_xact_lock(hashtextextended('registration-policies',0))",
   )
   const policy = await currentRegistrationPolicy(client)
-  if (!policy)
+  if (!policy && data.consent)
     throw new RegistrationError(
       409,
-      'POLICY_NOT_READY',
-      'Free oven setup needs owner-approved Terms and Privacy content. No oven or subscription was created.',
+      'POLICY_CHANGED',
+      'No policies are published. Refresh the policy check and retry without policy acceptance.',
     )
-  if (data.consent.revision !== policy.revision)
+  if (policy && data.consent?.revision !== policy.revision)
     throw new RegistrationError(
       409,
       'POLICY_CHANGED',
@@ -92,9 +93,13 @@ export async function createFreeWorkspace(
         appearance: { theme: 'cottage', mode: 'light' },
         freeRegistration: {
           plan: 'free',
-          acceptedPolicyRevision: data.consent.revision,
-          acceptedAt: new Date().toISOString(),
           identityId: actor.id,
+          ...(policy && data.consent
+            ? {
+                acceptedPolicyRevision: policy.revision,
+                acceptedAt: new Date().toISOString(),
+              }
+            : {}),
         },
       }),
     ],

@@ -4,16 +4,10 @@ import { launchPricing, type PlanId } from './launch-plans'
 export const registrationReadiness = (policyReady: boolean) => ({
   publicSignup: true,
   policyAcceptance: policyReady,
-  activation: policyReady,
+  activation: true,
   liveCheckout: false,
   betaAdmission: false,
-  blockers: [
-    ...(!policyReady
-      ? [
-          'Owner-approved Terms and Privacy content is required before free oven creation.',
-        ]
-      : []),
-  ],
+  blockers: [],
 })
 export function selectedPlan(value: unknown): PlanId {
   // Unpublished, unassignable drafts (Cottage Mercantile) are never selectable.

@@ -102,7 +102,7 @@ beforeEach(async () => {
   )
 })
 
-it('blocks free oven creation until real policies and explicit current consent exist', async () => {
+it('rejects invented acceptance and requires current consent only when documents are published', async () => {
   runtime.current = {
     id: 'public-policy-account',
     email: 'public@example.invalid',
@@ -124,7 +124,7 @@ it('blocks free oven creation until real policies and explicit current consent e
     )
   const blocked = await make({ accepted: true, revision: 'unapproved' })
   expect(blocked.status).toBe(409)
-  expect((await blocked.json()).code).toBe('POLICY_NOT_READY')
+  expect((await blocked.json()).code).toBe('POLICY_CHANGED')
   expect(
     (
       await db.query('SELECT id FROM businesses WHERE identity_owner=$1', [
@@ -141,6 +141,7 @@ it('blocks free oven creation until real policies and explicit current consent e
       'fixture-owner',
     ],
   )
+  expect((await make(undefined)).status).toBe(409)
   expect((await make({ accepted: true, revision: 'old' })).status).toBe(409)
   expect(
     (await make({ accepted: false, revision: 'synthetic-approved-v1' })).ok,
@@ -148,106 +149,134 @@ it('blocks free oven creation until real policies and explicit current consent e
   expect(fetch).not.toHaveBeenCalled()
 })
 
-it('creates exactly one free oven for a verified ordinary account, without touching billing or fixture records', async () => {
-  runtime.current = {
-    id: 'public-free-owner',
-    email: 'free@example.invalid',
-    confirmedAt: '2026-01-01',
-    roles: [],
-  }
-  runtime.values.CONTEXT = 'production'
-  await db.query(
-    'INSERT INTO registration_policies(revision,terms,privacy,published_by) VALUES($1,$2,$3,$4)',
-    [
-      'synthetic-approved-v1',
-      'Synthetic Terms for isolated testing.',
-      'Synthetic Privacy for isolated testing.',
-      'fixture-owner',
-    ],
-  )
-  const make = () =>
-    registration(
-      new Request('https://example.test/api/registration?view=free', {
-        method: 'POST',
-        headers: { origin: 'https://example.test' },
-        body: JSON.stringify({
-          action: 'createFreeWorkspace',
-          profile,
-          consent: { accepted: true, revision: 'synthetic-approved-v1' },
+it.each([false, true])(
+  'creates exactly one free oven with published policies=%s, without touching billing or fixture records',
+  async (published) => {
+    runtime.current = {
+      id: 'public-free-owner-' + published,
+      email: 'free@example.invalid',
+      confirmedAt: '2026-01-01',
+      roles: [],
+    }
+    runtime.values.CONTEXT = 'production'
+    if (published)
+      await db.query(
+        'INSERT INTO registration_policies(revision,terms,privacy,published_by) VALUES($1,$2,$3,$4)',
+        [
+          'synthetic-approved-v1',
+          'Synthetic Terms for isolated testing.',
+          'Synthetic Privacy for isolated testing.',
+          'fixture-owner',
+        ],
+      )
+    const make = () =>
+      registration(
+        new Request('https://example.test/api/registration?view=free', {
+          method: 'POST',
+          headers: { origin: 'https://example.test' },
+          body: JSON.stringify({
+            action: 'createFreeWorkspace',
+            profile,
+            ...(published
+              ? {
+                  consent: {
+                    accepted: true,
+                    revision: 'synthetic-approved-v1',
+                  },
+                }
+              : {}),
+          }),
         }),
-      }),
+      )
+    const first = await make()
+    expect(first.status).toBe(200)
+    expect(first.headers.get('set-cookie')).toContain(
+      'HttpOnly; Secure; SameSite=Lax',
     )
-  const first = await make()
-  expect(first.status).toBe(200)
-  expect(first.headers.get('set-cookie')).toContain(
-    'HttpOnly; Secure; SameSite=Lax',
-  )
-  const created = await first.json()
-  const repeated = await (await make()).json()
-  expect(repeated).toMatchObject({
-    existing: true,
-    workspaceId: created.workspaceId,
-  })
-  expect(
-    (
-      await db.query('SELECT id FROM businesses WHERE identity_owner=$1', [
-        runtime.current.id,
-      ])
-    ).rows,
-  ).toHaveLength(1)
-  expect(
-    (
-      await db.query('SELECT role FROM users WHERE identity_id=$1', [
-        runtime.current.id,
-      ])
-    ).rows,
-  ).toEqual([{ role: 'Owner' }])
-  const saved: any = (
-    await db.query('SELECT data FROM settings WHERE business_id=$1', [
-      created.workspaceId,
-    ])
-  ).rows[0]
-  expect(saved.data).toMatchObject({
-    name: profile.name,
-    freeRegistration: {
-      plan: 'free',
-      acceptedPolicyRevision: 'synthetic-approved-v1',
-      identityId: runtime.current.id,
-    },
-  })
-  expect(
-    (
-      await db.query('SELECT * FROM workspace_billing WHERE business_id=$1', [
+    const created = await first.json()
+    const repeated = await (await make()).json()
+    expect(repeated).toMatchObject({
+      existing: true,
+      workspaceId: created.workspaceId,
+    })
+    expect(
+      (
+        await db.query('SELECT id FROM businesses WHERE identity_owner=$1', [
+          runtime.current.id,
+        ])
+      ).rows,
+    ).toHaveLength(1)
+    expect(
+      (
+        await db.query('SELECT role FROM users WHERE identity_id=$1', [
+          runtime.current.id,
+        ])
+      ).rows,
+    ).toEqual([{ role: 'Owner' }])
+    const saved: any = (
+      await db.query('SELECT data FROM settings WHERE business_id=$1', [
         created.workspaceId,
       ])
-    ).rows,
-  ).toHaveLength(0)
-  expect(
-    (
-      await db.query('SELECT * FROM registration_drafts WHERE identity_id=$1', [
-        runtime.current.id,
-      ])
-    ).rows,
-  ).toHaveLength(0)
-  const access = await (
-    await registration(
-      new Request('https://example.test/api/registration?view=access'),
+    ).rows[0]
+    expect(saved.data).toMatchObject({
+      name: profile.name,
+      freeRegistration: {
+        plan: 'free',
+        ...(published
+          ? { acceptedPolicyRevision: 'synthetic-approved-v1' }
+          : {}),
+        identityId: runtime.current.id,
+      },
+    })
+    if (!published) {
+      expect(saved.data.freeRegistration).not.toHaveProperty('acceptedAt')
+      expect(saved.data.freeRegistration).not.toHaveProperty(
+        'acceptedPolicyRevision',
+      )
+    }
+    expect(
+      (
+        await db.query(
+          'SELECT * FROM registration_acceptances WHERE identity_id=$1',
+          [runtime.current.id],
+        )
+      ).rows,
+    ).toHaveLength(0)
+    expect(
+      (
+        await db.query('SELECT * FROM workspace_billing WHERE business_id=$1', [
+          created.workspaceId,
+        ])
+      ).rows,
+    ).toHaveLength(0)
+    expect(
+      (
+        await db.query(
+          'SELECT * FROM registration_drafts WHERE identity_id=$1',
+          [runtime.current.id],
+        )
+      ).rows,
+    ).toHaveLength(0)
+    const access = await (
+      await registration(
+        new Request('https://example.test/api/registration?view=access'),
+      )
+    ).json()
+    expect(access.membership).toMatchObject({
+      id: created.workspaceId,
+      role: 'Owner',
+    })
+    const denied = await registration(
+      new Request('https://example.test/api/registration?view=access', {
+        method: 'POST',
+        headers: { origin: 'https://example.test' },
+        body: JSON.stringify({ workspaceId: crypto.randomUUID() }),
+      }),
     )
-  ).json()
-  expect(access.membership).toMatchObject({
-    id: created.workspaceId,
-    role: 'Owner',
-  })
-  const denied = await registration(
-    new Request('https://example.test/api/registration?view=access', {
-      method: 'POST',
-      headers: { origin: 'https://example.test' },
-      body: JSON.stringify({ workspaceId: crypto.randomUUID() }),
-    }),
-  )
-  expect(denied.status).toBe(403)
-  expect(fetch).not.toHaveBeenCalled()
-})
+    expect(denied.status).toBe(403)
+    expect(fetch).not.toHaveBeenCalled()
+  },
+)
 
 it('does not provision for an unverified user, a signed-out request, or a foreign origin', async () => {
   runtime.values.CONTEXT = 'production'
@@ -270,6 +299,45 @@ it('does not provision for an unverified user, a signed-out request, or a foreig
   runtime.session = { id: 'public-unverified' }
   runtime.current.confirmedAt = '2026-01-01'
   expect((await make('https://foreign.invalid')).status).toBe(403)
+})
+it('validates no-policy business details and refuses caller-controlled ownership or paid access', async () => {
+  runtime.current = {
+    id: 'no-policy-invalid-input',
+    email: 'invalid@example.invalid',
+    confirmedAt: '2026-01-01',
+    roles: [],
+  }
+  runtime.values.CONTEXT = 'production'
+  for (const input of [
+    { profile: { ...profile, name: '' } },
+    { profile: { ...profile, timezone: 'Not/AZone' } },
+    { profile: { ...profile, currency: 'FAKE' } },
+    { businessId: crypto.randomUUID() },
+    { identityId: 'another-owner' },
+    { role: 'platform_admin' },
+    { planId: 'cottage-mercantile' },
+    { paid: true },
+  ]) {
+    const result = await registration(
+      new Request('https://example.test/api/registration?view=free', {
+        method: 'POST',
+        headers: { origin: 'https://example.test' },
+        body: JSON.stringify({
+          action: 'createFreeWorkspace',
+          profile,
+          ...input,
+        }),
+      }),
+    )
+    expect(result.status).toBe(400)
+  }
+  expect(
+    (
+      await db.query('SELECT id FROM businesses WHERE identity_owner=$1', [
+        runtime.current.id,
+      ])
+    ).rows,
+  ).toHaveLength(0)
 })
 const request = (data: any) =>
   new Request('https://fixture.netlify.app/api/registration', {

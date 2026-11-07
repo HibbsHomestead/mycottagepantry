@@ -2,6 +2,7 @@ import {
   elementVisible,
   elementText,
   elementAssetId,
+  labelBackground,
   type LabelDocument,
   type LabelData,
 } from './label-studio'
@@ -31,8 +32,9 @@ export const layoutKeys = [
   'displayUnit',
 ] as const
 export function labelLayout(d: LabelDocument): LabelLayout {
+  const normalized = { ...d, ...labelBackground(d) }
   return Object.fromEntries(
-    layoutKeys.map((key) => [key, structuredClone(d[key])]),
+    layoutKeys.map((key) => [key, structuredClone(normalized[key])]),
   ) as LabelLayout
 }
 export function labelSide(d: LabelDocument, side: LabelSide): LabelDocument {
@@ -43,6 +45,7 @@ export function labelSide(d: LabelDocument, side: LabelSide): LabelDocument {
   return {
     ...single,
     ...(side === 'back' ? d.back : {}),
+    ...labelBackground(side === 'back' ? d.back! : d),
     id: d.format === 'front-back' ? `${d.id}-${side}` : d.id,
     format: 'single',
   }

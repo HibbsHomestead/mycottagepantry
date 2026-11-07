@@ -68,6 +68,7 @@ import {
   labelSizes,
   newElement,
   blankLabel,
+  withLabelBackgrounds,
   systemLabelTemplates,
   bindings,
   bakeryGraphics,
@@ -576,7 +577,9 @@ export function LabelStudio({
     setEditorSide('front')
     setRunIndex(0)
     const nextSource = labelSource(w, t, initialProductId)
-    const next = saved ? structuredClone(t) : duplicateSavedLabel(t, nextSource)
+    const next = saved
+      ? withLabelBackgrounds(structuredClone(t))
+      : duplicateSavedLabel(t, nextSource)
     setSource(nextSource)
     setBrandId(next.brandId || '')
     setParts(next.printSettings?.parts || 'both')

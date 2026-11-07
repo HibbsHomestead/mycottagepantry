@@ -41,16 +41,29 @@ beforeEach(() => {
   fixture.retry.mockReset()
 })
 
-it('blocks activation and never fabricates consent when approved policies are missing', () => {
-  render(<FreeWorkspaceSetup onCreated={vi.fn()} />)
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'owner needs to publish approved Terms and Privacy',
-  )
+it('creates a business without a checkbox or consent payload when policies are unpublished', async () => {
+  fixture.request.mockResolvedValue({ workspaceId: 'synthetic-workspace' })
+  const created = vi.fn()
+  render(<FreeWorkspaceSetup onCreated={created} />)
   expect(
     screen.getByRole('button', { name: 'Create your business' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-  expect(fixture.request).not.toHaveBeenCalled()
+  expect(
+    screen.queryByRole('link', { name: /^Terms$|^Privacy$/ }),
+  ).not.toBeInTheDocument()
+  const user = userEvent.setup()
+  await user.type(
+    screen.getByLabelText('Business/display name'),
+    'Synthetic Kitchen',
+  )
+  await user.click(screen.getByRole('button', { name: 'Create your business' }))
+  await waitFor(() => expect(created).toHaveBeenCalledOnce())
+  expect(fixture.request).toHaveBeenCalledWith('free', {
+    action: 'createFreeWorkspace',
+    profile: expect.objectContaining({ name: 'Synthetic Kitchen' }),
+  })
+  expect(fixture.request.mock.calls[0][1]).not.toHaveProperty('consent')
 })
 
 it('requires explicit consent and posts only free setup without billing fields', async () => {

@@ -19,6 +19,7 @@ import {
 import fontkit from '@pdf-lib/fontkit'
 import {
   bakeryGraphics,
+  withLabelBackgrounds,
   elementAssetId,
   elementVisible,
   labelFonts,
@@ -57,6 +58,7 @@ export async function exportLabelPdf(
     image: (asset: Item) => Promise<Uint8Array>
   },
 ): Promise<Uint8Array> {
+  d = withLabelBackgrounds(d)
   validateSheet(d, layout)
   const availableFonts = [...labelFonts, ...(loaders?.fonts || [])]
   const pdf = await PDFDocument.create()

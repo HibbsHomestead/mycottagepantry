@@ -282,13 +282,14 @@ it('publishes legal documents only for an owner with MFA and exposes the same pu
   ).rejects.toThrow('immutable')
 })
 
-it('reports unpublished policies without opening activation and rejects cross-origin publication', async () => {
+it('allows activation without published policies and rejects cross-origin publication', async () => {
   const readiness = await registration(
     new Request('https://mycottagepantry.com/api/registration?view=readiness'),
   )
   expect(await readiness.json()).toMatchObject({
     policyAcceptance: false,
-    activation: false,
+    activation: true,
+    blockers: [],
   })
   await session(true)
   const denied = await handler(
@@ -319,131 +320,183 @@ it('reports unpublished policies without opening activation and rejects cross-or
   }
 })
 
-it('keeps a pending verified registration out of customer accounts, then lists its own created business and restores its membership after sign-in', async () => {
-  // Provider/session transitions are fixtures. This does not send real signup or verification email.
-  const identity = 'isolated-onboarding-owner'
-  runtime.identities[identity] = {
-    id: identity,
-    email: 'isolated@example.invalid',
-    confirmedAt: '2026-01-01T00:00:00Z',
-    roles: [],
-  }
-  runtime.loginId = identity
-  await session(true)
-  const list = () =>
-    handler(
-      request('section=customers&kind=accounts&q=' + identity, undefined, {
-        token,
-      }),
-      context,
-    )
-  const pending = await list()
-  expect((await pending.json()).rows).toHaveLength(0)
-  expect(
-    (
-      await database.query('SELECT id FROM users WHERE identity_id=$1', [
-        identity,
+it.each([false, true])(
+  'lists one created business and restores membership after sign-in with published policies=%s',
+  async (published) => {
+    // Provider/session transitions are fixtures. This does not send real signup or verification email.
+    const preserved = async () => {
+      const rows = []
+      for (const table of [
+        'businesses',
+        'users',
+        'settings',
+        'workspace_billing',
+        'registration_acceptances',
       ])
-    ).rows,
-  ).toHaveLength(0)
-  await handler(
-    request(
-      'action=registration-policies',
-      {
-        policy: {
-          revision: 'isolated-v1',
-          terms: 'Synthetic Terms for isolated testing.',
-          privacy: 'Synthetic Privacy for isolated testing.',
-        },
-        approved: true,
-        expectedRevision: null,
-      },
-      { token },
-    ),
-    context,
-  )
-  const create = () =>
-    registration(
-      new Request('https://mycottagepantry.com/api/registration?view=free', {
-        method: 'POST',
-        headers: { origin: 'https://mycottagepantry.com' },
-        body: JSON.stringify({
-          action: 'createFreeWorkspace',
-          profile: {
-            name: 'Isolated Kitchen',
-            country: 'US',
-            timezone: 'America/Chicago',
-            currency: 'USD',
-            measurements: 'us',
-          },
-          consent: { accepted: true, revision: 'isolated-v1' },
-        }),
-      }),
-    )
-  let workspaceId: string | undefined
-  try {
-    const response = await create()
-    expect(response.status).toBe(200)
-    workspaceId = (await response.json()).workspaceId
-    expect((await (await create()).json()).workspaceId).toBe(workspaceId)
-    const accounts = await (await list()).json()
-    expect(accounts.rows).toEqual([
-      expect.objectContaining({
-        identity_id: identity,
-        oven_count: 1,
-        active_memberships: 1,
-      }),
-    ])
-    expect(
-      (
-        await database.query(
-          'SELECT identity_owner FROM businesses WHERE id=$1',
-          [workspaceId],
+        rows.push(
+          (await database.query(`SELECT * FROM ${table} ORDER BY 1`)).rows,
         )
-      ).rows,
-    ).toEqual([{ identity_owner: identity }])
-    const access = () =>
-      registration(
-        new Request('https://mycottagepantry.com/api/registration?view=access'),
-      )
-    expect((await (await access()).json()).memberships).toEqual([
-      expect.objectContaining({ id: workspaceId, role: 'Owner' }),
-    ])
-    runtime.loginId = 'signed-out-fixture'
-    expect((await access()).status).toBe(401)
+      return rows
+    }
+    const before = await preserved()
+    const identity = 'isolated-onboarding-owner'
+    runtime.identities[identity] = {
+      id: identity,
+      email: 'isolated@example.invalid',
+      confirmedAt: '2026-01-01T00:00:00Z',
+      roles: [],
+    }
     runtime.loginId = identity
-    expect((await (await access()).json()).memberships).toEqual([
-      expect.objectContaining({ id: workspaceId, role: 'Owner' }),
-    ])
+    await session(true)
+    const list = () =>
+      handler(
+        request('section=customers&kind=accounts&q=' + identity, undefined, {
+          token,
+        }),
+        context,
+      )
+    const pending = await list()
+    expect((await pending.json()).rows).toHaveLength(0)
     expect(
       (
-        await database.query(
-          'SELECT business_id FROM workspace_billing WHERE business_id=$1',
-          [workspaceId],
-        )
+        await database.query('SELECT id FROM users WHERE identity_id=$1', [
+          identity,
+        ])
       ).rows,
     ).toHaveLength(0)
-    const settings: any = (
-      await database.query(
-        "SELECT data FROM settings WHERE business_id=$1 AND id='business'",
-        [workspaceId],
+    if (published)
+      await handler(
+        request(
+          'action=registration-policies',
+          {
+            policy: {
+              revision: 'isolated-v1',
+              terms: 'Synthetic Terms for isolated testing.',
+              privacy: 'Synthetic Privacy for isolated testing.',
+            },
+            approved: true,
+            expectedRevision: null,
+          },
+          { token },
+        ),
+        context,
       )
-    ).rows[0]
-    expect(settings.data.freeRegistration).toMatchObject({
-      plan: 'free',
-      identityId: identity,
-      acceptedPolicyRevision: 'isolated-v1',
-    })
-  } finally {
-    if (workspaceId) {
-      for (const table of ['units', 'settings', 'users'])
-        await database.query(`DELETE FROM ${table} WHERE business_id=$1`, [
+    const create = () =>
+      registration(
+        new Request('https://mycottagepantry.com/api/registration?view=free', {
+          method: 'POST',
+          headers: { origin: 'https://mycottagepantry.com' },
+          body: JSON.stringify({
+            action: 'createFreeWorkspace',
+            profile: {
+              name: 'Isolated Kitchen',
+              country: 'US',
+              timezone: 'America/Chicago',
+              currency: 'USD',
+              measurements: 'us',
+            },
+            ...(published
+              ? { consent: { accepted: true, revision: 'isolated-v1' } }
+              : {}),
+          }),
+        }),
+      )
+    let workspaceId: string | undefined
+    try {
+      const response = await create()
+      expect(response.status).toBe(200)
+      workspaceId = (await response.json()).workspaceId
+      for (const retry of await Promise.all([create(), create()]))
+        expect(await retry.json()).toMatchObject({
+          workspaceId,
+          existing: true,
+        })
+      expect(
+        (
+          await database.query(
+            'SELECT id FROM businesses WHERE identity_owner=$1',
+            [identity],
+          )
+        ).rows,
+      ).toHaveLength(1)
+      const accounts = await (await list()).json()
+      expect(accounts.rows).toEqual([
+        expect.objectContaining({
+          identity_id: identity,
+          oven_count: 1,
+          active_memberships: 1,
+        }),
+      ])
+      expect(
+        (
+          await database.query(
+            'SELECT identity_owner FROM businesses WHERE id=$1',
+            [workspaceId],
+          )
+        ).rows,
+      ).toEqual([{ identity_owner: identity }])
+      const access = () =>
+        registration(
+          new Request(
+            'https://mycottagepantry.com/api/registration?view=access',
+          ),
+        )
+      expect((await (await access()).json()).memberships).toEqual([
+        expect.objectContaining({ id: workspaceId, role: 'Owner' }),
+      ])
+      runtime.loginId = 'signed-out-fixture'
+      expect((await access()).status).toBe(401)
+      runtime.loginId = identity
+      expect((await (await access()).json()).memberships).toEqual([
+        expect.objectContaining({ id: workspaceId, role: 'Owner' }),
+      ])
+      expect(
+        (
+          await database.query(
+            'SELECT business_id FROM workspace_billing WHERE business_id=$1',
+            [workspaceId],
+          )
+        ).rows,
+      ).toHaveLength(0)
+      const settings: any = (
+        await database.query(
+          "SELECT data FROM settings WHERE business_id=$1 AND id='business'",
+          [workspaceId],
+        )
+      ).rows[0]
+      expect(settings.data.freeRegistration).toMatchObject({
+        plan: 'free',
+        identityId: identity,
+        ...(published ? { acceptedPolicyRevision: 'isolated-v1' } : {}),
+      })
+      if (!published) {
+        expect(settings.data.freeRegistration).not.toHaveProperty('acceptedAt')
+        expect(settings.data.freeRegistration).not.toHaveProperty(
+          'acceptedPolicyRevision',
+        )
+      }
+      expect(
+        (
+          await database.query(
+            'SELECT * FROM registration_acceptances WHERE identity_id=$1',
+            [identity],
+          )
+        ).rows,
+      ).toHaveLength(0)
+    } finally {
+      if (workspaceId) {
+        for (const table of ['units', 'settings', 'users'])
+          await database.query(`DELETE FROM ${table} WHERE business_id=$1`, [
+            workspaceId,
+          ])
+        await database.query('DELETE FROM businesses WHERE id=$1', [
           workspaceId,
         ])
-      await database.query('DELETE FROM businesses WHERE id=$1', [workspaceId])
+      }
     }
-  }
-})
+    expect(await preserved()).toEqual(before)
+  },
+)
 
 it('denies every admin data view to logged-out users and to customer cookies or browser role flags', async () => {
   for (const section of [

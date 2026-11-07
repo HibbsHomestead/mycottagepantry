@@ -13,7 +13,9 @@ it('uploads approved text for review before publishing and reopens the saved doc
   })
   vi.stubGlobal('fetch', fetch)
   const view = render(<AdminRegistrationPolicies />)
-  await screen.findByText('No policies published. Business creation is paused.')
+  await screen.findByText(
+    'No policies published. Business creation is available without policy acceptance.',
+  )
   const file = new File(
     ['Synthetic approved Terms for testing only.'],
     'terms.txt',
@@ -81,7 +83,9 @@ it('preserves the policy editor after failed publication and rejects unsupported
     ),
   )
   render(<AdminRegistrationPolicies />)
-  await screen.findByText('No policies published. Business creation is paused.')
+  await screen.findByText(
+    'No policies published. Business creation is available without policy acceptance.',
+  )
   fireEvent.change(
     screen.getByLabelText('Upload approved Terms (.txt or .md)'),
     {

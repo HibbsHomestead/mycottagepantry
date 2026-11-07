@@ -311,13 +311,20 @@ it('does not classify membership loading as new registration on onboarding', asy
 })
 it('offers free setup to a verified no-workspace account without fabricated policy acceptance', async () => {
   history.replaceState({}, '', '/onboarding')
-  transport.mockResolvedValue(Response.json(accessFixture('no_workspace')))
-  render(<OnboardingPage />)
-  expect(
-    await screen.findByText(
-      /owner needs to publish approved Terms and Privacy/,
+  transport.mockImplementation(async (url: string) =>
+    Response.json(
+      url.includes('view=policies')
+        ? { policy: null }
+        : accessFixture('no_workspace'),
     ),
-  ).toBeInTheDocument()
+  )
+  render(<OnboardingPage />)
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Create your business' }),
+    ).toBeEnabled(),
+  )
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   expect(screen.getByLabelText('Business/display name')).toBeInTheDocument()
   expect(accountNavigation.replace).not.toHaveBeenCalled()
 })

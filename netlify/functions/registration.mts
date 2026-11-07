@@ -285,8 +285,7 @@ export default async (request: Request) => {
       return Response.json(
         {
           code: 'INVALID_REGISTRATION_INPUT',
-          error:
-            'Check your business details and explicitly accept the current policies.',
+          error: 'Check the highlighted business details and try again.',
           fields:
             error instanceof ZodError
               ? Object.fromEntries(
