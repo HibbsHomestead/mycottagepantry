@@ -920,3 +920,27 @@
   max-width: 100%;
   height: auto;
 }
+
+.admin-policy-form,
+.admin-policy-form label {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.admin-policy-form {
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.admin-policy-form textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid var(--admin-line);
+  border-radius: 7px;
+  font: inherit;
+}
+.admin-policy-form textarea:focus-visible {
+  outline: 2px solid var(--admin-purple);
+  outline-offset: 2px;
+}

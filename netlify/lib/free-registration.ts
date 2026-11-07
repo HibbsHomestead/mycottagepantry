@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { businessProfile } from '../../src/lib/registration'
-import {
-  freeRegistrationPolicy,
-  freeRegistrationPolicyReady,
-} from '../../src/lib/free-registration-policy'
+import { currentRegistrationPolicy } from './registration-policies'
 import { units } from '../../src/lib/domain'
 import {
   currentMembership,
@@ -32,13 +29,17 @@ export async function createFreeWorkspace(
   const data = freeSetup.parse(input)
   const existing = await currentMembership(client, actor)
   if (existing) return { existing: true, workspaceId: existing.id }
-  if (!freeRegistrationPolicyReady())
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended('registration-policies',0))",
+  )
+  const policy = await currentRegistrationPolicy(client)
+  if (!policy)
     throw new RegistrationError(
       409,
       'POLICY_NOT_READY',
       'Free oven setup needs owner-approved Terms and Privacy content. No oven or subscription was created.',
     )
-  if (data.consent.revision !== freeRegistrationPolicy.revision)
+  if (data.consent.revision !== policy.revision)
     throw new RegistrationError(
       409,
       'POLICY_CHANGED',

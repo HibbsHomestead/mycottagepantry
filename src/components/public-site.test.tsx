@@ -1,5 +1,5 @@
 import { render, screen, within } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 const session = vi.hoisted(() => ({ status: vi.fn() }))
 vi.mock('@/lib/account-access-client', () => ({
@@ -23,10 +23,15 @@ import {
 } from './public-site'
 beforeEach(() => {
   session.status.mockResolvedValue({ signedIn: false })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ policy: null })),
+  )
 })
+afterEach(() => vi.unstubAllGlobals())
 it('shows the website to signed-out visitors and an obvious oven link to signed-in visitors without reading business data', async () => {
   session.status.mockResolvedValue({ signedIn: true })
-  const fetcher = vi.fn()
+  const fetcher = vi.fn(async () => Response.json({ policy: null }))
   vi.stubGlobal('fetch', fetcher)
   const view = render(<HomePage />)
   expect(
@@ -36,11 +41,15 @@ it('shows the website to signed-out visitors and an obvious oven link to signed-
     'Know your costs.Organize your kitchen.Build your business.',
   )
   expect(screen.queryByText('Hibbs Homestead Market')).not.toBeInTheDocument()
-  expect(fetcher).not.toHaveBeenCalled()
+  expect(
+    fetcher.mock.calls.every(
+      (call: unknown[]) => call[0] === '/api/registration?view=policies',
+    ),
+  ).toBe(true)
   view.unmount()
   vi.unstubAllGlobals()
 })
-it('compares approved monthly prices while distinguishing proposed scope and unavailable checkout', () => {
+it('compares approved monthly prices while distinguishing proposed scope and unavailable checkout', async () => {
   render(<PricingPage />)
   expect(
     screen.getByText(
@@ -48,7 +57,7 @@ it('compares approved monthly prices while distinguishing proposed scope and una
     ),
   ).toBeInTheDocument()
   expect(
-    screen.getByText(
+    await screen.findByText(
       /Business setup is paused until approved Terms and Privacy/,
     ),
   ).toBeInTheDocument()
@@ -116,11 +125,34 @@ it('opens accessible phone navigation and offers registration', async () => {
   ).toBeInTheDocument()
   expect(screen.getByLabelText('Email')).toBeInTheDocument()
 })
-it('does not invent legal policies', () => {
+it('does not invent legal policies', async () => {
   render(<LegalPage kind="Privacy" />)
   expect(
-    screen.getByText(/not a legal policy or agreement/),
+    await screen.findByText(/not a legal policy or agreement/),
   ).toBeInTheDocument()
+})
+
+it('shows the published legal text and revision together without the unpublished notice', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        policy: {
+          revision: 'synthetic-v1',
+          terms: 'Synthetic approved Terms.',
+          privacy: 'Synthetic approved Privacy.',
+        },
+      }),
+    ),
+  )
+  render(<LegalPage kind="Privacy" />)
+  expect(
+    await screen.findByText('Synthetic approved Privacy.'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Revision synthetic-v1')).toBeInTheDocument()
+  expect(
+    screen.queryByText(/not a legal policy or agreement/),
+  ).not.toBeInTheDocument()
 })
 
 it('offers a six-section product tour with feature availability and an accessible screenshot viewer', async () => {

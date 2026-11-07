@@ -6,7 +6,7 @@ import {
   type FeatureId,
   type PlanId,
 } from '@/lib/launch-plans'
-import { freeRegistrationPolicyReady } from '@/lib/free-registration-policy'
+import { useRegistrationPolicy } from '@/lib/registration-policy-client'
 import { signupPlanHref } from '@/lib/signup-plan'
 
 const copy: Record<
@@ -103,6 +103,7 @@ function scope(plan: PlanId, feature: FeatureId) {
 }
 
 export function PricingComparison() {
+  const policies = useRegistrationPolicy()
   return (
     <section
       className="public-width plan-comparison"
@@ -121,7 +122,9 @@ export function PricingComparison() {
       <p className="registration-notice plan-launch-notice">
         You can create your account now. Paid activation is not yet available.
         Your chosen plan is saved; registration collects no payment.
-        {!freeRegistrationPolicyReady() &&
+        {!policies.loading &&
+          !policies.error &&
+          !policies.policy &&
           ' Business setup is paused until approved Terms and Privacy are published.'}{' '}
         Free’s proposed limits are not active. Existing customer access is
         preserved.

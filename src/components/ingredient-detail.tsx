@@ -56,6 +56,7 @@ import {
 import './ingredient-detail.css'
 import { PantryPhoto } from './pantry-photo'
 import { editActionLabel } from '@/lib/item-actions'
+import { inventoryMovementView } from '@/lib/inventory-adjustment'
 function Measure({ children }: { children: () => ReactNode }) {
   try {
     return <>{children()}</>
@@ -1553,12 +1554,23 @@ export function IngredientDetail({
                           </tr>
                         </thead>
                         <tbody>
-                          {history.map((l) => (
+                          {history.map(inventoryMovementView).map((l) => (
                             <tr key={l.id}>
                               <td>{l.date}</td>
                               <td>{l.type}</td>
                               <td>
                                 {precise(l.quantity)} {l.unit}
+                                {l.resultingInventoryQuantity != null &&
+                                  l.inventoryUnit && (
+                                    <small>
+                                      {' '}
+                                      · Balance:{' '}
+                                      {precise(
+                                        l.resultingInventoryQuantity,
+                                      )}{' '}
+                                      {l.inventoryUnit}
+                                    </small>
+                                  )}
                               </td>
                               <td>{money(l.amount)}</td>
                               <td>

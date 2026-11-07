@@ -2,6 +2,8 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Context } from '@netlify/functions'
 import { bestCrumbleSource } from '../test/fixtures/best-crumble'
+import { convert } from './domain'
+import { inventoryMovementView } from './inventory-adjustment'
 import {
   parseRecipeText,
   parseIngredient,
@@ -3247,4 +3249,338 @@ it('persists explicit label name parts on products without changing or splitting
     labelMainName: 'Longer Homestyle Wheat',
     labelProductType: '',
   })
+})
+
+// Synthetic records only. These exercise the actual workspace handler with its test database adapter.
+it.each(['each', 'g'])(
+  'saves and reopens an opening count in each with canonical %s stock, without altering costs or old history',
+  async (unit) => {
+    const conversions =
+      unit === 'g'
+        ? [
+            {
+              from: 'each',
+              to: 'g',
+              amountFrom: 1,
+              amountTo: 100,
+              verified: true,
+            },
+          ]
+        : []
+    database.records.ingredients = [
+      {
+        id: 'counted-cups',
+        name: 'Applesauce count fixture',
+        unit,
+        storageUnit: 'each',
+        recipeUnit: 'g',
+        quantity: unit === 'g' ? 200 : 2,
+        cost: unit === 'g' ? 0.004 : 0.4,
+        currentCost: unit === 'g' ? 0.005 : 0.5,
+        conversions,
+      },
+    ]
+    database.records.ledger = [
+      {
+        id: 'original',
+        name: 'Original receipt',
+        ingredientId: 'counted-cups',
+        quantity: unit === 'g' ? 200 : 2,
+        unit,
+        amount: 0.8,
+      },
+    ]
+    const original = structuredClone(database.records.ledger[0])
+    database.records.recipes = [
+      {
+        id: 'old-recipe',
+        name: 'Old recipe',
+        lines: [{ ingredientId: 'counted-cups', quantity: 25, unit: 'g' }],
+      },
+    ]
+    const recipes = structuredClone(database.records.recipes)
+    const response = await handler(
+      new Request('https://cottage-pantry.test/api/workspace'),
+      context,
+    )
+    const before = (await response.json()).workspace.ingredients[0]
+    const data = {
+      id: before.id,
+      operationId: 'opening-six',
+      adjustmentMode: 'total',
+      quantity: 6,
+      unit: 'each',
+      type: 'adjustment',
+      reason: 'Opening count',
+      expectedInventoryRevision: before.inventoryRevision,
+    }
+    const saved = await post('adjust', 'ingredients', data)
+    expect(saved.status).toBe(200)
+    const item = saved.workspace.ingredients[0]
+    expect(item.quantity).toBe(unit === 'g' ? 600 : 6)
+    expect(
+      convert(item.quantity, item.unit, item.storageUnit, item.conversions),
+    ).toBe(6)
+    expect(item.cost).toBe(before.cost)
+    expect(item.currentCost).toBe(before.currentCost)
+    const movement = saved.workspace.ledger.find(
+      (l: any) => l.id === 'stock-opening-six',
+    )
+    expect(movement).toMatchObject({
+      quantity: unit === 'g' ? 400 : 4,
+      unit,
+      enteredQuantity: 6,
+      enteredUnit: 'each',
+      inventoryQuantity: 4,
+      inventoryUnit: 'each',
+      previousInventoryQuantity: 2,
+      resultingInventoryQuantity: 6,
+      amount: 1.6,
+      adjustmentMode: 'total',
+    })
+    expect(inventoryMovementView(movement)).toMatchObject({
+      quantity: 4,
+      unit: 'each',
+    })
+    expect(database.records.ledger[0]).toEqual(original)
+    expect(database.records.recipes).toEqual(recipes)
+    expect(database.records.journals[0].lines).toEqual([
+      { account: 'Inventory asset', debit: 1.6, credit: 0 },
+      { account: 'Other income', debit: 0, credit: 1.6 },
+    ])
+    // An identical retry is accepted before checking its now-stale stock revision.
+    expect((await post('adjust', 'ingredients', data)).status).toBe(200)
+    expect(database.records.ledger).toHaveLength(2)
+    expect(database.records.journals).toHaveLength(1)
+    expect(
+      (
+        await post('adjust', 'ingredients', {
+          ...data,
+          adjustmentMode: 'change',
+        })
+      ).status,
+    ).toBe(400)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const reopened = await handler(
+        new Request('https://cottage-pantry.test/api/workspace'),
+        context,
+      )
+      const workspace = (await reopened.json()).workspace
+      const ingredient = workspace.ingredients[0]
+      expect(
+        convert(
+          ingredient.quantity,
+          ingredient.unit,
+          ingredient.storageUnit,
+          ingredient.conversions,
+        ),
+      ).toBe(6)
+      expect(
+        inventoryMovementView(
+          workspace.ledger.find((l: any) => l.id === movement.id),
+        ),
+      ).toMatchObject({
+        quantity: 4,
+        unit: 'each',
+        resultingInventoryQuantity: 6,
+      })
+    }
+  },
+)
+it('converts each-based additions and removals before stock valuation, and rejects missing conversions without writes', async () => {
+  database.records.ingredients = [
+    {
+      id: 'counted',
+      name: 'Cups',
+      unit: 'g',
+      storageUnit: 'each',
+      quantity: 200,
+      cost: 0.004,
+      conversions: [
+        { from: 'each', to: 'g', amountFrom: 1, amountTo: 100, verified: true },
+      ],
+    },
+  ]
+  expect(
+    (
+      await post('adjust', 'ingredients', {
+        id: 'counted',
+        quantity: 6,
+        unit: 'each',
+        reason: 'Additional stock',
+      })
+    ).status,
+  ).toBe(200)
+  expect(database.records.ingredients[0].quantity).toBe(800)
+  expect(database.records.ledger[0]).toMatchObject({
+    quantity: 600,
+    unit: 'g',
+    inventoryQuantity: 6,
+    inventoryUnit: 'each',
+    amount: 2.4,
+  })
+  expect(
+    (
+      await post('adjust', 'ingredients', {
+        id: 'counted',
+        quantity: -0.5,
+        unit: 'each',
+        type: 'waste',
+        reason: 'Partial cup wasted',
+      })
+    ).status,
+  ).toBe(200)
+  expect(database.records.ingredients[0].quantity).toBe(750)
+  database.records.ingredients[0].conversions = []
+  const snapshot = structuredClone(database.records)
+  const failed = await post('adjust', 'ingredients', {
+    id: 'counted',
+    quantity: 6,
+    unit: 'each',
+    reason: 'Must not assume each is gram',
+  })
+  expect(failed.status).toBe(400)
+  expect(failed.error).toMatch(/verified unit conversion/)
+  expect(database.records).toEqual(snapshot)
+})
+it('requires a fresh balance for set-total counts and rejects foreign stock and read-only roles', async () => {
+  database.records.ingredients = [
+    {
+      id: 'counted',
+      name: 'Cups',
+      unit: 'each',
+      storageUnit: 'each',
+      quantity: 2,
+      cost: 0.4,
+    },
+  ]
+  const response = await handler(
+    new Request('https://cottage-pantry.test/api/workspace'),
+    context,
+  )
+  const before = (await response.json()).workspace.ingredients[0]
+  const data = {
+    id: 'counted',
+    quantity: 6,
+    unit: 'each',
+    adjustmentMode: 'total',
+    reason: 'Opening count',
+  }
+  expect((await post('adjust', 'ingredients', data)).status).toBe(400)
+  database.records.ingredients[0].storageUnit = 'dozen'
+  expect(
+    (
+      await post('adjust', 'ingredients', {
+        ...data,
+        expectedInventoryRevision: before.inventoryRevision,
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (await post('adjust', 'ingredients', { ...data, id: 'foreign-item' }))
+      .status,
+  ).toBe(400)
+  database.role = 'Read-only Accountant'
+  expect(
+    (
+      await post('adjust', 'ingredients', {
+        id: 'counted',
+        quantity: 1,
+        unit: 'each',
+        reason: 'Unauthorized',
+      })
+    ).status,
+  ).toBe(400)
+  expect(database.records.ingredients[0].quantity).toBe(2)
+  expect(database.records.ledger || []).toEqual([])
+})
+
+it('deducts two each from a saved six-each opening total and locks the corresponding weight and historical cost', async () => {
+  database.records.ingredients = [
+    {
+      id: 'cups',
+      name: 'Recipe cup fixture',
+      unit: 'g',
+      storageUnit: 'each',
+      recipeUnit: 'each',
+      quantity: 200,
+      cost: 0.004,
+      currentCost: 0.005,
+      conversions: [
+        { from: 'each', to: 'g', amountFrom: 1, amountTo: 100, verified: true },
+      ],
+    },
+  ]
+  const response = await handler(
+    new Request('https://cottage-pantry.test/api/workspace'),
+    context,
+  )
+  const before = (await response.json()).workspace.ingredients[0]
+  expect(
+    (
+      await post('adjust', 'ingredients', {
+        id: 'cups',
+        quantity: 6,
+        unit: 'each',
+        adjustmentMode: 'total',
+        expectedInventoryRevision: before.inventoryRevision,
+        reason: 'Opening count',
+      })
+    ).status,
+  ).toBe(200)
+  expect(
+    (
+      await post('save', 'recipes', {
+        id: 'cup-recipe',
+        name: 'Applesauce recipe fixture',
+        yield: 1,
+        yieldUnit: 'each',
+        laborMinutes: 0,
+        laborRate: 0,
+        overhead: 0,
+        lines: [{ ingredientId: 'cups', quantity: 2, unit: 'each' }],
+      })
+    ).status,
+  ).toBe(200)
+  expect(
+    (
+      await post('save', 'batches', {
+        id: 'cup-run',
+        name: 'Cup recipe run',
+        recipeId: 'cup-recipe',
+        count: 1,
+      })
+    ).status,
+  ).toBe(200)
+  const completed = await post('complete', 'batches', {
+    id: 'cup-run',
+    actualYield: 1,
+    laborMinutes: 0,
+  })
+  expect(completed.status).toBe(200)
+  expect(completed.workspace.ingredients[0].quantity).toBe(400)
+  expect(
+    convert(
+      completed.workspace.ingredients[0].quantity,
+      'g',
+      'each',
+      completed.workspace.ingredients[0].conversions,
+    ),
+  ).toBe(4)
+  expect(completed.workspace.recipes[0].lines[0]).toMatchObject({
+    quantity: 2,
+    unit: 'each',
+  })
+  expect(completed.workspace.batches[0].usage[0]).toMatchObject({
+    quantity: 200,
+    unit: 'g',
+    cost: 0.8,
+  })
+  expect(completed.workspace.batches[0].costSnapshot.ingredient).toBeCloseTo(
+    0.8,
+  )
+  const consumption = completed.workspace.ledger.find(
+    (l: any) => l.type === 'batch_consumption',
+  )
+  expect(consumption).toMatchObject({ quantity: -200, unit: 'g', amount: -0.8 })
 })

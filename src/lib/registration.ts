@@ -1,21 +1,20 @@
 import { z } from 'zod'
 import { launchPricing, type PlanId } from './launch-plans'
-import { freeRegistrationPolicyReady } from './free-registration-policy'
 
-export const registrationReadiness = {
+export const registrationReadiness = (policyReady: boolean) => ({
   publicSignup: true,
-  policyAcceptance: freeRegistrationPolicyReady(),
-  activation: freeRegistrationPolicyReady(),
+  policyAcceptance: policyReady,
+  activation: policyReady,
   liveCheckout: false,
   betaAdmission: false,
   blockers: [
-    ...(!freeRegistrationPolicyReady()
+    ...(!policyReady
       ? [
           'Owner-approved Terms and Privacy content is required before free oven creation.',
         ]
       : []),
   ],
-} as const
+})
 export function selectedPlan(value: unknown): PlanId {
   // Unpublished, unassignable drafts (Cottage Mercantile) are never selectable.
   return launchPricing.plans.some((p) => p.id === value && p.assignable)

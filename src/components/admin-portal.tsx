@@ -1,4 +1,5 @@
 import { AdminCatalog } from './admin-catalog'
+import { AdminRegistrationPolicies } from './admin-registration-policies'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useRouterState } from '@tanstack/react-router'
 import {
@@ -944,6 +945,7 @@ function AdminView({
       <>
         <Notice>{data.note}</Notice>
         <AdminCatalog />
+        <AdminRegistrationPolicies />
         <section className="admin-panel">
           <h2>System label templates</h2>
           <p>

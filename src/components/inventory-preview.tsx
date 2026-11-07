@@ -28,6 +28,7 @@ import {
 } from './ui/dialog'
 import { PantryPhoto } from './pantry-photo'
 import { editActionLabel } from '@/lib/item-actions'
+import { inventoryMovementView } from '@/lib/inventory-adjustment'
 import './inventory-preview.css'
 
 /** Opt-in design review: browsing never changes records or saves device-local inventory. */
@@ -257,10 +258,17 @@ export function InventoryPreview({
                 <details>
                   <summary>Stock History</summary>
                   {movements.length ? (
-                    movements.map((l) => (
+                    movements.map(inventoryMovementView).map((l) => (
                       <p key={l.id}>
                         {l.date} · {l.type} · {l.quantity}{' '}
                         {l.unit || item.item.unit || 'each'} ·{' '}
+                        {l.resultingInventoryQuantity != null &&
+                          l.inventoryUnit && (
+                            <>
+                              Balance: {l.resultingInventoryQuantity}{' '}
+                              {l.inventoryUnit} ·{' '}
+                            </>
+                          )}
                         {l.reason || l.sourceId || 'No additional note'}
                       </p>
                     ))

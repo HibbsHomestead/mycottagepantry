@@ -45,7 +45,6 @@ import registration from '../../netlify/functions/registration.mts'
 import webhook from '../../netlify/functions/square-sandbox-webhook.mts'
 import identityHook from '../../netlify/functions/identity.mts'
 import { createHmac } from 'node:crypto'
-import { freeRegistrationPolicy } from './free-registration-policy'
 const db = new PGlite()
 const profile = {
   name: 'Juniper Crumb Kitchen',
@@ -79,12 +78,8 @@ afterAll(async () => {
   await db.close()
   vi.unstubAllGlobals()
 })
-beforeEach(() => {
-  Object.assign(freeRegistrationPolicy, {
-    revision: '',
-    terms: '',
-    privacy: '',
-  })
+beforeEach(async () => {
+  await db.exec('TRUNCATE registration_policies RESTART IDENTITY')
   runtime.values = {
     CONTEXT: 'deploy-preview',
     REGISTRATION_PRIVATE_TESTS_ENABLED: 'true',
@@ -137,11 +132,15 @@ it('blocks free oven creation until real policies and explicit current consent e
       ])
     ).rows,
   ).toHaveLength(0)
-  Object.assign(freeRegistrationPolicy, {
-    revision: 'synthetic-approved-v1',
-    terms: 'Synthetic Terms for this isolated test only.',
-    privacy: 'Synthetic Privacy for this isolated test only.',
-  })
+  await db.query(
+    'INSERT INTO registration_policies(revision,terms,privacy,published_by) VALUES($1,$2,$3,$4)',
+    [
+      'synthetic-approved-v1',
+      'Synthetic Terms for this isolated test only.',
+      'Synthetic Privacy for this isolated test only.',
+      'fixture-owner',
+    ],
+  )
   expect((await make({ accepted: true, revision: 'old' })).status).toBe(409)
   expect(
     (await make({ accepted: false, revision: 'synthetic-approved-v1' })).ok,
@@ -157,11 +156,15 @@ it('creates exactly one free oven for a verified ordinary account, without touch
     roles: [],
   }
   runtime.values.CONTEXT = 'production'
-  Object.assign(freeRegistrationPolicy, {
-    revision: 'synthetic-approved-v1',
-    terms: 'Synthetic Terms for isolated testing.',
-    privacy: 'Synthetic Privacy for isolated testing.',
-  })
+  await db.query(
+    'INSERT INTO registration_policies(revision,terms,privacy,published_by) VALUES($1,$2,$3,$4)',
+    [
+      'synthetic-approved-v1',
+      'Synthetic Terms for isolated testing.',
+      'Synthetic Privacy for isolated testing.',
+      'fixture-owner',
+    ],
+  )
   const make = () =>
     registration(
       new Request('https://example.test/api/registration?view=free', {

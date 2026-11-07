@@ -159,7 +159,7 @@ it('clears the customer view when the server rejects the session', async () => {
   expect(await screen.findByText('Session revoked')).toBeInTheDocument()
   expect(screen.queryByText('Customer accounts')).not.toBeInTheDocument()
 })
-it('previews the existing stock templates without offering write or publish controls', async () => {
+it('previews the existing stock templates and includes a separate policy publisher', async () => {
   runtime.authenticated = true
   runtime.search = '?section=content'
   render(<AdminPortal />)
@@ -172,8 +172,8 @@ it('previews the existing stock templates without offering write or publish cont
     screen.getByRole('button', { name: /The artisan loaf/ }),
   ).toHaveAttribute('aria-pressed', 'true')
   expect(
-    screen.queryByRole('button', { name: /Publish/ }),
-  ).not.toBeInTheDocument()
+    screen.getByRole('button', { name: 'Publish Terms and Privacy' }),
+  ).toBeDisabled()
 })
 
 it('requests recovery with email only and returns to secure sign in', async () => {

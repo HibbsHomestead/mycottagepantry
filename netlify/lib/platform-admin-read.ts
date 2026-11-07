@@ -206,7 +206,7 @@ export async function readAdministration(
         page: input.page,
         pageSize,
         kind: input.kind,
-        note: 'Search by stable Identity ID. Names and emails from the Identity directory are not synchronized.',
+        note: 'This list includes accounts attached to completed customer businesses. Registrations awaiting business setup are excluded; absence here does not mean authentication signup failed. Search by stable Identity ID. Provider names and emails are not synchronized.',
       }
     }
     const where = `${customerWhere} AND (b.business_name ILIKE $1 OR b.id::text ILIKE $1 OR b.identity_owner ILIKE $1)`
