@@ -1771,30 +1771,34 @@ export function LabelStudio({
                   ) : (
                     <LabelCanvas document={t} data={data} assets={assets} />
                   )}
-                  <span>
-                    {(t.width / 72).toFixed(1)} × {(t.height / 72).toFixed(1)}{' '}
-                    in
-                  </span>
-                </button>
-                <div>
-                  <h3>{t.name}</h3>
-                  <p>
-                    {t.category} ·{' '}
-                    {t.isSystem
-                      ? 'Original starter'
-                      : labelRecordKind(t) === 'template'
-                        ? 'Reusable template'
-                        : 'Your saved design'}
-                  </p>
-                  {!t.isSystem && (
-                    <p className="studio-small-note">
-                      Revision {t.revision}
-                      {t.savedAt || t.updatedAt
-                        ? ' · ' +
-                          new Date(t.savedAt || t.updatedAt!).toLocaleString()
-                        : ''}
-                    </p>
+                  {t.format !== 'front-back' && (
+                    <span>
+                      {(t.width / 72).toFixed(1)} × {(t.height / 72).toFixed(1)}{' '}
+                      in
+                    </span>
                   )}
+                </button>
+                <div className="studio-template-body">
+                  <div className="studio-template-info">
+                    <h3>{t.name}</h3>
+                    <p>
+                      {t.category} ·{' '}
+                      {t.isSystem
+                        ? 'Original starter'
+                        : labelRecordKind(t) === 'template'
+                          ? 'Reusable template'
+                          : 'Your saved design'}
+                    </p>
+                    {!t.isSystem && (
+                      <p className="studio-small-note">
+                        Revision {t.revision}
+                        {t.savedAt || t.updatedAt
+                          ? ' · ' +
+                            new Date(t.savedAt || t.updatedAt!).toLocaleString()
+                          : ''}
+                      </p>
+                    )}
+                  </div>
                   <div className="studio-library-actions">
                     <button
                       className="text-button"
@@ -1808,23 +1812,25 @@ export function LabelStudio({
                       <ArrowRight size={16} />
                     </button>
                     {!t.isSystem && labelRecordKind(t) === 'template' && (
-                      <>
-                        <button
-                          className="text-button"
-                          onClick={() => choose(t, true)}
-                        >
-                          Assign to products
-                        </button>
-                        <button
-                          className="text-button"
-                          disabled={!canEdit || saveBusy}
-                          onClick={() =>
-                            setTemplateAction({ mode: 'rename', document: t })
-                          }
-                        >
-                          Rename
-                        </button>
-                      </>
+                      <button
+                        className="text-button"
+                        onClick={() => choose(t, true)}
+                      >
+                        Assign to products
+                      </button>
+                    )}
+                  </div>
+                  <div className="studio-library-actions studio-library-secondary-actions">
+                    {!t.isSystem && labelRecordKind(t) === 'template' && (
+                      <button
+                        className="text-button"
+                        disabled={!canEdit || saveBusy}
+                        onClick={() =>
+                          setTemplateAction({ mode: 'rename', document: t })
+                        }
+                      >
+                        Rename
+                      </button>
                     )}
                     {labelRecordKind(t) === 'template' &&
                       t.format !== 'front-back' && (
@@ -1847,13 +1853,13 @@ export function LabelStudio({
                             )
                           }}
                         >
-                          Duplicate as Front + Back set
+                          Create front/back copy
                         </button>
                       )}
                     {!t.isSystem && (
                       <>
                         <button
-                          className="icon-button"
+                          className="text-button"
                           aria-label={'Duplicate ' + t.name}
                           disabled={
                             saveBusy ||
@@ -1875,7 +1881,7 @@ export function LabelStudio({
                                 )
                           }
                         >
-                          <Copy size={17} />
+                          <Copy size={17} /> Duplicate
                         </button>
                       </>
                     )}
@@ -2129,7 +2135,7 @@ export function LabelStudio({
                   <h3>Add to your label</h3>
                   <button onClick={() => add(newElement())}>
                     <Type size={18} />
-                    Static text
+                    <span>Static text</span>
                   </button>
                   <Control label="Dynamic field">
                     <select
@@ -2176,7 +2182,7 @@ export function LabelStudio({
                     }
                   >
                     <Shapes size={18} />
-                    Shape
+                    <span>Shape</span>
                   </button>
                   <button onClick={() => add(newElement('line'))}>
                     — Line / divider
@@ -2191,7 +2197,7 @@ export function LabelStudio({
                     }
                   >
                     <Grid2X2 size={18} />
-                    Border
+                    <span>Border</span>
                   </button>
                   <div className="studio-small-note">
                     Select an element to edit it. Drag to move; use its corner
@@ -2246,7 +2252,7 @@ export function LabelStudio({
                       }
                     >
                       <ImagePlus size={17} />
-                      {imageBindingNames[binding]}
+                      <span>{imageBindingNames[binding]}</span>
                     </button>
                   ))}
 
@@ -2255,7 +2261,7 @@ export function LabelStudio({
                     onClick={() => setSection('Graphics Library')}
                   >
                     <Upload size={17} />
-                    Upload graphics
+                    <span>Upload graphics</span>
                   </button>
                   {assets.map((a) => (
                     <button
@@ -2271,7 +2277,7 @@ export function LabelStudio({
                       }
                     >
                       <img src={a.fileUrl} alt="" />
-                      {a.name}
+                      <span>{a.name}</span>
                     </button>
                   ))}
                 </div>
