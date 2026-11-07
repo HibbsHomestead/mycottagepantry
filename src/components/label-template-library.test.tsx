@@ -308,7 +308,7 @@ it('duplicates a design as a set with an intact Front and blank Back, leaving th
   render(<api.App />)
   const user = userEvent.setup()
   await user.click(
-    screen.getAllByRole('button', { name: 'Duplicate as Front + Back set' })[0],
+    screen.getAllByRole('button', { name: 'Create front/back copy' })[0],
   )
   expect(screen.getByLabelText('Template format')).toHaveValue('front-back')
   expect(screen.getByText(/Blank back/)).toBeInTheDocument()
