@@ -116,7 +116,7 @@ export function AdminRegistrationPolicies() {
         {loaded
           ? current
             ? `Published revision: ${current.revision}`
-            : 'No policies published. Business creation is paused.'
+            : 'No policies published. Business creation is available without policy acceptance.'
           : 'Loading published policies…'}
       </p>
       {current && (

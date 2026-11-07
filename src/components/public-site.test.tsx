@@ -11,7 +11,9 @@ vi.mock('@/lib/account-access-client', () => ({
     retry: vi.fn(),
   }),
 }))
-vi.mock('@/lib/session.functions', () => ({ getSessionStatus: session.status }))
+vi.mock('@/lib/session.functions', () => ({
+  getSessionStatus: session.status,
+}))
 import { SignupPage } from './signup-page'
 import { tourPlanScope } from './product-tour'
 import {
@@ -46,6 +48,11 @@ it('shows the website to signed-out visitors and an obvious oven link to signed-
       (call: unknown[]) => call[0] === '/api/registration?view=policies',
     ),
   ).toBe(true)
+  expect(screen.queryByRole('link', { name: 'Terms' })).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Privacy' }),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText(/requires publication/)).not.toBeInTheDocument()
   view.unmount()
   vi.unstubAllGlobals()
 })
@@ -58,7 +65,7 @@ it('compares approved monthly prices while distinguishing proposed scope and una
   ).toBeInTheDocument()
   expect(
     await screen.findByText(
-      /Business setup is paused until approved Terms and Privacy/,
+      /setup requires email verification and valid business details/,
     ),
   ).toBeInTheDocument()
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
@@ -150,6 +157,14 @@ it('shows the published legal text and revision together without the unpublished
     await screen.findByText('Synthetic approved Privacy.'),
   ).toBeInTheDocument()
   expect(screen.getByText('Revision synthetic-v1')).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Terms' })).toHaveAttribute(
+    'href',
+    '/terms',
+  )
+  expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute(
+    'href',
+    '/privacy',
+  )
   expect(
     screen.queryByText(/not a legal policy or agreement/),
   ).not.toBeInTheDocument()

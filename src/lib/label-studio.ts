@@ -217,6 +217,43 @@ export const newElement = (
   opacity: 1,
   fit: 'contain',
 })
+export const DEFAULT_LABEL_BACKGROUND = '#FFFFFF'
+
+const missingLabelBackground = (value: unknown) =>
+  value == null || (typeof value === 'string' && value.trim() === '')
+
+/** Missing backgrounds are opaque white, independently on each label side. */
+export function labelBackground(layout: {
+  background?: string | null
+  backgroundOpacity?: number
+}) {
+  return missingLabelBackground(layout.background)
+    ? { background: DEFAULT_LABEL_BACKGROUND, backgroundOpacity: 1 }
+    : {
+        background: layout.background!,
+        backgroundOpacity: layout.backgroundOpacity ?? 1,
+      }
+}
+
+export function withLabelBackgrounds(document: LabelDocument): LabelDocument {
+  return {
+    ...document,
+    ...(missingLabelBackground(document.background)
+      ? labelBackground(document)
+      : {}),
+    ...(document.back
+      ? {
+          back: {
+            ...document.back,
+            ...(missingLabelBackground(document.back.background)
+              ? labelBackground(document.back)
+              : {}),
+          },
+        }
+      : {}),
+  }
+}
+
 export const blankLabel = (): LabelDocument => ({
   id: '',
   name: 'Untitled label',
@@ -225,7 +262,8 @@ export const blankLabel = (): LabelDocument => ({
   width: 288,
   height: 432,
   round: false,
-  background: '#fffdf6',
+  background: DEFAULT_LABEL_BACKGROUND,
+  backgroundOpacity: 1,
   elements: [],
   revision: 0,
   tags: [],
@@ -274,7 +312,6 @@ function template(
     height: 412,
     color: style === 0 ? '#6b284f' : '#2f3426',
   }
-  d.background = style === 0 ? '#f8efdf' : style === 2 ? '#f2f0df' : '#fffdf8'
   d.elements = [
     border,
     text(
@@ -942,6 +979,9 @@ export function validateLabelDocument(
     throw new Error('Label dimensions must be between 0.5 and 14 inches.')
   if (!Array.isArray(input.elements) || input.elements.length > 100)
     throw new Error('Use up to 100 label elements.')
+  // Preserve invalid-color validation while allowing legacy unset backgrounds.
+  if (typeof input.background === 'string' || input.background == null)
+    input = withLabelBackgrounds(input)
   if (!color(input.background))
     throw new Error('Choose a valid background color.')
   for (const opacity of [

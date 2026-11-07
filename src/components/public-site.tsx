@@ -100,21 +100,17 @@ export function PublicSite({ children }: { children: ReactNode }) {
           <a href="/features">Features</a>
           <a href="/pricing">View Plans</a>
           <a href="/help">Help & contact</a>
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
+          {!policies.loading && !policies.error && policies.policy && (
+            <>
+              <a href="/privacy">Privacy</a>
+              <a href="/terms">Terms</a>
+            </>
+          )}
         </nav>
         <p className="public-fine">
           Monthly plans in USD. Paid subscriptions are not yet available for
           purchase.
         </p>
-        {!policies.loading && !policies.error && !policies.policy && (
-          <p className="public-fine">
-            Account creation is open. Creating a business oven currently
-            requires publication of approved <a href="/terms">Terms</a> and{' '}
-            <a href="/privacy">Privacy</a> documents. Existing-account login
-            remains available separately.
-          </p>
-        )}
       </footer>
     </div>
   )
@@ -353,7 +349,7 @@ export function HelpPage() {
             ],
             [
               'How do I create an account?',
-              'Use View Plans to compare monthly pricing and current availability, then Get Started to create an account and verify your email. Registration currently offers the Free setup path only and collects no payment. Business oven setup remains blocked until approved Terms and Privacy are published. Existing account holders can log in separately.',
+              'Use View Plans to compare monthly pricing and current availability, then Get Started to create an account and verify your email. Registration currently offers the Free setup path only and collects no payment. After email verification, enter your business details to create your oven. Existing account holders can log in separately.',
             ],
             [
               'Can I subscribe to a paid plan now?',
@@ -435,21 +431,16 @@ export function LegalPage({ kind }: { kind: 'Privacy' | 'Terms' }) {
   return (
     <PublicSite>
       <section className="public-width public-page-intro narrow">
-        <p className="public-eyebrow">Policy publication required</p>
+        <p className="public-eyebrow">No published document</p>
         <h1>{kind}</h1>
         <p className="public-lead">
           The {kind.toLowerCase()} content has not been approved for
           publication.
         </p>
         <p>
-          This page is a launch-review notice, not a legal policy or agreement.
-          The owner still needs to supply and approve the appropriate content.
-          This document requirement does not prevent existing-account login.
-        </p>
-        <p>
-          {kind === 'Privacy'
-            ? 'The review needs to cover collected data, purposes, processors, retention, exports, deletion, support access, and contact details.'
-            : 'The review needs to cover service scope, eligibility, acceptable use, free-service scope and account closure, data ownership, and business responsibilities.'}
+          This page is not a legal policy or agreement. No acceptance of this
+          unpublished document is requested or recorded. You can create your
+          business after verifying your email.
         </p>
         <a className="public-text-link" href="/help">
           Help & contact <ArrowRight size={18} />

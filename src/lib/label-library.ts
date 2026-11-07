@@ -1,4 +1,4 @@
-import type { LabelDocument } from './label-studio'
+import { withLabelBackgrounds, type LabelDocument } from './label-studio'
 
 // Existing documents predate the library and remain saved labels.
 export const labelRecordKind = (document: LabelDocument) =>
@@ -12,7 +12,7 @@ export function copyLabelDesign(
   kind: 'label' | 'template',
   name = document.name,
 ): LabelDocument {
-  const copy = structuredClone(document)
+  const copy = withLabelBackgrounds(structuredClone(document))
   for (const key of [
     'createdBy',
     'updatedBy',

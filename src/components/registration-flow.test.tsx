@@ -214,7 +214,7 @@ it('offers recovery without claiming that mail was already requested or delivere
   expect(api.request).not.toHaveBeenCalled()
 })
 
-it('shows the saved paid choice during ordinary setup without activating it or bypassing policies', async () => {
+it('keeps the saved paid choice while allowing business setup without unpublished policies or paid activation', async () => {
   api.resume.mockResolvedValue({
     planId: 'cottage-kitchen',
     name: 'Cottage Kitchen',
@@ -240,8 +240,6 @@ it('shows the saved paid choice during ordinary setup without activating it or b
   expect(api.request).not.toHaveBeenCalled()
   expect(
     screen.getByRole('button', { name: 'Create your business' }),
-  ).toBeDisabled()
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'approved Terms and Privacy',
-  )
+  ).toBeEnabled()
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
 })
