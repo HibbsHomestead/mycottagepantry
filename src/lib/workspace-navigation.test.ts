@@ -37,7 +37,8 @@ it('maps old shared destinations without losing existing functionality', () => {
       'Settings',
       'Data Import & Export',
     ],
-    ['#Labels/My%20Labels', 'Labels', 'Saved Labels'],
+    ['#Labels/My%20Labels', 'Labels', 'Labels'],
+    ['#Labels/Templates', 'Labels', 'Labels'],
   ])
     expect(parseWorkspaceHash(old)).toMatchObject({ section, tab })
   expect(

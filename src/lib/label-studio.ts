@@ -147,6 +147,19 @@ export type LabelElement = {
 }
 export type LabelDocument = {
   id: string
+  /** Explicit-save labels; legacy documents remain preserved until conversion review. */
+  workflowVersion?: 1
+  productId?: string
+  source?: LabelSource
+  brandId?: string
+  manualTextReviewedFor?: string
+  printSettings?: {
+    printingMethod?: string
+    copies: number
+    layout: import('./label-print-layout').SheetLayout
+    parts: 'both' | 'front' | 'back'
+    order: 'grouped' | 'paired'
+  }
   recordKind?: 'label' | 'template'
   sourceTemplateId?: string
   format?: 'single' | 'front-back'

@@ -10,7 +10,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { inlineLabelSvg } from '@/lib/label-client-export'
 import {
-  ArrowLeft,
   Minus,
   Pencil,
   Plus,
@@ -42,12 +41,11 @@ import {
 } from '@/lib/label-studio'
 import { defaultSheet, type SheetLayout } from '@/lib/label-print-layout'
 import { mergeLabelWorkspace } from '@/lib/label-persistence'
-import { labelRecordKind } from '@/lib/label-library'
 import {
-  assignableLabels,
-  assignedLabel,
-  missingLabelFields,
-} from '@/lib/label-preview'
+  labelsForProduct,
+  preservedManualTextWarnings,
+} from '@/lib/saved-labels'
+import { assignedLabel, missingLabelFields } from '@/lib/label-preview'
 import type { Item, Workspace } from '@/lib/domain'
 import './label-preview.css'
 
@@ -69,10 +67,12 @@ export function LabelPreviewDialog({
   onWorkspace,
   onEditLabel,
   onCreateLabel,
+  labelId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   product: Item
+  labelId?: string
   workspace: Workspace
   ready: boolean
   role: string
@@ -80,21 +80,33 @@ export function LabelPreviewDialog({
   onEditLabel: (labelId: string) => void
   onCreateLabel: () => void
 }) {
-  const [parts, setParts] = useState<'both' | LabelSide>('both')
-  const [order, setOrder] = useState<'grouped' | 'paired'>('grouped')
+  const initialAssignment = assignedLabel(w, product, labelId)
+  const initialDocument =
+    initialAssignment.status === 'ok' ? initialAssignment.design : null
+  const [parts, setParts] = useState<'both' | LabelSide>(
+    initialDocument?.printSettings?.parts || 'both',
+  )
+  const [order, setOrder] = useState<'grouped' | 'paired'>(
+    initialDocument?.printSettings?.order || 'grouped',
+  )
   const [runIndex, setRunIndex] = useState(0)
   const [backUrl, setBackUrl] = useState('')
-  const [view, setView] = useState<'preview' | 'choose'>('preview')
+  const [selectedId, setSelectedId] = useState(labelId || '')
   const [zoom, setZoom] = useState(1)
   const [fit, setFit] = useState(1)
-  const [copies, setCopies] = useState(1)
-  const [layout, setLayout] = useState<SheetLayout>(defaultSheet)
-  const [printingMethod, setPrintingMethod] = useState('')
+  const [copies, setCopies] = useState(
+    initialDocument?.printSettings?.copies || 1,
+  )
+  const [layout, setLayout] = useState<SheetLayout>(
+    initialDocument?.printSettings?.layout || defaultSheet,
+  )
+  const [printingMethod, setPrintingMethod] = useState(
+    initialDocument?.printSettings?.printingMethod || 'browser',
+  )
   const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
-  const [choice, setChoice] = useState('')
   const [rendered, setRendered] = useState({ key: '', url: '', error: '' })
   const stage = useRef<HTMLDivElement>(null)
   const latest = useRef(w)
@@ -102,7 +114,7 @@ export function LabelPreviewDialog({
     latest.current = w
   }, [w])
   const canEdit = ready && ['Owner', 'Manager'].includes(role)
-  const assignment = assignedLabel(w, product)
+  const assignment = assignedLabel(w, product, selectedId || undefined)
   const savedDesign = assignment.status === 'ok' ? assignment.design : null
   // A structurally broken saved design is reported as a rendering error.
   const design = useMemo(() => {
@@ -124,11 +136,15 @@ export function LabelPreviewDialog({
     () => workspaceFonts(w.font_assets),
     [w.font_assets],
   )
-  const brandId = w.brand_kits?.[0]?.id || ''
+  const brandId =
+    doc?.workflowVersion === 1 ? doc.brandId || '' : w.brand_kits?.[0]?.id || ''
   const brand = (w.brand_kits || []).find((b) => b.id === brandId)
   const source: LabelSource = useMemo(
-    () => ({ kind: 'product', id: product.id }),
-    [product.id],
+    () =>
+      doc?.workflowVersion === 1 && doc.source
+        ? doc.source
+        : { kind: 'product', id: product.id },
+    [product.id, doc],
   )
   const data = useMemo(
     () => resolveLabelData(w, source, brand),
@@ -142,19 +158,21 @@ export function LabelPreviewDialog({
     try {
       return {
         issues: doc
-          ? labelSides(doc).flatMap((side) =>
-              checkLabel(
-                labelSide(doc, side),
-                data,
-                assets,
-                customFonts,
-                labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
-              ).map((issue) =>
-                doc.format === 'front-back'
-                  ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
-                  : issue,
-              ),
-            )
+          ? labelSides(doc)
+              .flatMap((side) =>
+                checkLabel(
+                  labelSide(doc, side),
+                  data,
+                  assets,
+                  customFonts,
+                  labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
+                ).map((issue) =>
+                  doc.format === 'front-back'
+                    ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
+                    : issue,
+                ),
+              )
+              .concat(preservedManualTextWarnings(doc))
           : [],
         missing: doc
           ? labelSides(doc).flatMap((side) =>
@@ -320,7 +338,6 @@ export function LabelPreviewDialog({
   function changeOpen(next: boolean) {
     if (busy) return
     if (!next) {
-      setView('preview')
       setZoom(1)
       setStatus('')
       setError('')
@@ -349,7 +366,7 @@ export function LabelPreviewDialog({
     const observer = new ResizeObserver(measure)
     observer.observe(element)
     return () => observer.disconnect()
-  }, [doc, view, open])
+  }, [doc, open])
 
   async function request(action: string, payload: Record<string, unknown>) {
     const response = await fetch('/api/workspace', {
@@ -434,31 +451,8 @@ export function LabelPreviewDialog({
     }
   }
 
-  async function assign() {
-    if (!choice || busy) return
-    setBusy(true)
-    setError('')
-    try {
-      await request('productLabelAssignment', {
-        productId: product.id,
-        labelId: choice,
-      })
-      setView('preview')
-      setStatus('Label assigned to this product.')
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const scale = fit * zoom
-  const designs = assignableLabels(w)
-    .filter(
-      (d) =>
-        labelRecordKind(d) === 'template' || d.id === product.labelDesignId,
-    )
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const designs = labelsForProduct(w, product)
   const labelCanvas = doc && (
     <div
       className="label-preview-paper"
@@ -481,44 +475,15 @@ export function LabelPreviewDialog({
         <p>The preview appears once your oven’s saved labels have loaded.</p>
       </div>
     )
-  } else if (view === 'choose') {
-    body = (
-      <div className="label-preview-choose">
-        <fieldset>
-          <legend>Choose a saved label for {product.name}</legend>
-          {designs.length ? (
-            designs.map((d) => (
-              <label key={d.id} className="label-preview-option">
-                <input
-                  type="radio"
-                  name="label-preview-choice"
-                  value={d.id}
-                  checked={choice === d.id}
-                  onChange={() => setChoice(d.id)}
-                />
-                <span>
-                  <strong>{d.name}</strong>
-                  <small>
-                    {labelRecordKind(d) === 'template' ? 'Template' : 'Label'} ·{' '}
-                    {inches(d.width)} × {inches(d.height)} in
-                  </small>
-                </span>
-              </label>
-            ))
-          ) : (
-            <p className="muted">
-              No saved labels yet. Create one in Label Studio.
-            </p>
-          )}
-        </fieldset>
-      </div>
-    )
   } else if (assignment.status === 'none') {
     body = (
       <div className="label-preview-state">
         <StickyNote size={22} />
-        <h3>Choose a label template</h3>
-        <p>Choose a reusable template for {product.name} in Label Studio.</p>
+        <h3>No labels linked yet</h3>
+        <p>
+          Create a label and choose {product.name}, or duplicate an existing
+          label.
+        </p>
       </div>
     )
   } else if (assignment.status === 'missing') {
@@ -700,7 +665,7 @@ export function LabelPreviewDialog({
     )
   }
 
-  const designReady = !!doc && !design.error && view !== 'choose'
+  const designReady = !!doc && !design.error
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="app-dialog wide-dialog label-preview-dialog">
@@ -708,10 +673,42 @@ export function LabelPreviewDialog({
           <div className="eyebrow">LABEL PREVIEW · READ-ONLY</div>
           <DialogTitle>Preview Label · {product.name}</DialogTitle>
           <DialogDescription>
-            Shows the assigned design with this product’s saved data. Previewing
-            and printing never change the product or design.
+            Shows the selected label with its saved product data. Previewing and
+            printing never change the product or design.
           </DialogDescription>
         </header>
+        {designs.length > 1 && (
+          <label className="field">
+            <span>Linked label</span>
+            <select
+              aria-label="Linked label"
+              value={assignment.status === 'ok' ? assignment.design.id : ''}
+              onChange={(event) => {
+                setSelectedId(event.target.value)
+                const selected = designs.find(
+                  (d) => d.id === event.target.value,
+                )
+                setCopies(selected?.printSettings?.copies || 1)
+                setLayout(selected?.printSettings?.layout || defaultSheet)
+                setParts(selected?.printSettings?.parts || 'both')
+                setOrder(selected?.printSettings?.order || 'grouped')
+                setPrintingMethod(
+                  selected?.printSettings?.printingMethod || 'browser',
+                )
+                setRunIndex(0)
+                setReviewed(false)
+                setStatus('')
+                setError('')
+              }}
+            >
+              {designs.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {body}
         {(status || error) && (
           <p className={error ? 'error-text' : 'table-note'} role="status">
@@ -719,86 +716,36 @@ export function LabelPreviewDialog({
           </p>
         )}
         <footer className="button-row label-preview-actions">
-          {view === 'choose' ? (
+          <button
+            className="btn secondary"
+            disabled={busy}
+            onClick={() => changeOpen(false)}
+          >
+            Close
+          </button>
+          <button
+            className="btn secondary"
+            disabled={busy || !canEdit}
+            onClick={onCreateLabel}
+          >
+            Create label
+          </button>
+          {assignment.status === 'ok' && (
             <>
               <button
                 className="btn secondary"
-                disabled={busy}
-                onClick={() => setView('preview')}
+                disabled={busy || !canEdit}
+                onClick={() => onEditLabel(assignment.design.id)}
               >
-                <ArrowLeft size={16} /> Back
-              </button>
-              <button className="btn secondary" onClick={onCreateLabel}>
-                Template library
+                <Pencil size={16} /> Edit Label
               </button>
               <button
                 className="btn"
-                disabled={!choice || busy || !canEdit}
-                onClick={() => void assign()}
+                disabled={!designReady || busy || !!printBlocked}
+                onClick={() => void print()}
               >
-                {busy ? 'Assigning…' : 'Use this label'}
+                <Printer size={16} /> {busy ? 'Preparing…' : 'Print Label'}
               </button>
-            </>
-          ) : (
-            <>
-              <button
-                className="btn secondary"
-                disabled={busy}
-                onClick={() => changeOpen(false)}
-              >
-                Close
-              </button>
-              {assignment.status !== 'ok' ? (
-                <>
-                  <button className="btn secondary" onClick={onCreateLabel}>
-                    Template library
-                  </button>
-                  <button
-                    className="btn"
-                    disabled={!canEdit}
-                    title={
-                      canEdit
-                        ? undefined
-                        : 'An Owner or Manager in a connected oven can assign labels.'
-                    }
-                    onClick={() => {
-                      setChoice('')
-                      setView('choose')
-                    }}
-                  >
-                    Choose Label
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="btn secondary"
-                    disabled={busy}
-                    onClick={() => onEditLabel(assignment.design.id)}
-                  >
-                    <Pencil size={16} /> Edit Label
-                  </button>
-                  {canEdit && (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => {
-                        setChoice(assignment.design.id)
-                        setView('choose')
-                      }}
-                    >
-                      Change label
-                    </button>
-                  )}
-                  <button
-                    className="btn"
-                    disabled={!designReady || busy || !!printBlocked}
-                    onClick={() => void print()}
-                  >
-                    <Printer size={16} /> {busy ? 'Preparing…' : 'Print Label'}
-                  </button>
-                </>
-              )}
             </>
           )}
         </footer>

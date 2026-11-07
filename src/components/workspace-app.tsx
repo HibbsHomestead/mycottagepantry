@@ -1,4 +1,5 @@
-import { ProductTemplateField } from './label-template-assignment'
+import { ProductLabelsInfo } from './product-labels'
+import { labelsForProduct } from '@/lib/saved-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
 import { componentStock } from '@/lib/recipe-components'
 import { ItemDetailHeader, ItemDetailLayout } from './item-detail-layout'
@@ -272,7 +273,9 @@ export function WorkspaceApp() {
     [demo, setDemo] = useState(true),
     [labelProduct, setLabelProduct] = useState(''),
     [labelDesign, setLabelDesign] = useState(''),
+    [labelCreateRequest, setLabelCreateRequest] = useState(0),
     [previewProduct, setPreviewProduct] = useState<Item | null>(null),
+    [previewLabelId, setPreviewLabelId] = useState(''),
     [financeEntry, setFinanceEntry] = useState(''),
     [formError, setFormError] = useState('')
   const [componentPicker, setComponentPicker] = useState(false)
@@ -700,6 +703,7 @@ export function WorkspaceApp() {
   }
   function open(kind: string, item?: Item) {
     if (['label-preview', 'label-print'].includes(kind) && item) {
+      setPreviewLabelId('')
       setPreviewProduct(item)
       return
     }
@@ -1964,6 +1968,8 @@ export function WorkspaceApp() {
             <LabelStudio
               initialProductId={labelProduct}
               initialLabelId={labelDesign}
+              initialCreateRequest={labelCreateRequest}
+              onCreateRequestHandled={() => setLabelCreateRequest(0)}
               initialSection={sub}
               onSectionChange={(section) => go('Labels', section)}
               onDirtyChange={(dirty) => {
@@ -3798,14 +3804,13 @@ export function WorkspaceApp() {
                       onWorkspace={setState}
                       onBusy={setBusy}
                     >
-                      <ProductTemplateField
+                      <ProductLabelsInfo
                         value={{
                           ...draft,
                           id: draft.id || 'preview',
                           name: draft.name || 'Product',
                         }}
                         workspace={state}
-                        change={change}
                       />
                       <section
                         className="item-images-text"
@@ -4630,25 +4635,63 @@ export function WorkspaceApp() {
                 cost={productCost(selected)}
                 workspace={state}
               />
-              <p className="table-note">
-                {(state.label_templates || []).find(
-                  (t) => t.id === selected.labelDesignId && !t.deletedAt,
-                )?.name
-                  ? `Label template: ${(state.label_templates || []).find((t) => t.id === selected.labelDesignId)?.name}`
-                  : selected.labelDesignId
-                    ? 'Assigned label template unavailable — choose a label template.'
-                    : 'Choose a label template.'}
-              </p>
+              <section
+                aria-label="Product labels"
+                className="product-linked-labels"
+              >
+                <h3>Labels</h3>
+                {labelsForProduct(state, selected).length ? (
+                  labelsForProduct(state, selected).map((label) => (
+                    <div className="product-linked-label" key={label.id}>
+                      <span>
+                        <strong>{label.name}</strong>
+                        {label.format === 'front-back' ? ' · Front + Back' : ''}
+                      </span>
+                      <Btn
+                        secondary
+                        small
+                        onClick={() => {
+                          setPreviewLabelId(label.id)
+                          setPreviewProduct(selected)
+                        }}
+                      >
+                        Preview/Print
+                      </Btn>
+                      <Btn
+                        secondary
+                        small
+                        onClick={() => {
+                          setLabelProduct(selected.id)
+                          setLabelDesign(label.id)
+                          setModal(null)
+                          go('Labels', 'Editor')
+                        }}
+                      >
+                        Edit
+                      </Btn>
+                    </div>
+                  ))
+                ) : (
+                  <p className="table-note">
+                    No linked labels. Create one in Labels when needed.
+                  </p>
+                )}
+              </section>
               <div className="button-row">
                 <Btn onClick={() => open('product', selected)}>
                   Edit Product
                 </Btn>
-                <Btn secondary onClick={() => open('label-preview', selected)}>
-                  <StickyNote size={16} />
-                  Preview Label
-                </Btn>
-                <Btn secondary onClick={() => open('label-print', selected)}>
-                  Print Label
+                <Btn
+                  secondary
+                  onClick={() => {
+                    setLabelProduct(selected.id)
+                    setLabelDesign('')
+                    setLabelCreateRequest((n) => n + 1)
+                    setModal(null)
+                    go('Labels', 'Labels')
+                  }}
+                >
+                  Create label
                 </Btn>
               </div>
               <p className="table-note">
@@ -4989,6 +5032,8 @@ export function WorkspaceApp() {
       </Dialog>
       {previewProduct && (
         <LabelPreviewDialog
+          key={`${previewProduct.id}:${previewLabelId}`}
+          labelId={previewLabelId || undefined}
           open
           product={
             state.products.find((p) => p.id === previewProduct.id) ||
@@ -5011,9 +5056,10 @@ export function WorkspaceApp() {
           onCreateLabel={() => {
             setLabelProduct(previewProduct.id)
             setLabelDesign('')
+            setLabelCreateRequest((n) => n + 1)
             setPreviewProduct(null)
             setModal(null)
-            go('Labels', 'Templates')
+            go('Labels', 'Labels')
           }}
         />
       )}

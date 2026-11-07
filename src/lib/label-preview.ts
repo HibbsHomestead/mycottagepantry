@@ -1,5 +1,6 @@
 import type { Item, Workspace } from './domain'
 import { labelRecordKind } from './label-library'
+import { labelsForProduct } from './saved-labels'
 import {
   elementText,
   elementVisible,
@@ -21,10 +22,15 @@ export type AssignedLabel =
  * The design explicitly assigned to a product. Never falls back to another
  * design: an unknown or deleted assignment is reported as missing.
  */
-export function assignedLabel(w: Workspace, product: Item): AssignedLabel {
-  const id = String(product.labelDesignId || '')
+export function assignedLabel(
+  w: Workspace,
+  product: Item,
+  labelId?: string,
+): AssignedLabel {
+  const linked = labelsForProduct(w, product)
+  const id = labelId || String(product.labelDesignId || linked[0]?.id || '')
   if (!id) return { status: 'none' }
-  const design = assignableLabels(w).find((t) => t.id === id)
+  const design = linked.find((t) => t.id === id)
   return design ? { status: 'ok', design } : { status: 'missing', id }
 }
 
@@ -87,7 +93,11 @@ export function applyProductTemplateDraft(
   stored?: Item,
 ) {
   if (item.labelAssignmentEdited === true) {
-    const product = { ...stored, ...item, labelDesignId: stored?.labelDesignId }
+    const product = {
+      ...stored,
+      ...item,
+      labelDesignId: stored?.labelDesignId,
+    }
     const next = productLabelAssignment(
       {
         ...w,

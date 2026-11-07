@@ -76,8 +76,8 @@ it.skipIf(process.env.RUN_LABEL_OWNER_AUDIT !== '1')(
       />,
     )
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Saved Labels' }))
-    await user.click(screen.getByRole('button', { name: /Open label/ }))
+    await user.click(screen.getByRole('button', { name: 'Labels' }))
+    await user.click(screen.getByRole('button', { name: /Preview\/Print Bread Label/ }))
     expect(screen.getByLabelText('Label name')).toHaveValue('Bread Label')
     await user.click(
       screen.getByRole('button', { name: 'Export editable recovery file' }),

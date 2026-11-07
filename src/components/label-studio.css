@@ -1227,3 +1227,89 @@
 .studio-editor-toolbar .studio-save-state {
   flex: 1 1 140px;
 }
+.studio-label-list {
+  display: grid;
+  gap: 10px;
+}
+.studio-label-row {
+  display: grid;
+  grid-template-columns: 110px minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border, #dedace);
+  border-radius: 10px;
+  background: var(--panel, #fffdf6);
+}
+.studio-label-thumbnail {
+  max-height: 96px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.studio-label-thumbnail .label-set-preview {
+  gap: 4px;
+}
+.studio-label-thumbnail figcaption {
+  font-size: 9px;
+}
+.studio-label-thumbnail figure > div {
+  max-height: 68px;
+}
+.studio-label-description {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.studio-label-description h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+.studio-label-description p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #686759);
+}
+.studio-label-row .studio-library-actions {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.studio-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.studio-manual-review {
+  border: 1px solid #b99b58;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 12px 0;
+  background: #faf4e5;
+}
+.studio-manual-review ul {
+  max-height: 180px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.product-linked-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border, #dedace);
+}
+.product-linked-label > span {
+  flex: 1;
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .studio-label-row {
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+  .studio-label-row .studio-library-actions {
+    grid-column: 1 / -1;
+  }
+}

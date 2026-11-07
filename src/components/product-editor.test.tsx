@@ -72,7 +72,10 @@ it('opens an existing product as Edit Product with Save Changes and keeps its ID
     screen.getByRole('button', { name: 'Receive Stock' }),
   ).toBeInTheDocument()
   tab('Images & Labels')
-  expect(screen.getByRole('combobox', { name: 'Label template' })).toBeVisible()
+  expect(screen.getByRole('region', { name: 'Linked labels' })).toBeVisible()
+  expect(
+    screen.queryByRole('combobox', { name: 'Label template' }),
+  ).not.toBeInTheDocument()
   tab('Details')
   await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
   await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1))

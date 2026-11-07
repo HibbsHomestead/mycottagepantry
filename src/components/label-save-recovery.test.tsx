@@ -33,6 +33,8 @@ function makeDocument(): LabelDocument {
     ...blankLabel(),
     id: crypto.randomUUID(),
     name: 'Bread Label',
+    workflowVersion: 1,
+    recordKind: 'label',
     width: 216,
     height: 288,
     elements: [
@@ -64,6 +66,11 @@ function setup(existing = true) {
   let workspace = demoData()
   workspace.settings[0].labelEditorScope = 'private-scope'
   workspace.label_templates = existing ? [makeDocument()] : []
+  for (const document of workspace.label_templates) {
+    document.source = { kind: 'product', id: workspace.products[0].id }
+    document.productId = workspace.products[0].id
+    document.manualTextReviewedFor = `product:${workspace.products[0].id}:`
+  }
   workspace.label_recovery_drafts = []
   workspace.label_versions = []
   let fail = '',
@@ -136,40 +143,29 @@ function setup(existing = true) {
 }
 async function open() {
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Saved Labels' }))
-  await user.click(screen.getByRole('button', { name: /Open label/ }))
+  await user.click(screen.getByRole('button', { name: 'Labels' }))
+  await user.click(screen.getByRole('button', { name: /^Edit / }))
   return user
 }
-it('creates a reusable starter template, saves, reopens and remounts with exact contents and ID', async () => {
+it('creates and explicitly saves a new label without a template prerequisite', async () => {
   const api = setup(false),
     user = userEvent.setup()
-  const app = render(<api.App />)
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
-  fireEvent.change(screen.getByLabelText('Template name'), {
+  render(<api.App />)
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  fireEvent.change(screen.getByLabelText('Label name'), {
     target: { value: 'Owner editable loaf' },
   })
-  await user.click(screen.getByRole('button', { name: 'Update Template' }))
-  await waitFor(() => expect(screen.getByText(/^Saved ·/)).toBeInTheDocument())
-  const saved = structuredClone(api.workspace().label_templates[0])
-  expect(saved.recordKind).toBe('template')
-  await user.click(screen.getByRole('button', { name: 'Templates' }))
-  await user.click(screen.getByRole('button', { name: 'Open template' }))
-  await user.click(
-    screen.getByRole('button', { name: 'Export editable recovery file' }),
+  await user.selectOptions(
+    screen.getAllByLabelText('Product')[0],
+    api.workspace().products[0].id,
   )
-  expect(labelContent(state.snapshots.at(-1)!.document)).toBe(
-    labelContent(saved as LabelDocument),
-  )
-  app.unmount()
-  render(<api.App />)
-  await user.click(screen.getByRole('button', { name: 'Open template' }))
-  await user.click(
-    screen.getByRole('button', { name: 'Export editable recovery file' }),
-  )
-  expect(labelContent(state.snapshots.at(-1)!.document)).toBe(
-    labelContent(saved as LabelDocument),
-  )
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await screen.findByText(/^Saved ·/)
   expect(api.workspace().label_templates).toHaveLength(1)
+  expect(api.workspace().label_templates[0].recordKind).toBe('label')
+  expect(api.workspace().label_templates[0].productId).toBe(
+    api.workspace().products[0].id,
+  )
 })
 it('updates an existing rotated dynamic layout without changing element IDs, groups, or fonts', async () => {
   const api = setup(),
@@ -306,8 +302,10 @@ it('resets inherited template filters when opening My Labels and shows a tagless
   render(<api.App />)
   const user = userEvent.setup()
   await user.selectOptions(screen.getByLabelText('Style filter'), 'Farmhouse')
-  await user.click(screen.getByRole('button', { name: 'Saved Labels' }))
-  expect(screen.getByRole('button', { name: /Open label/ })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Labels' }))
+  expect(
+    screen.getByRole('button', { name: /^Edit / }),
+  ).toBeInTheDocument()
   expect(screen.getByLabelText('Style filter')).toHaveValue('All styles')
 })
 it('retries after a committed save loses its response without creating another revision or label', async () => {
@@ -450,8 +448,8 @@ it('applies a different font to a selected static word and preserves the text ru
   await user.click(screen.getByRole('button', { name: 'Apply Lora' }))
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await screen.findByText(/^Saved ·/)
-  await user.click(screen.getByRole('button', { name: 'Saved Labels' }))
-  await user.click(screen.getByRole('button', { name: /Open label/ }))
+  await user.click(screen.getByRole('button', { name: 'Labels' }))
+  await user.click(screen.getByRole('button', { name: /^Edit / }))
   await user.click(
     screen.getByRole('button', { name: 'Export editable recovery file' }),
   )

@@ -20,8 +20,7 @@ export const sectionTabs: Record<string, string[]> = {
   Sales: ['Sales', 'Consignment'],
   Purchasing: ['Purchases & Receipts', 'Suppliers', 'Purchase Orders'],
   Labels: [
-    'Saved Labels',
-    'Templates',
+    'Labels',
     'Brand Kit',
     'Graphics Library',
     'Print & Export',
@@ -58,7 +57,7 @@ export type Destination = {
 }
 export function destination(name: string, section?: string): Destination {
   if (name === 'Production' && section === 'Label Studio')
-    return destination('Labels', 'Templates')
+    return destination('Labels', 'Labels')
   let main = name,
     tab = section || ''
   if (name === 'Products & Pricing') main = 'Products'
@@ -112,7 +111,11 @@ export function destination(name: string, section?: string): Destination {
           'Waste / adjustments': 'Waste & Adjustments',
         } as Record<string, string>
       )[tab] || tab
-  if (name === 'Labels') tab = tab === 'My Labels' ? 'Saved Labels' : tab
+  if (
+    name === 'Labels' &&
+    ['My Labels', 'Saved Labels', 'Templates'].includes(tab)
+  )
+    tab = 'Labels'
   if (!sectionTabs[main]) main = 'Dashboard'
   const specialFilter =
     main === 'Inventory' && ['Low stock', 'Expiring soon'].includes(tab)
@@ -173,7 +176,6 @@ export function destination(name: string, section?: string): Destination {
         } as Record<string, string>
       )[tab] || tab
   }
-  if (main === 'Labels') sub = tab === 'Saved Labels' ? 'My Labels' : tab
   return { section: main, tab, page, sub, filter }
 }
 export const destinationHash = (route: Destination) =>

@@ -165,15 +165,12 @@ it.each(['none', 'missing'] as const)(
       screen.getByRole('heading', {
         name:
           assignment === 'none'
-            ? 'Choose a label template'
+            ? 'No labels linked yet'
             : 'Assigned label design is unavailable',
       }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Choose Label' }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Template library' }),
+      screen.getByRole('button', { name: 'Create label' }),
     ).toBeInTheDocument()
     expect(output.inline).not.toHaveBeenCalled()
     expect(p.fetcher).not.toHaveBeenCalled()
@@ -250,4 +247,74 @@ it('refuses a server snapshot that differs from the preview instead of silently 
   ).toBeInTheDocument()
   expect(output.print).not.toHaveBeenCalled()
   expect(p.onOpenChange).not.toHaveBeenCalled()
+})
+
+it('selects among multiple saved labels for one product without assigning or saving anything', async () => {
+  const workspace = demoData(),
+    product = workspace.products[0]
+  delete product.labelDesignId
+  const source = { kind: 'product' as const, id: product.id }
+  const first = {
+    ...blankLabel(),
+    id: 'small-label',
+    name: 'Small label',
+    workflowVersion: 1 as const,
+    recordKind: 'label' as const,
+    revision: 1,
+    source,
+    productId: product.id,
+    elements: [newElement('text', '', 'product.displayName')],
+  }
+  const second = {
+    ...first,
+    id: 'large-label',
+    name: 'Large label',
+    width: 216,
+    printSettings: {
+      copies: 6,
+      layout: {
+        mode: 'roll' as const,
+        pageWidth: 612,
+        pageHeight: 792,
+        columns: 1,
+        rows: 1,
+        margin: 0,
+        gutter: 0,
+      },
+      parts: 'both' as const,
+      order: 'grouped' as const,
+    },
+  }
+  workspace.label_templates = [first, second]
+  const fetcher = vi.fn(),
+    edit = vi.fn()
+  vi.stubGlobal('fetch', fetcher)
+  render(
+    <LabelPreviewDialog
+      open
+      product={product}
+      labelId={second.id}
+      workspace={workspace}
+      ready
+      role="Owner"
+      onWorkspace={vi.fn()}
+      onOpenChange={vi.fn()}
+      onEditLabel={edit}
+      onCreateLabel={vi.fn()}
+    />,
+  )
+  const user = userEvent.setup()
+  await screen.findByAltText(`Populated label for ${product.name}`)
+  expect(screen.getByLabelText('Linked label')).toHaveValue(second.id)
+  expect(screen.getByLabelText('Number of products')).toHaveValue(6)
+  await user.selectOptions(screen.getByLabelText('Linked label'), first.id)
+  await waitFor(() =>
+    expect(output.inline.mock.calls.at(-1)![0].getAttribute('viewBox')).toBe(
+      '0 0 288 432',
+    ),
+  )
+  await user.click(screen.getByRole('button', { name: 'Edit Label' }))
+  expect(edit).toHaveBeenCalledWith(first.id)
+  expect(fetcher).not.toHaveBeenCalled()
+  expect(product.labelDesignId).toBeUndefined()
 })

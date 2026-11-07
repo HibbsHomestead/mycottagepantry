@@ -84,6 +84,7 @@ export function safeWorkspaceReturn(value: string | null | undefined) {
       tab &&
       sectionTabs[section] &&
       !sectionTabs[section].includes(tab) &&
+      !(section === 'Labels' && ['Templates', 'Saved Labels'].includes(tab)) &&
       ![
         'Batch planner',
         'Batch runs',

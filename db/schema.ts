@@ -212,7 +212,17 @@ export const productTaxAssignments = pgTable(
 )
 
 // Label Studio documents retain editable JSON and relational organization keys.
-export const labelTemplates = orgTable('label_templates')
+export const labelTemplates = pgTable(
+  'label_templates',
+  { ...base(), productId: text('product_id') },
+  (t) => [
+    uniqueIndex('label_templates_org_id').on(t.businessId, t.id),
+    foreignKey({
+      columns: [t.businessId, t.productId],
+      foreignColumns: [products.businessId, products.id],
+    }),
+  ],
+)
 export const labelRecoveryDrafts = pgTable(
   'label_recovery_drafts',
   {

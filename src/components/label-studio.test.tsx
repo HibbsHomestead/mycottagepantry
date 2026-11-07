@@ -18,12 +18,14 @@ it('makes a copy of a starter, edits dynamic elements, and exposes label checks 
   expect(
     screen.getByRole('navigation', { name: 'Label Studio sections' }),
   ).toBeInTheDocument()
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
-  expect(screen.getByLabelText('Template name')).toHaveValue(
-    'Homestead bold · my template',
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Choose a starting design (optional)' }),
   )
+  await user.click(screen.getByRole('button', { name: 'Homestead bold' }))
+  expect(screen.getByLabelText('Label name')).toHaveValue('Homestead bold')
   expect(
-    screen.getByRole('img', { name: 'Homestead bold · my template' }),
+    screen.getByRole('img', { name: 'Homestead bold' }),
   ).toBeInTheDocument()
   await user.selectOptions(
     screen.getByLabelText('Dynamic field'),
@@ -32,7 +34,7 @@ it('makes a copy of a starter, edits dynamic elements, and exposes label checks 
   expect(screen.getByLabelText('Data binding')).toHaveValue('batch.number')
   await user.click(screen.getByRole('button', { name: 'Undo' }))
   expect(screen.queryByLabelText('Data binding')).not.toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Print & export' }))
+  await user.click(screen.getByRole('button', { name: 'Preview/Print' }))
   expect(
     screen.getByRole('heading', { name: 'Label Check' }),
   ).toBeInTheDocument()
@@ -73,7 +75,11 @@ it('moves, resizes and rotates on the canvas with one undo step per drag', async
       role="Owner"
     />,
   )
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Choose a starting design (optional)' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Homestead bold' }))
   const paper = document.querySelector('.studio-paper') as HTMLElement,
     target = paper.querySelector('g[data-element] rect, g[data-element] text')!
   const at = (x: number, y: number) => ({

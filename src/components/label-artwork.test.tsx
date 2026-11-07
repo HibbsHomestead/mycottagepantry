@@ -16,7 +16,11 @@ it('adds a linked product graphic through the label editor', async () => {
       role="Owner"
     />,
   )
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Choose a starting design (optional)' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Homestead bold' }))
   await user.click(screen.getByRole('button', { name: 'Assets' }))
   await user.click(
     screen.getByRole('button', { name: 'Product label graphic' }),
@@ -38,7 +42,11 @@ it('offers product label graphics in the dynamic field dropdown as an image', as
       role="Owner"
     />,
   )
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Choose a starting design (optional)' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Homestead bold' }))
   const field = screen.getByRole('combobox', { name: 'Dynamic field' })
   expect(
     screen.getByRole('option', { name: 'Product label graphic' }),
@@ -139,7 +147,11 @@ it('commits one color session as one undo step and keeps label colors independen
       role="Owner"
     />,
   )
-  await user.click(screen.getAllByRole('button', { name: 'Use a copy' })[0])
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.click(
+    screen.getByRole('button', { name: 'Choose a starting design (optional)' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Homestead bold' }))
   const { fireEvent } = await import('@testing-library/react')
   const trigger = document.querySelector('.color-trigger') as HTMLElement
   const original = trigger.getAttribute('title')
