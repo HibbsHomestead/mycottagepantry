@@ -1,0 +1,203 @@
+.registration-shell {
+  width: min(100% - 36px, 850px);
+  margin: 35px auto 65px;
+}
+.registration-steps {
+  list-style: none;
+  display: flex;
+  gap: 16px;
+  padding: 0;
+  margin: 0 0 25px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.registration-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.registration-steps span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+}
+.registration-steps [aria-current] {
+  color: var(--primary);
+  font-weight: 600;
+}
+.registration-steps [aria-current] span {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+}
+.registration-paper {
+  padding: clamp(22px, 5vw, 48px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+}
+.registration-paper h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.2;
+  margin: 12px 0;
+}
+.registration-lead {
+  color: var(--muted);
+  font-size: 17px;
+}
+.registration-plan {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 25px 0;
+  padding: 18px 0;
+  border-block: 1px solid var(--border);
+}
+.registration-plan strong {
+  display: block;
+  font-size: 20px;
+  font-family: var(--font-heading);
+  color: var(--primary);
+}
+.registration-plan small {
+  display: block;
+  font-size: 12px;
+}
+.registration-notice {
+  padding: 16px;
+  border-left: 3px solid var(--primary);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+.registration-form {
+  display: grid;
+  gap: 18px;
+}
+.registration-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.registration-form input,
+.registration-form select,
+.registration-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  border-radius: var(--radius-control);
+  padding: 12px;
+  font: inherit;
+}
+.registration-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.registration-form input:focus-visible,
+.registration-form select:focus-visible,
+.registration-form textarea:focus-visible,
+.registration-paper a:focus-visible,
+.registration-paper button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.registration-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.registration-actions {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 22px 0;
+}
+.registration-form .registration-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  z-index: 1;
+}
+.registration-help {
+  font-size: 13px;
+  color: var(--muted);
+}
+.registration-checklist {
+  padding-left: 20px;
+}
+.registration-checklist li {
+  margin-block: 12px;
+}
+.registration-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.registration-table td,
+.registration-table th {
+  text-align: left;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.registration-paper button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.registration-password {
+  display: flex;
+  gap: 8px;
+}
+.registration-password button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 8px 12px;
+  background: var(--surface-soft);
+}
+@media (max-width: 580px) {
+  .registration-grid {
+    grid-template-columns: 1fr;
+  }
+  .registration-plan {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .registration-steps {
+    gap: 8px 12px;
+    font-size: 11px;
+  }
+  .registration-paper {
+    padding: 22px 18px;
+  }
+}
+.signup-plan-scope {
+  display: block;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.signup-plan-choice {
+  min-inline-size: 0;
+  display: grid;
+  gap: 16px;
+}
+.signup-plan-choice .check-label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+.signup-plan-choice input[type='radio'] {
+  width: auto;
+  margin-top: 5px;
+  padding: 0;
+}

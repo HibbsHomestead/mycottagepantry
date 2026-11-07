@@ -1,0 +1,88 @@
+{
+  "products": [
+    {
+      "fields": {
+        "name": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+        "packageSize": "13.5 lbs",
+        "brand": "ARM & HAMMER",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13960262278",
+        "barcode": "033200003403",
+        "notes": "\n13.5 pound resealable bag\nMore than 100 uses: The most useful product in your home that saves time and money\nAll-purpose cleaner and deodorizer: From kitchen to bathroom to laundry room – use on fixtures, laundry, furniture, toys, pots, pans, etc.\nBeyond cleaning: Resealable, water-resistant bag can be used for hair and skin treatments, crafts for kids and even pedicures\n",
+        "subingredients": "Sodium Bicarbonate 100%",
+        "packagePrice": 9.42,
+        "currency": "USD",
+        "purchaseQuantity": 13.5,
+        "purchaseUnit": "lb"
+      },
+      "title": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/eed6f415-e434-4fb2-9424-fb8b9046944d.b21ff811a2be34d1d86a070a0ad6f8ba.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search",
+      "checkedAt": "2026-11-06T23:19:44.604Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · SHIPPING · Membership: https://www.samsclub.com/join#Club, https://www.samsclub.com/join#Plus · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search"
+    },
+    {
+      "fields": {
+        "name": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+        "packageSize": "13.5 lbs",
+        "brand": "ARM & HAMMER",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13960262278",
+        "barcode": "033200003403",
+        "notes": "\n13.5 pound resealable bag\nMore than 100 uses: The most useful product in your home that saves time and money\nAll-purpose cleaner and deodorizer: From kitchen to bathroom to laundry room – use on fixtures, laundry, furniture, toys, pots, pans, etc.\nBeyond cleaning: Resealable, water-resistant bag can be used for hair and skin treatments, crafts for kids and even pedicures\n",
+        "subingredients": "Sodium Bicarbonate 100%",
+        "packagePrice": 8.98,
+        "currency": "USD",
+        "purchaseQuantity": 13.5,
+        "purchaseUnit": "lb"
+      },
+      "title": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/eed6f415-e434-4fb2-9424-fb8b9046944d.b21ff811a2be34d1d86a070a0ad6f8ba.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search",
+      "checkedAt": "2026-11-06T23:19:44.604Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · PICKUP · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search"
+    },
+    {
+      "fields": {
+        "name": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+        "packageSize": "13.5 lbs",
+        "brand": "ARM & HAMMER",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13960262278",
+        "barcode": "033200003403",
+        "notes": "\n13.5 pound resealable bag\nMore than 100 uses: The most useful product in your home that saves time and money\nAll-purpose cleaner and deodorizer: From kitchen to bathroom to laundry room – use on fixtures, laundry, furniture, toys, pots, pans, etc.\nBeyond cleaning: Resealable, water-resistant bag can be used for hair and skin treatments, crafts for kids and even pedicures\n",
+        "subingredients": "Sodium Bicarbonate 100%",
+        "packagePrice": 8.98,
+        "currency": "USD",
+        "purchaseQuantity": 13.5,
+        "purchaseUnit": "lb"
+      },
+      "title": "Arm & Hammer Pure Baking Soda, 13.5 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/eed6f415-e434-4fb2-9424-fb8b9046944d.b21ff811a2be34d1d86a070a0ad6f8ba.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search",
+      "checkedAt": "2026-11-06T23:19:44.604Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · DELIVERY · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Arm-Hammer-Pure-Baking-Soda-13-5-lbs/13960262278?classType=REGULAR&athbdg=L1103&from=/search"
+    }
+  ]
+}

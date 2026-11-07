@@ -1,0 +1,254 @@
+/* Shared screen surfaces. Print documents and label canvases retain their own units. */
+@media screen {
+  /* Contain positioned accessible labels inside the existing table scroller. */
+  .panel > .table-wrap {
+    position: relative;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .panel-body,
+  .panel-footer {
+    padding: var(--card-padding);
+  }
+  .panel-body > .panel-heading,
+  .panel-body > .panel-body,
+  .panel-body > .panel-footer {
+    padding-inline: 0;
+  }
+  .panel-heading > *,
+  .panel-body,
+  .panel-footer,
+  .button-row,
+  [data-slot='card-header'] > * {
+    min-width: 0;
+  }
+  .panel-heading h2,
+  .panel-heading h3,
+  .panel-body h2,
+  .panel-footer,
+  [data-slot='card-title'] {
+    overflow-wrap: anywhere;
+  }
+  .panel-heading .button-row,
+  .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--action-gap);
+  }
+  .button-row > .btn {
+    max-width: 100%;
+    white-space: normal;
+  }
+  .panel > .table-wrap > table :is(th, td):first-child {
+    padding-left: var(--card-padding);
+  }
+  .panel > .table-wrap > table :is(th, td):last-child {
+    padding-right: var(--card-padding);
+  }
+  .action-banner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--icon-text-gap);
+    padding: var(--card-padding);
+  }
+  .action-banner-icon {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    color: var(--primary);
+  }
+  .action-banner-icon > svg {
+    width: 24px;
+    height: 24px;
+  }
+  .action-banner-copy {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .action-banner-copy small {
+    display: block;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+  .action-banner-actions {
+    justify-content: flex-end;
+    max-width: 460px;
+  }
+  .finance-list-row {
+    gap: var(--icon-text-gap);
+  }
+  .finance-list-row > * {
+    min-width: 0;
+  }
+  .finance-list-row > svg {
+    flex-shrink: 0;
+  }
+  .finance-list-row > span:first-of-type {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .finance-list-row > strong {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .finance-list-row.finance-list-row--receipt {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 112px 96px 44px;
+  }
+  .finance-list-row--receipt > .badge {
+    justify-self: start;
+  }
+  .finance-list-row--receipt > svg:last-child {
+    justify-self: center;
+  }
+  .attention-icon,
+  .run-icon {
+    flex-shrink: 0;
+  }
+  .recent-run > span:nth-child(2),
+  .profit-product > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 1200px) {
+    .action-banner {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+    .action-banner-actions {
+      grid-column: 2;
+      justify-content: flex-start;
+      max-width: 100%;
+    }
+  }
+  @media (max-width: 640px) {
+    :root {
+      --card-padding: 16px;
+    }
+    .action-banner-actions {
+      grid-column: 1 / -1;
+    }
+    .finance-list-row {
+      flex-wrap: wrap;
+    }
+    .finance-list-row > span:first-of-type {
+      flex-basis: 50%;
+    }
+    .finance-list-row.finance-list-row--receipt {
+      grid-template-columns: 24px minmax(0, 1fr) 44px;
+    }
+    .finance-list-row--receipt > span:first-of-type {
+      grid-column: 2;
+    }
+    .finance-list-row--receipt > strong {
+      grid-column: 2;
+      text-align: left;
+    }
+    .finance-list-row--receipt > .badge {
+      grid-column: 2;
+    }
+    .finance-list-row--receipt > svg:last-child {
+      grid-column: 3;
+      grid-row: 1 / span 3;
+      align-self: center;
+    }
+    .panel-heading {
+      align-items: flex-start;
+    }
+    .panel > .table-wrap > table tr {
+      padding: var(--card-padding);
+    }
+  }
+}
+
+/* A full-width divider and inset disclosure content shared by card footers. */
+.card-disclosure {
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.card-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px var(--card-padding);
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+}
+.card-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.card-disclosure > summary svg {
+  flex-shrink: 0;
+}
+.card-disclosure[open] > summary svg {
+  transform: rotate(90deg);
+}
+.card-disclosure > summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -4px;
+}
+.card-disclosure-content {
+  padding: 0 var(--card-padding) 16px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.card-disclosure-content .finance-list-row {
+  padding-inline: 0;
+}
+.card-disclosure-content .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Fabric records use the shared cool-gray surfaces and responsive form grid. */
+.fabric-card-details {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 10px;
+  font-size: 0.85rem;
+}
+.fabric-card-details p {
+  margin: 4px 0;
+}
+.fabric-summary {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 2fr;
+  gap: 8px 16px;
+}
+.fabric-summary dt {
+  color: var(--muted-foreground);
+}
+.fabric-summary dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+@media (max-width: 1250px) {
+  .breadcrumb > span {
+    display: inline;
+    white-space: nowrap;
+  }
+}
+@media (max-width: 700px) {
+  .topbar .quick-add {
+    min-width: 38px;
+    padding: 9px;
+  }
+  .topbar .quick-add > span,
+  .topbar .quick-add > svg:last-child {
+    display: none;
+  }
+  .topbar-right {
+    gap: 5px;
+  }
+  .breadcrumb {
+    gap: 5px;
+  }
+}

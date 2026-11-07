@@ -1,0 +1,151 @@
+.product-card dt,
+.product-card .status {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.product-card footer .btn {
+  white-space: normal;
+}
+
+/* Product-overview styles leave inventory cards, detail dialogs and editors alone. */
+.product-photo-grid.pantry-card-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.product-card-photo-first {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 3px 12px #24273408;
+}
+
+.product-card-photo-first .pantry-card-photo-button {
+  order: -1;
+  padding: 0;
+  border-radius: 15px 15px 0 0;
+}
+
+.product-card-photo-first .pantry-card-photo-button .pantry-photo {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 200px;
+  aspect-ratio: 4 / 3;
+  border-radius: inherit;
+  background: var(--accent-soft);
+}
+
+.product-card-photo-first .pantry-photo img {
+  object-fit: contain;
+}
+
+.product-card-photo-first .pantry-photo > svg {
+  width: 52px;
+  height: 52px;
+  stroke-width: 1.25;
+  color: var(--primary);
+}
+
+.product-card-photo-first .pantry-card-top {
+  padding: 16px 20px 0;
+  gap: 12px;
+}
+
+.product-card-photo-first .status {
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.product-card-photo-first .pantry-card-main {
+  padding: 12px 20px 20px;
+  gap: 12px;
+}
+
+.product-card-photo-first .pantry-card-title {
+  font-size: 19px;
+  line-height: 1.35;
+  color: var(--foreground);
+}
+
+.product-card-photo-first .pantry-card-main p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.product-card-photo-first dl {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-card-photo-first dt,
+.product-card-photo-first dd {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  align-content: center;
+}
+
+.product-card-photo-first dt:first-of-type,
+.product-card-photo-first dd:first-of-type {
+  padding-top: 2px;
+  padding-bottom: 14px;
+}
+
+.product-card-photo-first dd:first-of-type {
+  color: var(--primary);
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.product-card-photo-first footer {
+  padding: 16px 20px;
+  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.product-card-photo-first footer .btn {
+  min-height: 42px;
+  padding: 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.product-card-photo-first footer .btn:first-child {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.product-card-photo-first footer .btn:first-child:hover {
+  background: var(--primary-hover);
+}
+
+.product-card-photo-first button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.product-card-photo-first .pantry-card-photo-button:focus-visible {
+  outline-offset: -4px;
+}
+
+@media (max-width: 1200px) {
+  .product-photo-grid.pantry-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .product-photo-grid.pantry-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}

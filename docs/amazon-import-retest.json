@@ -1,0 +1,82 @@
+{
+  "observations": [
+    {
+      "url": "https://www.amazon.com/dp/B0BQMJJBNP?ref_=ppx_hzsearch_conn_dt_b_fed_asin_title_8&th=1",
+      "requestedAt": "2026-11-07T19:42:42.850Z",
+      "status": 503,
+      "hops": [
+        {
+          "url": "https://www.amazon.com/dp/B0BQMJJBNP?ref_=%5Bredacted%5D&th=1",
+          "at": "2026-11-07T19:42:42.929Z",
+          "status": 503,
+          "headers": {
+            "content-type": "text/html",
+            "date": "Sat, 07 Nov 2026 19:42:42 GMT",
+            "via": "1.1 95ef1030311257e7ed5f551280daef42.cloudfront.net (CloudFront)",
+            "x-cache": "Error from cloudfront",
+            "x-amz-cf-id": "z4LuDuhtytfWUxMeAAMiKIkgoVfcdgPRX-b2nkGySCnkh9rqSF3aqA=="
+          },
+          "bodySummary": "Error document contains a browser redirect; not followed or parsed as product data."
+        }
+      ],
+      "bytes": 316,
+      "sanitizedBody": {
+        "document": "HTML",
+        "browserRedirectTarget": "https://www.amazon.com/error/500",
+        "containsProductMetadata": false,
+        "containsVerification": false
+      }
+    },
+    {
+      "url": "https://www.amazon.com/dp/B0BQMJJBNP?th=1",
+      "requestedAt": "2026-11-07T19:42:42.929Z",
+      "status": 503,
+      "hops": [
+        {
+          "url": "https://www.amazon.com/dp/B0BQMJJBNP?th=1",
+          "at": "2026-11-07T19:42:43.015Z",
+          "status": 503,
+          "headers": {
+            "content-type": "text/html",
+            "date": "Sat, 07 Nov 2026 19:42:43 GMT",
+            "via": "1.1 95ef1030311257e7ed5f551280daef42.cloudfront.net (CloudFront)",
+            "x-cache": "Error from cloudfront",
+            "x-amz-cf-id": "WG5tb_vAN6hvEBpr60it_yqiBekoyAfFxMx2E7rxXGKZKOdNKrMKrA=="
+          },
+          "bodySummary": "Error document contains a browser redirect; not followed or parsed as product data."
+        }
+      ],
+      "bytes": 316,
+      "sanitizedBody": {
+        "document": "HTML",
+        "browserRedirectTarget": "https://www.amazon.com/error/500",
+        "containsProductMetadata": false,
+        "containsVerification": false
+      }
+    }
+  ],
+  "importer": {
+    "outcome": "structured failure; no product data imported",
+    "diagnostics": {
+      "requestedAt": "2026-11-07T19:42:43.016Z",
+      "requestedUrl": "https://www.amazon.com/dp/B0BQMJJBNP?ref_=%5Bredacted%5D&th=1",
+      "source": "retailer",
+      "hops": [
+        {
+          "url": "https://www.amazon.com/dp/B0BQMJJBNP?ref_=%5Bredacted%5D&th=1",
+          "at": "2026-11-07T19:42:43.044Z",
+          "status": 503,
+          "headers": {
+            "content-type": "text/html",
+            "date": "Sat, 07 Nov 2026 19:42:43 GMT",
+            "via": "1.1 95ef1030311257e7ed5f551280daef42.cloudfront.net (CloudFront)",
+            "x-cache": "Error from cloudfront",
+            "x-amz-cf-id": "PxD3NL4EseI2-qfbLgxo1nk5ihL02_tOCEk1ghkTzxmsRobzpNMfAg=="
+          },
+          "bodySummary": "Error document contains a browser redirect; not followed or parsed as product data."
+        }
+      ]
+    },
+    "retryAfter": null
+  }
+}

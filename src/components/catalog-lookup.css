@@ -1,0 +1,105 @@
+.catalog-lookup,
+.draft-field-review,
+.package-photo-import,
+.catalog-contribution {
+  min-width: 0;
+  margin-block: 0.55rem;
+  color: var(--ink, #34382b);
+}
+.catalog-search-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.catalog-search-row .field {
+  flex: 1;
+  min-width: 0;
+}
+.catalog-search-row input {
+  min-width: 0;
+  width: 100%;
+}
+.catalog-result {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid #dcded2;
+  overflow-wrap: anywhere;
+}
+.catalog-result .text-button {
+  justify-self: start;
+}
+.catalog-result small,
+.draft-review-row small {
+  display: block;
+  color: #60654e;
+}
+.draft-review-row {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e4e5db;
+  overflow-wrap: anywhere;
+}
+.draft-review-row > input {
+  margin-top: 0.3rem;
+}
+.draft-field-review > .btn {
+  margin-top: 0.65rem;
+}
+.package-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.6rem 0;
+}
+.package-photo-grid label {
+  display: block;
+}
+.package-photo-grid input {
+  max-width: 100%;
+  font-size: 0.8rem;
+}
+.package-photo-grid img {
+  display: block;
+  max-width: 100%;
+  height: 90px;
+  object-fit: contain;
+  margin: 0.3rem 0;
+}
+.package-photo-grid .text-button {
+  margin-right: 0.6rem;
+}
+.package-photo-import summary,
+.catalog-contribution summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.catalog-contribution dl {
+  overflow-wrap: anywhere;
+}
+.catalog-contribution dd {
+  margin-left: 0;
+}
+.catalog-contribution dt {
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .catalog-search-row {
+    flex-wrap: wrap;
+  }
+  .catalog-search-row .field {
+    flex-basis: 100%;
+  }
+  .package-photo-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .catalog-lookup .barcode-entry-row {
+    flex-wrap: wrap;
+  }
+  .catalog-lookup .barcode-entry-row > .field {
+    flex-basis: 100%;
+  }
+}

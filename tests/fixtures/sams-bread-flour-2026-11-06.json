@@ -1,0 +1,91 @@
+{
+  "products": [
+    {
+      "fields": {
+        "name": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+        "packageSize": "25 lbs",
+        "brand": "Member's Mark",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13909715756",
+        "barcode": "078742251462",
+        "notes": "\n25 pound bag\nFlour for bread and pizza dough\nGreat for bread machines\nEnriched, malted and bleached\nHigh gluten\n",
+        "subingredients": "Bleached wheat flour, malted barley flour, niacin, reduced iron, thiamine mononitrate, riboflavin, folic acid.",
+        "sourceContains": "Contains wheat.",
+        "packagePrice": 10.98,
+        "currency": "USD",
+        "purchaseQuantity": 25,
+        "purchaseUnit": "lb"
+      },
+      "title": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/cef3df48-2441-4fb1-b99b-4a08173800de.cfe1981a2ad12557c7ba107c1accb1d7.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756",
+      "checkedAt": "2026-11-06T23:19:45.498Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · SHIPPING · Membership: https://www.samsclub.com/join#Club, https://www.samsclub.com/join#Plus · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756"
+    },
+    {
+      "fields": {
+        "name": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+        "packageSize": "25 lbs",
+        "brand": "Member's Mark",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13909715756",
+        "barcode": "078742251462",
+        "notes": "\n25 pound bag\nFlour for bread and pizza dough\nGreat for bread machines\nEnriched, malted and bleached\nHigh gluten\n",
+        "subingredients": "Bleached wheat flour, malted barley flour, niacin, reduced iron, thiamine mononitrate, riboflavin, folic acid.",
+        "sourceContains": "Contains wheat.",
+        "packagePrice": 10.98,
+        "currency": "USD",
+        "purchaseQuantity": 25,
+        "purchaseUnit": "lb"
+      },
+      "title": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/cef3df48-2441-4fb1-b99b-4a08173800de.cfe1981a2ad12557c7ba107c1accb1d7.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756",
+      "checkedAt": "2026-11-06T23:19:45.498Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · PICKUP · Membership: https://www.samsclub.com/join#Club, https://www.samsclub.com/join#Plus · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756"
+    },
+    {
+      "fields": {
+        "name": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+        "packageSize": "25 lbs",
+        "brand": "Member's Mark",
+        "vendor": "Samsclub.com",
+        "retailerSku": "13909715756",
+        "barcode": "078742251462",
+        "notes": "\n25 pound bag\nFlour for bread and pizza dough\nGreat for bread machines\nEnriched, malted and bleached\nHigh gluten\n",
+        "subingredients": "Bleached wheat flour, malted barley flour, niacin, reduced iron, thiamine mononitrate, riboflavin, folic acid.",
+        "sourceContains": "Contains wheat.",
+        "packagePrice": 10.98,
+        "currency": "USD",
+        "purchaseQuantity": 25,
+        "purchaseUnit": "lb"
+      },
+      "title": "Member's Mark Bread & Pizza Flour, 25 lbs.",
+      "imageUrl": "https://i5.samsclubimages.com/asr/cef3df48-2441-4fb1-b99b-4a08173800de.cfe1981a2ad12557c7ba107c1accb1d7.jpeg",
+      "sourceUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756",
+      "checkedAt": "2026-11-06T23:19:45.498Z",
+      "warnings": [
+        "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+        "Package quantity was read from the product title; confirm against the actual package."
+      ],
+      "conditions": [
+        "Sam’s Club · DELIVERY · Membership: https://www.samsclub.com/join#Club, https://www.samsclub.com/join#Plus · confirm membership and store at checkout"
+      ],
+      "requestedUrl": "https://www.samsclub.com/ip/Member-s-Mark-Bread-Pizza-Flour-25-lbs/13909715756"
+    }
+  ]
+}

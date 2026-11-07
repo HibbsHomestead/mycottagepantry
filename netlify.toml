@@ -1,0 +1,56 @@
+[build]
+  command = "vite build"
+  publish = "dist/client"
+[build.environment]
+  NODE_VERSION = "24"
+[dev]
+  framework = "#custom"
+  command = "npm run dev"
+  targetPort = 3000
+  port = 8888
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["pdfjs-dist", "@napi-rs/canvas", "@resvg/resvg-js"]
+  included_files = ["public/label-fonts/**", "public/artwork/**"]
+
+# Runtime file tracing can also discover copies in generated development/build
+# directories. The workspace needs only the source assets above, never those
+# copies. Scope exclusions here so the framework's generated server stays intact.
+[functions.workspace]
+  included_files = [
+    "public/label-fonts/**",
+    "public/artwork/**",
+    "!.netlify/**",
+    "!dist/**",
+  ]
+
+[[headers]]
+  for = "/app-version.json"
+  [headers.values]
+    Cache-Control = "no-store"
+    Netlify-CDN-Cache-Control = "no-store"
+
+[[headers]]
+  for = "/label-fonts/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+# Preserve query strings; browsers inherit the original fragment on redirects.
+[[redirects]]
+  from = "/workspace"
+  to = "/oven"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/workspace/*"
+  to = "/oven/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/studio"
+  to = "/oven"
+  status = 301
+  force = true

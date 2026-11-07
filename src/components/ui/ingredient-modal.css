@@ -1,0 +1,414 @@
+/* One viewport-constrained shell for Add and Edit. Override actual Radix content,
+   including the generic app-dialog !important padding/max-width. */
+[data-slot='dialog-content'].ingredient-modal-shell {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  width: min(1040px, calc(100vw - 48px));
+  max-width: min(1040px, calc(100vw - 48px)) !important;
+  height: auto;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  transform: translate(-50%, -50%);
+  translate: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  background: var(--card) !important;
+  color: var(--foreground);
+  border-radius: 16px !important;
+  animation: none;
+}
+.ingredient-modal-shell > [data-slot='dialog-header'] {
+  flex-shrink: 0;
+  padding: 24px 56px 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.ingredient-modal-shell .editor-ingredient {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.ingredient-modal-shell .ingredient-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px;
+  scroll-padding-block: 24px;
+}
+.ingredient-modal-shell .form-footer,
+.ingredient-modal-shell .ingredient-detail-footer {
+  position: static;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+.ingredient-modal-shell .ingredient-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.ingredient-modal-shell .ingredient-flow > .product-link-panel,
+.ingredient-modal-shell .ingredient-flow > details,
+.ingredient-modal-shell .ingredient-detail-grid > .product-link-panel,
+.ingredient-modal-shell .ingredient-optional {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.ingredient-modal-shell .ingredient-basics {
+  grid-column: 1;
+  grid-row: 2 / span 2;
+}
+.ingredient-modal-shell .ingredient-purchase {
+  grid-column: 2;
+  grid-row: 2;
+}
+.ingredient-modal-shell .ingredient-storage {
+  grid-column: 2;
+  grid-row: 3;
+}
+.ingredient-modal-shell .form-step,
+.ingredient-modal-shell .ingredient-section,
+.ingredient-modal-shell .product-link-panel {
+  min-width: 0;
+}
+.ingredient-modal-shell .form-grid.three {
+  grid-template-columns: minmax(0, 1fr);
+}
+.product-link-panel {
+  overflow-wrap: anywhere;
+}
+.product-link-entry {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  min-width: 0;
+}
+.product-link-entry .field {
+  flex: 1;
+  min-width: 0;
+}
+.product-link-entry input {
+  min-width: 0;
+  max-width: 100%;
+}
+.product-link-entry > button {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+.product-link-panel .check-label {
+  min-width: 0;
+  align-items: flex-start;
+}
+.product-link-panel .check-label > input {
+  flex-shrink: 0;
+}
+.product-link-panel .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (min-width: 1000px) {
+  .ingredient-modal-shell .form-grid.three {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
+  }
+}
+@media (max-width: 760px) {
+  [data-slot='dialog-content'].ingredient-modal-shell {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+  .ingredient-modal-shell > [data-slot='dialog-header'] {
+    padding: 16px 48px 16px 16px;
+  }
+  .ingredient-modal-shell .ingredient-modal-body,
+  .ingredient-modal-shell .ingredient-detail-body,
+  .ingredient-modal-shell .ingredient-detail-header {
+    padding: 16px;
+  }
+  .ingredient-modal-shell .form-footer,
+  .ingredient-modal-shell .ingredient-detail-footer {
+    padding: 12px 16px;
+  }
+  .ingredient-modal-shell .ingredient-flow,
+  .ingredient-modal-shell .ingredient-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ingredient-modal-shell .ingredient-basics,
+  .ingredient-modal-shell .ingredient-purchase,
+  .ingredient-modal-shell .ingredient-storage {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+@media (max-width: 560px) {
+  .product-link-entry {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ingredient-modal-shell .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Import review is a document, never a calculation-box horizontal row. */
+.product-import {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+  overflow-wrap: normal;
+}
+.product-import-review {
+  display: block;
+  min-width: 0;
+  margin-top: 12px;
+}
+.product-import-summary {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.product-import-summary img {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.product-import h4 {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0 0 4px;
+  overflow-wrap: break-word;
+}
+.product-import p {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 4px 0;
+}
+.product-import a {
+  overflow-wrap: anywhere;
+}
+.product-import-fields {
+  display: block;
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 12px;
+}
+.product-import-field {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.product-import-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.product-import-value > div:first-child {
+  display: inline;
+}
+.product-import .product-import-current {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.product-import-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.product-import-selection > span:first-child {
+  margin-right: auto;
+}
+.product-import .text-button {
+  margin: 0;
+  font-size: inherit;
+}
+.product-import-expand {
+  display: inline;
+}
+.product-import .product-import-selection > .text-button,
+.app-dialog .product-import button.product-import-expand {
+  min-height: 0;
+  padding: 0;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+.product-import-edit {
+  display: inline;
+  margin-left: 8px;
+  white-space: normal;
+}
+.product-import-edit[open] {
+  display: block;
+  margin: 4px 0 0;
+}
+.product-import .product-import-edit > summary {
+  display: inline;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.product-import-edit textarea {
+  field-sizing: content;
+  resize: none;
+}
+.product-import-source-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.product-import-footer {
+  position: static;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.product-import-footer .button-row {
+  margin-top: 10px;
+}
+.product-vendor-review .btn {
+  margin-top: 8px;
+}
+.product-vendor-add {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.product-import-select,
+.product-import .check-label {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.5;
+  color: inherit;
+}
+.product-import input[type='checkbox'] {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  margin: 2px 0 0;
+}
+.product-import-field p {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.product-import .field {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.product-import input:not([type='checkbox']),
+.product-import select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+.product-import-details {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.product-import summary {
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.product-import .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.product-import button {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  flex-shrink: 0;
+  line-height: 1.5;
+}
+.product-import-applied,
+.product-import-missing {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+}
+.ingredient-save-error {
+  flex: 1 1 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--danger);
+}
+.ingredient-modal-shell .form-footer {
+  flex-wrap: wrap;
+}
+.ingredient-modal-shell [aria-invalid='true'] {
+  border-color: var(--danger);
+}
+@media (max-width: 760px) {
+  .product-import {
+    padding: 12px;
+  }
+  .product-import-summary {
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .product-import-summary img {
+    width: 80px;
+    height: 80px;
+  }
+}
+.product-import textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  line-height: 1.5;
+}

@@ -1,0 +1,53 @@
+.store-price-search,
+.price-search-controls {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.price-search-controls {
+  padding: 16px;
+  background: var(--surface-soft);
+  border-radius: 12px;
+}
+.web-offer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.web-offer {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  min-width: 0;
+  align-content: start;
+  overflow-wrap: anywhere;
+}
+.web-offer h4 {
+  margin: 0;
+}
+.web-offer .status {
+  justify-self: start;
+}
+.web-offer-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.web-offer-heading > div {
+  min-width: 0;
+}
+.web-offer-heading img {
+  width: 56px;
+  height: 64px;
+  object-fit: contain;
+  background: var(--surface-soft);
+  flex-shrink: 0;
+}
+@media (max-width: 700px) {
+  .web-offer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

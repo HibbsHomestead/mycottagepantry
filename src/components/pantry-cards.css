@@ -1,0 +1,138 @@
+.pantry-photo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-soft);
+  color: var(--muted);
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.pantry-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.pantry-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+.pantry-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+.pantry-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 16px 0;
+}
+.pantry-card-top .status {
+  margin-right: auto;
+  min-width: 0;
+}
+.pantry-card-photo-button {
+  padding: 16px 24px 0;
+  display: block;
+  width: 100%;
+}
+.pantry-card-photo-button .pantry-photo {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  border-radius: 12px;
+}
+.pantry-card-main {
+  padding: 16px 24px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  align-content: start;
+}
+.pantry-card-title {
+  text-align: left;
+  font-weight: 700;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+.pantry-card-main p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pantry-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  font-size: 13px;
+}
+.pantry-card dt {
+  color: var(--muted);
+}
+.pantry-card dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.pantry-card footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.pantry-view-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.pantry-view-toggle button {
+  padding: 6px 12px;
+  border-radius: 7px;
+}
+.pantry-view-toggle button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--primary);
+  font-weight: 700;
+}
+.pantry-v2 .toolbar {
+  flex-wrap: wrap;
+}
+.pantry-edit-photo {
+  width: 100%;
+  height: 128px;
+}
+@media (min-width: 1500px) {
+  .pantry-card-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .pantry-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .pantry-card-main,
+  .pantry-card footer {
+    padding: 16px;
+  }
+  .pantry-card-photo-button {
+    padding: 16px 16px 0;
+  }
+}
+
+.pantry-v2 .pantry-sort {
+  white-space: nowrap;
+}

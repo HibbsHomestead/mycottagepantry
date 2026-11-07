@@ -1,0 +1,3 @@
+/** Exact owner-supplied public URL. Tracking parameters are preserved for reproduction. */
+export const ownerWalmartUrl =
+  'https://www.walmart.com/ip/Wesson-Pure-Cholesterol-Free-Canola-Oil-128-fl-oz/10291484?athAsset=eyJhdGhjcGlkIjoiMTAyOTE0ODQiLCJhdGhzdGlkIjoiQ1MxMzIiLCJhdGhMMSI6Ijk3Njc1OSIsImF0aGFlIjp7ImFlcnMiOnsiQURTX1JFViI6MC4wMDQ1MjI2MDYyNjQ3OTk4MzMsIk9SR19BVENSIjowLjAwODA1NTQ4NDg1MzY4NDkwMn0sIm1ycyI6eyJDVFIiOjAuMDE1MDc1MzUzOTA1NTU4NTg2LCJBVENSIjowLjAwODA1NTQ4NDg1MzY4NDkwMiwiQ1ZSIjowLjAwMTk2OTM0NzQ3NTA5NjU4MzR9LCJhZSI6MC4wMDU1NDI0MDg2NzQ5NTUzNjgsImFld3IiOiJBRFNfUkVWIn0sImF0aHRwIjoiaGVhZCJ9&classType=REGULAR&adsRedirect=true'

@@ -1,0 +1,1 @@
+Font upload validation fixtures use the bundled DM Sans font converted to WOFF and WOFF2, and Adobe Source Sans 3 Regular in OTF format from https://github.com/adobe-fonts/source-sans/tree/release/OTF. Their licenses are included alongside the fixtures. These files test font parsing and PDF embedding and are not business-uploaded assets.

@@ -1,0 +1,9 @@
+# Cottage Pantry brand purple
+
+The canonical purple is **#5C3A83** (RGB 92, 58, 131), sampled from `public/brand/cottage-pantry-original.png` at its original 1254×1254 resolution. The source is a textured raster rather than a perfectly flat vector, so its purple regions contain neighboring RGB values.
+
+Sampling used interior rectangles within the three jar labels and solid chart bars. White lettering/background, lighter decorative elements and edge pixels were excluded. Purple-channel filtering and a maximum adjacent-pixel channel difference of three excluded anti-aliased boundaries. Among 8,444 retained interior pixels, the most frequent exact RGB was #5C3A83 (341 pixels), ahead of #5B3982 (319) and #5C3A84 (281). The logo file was not modified. This is the dominant sampled interior color, not a claim that every purple pixel in the raster is identical.
+
+`src/lib/brand.ts` defines the canonical value and RGB shade mixing. The Cottage Purple palette derives lavender, borders, hover/pressed, dark-mode accessible purple and focus colors from that value. Primary-button text stays white in light mode and dark ink on the accessible light-purple dark-mode accent. Existing status colors remain separate.
+
+Cottage Purple is the new default theme. The existing Plum Pantry palette remains selectable and valid so explicit saved choices are not silently changed. Missing workspace preferences resolve to the new default after account loading, and the pre-paint script uses the same generated palette. Reset to default restores Cottage Purple while retaining the selected display mode; the existing authenticated Appearance save flow persists it. No business, inventory, financial or label-artwork colors are rewritten. If a workspace has explicitly saved another palette, choose Cottage Purple or Reset to default to change that workspace.

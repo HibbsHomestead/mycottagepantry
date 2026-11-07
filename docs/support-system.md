@@ -1,0 +1,85 @@
+# Private support tickets — Phase 1
+
+**Revised direction:** The owner now requests a full business help desk. See [the current architecture proposal](business-help-desk-proposal.md). This document describes the existing limited implementation, not a connected inbound/outbound email inbox. No provider cutover or legacy-ticket migration has been activated.
+
+## Implemented scope
+
+Existing verified account holders enter **Help & support → Get help**, or `/support`. The form accepts subject, Question/Bug/Account & billing/Feature request, a plain-text message and an optional screenshot. It warns against passwords, API keys and payment-card details. Tickets show a number, status, ordered conversation, replies, resolve/reopen and authenticated screenshot downloads. Support belongs on Free and every paid plan; no entitlement or payment check gates it.
+
+`/platform-support` provides a separate inbox with number/subject/requester search, status filters, pagination, customer-visible replies, clearly distinguished private internal notes, status/reopen/resolve controls and protected notification settings. The inbox shows durable notification states and attempts. No personal mailbox is connected or imported. No AI, stock, sales, expenses, journal, subscription or billing workflow is invoked.
+
+The database migration is additive and follows all existing applied migrations. Existing tables, business records and workspace roles are not migrated or rewritten. Netlify applies the new migration through its deployment pipeline; no migration command was run against a live database.
+
+## Authorization and privacy
+
+Every support API request uses `@netlify/identity` for its session, then re-fetches the current provider identity with the server admin SDK. A confirmed email is required. Role removal is checked on the next request rather than trusting browser/cached roles. Provider failure denies access without provisioning a demo workspace. The requester comes from that identity; client-supplied requester/workspace/role fields are rejected.
+
+- `platform_support` grants access to support tickets, replies, notes and statuses.
+- `platform_admin` also grants notification-settings access.
+- Workspace Owner, Manager, Production Staff and Accountant roles grant **neither** platform role. User-editable metadata is ignored. No bootstrap bypass or automatic first-owner promotion exists.
+- Assign initial platform roles manually in the Identity dashboard to the intended verified support account. Review strong authentication/MFA or organizational access controls before wider platform administration; this feature does not implement a new authentication provider.
+
+Tickets are requester-only plus authorized platform support. They are not shared with other workspace members, including another Owner. Support can be requested without an active workspace (for account problems); otherwise the server attaches only the current active membership's workspace ID. This does not fetch workspace contents or grant support staff general business-data browsing.
+
+All seven support tables have forced PostgreSQL row-level policies. Ticket ownership is independent from business ownership. Message and attachment policies follow their authorized parent; customer policies exclude internal notes and internal screenshots. API queries additionally check requester/view permission explicitly. Customer responses never include private notes, note IDs/files, outbox entries, support recipient settings or staff diagnostics. A database trigger prevents internal messages or mismatched ticket/message recipients from being queued for email. Platform ticket views, downloads, replies, notes, status and configuration changes have content-free audit entries.
+
+Support responses and screenshots use private/no-store, Cookie variance and no-referrer/nosniff headers. No public asset URL, client storage, shared workspace cache or customer-controlled file path is used. Future shared-workspace ticket access needs a separate reviewed access model.
+
+## Context and attachments
+
+The only automatic context is a server-derived short commit version (or `unknown`), the verified requester, optional active workspace ID, and a whitelisted app location. Diagnostic URLs lose their origin, query, record IDs, arbitrary fragments and sensitive values. Workspace navigation names are whitelisted. No business records, logs, financial details, screenshots or browser state are collected silently. Users choose their own text/file.
+
+Screenshots use private Netlify Blobs and SQL attachment metadata. PNG/JPEG/WebP only; 2 MB input; at most 4096 × 4096 pixels/16 megapixels; static images only. The server decodes with Sharp, rejects malformed/unsupported data, strips metadata and re-encodes to PNG with a 4 MB output ceiling. Original names are discarded. Maximum three screenshots/message and twenty/ticket. Downloads reauthorize ticket and message, use attachment disposition and a restrictive CSP. No untrusted HTML, SVG, PDF, archive or executable attachment is rendered.
+
+A message/ticket commits first. An optional screenshot uploads in a separate authorized, idempotent request. Upload failure leaves the conversation saved and tells the user the screenshot did not attach. Blob/SQL failures can leave an inaccessible orphan object; an audited age-based orphan reconciler and retention/deletion policy are follow-up operations work before high-volume use. Never delete an object based only on a browser-supplied key.
+
+Before broad attachment types, evaluate a quarantined scanning worker using ClamAV with maintained signatures or a commercial scanning service with data-residency, retention, cost and privacy review. Do not send customer screenshots to public multiscanner services. Broad types remain disabled; image decoding/normalization is a narrow attack-surface control, not a malware-scanning certification.
+
+## Durable submission and delivery
+
+Ticket + initial message + acknowledgment/new-ticket outbox events are one transaction. Replies and their outbox event also commit together. Private notes produce no notifications. Server-generated ticket numbers and stable UUID submission keys prevent duplicate creates/replies/uploads; unique database constraints backstop idempotency. Per-identity advisory locks serialize duplicate creates. Reuse of a saved key with different content is rejected. Ticket creation is limited to ten/hour, messages to sixty/hour (120 for authorized staff), and request bodies/files are bounded. Duplicate retries of an already saved submission remain usable at the rate limit.
+
+Email runs separately after commit, in a production-only scheduled function, at most three attempted notifications per ten-minute run. This is a simple initial dispatch capacity, not a delivery-time guarantee. Jobs use row locks/skip-locked claims. Definitive provider rate-limit rejection retries at most three total attempts with five-minute backoff. Unknown outcomes (timeouts, interrupted sends, non-JSON success, ambiguous 5xx) stay `unknown` and are not automatically retried, avoiding duplicate mail. A stale sending claim becomes unknown rather than being resent. Admins can see failure state; there is intentionally no unsafe blind “resend everything” control.
+
+States distinguish pending/blocked setup/sending/**accepted**/**delivered**/failed/unknown/bounced/suppressed/cancelled. API acceptance is not delivery. Authenticated, deduplicated provider Delivery/Bounce/SpamComplaint events update the outbox; later delivery does not clear a known bounce/suppression. A delivery event means the recipient server accepted mail, not that a human read it. Known bounced/suppressed targets stop subsequent sends pending review. Requester recipients are revalidated with Identity at dispatch; deleted/unverifiable identities are cancelled, without affecting tickets. Platform recipient confirmation is also checked against the current verified admin identity.
+
+Notifications contain a ticket number and canonical secure link, not ticket subjects, message bodies, business context, private notes or attachments. The From address is always the approved application sender, never the requester. Notifications say **“Reply in Cottage Pantry.”** Replying by email does not update the conversation. Production links use the approved `https://mycottagepantry.com` origin, never a request Host header.
+
+## Existing email audit and setup still required
+
+The existing Identity transport handles authentication-token messages, not arbitrary ticket notifications. No suitable application-mail account or configured sender was found in the existing source/audit. No personal mailbox or payment email transport was repurposed. The optional Postmark HTTP adapter was implemented without adding a service subscription or activating delivery; another provider would require a reviewed adapter, not silent substitution.
+
+The actual account's sender, quota, contract and delivery have not been verified. Previous public-price references listed Postmark Developer at 100 messages/month with no overages and Basic at $15/month for 10,000 messages, additional $1.80/1,000. Reconfirm the current quote, country/account availability and approval before purchase. No paid service or real test email was enabled/sent here. Identity authentication mail remains separate, avoiding duplicate verification or recovery messages.
+
+**Owner/account configuration:**
+
+1. Assign the separate platform role to the intended verified support account through Identity; require strong account authentication. No recipient address is inferred from that account or published.
+2. Enter a chosen notification recipient in the protected platform settings. It may be an existing email. Saving a change pauses notifications, removes the active recipient and stages the new address. Confirm by typing the address while signed in as a platform administrator whose provider-verified email matches it. Other mailbox addresses can be saved as pending but cannot activate without a later approved verification flow. No confirmation email is sent by this Phase 1 setup.
+3. Review/approve a transactional provider and budget. Verify the sending address/domain in that provider; configure SPF/DKIM and reviewed DMARC, a reply-to address, bounce/suppression handling and a transactional message stream. Configure production DNS/TLS and links for `mycottagepantry.com`. Do not duplicate Identity/account mail.
+4. Store provider credentials only in server/function environment configuration, scoped to production. The optional adapter uses `SUPPORT_POSTMARK_SERVER_TOKEN`. Pin the exact provider-verified sender as `SUPPORT_VERIFIED_FROM`. This pin is operator attestation after provider verification; the UI does not claim to query/verify the provider's domain itself.
+5. Configure an unpredictable server-only `SUPPORT_EMAIL_WEBHOOK_SECRET` (at least 32 characters), and Postmark Delivery/Bounce/SpamComplaint webhooks to `/api/support-delivery` using HTTPS Basic authentication with username `support` and that secret as password. Do not put credentials in URLs or logs. Metadata carries only the notification ID. Endpoint authentication and event deduplication are implemented; actual provider compatibility/delivery still needs an approved test.
+6. Only after explicit live-send approval, set production `SUPPORT_EMAIL_ENABLED` to the exact string `true`, set `SUPPORT_EMAIL_ORIGIN` to `https://mycottagepantry.com`, confirm recipient and sender settings, then enable notifications in the protected settings. Both server and database gates are required. Unset/other flag values, previews, tests, unconfirmed recipients and unapproved senders cannot send. No flag was enabled during implementation.
+
+The sender, reply-to and recipient are protected database settings, not public frontend configuration. Concurrent settings saves use a version check. Changed recipients always require renewed confirmation; the old recipient is not silently retained. Email failure never rolls back a saved ticket. A future arbitrary-mailbox verification flow would require a hashed, expiring, single-use challenge, rate limits and explicit approval before any real send.
+
+## Costs and operating assumptions
+
+No provider purchase or live-send spend was activated. Existing hosting/database subscriptions may already incur charges; account-specific rates were not inspected.
+
+A sizing example: 100 new tickets/month × two initial notifications plus 200 public support replies and 100 customer follow-up replies gives **500 notifications/month** before failures/resends. Private notes add zero. That exceeds the previously referenced 100-message development allowance. If a $15/10,000-message plan were approved at those quoted rates, its fixed fee would dominate this small volume; no purchase is proposed solely for testing. Support adds no separate inbox-hosting or personal-mailbox-import charge.
+
+At two 0.5 MB screenshots/ticket, 100 tickets add about **100 MB of private files/month**, before retention, downloads or normalized-image expansion. At roughly 2 KB/message and four messages/ticket, text is about 0.8 MB/month before indexes/outbox/audit overhead. Budget Netlify Database queries/storage, Blobs storage/egress, function execution, Identity lookups and retained inactive tickets separately. The ten-minute scheduler can run about 4,320 times per 30-day month even while delivery is blocked, with a small database check each time. Verify actual platform quotas/credits rather than assuming zero cost. Human support time is separate: at 15 minutes/ticket and $30/hour, 100 tickets represent $750/month of assumed labor, not a response-time promise.
+
+Before high-volume/public launch, approve retention/deletion and orphan cleanup, resource budgets/alerts, administrator access practices, and operational handling for unknown delivery, suppressions and provider outages. No customer data is deleted by the current system.
+
+## Public contact and Phase 2 — not activated
+
+`/help` remains public for people unable to sign in; `/support` offers a login link and public-help link when authentication fails. No email address was invented. A future **separate public contact form** is proposed: email + category + message, no account lookup, generic acknowledgment, honeypot/challenge as appropriate, per-IP and per-address throttles (starting proposal: three submissions/hour and one resend/15 minutes), limited body size, its own records/inbox label and verified/safe follow-up. It must not grant authenticated ticket access or disclose whether an email has an account. Review privacy notice, support recipient and abuse controls before enabling collection. The form is not silently enabled in this phase.
+
+Phase 2 direct email (`support@mycottagepantry.com` → ticket; email reply → conversation) was not implemented. It needs an approved inbound provider/domain, authenticated webhooks, verified sender association, expiring thread association, spoofing/forwarding handling, deduplication, loop/auto-responder protection and attachment quarantine. No hosted mailbox or inbound service was activated. Phase 1 notifications explicitly direct users back to the app.
+
+## Verification limits
+
+Tests exercise the actual new SQL migration and handler against an embedded PostgreSQL engine as a non-superuser role, with forced RLS enabled. They cover requester-only access (including peers in the same workspace), private notes/attachments, direct selectors, current platform-role validation, confirmations, duplicate submissions/replies/uploads, rate limits, sanitized context, image normalization, failed/blocked/ambiguous sends, bounded retries, provider acceptance vs delivery, authenticated event deduplication, bounce suppression and no stock/finance queries. Identity, Blob storage and provider HTTP are fakes; all data/addresses are deterministic test fixtures. Embedded test pool connections are serialized; production multi-instance lock contention still requires a deployed concurrency check.
+
+Component/browser tests cover creation, history, reply, resolve/reopen, private-note presentation, signed-out errors and desktop/mobile layout. Browser transport is mocked and creates no live tickets, files or emails. These tests do not establish real Identity admin credentials, production database policies, actual Blob ACLs, sender authentication, webhook interoperability or email delivery. A small approved deployed smoke test remains necessary after migration and account setup. No successful build is treated as proof of those integrations.

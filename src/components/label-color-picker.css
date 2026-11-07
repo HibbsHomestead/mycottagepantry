@@ -1,0 +1,221 @@
+.color-control {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.color-control-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.color-compact {
+  display: grid;
+  grid-template-columns: 30px minmax(65px, 1fr) 70px;
+  align-items: center;
+  gap: 6px;
+}
+.color-compact input {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px !important;
+  padding: 7px !important;
+}
+.compact-opacity {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 2px;
+}
+.checker {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #d8d8d8 25%, transparent 25%),
+    linear-gradient(-45deg, #d8d8d8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #d8d8d8 75%),
+    linear-gradient(-45deg, transparent 75%, #d8d8d8 75%);
+  background-size: 10px 10px;
+  background-position:
+    0 0,
+    0 5px,
+    5px -5px,
+    -5px 0;
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+.color-trigger,
+.color-chip {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.checker > span {
+  position: absolute;
+  inset: 0;
+}
+.no-fill:after {
+  content: '';
+  position: absolute;
+  height: 2px;
+  width: 140%;
+  background: var(--danger);
+  transform: rotate(-45deg);
+  top: 50%;
+  left: -20%;
+}
+.label-color-popover {
+  z-index: 100;
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  max-height: min(800px, var(--radix-popover-content-available-height));
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-dialog);
+  display: grid;
+  gap: 12px;
+  font-family: var(--font-body);
+}
+.label-color-popover label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.label-color-popover input:not([type='range']),
+.label-color-popover select {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  width: 100%;
+  min-width: 0;
+}
+.picker-heading,
+.picker-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.saturation-area {
+  height: 165px;
+  border-radius: 8px;
+  position: relative;
+  background-image:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, transparent);
+  touch-action: none;
+  cursor: crosshair;
+}
+.saturation-area > span {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #292630;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.picker-range input {
+  width: 100%;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.hue-slider {
+  background: linear-gradient(to right, red, #ff0, #0f0, #0ff, #00f, #f0f, red);
+  border-radius: 8px;
+}
+.picker-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.picker-channels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.picker-previews {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.picker-previews > span {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.picker-previews .checker {
+  display: block;
+  width: 55px;
+  height: 32px;
+  border-radius: 5px;
+}
+.picker-swatches h4 {
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+.picker-swatches > div {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.color-chip svg {
+  position: relative;
+  background: var(--card);
+  color: var(--foreground);
+  border-radius: 50%;
+  margin: auto;
+}
+.picker-brand-save {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+}
+.label-color-popover :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.studio-label-svg {
+  background: repeating-conic-gradient(#e1e1e1 0% 25%, #fff 0% 50%) 50%/16px
+    16px;
+}
+.studio-print-preview .studio-label-svg {
+  background: repeating-conic-gradient(#e1e1e1 0% 25%, #fff 0% 50%) 50%/16px
+    16px;
+}
+@media (max-width: 640px) {
+  [data-radix-popper-content-wrapper]:has(> .label-color-popover) {
+    transform: none !important;
+    inset: 0 !important;
+    pointer-events: none;
+  }
+  .label-color-popover {
+    pointer-events: auto;
+  }
+  .label-color-popover {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 85dvh;
+    border-radius: 18px 18px 0 0;
+    padding: 20px;
+  }
+  .saturation-area {
+    height: 140px;
+  }
+}
+@media print {
+  .studio-label-svg {
+    background: none !important;
+  }
+}

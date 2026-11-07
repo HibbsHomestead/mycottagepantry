@@ -1,0 +1,320 @@
+.finance-workspace {
+  display: grid;
+  gap: var(--section-gap);
+}
+.finance-workspace h2 {
+  font-size: 22px;
+}
+.finance-workspace h3 {
+  font-size: 18px;
+}
+.finance-workspace p {
+  line-height: 1.6;
+}
+.finance-upload p {
+  margin: 6px 0;
+}
+.finance-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+.finance-action-grid .btn {
+  padding: 16px;
+}
+.finance-list {
+  display: grid;
+  gap: 0;
+}
+.finance-list-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  padding: 16px var(--card-padding);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.finance-list-row > span:first-of-type {
+  flex: 1;
+}
+.finance-list-row small {
+  display: block;
+  line-height: 1.6;
+  opacity: 0.8;
+}
+.finance-empty {
+  padding: var(--card-padding);
+  text-align: center;
+}
+.finance-feedback {
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+.finance-feedback.error {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.finance-dialog {
+  width: min(880px, calc(100vw - 32px)) !important;
+  max-width: 880px !important;
+  max-height: 90dvh;
+  overflow: auto;
+}
+.finance-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.finance-full {
+  grid-column: 1/-1;
+}
+.finance-calculation {
+  background: var(--accent-soft);
+  padding: 18px;
+  border-radius: 12px;
+  margin: 12px 0;
+  line-height: 1.6;
+}
+.finance-sticky-actions {
+  position: sticky;
+  bottom: -1px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 0;
+  background: var(--card);
+  z-index: 3;
+  flex-wrap: wrap;
+}
+.receipt-review-dialog {
+  width: min(1440px, calc(100vw - 32px)) !important;
+  max-width: 1440px !important;
+  max-height: 94dvh;
+  overflow: auto;
+}
+.receipt-review-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 24px;
+  min-height: 400px;
+}
+.receipt-preview {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.receipt-preview-scroll {
+  height: 65dvh;
+  overflow: auto;
+  background: var(--surface-soft);
+  padding: 24px;
+  border-radius: 12px;
+}
+.receipt-image-wrap {
+  position: relative;
+  width: 100%;
+}
+.receipt-image-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.receipt-line-highlight {
+  position: absolute;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  border: 2px solid var(--primary);
+  pointer-events: none;
+}
+.receipt-fields {
+  min-width: 0;
+}
+.receipt-line {
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  margin: 16px 0;
+}
+.receipt-line.selected {
+  border-color: var(--primary);
+}
+.receipt-line .field {
+  margin: 0;
+}
+.receipt-line p {
+  font-size: 13px;
+}
+.receipt-fields > .finance-form-grid {
+  margin: 20px 0;
+}
+.receipt-review-dialog .badge {
+  font-size: 11px;
+  margin-top: 4px;
+  display: inline-block;
+}
+.finance-statement-table {
+  overflow: auto;
+}
+.finance-dialog table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.finance-dialog th,
+.finance-dialog td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.finance-workspace .stat-card {
+  display: grid;
+  gap: 12px;
+}
+.finance-workspace .stat-card > strong {
+  font-size: 30px;
+}
+.finance-workspace .stat-card small {
+  font-size: 12px;
+}
+.finance-workspace button:focus-visible,
+.finance-workspace input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+@media (max-width: 800px) {
+  .receipt-review-grid {
+    grid-template-columns: 1fr;
+  }
+  .receipt-preview {
+    position: static;
+  }
+  .receipt-preview-scroll {
+    height: 35dvh;
+  }
+  .finance-list-row {
+    flex-wrap: wrap;
+    gap: var(--icon-text-gap);
+    padding: 16px var(--card-padding);
+  }
+  .finance-list-row > span:first-of-type {
+    min-width: 0;
+  }
+  .finance-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .finance-dialog,
+  .receipt-review-dialog {
+    padding: 18px !important;
+  }
+  .finance-sticky-actions .btn {
+    flex: 1;
+  }
+  .finance-action-grid .btn {
+    flex: 1;
+    min-width: min(200px, 100%);
+  }
+}
+@media print {
+  body:has(.finance-statement) #root {
+    display: none !important;
+  }
+  .finance-statement {
+    position: static !important;
+    transform: none !important;
+    translate: none !important;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  .finance-statement > button,
+  .finance-statement > [data-slot='dialog-header'],
+  .finance-no-print,
+  [data-slot='dialog-overlay'] {
+    display: none !important;
+  }
+  .finance-print-document {
+    color: #111;
+    background: #fff;
+    font-size: 11pt;
+  }
+  .finance-print-document table {
+    font-size: 9pt;
+  }
+  .finance-statement-table {
+    overflow: visible;
+  }
+}
+
+.receipt-image-wrap canvas {
+  display: block;
+  max-width: none;
+}
+
+.finance-disclaimer {
+  margin: 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.transaction-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.transaction-picker h3 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.transaction-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 14px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--foreground);
+  background: var(--card);
+  text-align: left;
+}
+.transaction-choice:hover {
+  background: var(--accent-soft);
+}
+.transaction-choice span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.transaction-choice small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.transaction-choice svg {
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .transaction-picker {
+    grid-template-columns: 1fr;
+  }
+}
