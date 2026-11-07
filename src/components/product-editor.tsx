@@ -1,4 +1,4 @@
-import { ProductTemplateField } from './label-template-assignment'
+import { ProductLabelsInfo } from './product-labels'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ItemEditorShell, invalidEditorTabs } from './item-editor-shell'
 import { NetWeightField } from './net-weight-field'
@@ -383,11 +383,7 @@ export function ProductEditor({
       onWorkspace={onWorkspace}
       onBusy={setUploadBusy}
     >
-      <ProductTemplateField
-        value={draft}
-        workspace={workspace}
-        change={change}
-      />
+      <ProductLabelsInfo value={draft} workspace={workspace} />
       {handmade && (
         <section className="item-images-text" aria-label="Label text">
           <h3>Label text (optional)</h3>

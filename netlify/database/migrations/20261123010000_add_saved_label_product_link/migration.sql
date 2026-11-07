@@ -1,0 +1,2 @@
+ALTER TABLE "label_templates" ADD COLUMN "product_id" text;--> statement-breakpoint
+ALTER TABLE "label_templates" ADD CONSTRAINT "label_templates_ZCbsycROU5ep_fkey" FOREIGN KEY ("business_id","product_id") REFERENCES "products"("business_id","id");

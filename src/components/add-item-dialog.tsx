@@ -18,7 +18,7 @@ import {
   DialogDescription,
 } from './ui/dialog'
 import { ProductLinkImport } from './product-link-import'
-import { ProductTemplateField } from './label-template-assignment'
+import { ProductLabelsInfo } from './product-labels'
 import { InventoryProductFields } from './inventory-product-fields'
 import { FabricFields, FabricPurchaseFields } from './fabric-fields'
 import { ConversionEditor } from './financial-editors'
@@ -776,11 +776,7 @@ export function AddItemDialog({
                     type === 'resale' &&
                     panel(
                       'labels',
-                      <ProductTemplateField
-                        value={value}
-                        workspace={workspace}
-                        change={change}
-                      />,
+                      <ProductLabelsInfo value={value} workspace={workspace} />,
                     )}
                   {!existingProduct &&
                     panel(

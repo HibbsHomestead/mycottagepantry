@@ -5,16 +5,11 @@ import type { Item } from './domain'
 import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
-import {
-  blankLabel,
-  newElement,
-  systemLabelTemplates,
-  type LabelDocument,
-} from './label-studio'
+import { blankLabel, newElement, type LabelDocument } from './label-studio'
 import { labelContent } from './label-persistence'
 import { labelLayout } from './label-sets'
 import { defaultSheet } from './label-print-layout'
-import { copyLabelDesign, labelRecordKind } from './label-library'
+import { duplicateSavedLabel, sourceKey } from './saved-labels'
 const runtime = vi.hoisted(() => ({
   client: null as null | {
     query: (sql: string, params?: unknown[]) => Promise<unknown>
@@ -66,6 +61,11 @@ function label(): LabelDocument {
     ...blankLabel(),
     id: crypto.randomUUID(),
     name: 'Editable bread label',
+    workflowVersion: 1,
+    recordKind: 'label',
+    source: { kind: 'product', id: 'label-product-a' },
+    productId: 'label-product-a',
+    manualTextReviewedFor: 'product:label-product-a:',
     displayUnit: 'mm',
     elements: [
       {
@@ -123,6 +123,21 @@ beforeAll(async () => {
         JSON.stringify({ id: 'business', name: 'Label test', taxRates: [] }),
       ],
     )
+    for (const id of ['label-product-a', 'label-product-b'])
+      await db.query(
+        'INSERT INTO products(id,business_id,data,recipe_id,quantity,cost) VALUES($1,$2,$3,NULL,0,0)',
+        [
+          id,
+          org,
+          JSON.stringify({
+            id,
+            name: id,
+            labelMainName: 'Bread',
+            labelProductType: 'Loaf',
+            workflow: 'resale',
+          }),
+        ],
+      )
     await db.query(
       'INSERT INTO graphic_assets(id,business_id,data) VALUES($1,$2,$3)',
       [
@@ -232,13 +247,16 @@ it('persists checkpoints per user and oven, retains newer edits after an older s
     baseRevision: 0,
     expectedScope: scope,
   })
+  expect(
+    (await request('labelSave', { document, expectedRevision: 0 })).status,
+  ).toBe(200)
   const first = draft(1),
     newer = draft(2, { ...document, name: 'Newer unsaved edits' })
   expect((await request('labelDraft', first)).status).toBe(200)
   expect((await request('labelDraft', newer)).status).toBe(200)
   let result = await request('labelSave', {
     document,
-    expectedRevision: 0,
+    expectedRevision: 1,
     operationId: crypto.randomUUID(),
     sessionId,
     sequence: 1,
@@ -304,562 +322,189 @@ it('rejects expired sessions, read-only users, changed ovens, and operation IDs 
   ).toBe(400)
 })
 
-it('saves and reopens complete reusable templates, updates in place, and isolates variations and labels', async () => {
-  const original = {
-    ...label(),
-    recordKind: 'template' as const,
-    name: 'Market bread master',
-    width: 288,
-    height: 216,
-    background: '#faf5ee',
-    backgroundOpacity: 0.8,
-    round: false,
-    tags: ['Rustic'],
-    elements: [
-      ...label().elements,
-      {
-        ...newElement('image'),
-        binding: 'business.logo',
-        x: 10,
-        y: 12,
-        width: 65,
-        height: 40,
-        fit: 'cover' as const,
-      },
-      {
-        ...newElement('shape'),
-        fill: '#123456',
-        rotation: 90,
-        hidden: true,
-        locked: true,
-      },
-      { ...newElement('illustration'), graphic: 'wheat', opacity: 0.5 },
-      { ...newElement('line'), color: '#abcdef' },
-    ],
-  }
-  let result = await request('labelSave', {
-    document: original,
-    expectedRevision: 0,
-    operationId: crypto.randomUUID(),
-  })
-  expect(result.status, result.error).toBe(200)
-  const reopened = (await request()).workspace.label_templates.find(
-    (t: Item) => t.id === original.id,
-  )
-  expect(labelContent(reopened)).toBe(labelContent(original))
-  expect(reopened.elements).toEqual(original.elements)
-  const labelCopy = copyLabelDesign(reopened, 'label', 'Saturday market bread')
-  result = await request('labelSave', {
-    document: labelCopy,
-    expectedRevision: 0,
-  })
-  expect(result.status, result.error).toBe(200)
-  const variation = copyLabelDesign(
-    reopened,
-    'template',
-    'Market bread variation',
-  )
-  expect(
-    (await request('labelSave', { document: variation, expectedRevision: 0 }))
-      .status,
-  ).toBe(200)
-  const updated = {
-    ...reopened,
-    width: 216,
-    height: 288,
-    elements: reopened.elements.map((e: Item) => ({ ...e, x: e.x + 3 })),
-  }
-  expect(
-    (await request('labelSave', { document: updated, expectedRevision: 1 }))
-      .status,
-  ).toBe(200)
-  const workspace = (await request()).workspace
-  expect(
-    workspace.label_templates.filter((t: Item) => t.id === original.id),
-  ).toHaveLength(1)
-  expect(
-    workspace.label_templates.find((t: Item) => t.id === original.id).revision,
-  ).toBe(2)
-  expect(
-    labelContent(
-      workspace.label_templates.find((t: Item) => t.id === original.id),
-    ),
-  ).toBe(labelContent(updated))
-  expect(
-    labelContent(
-      workspace.label_templates.find((t: Item) => t.id === labelCopy.id),
-    ),
-  ).toBe(labelContent(labelCopy))
-  expect(
-    labelContent(
-      workspace.label_templates.find((t: Item) => t.id === variation.id),
-    ),
-  ).toBe(labelContent(variation))
-  expect(labelCopy.sourceTemplateId).toBe(original.id)
-})
-
-it('rejects duplicate template names, changed record types, and stale template updates without overwriting', async () => {
+it('stores multiple independent product labels and copies both layouts without inheritance', async () => {
   const document = {
     ...label(),
-    recordKind: 'template' as const,
-    name: 'Holiday Template',
-  }
-  expect(
-    (await request('labelSave', { document, expectedRevision: 0 })).status,
-  ).toBe(200)
-  const duplicate = copyLabelDesign(
-    document,
-    'template',
-    '  HOLIDAY Template  ',
-  )
-  const rejected = await request('labelSave', {
-    document: duplicate,
-    expectedRevision: 0,
-  })
-  expect(rejected.status).toBe(400)
-  expect(rejected.error).toMatch(/name already exists/)
-  expect(
-    (
-      await request('labelSave', {
-        document: { ...document, name: 'Stale edit' },
-        expectedRevision: 0,
-      })
-    ).status,
-  ).toBe(400)
-  expect(
-    (
-      await request('labelSave', {
-        document: { ...document, recordKind: 'label' },
-        expectedRevision: 1,
-      })
-    ).status,
-  ).toBe(400)
-  // An explicit update targets the stable ID and current revision.
-  const updated = {
-    ...document,
-    name: 'Holiday Template',
-    elements: [...document.elements, newElement('text', 'Winter')],
-  }
-  expect(
-    (await request('labelSave', { document: updated, expectedRevision: 1 }))
-      .status,
-  ).toBe(200)
-  expect(
-    (await request()).workspace.label_templates.filter(
-      (t: Item) => t.id === document.id,
-    ),
-  ).toHaveLength(1)
-})
-
-it('persists single and bulk deletion, retains templates, other labels, assets and history, and rejects resurrection', async () => {
-  const template = {
-    ...label(),
-    recordKind: 'template' as const,
-    name: 'Deletion source',
-  }
-  template.elements.push({
-    ...newElement('image'),
-    assetId: 'shared-graphic',
-    width: 50,
-    height: 40,
-  })
-  expect(
-    (await request('labelSave', { document: template, expectedRevision: 0 }))
-      .status,
-  ).toBe(200)
-  const labels = [1, 2, 3, 4].map((n) =>
-    copyLabelDesign(template, 'label', `Deletion label ${n}`),
-  )
-  for (const document of labels)
-    expect(
-      (await request('labelSave', { document, expectedRevision: 0 })).status,
-    ).toBe(200)
-  const before = (await request()).workspace
-  const scope = before.settings[0].labelEditorScope
-  const sessionId = crypto.randomUUID()
-  expect(
-    (
-      await request('labelDraft', {
-        id: crypto.randomUUID(),
-        sessionId,
-        sequence: 1,
-        document: labels[0],
-        expectedScope: scope,
-      })
-    ).status,
-  ).toBe(200)
-  const result = await request('labelDelete', {
-    ids: [labels[0].id],
-    recordKind: 'label',
-    expectedScope: scope,
-  })
-  expect(result.status, result.error).toBe(200)
-  expect(
-    result.workspace.label_recovery_drafts.some(
-      (d: Item) => d.document.id === labels[0].id,
-    ),
-  ).toBe(false)
-  // Retrying a deletion is safe.
-  expect(
-    (await request('labelDelete', { ids: [labels[0].id], recordKind: 'label' }))
-      .status,
-  ).toBe(200)
-  expect(
-    (
-      await request('labelDelete', {
-        ids: labels.slice(1, 3).map((d) => d.id),
-        recordKind: 'label',
-      })
-    ).status,
-  ).toBe(200)
-  const reopened = (await request()).workspace
-  expect(
-    reopened.label_templates.filter(
-      (t: Item) => !t.deletedAt && labels.some((d) => d.id === t.id),
-    ),
-  ).toEqual([expect.objectContaining({ id: labels[3].id })])
-  expect(
-    reopened.label_templates.find((t: Item) => t.id === template.id).deletedAt,
-  ).toBeUndefined()
-  expect(reopened.graphic_assets).toEqual(before.graphic_assets)
-  expect(reopened.graphic_assets).toContainEqual(
-    expect.objectContaining({ id: 'shared-graphic' }),
-  )
-  expect(
-    reopened.label_templates.find((t: Item) => t.id === labels[3].id).elements,
-  ).toContainEqual(expect.objectContaining({ assetId: 'shared-graphic' }))
-  expect(reopened.label_versions).toEqual(before.label_versions)
-  expect(reopened.label_print_jobs).toEqual(before.label_print_jobs)
-  const staleSave = await request('labelSave', {
-    document: labels[0],
-    expectedScope: scope,
-    expectedRevision: 1,
-  })
-  expect(staleSave.status).toBe(400)
-  expect(staleSave.error).toMatch(/deleted/)
-  expect(
-    (
-      await request('labelDraft', {
-        id: crypto.randomUUID(),
-        sessionId,
-        sequence: 2,
-        document: labels[0],
-        expectedScope: scope,
-      })
-    ).status,
-  ).toBe(400)
-  expect(
-    (await request('labelPrint', { templateId: labels[0].id })).status,
-  ).toBe(400)
-  expect(
-    (
-      await request('labelDelete', {
-        ids: [template.id],
-        recordKind: 'template',
-      })
-    ).status,
-  ).toBe(200)
-  const afterTemplateDeletion = (await request()).workspace
-  expect(
-    afterTemplateDeletion.label_templates.find(
-      (t: Item) => t.id === labels[3].id,
-    ).deletedAt,
-  ).toBeUndefined()
-  expect(
-    labelRecordKind(
-      afterTemplateDeletion.label_templates.find(
-        (t: Item) => t.id === template.id,
-      ),
-    ),
-  ).toBe('template')
-})
-
-it('rejects cross-workspace, mixed-kind, read-only, expired and wrong-scope deletions atomically', async () => {
-  const template = {
-    ...label(),
-    recordKind: 'template' as const,
-    name: 'Protected deletion source',
-  }
-  expect(
-    (await request('labelSave', { document: template, expectedRevision: 0 }))
-      .status,
-  ).toBe(200)
-  const document = copyLabelDesign(template, 'label')
-  expect(
-    (await request('labelSave', { document, expectedRevision: 0 })).status,
-  ).toBe(200)
-  expect(
-    (
-      await request('labelDelete', {
-        ids: [document.id, template.id],
-        recordKind: 'label',
-      })
-    ).status,
-  ).toBe(400)
-  expect(
-    (
-      await request('labelDelete', {
-        ids: [document.id, 'nonexistent'],
-        recordKind: 'label',
-      })
-    ).status,
-  ).toBe(400)
-  expect(
-    (
-      await request('labelDelete', {
-        ids: [document.id],
-        recordKind: 'label',
-        expectedScope: 'wrong-scope',
-      })
-    ).status,
-  ).toBe(400)
-  runtime.user = 'label-owner-b'
-  expect(
-    (await request('labelDelete', { ids: [document.id], recordKind: 'label' }))
-      .status,
-  ).toBe(400)
-  runtime.user = 'label-reader'
-  expect(
-    (await request('labelDelete', { ids: [document.id], recordKind: 'label' }))
-      .status,
-  ).toBe(400)
-  runtime.user = 'label-owner-a'
-  runtime.expired = true
-  expect(
-    (await request('labelDelete', { ids: [document.id], recordKind: 'label' }))
-      .status,
-  ).toBe(401)
-  runtime.expired = false
-  const reopened = (await request()).workspace
-  expect(
-    reopened.label_templates.find((t: Item) => t.id === document.id).deletedAt,
-  ).toBeUndefined()
-  expect(
-    reopened.label_templates.find((t: Item) => t.id === template.id).deletedAt,
-  ).toBeUndefined()
-})
-
-it('removes built-in templates per oven, survives reauthentication, and preserves existing editable labels', async () => {
-  runtime.user = 'label-owner-a'
-  const starter = systemLabelTemplates[0]
-  const original = JSON.stringify(starter)
-  const document = copyLabelDesign(
-    starter,
-    'label',
-    'Independent starter label',
-  )
-  expect(
-    (await request('labelSave', { document, expectedRevision: 0 })).status,
-  ).toBe(200)
-  const before = (await request()).workspace
-  const snapshot = labelContent(
-    before.label_templates.find((t: Item) => t.id === document.id),
-  )
-  const remove = () =>
-    request('labelDelete', { ids: [starter.id], recordKind: 'template' })
-  runtime.user = 'label-reader'
-  expect((await remove()).status).toBe(400)
-  runtime.user = 'label-owner-a'
-  const removed = await remove()
-  expect(removed.status).toBe(200)
-  const marker = removed.workspace.label_templates.find(
-    (t: Item) => t.id === starter.id,
-  )
-  expect(marker).toMatchObject({ recordKind: 'template', revision: 1 })
-  expect(marker.deletedAt).toBeTruthy()
-  expect(
-    (await remove()).workspace.label_templates.find(
-      (t: Item) => t.id === starter.id,
-    ).revision,
-  ).toBe(1)
-  runtime.expired = true
-  expect((await request()).status).toBe(401)
-  runtime.expired = false
-  runtime.user = 'second-owner'
-  const reopened = (await request()).workspace
-  expect(
-    reopened.label_templates.find((t: Item) => t.id === starter.id).deletedAt,
-  ).toBe(marker.deletedAt)
-  expect(
-    labelContent(
-      reopened.label_templates.find((t: Item) => t.id === document.id),
-    ),
-  ).toBe(snapshot)
-  expect(
-    reopened.label_versions.filter((t: Item) => t.templateId === document.id),
-  ).toEqual(
-    before.label_versions.filter((t: Item) => t.templateId === document.id),
-  )
-  // The original template still exists in code, and a different workspace sees no removal.
-  expect(JSON.stringify(starter)).toBe(original)
-  runtime.user = 'label-owner-b'
-  expect(
-    (await request()).workspace.label_templates.some(
-      (t: Item) => t.id === starter.id,
-    ),
-  ).toBe(false)
-  expect(
-    (
-      await request('labelSave', {
-        document: copyLabelDesign(starter, 'label'),
-        expectedRevision: 0,
-      })
-    ).status,
-  ).toBe(200)
-  runtime.user = 'label-owner-a'
-  const resurrection = {
-    ...starter,
-    isSystem: false,
-    recordKind: 'template',
-    revision: 1,
-  }
-  expect(
-    (
-      await request('labelSave', {
-        document: resurrection,
-        expectedRevision: 1,
-      })
-    ).status,
-  ).toBe(400)
-})
-
-it('persists two independent layouts, assigns two products, prepares exact sets without creating labels or changing stock, and isolates tenants', async () => {
-  runtime.user = 'label-owner-a'
-  runtime.expired = false
-  runtime.selected = undefined
-  const front = {
-    ...blankLabel(),
-    id: crypto.randomUUID(),
-    name: 'Reusable paired acceptance',
-    recordKind: 'template' as const,
-    renderVersion: 2 as const,
-    width: 216,
-    height: 144,
-    elements: [newElement('text', '', 'product.displayName')],
-  }
-  const document = {
-    ...front,
     format: 'front-back' as const,
     back: {
-      ...labelLayout(front),
-      width: 144,
-      elements: [
-        newElement('text', '', 'product.netQuantity'),
-        { ...newElement('image'), assetId: 'shared-graphic' },
-      ],
+      ...labelLayout(label()),
+      elements: [newElement('text', '', 'product.displayName')],
     },
   }
-  let result = await request('labelSave', { document, expectedRevision: 0 })
-  expect(result.status, result.error).toBe(200)
-  for (const [id, name, weight] of [
-    ['paired-a', 'Banana bread', 9.5],
-    ['paired-b', 'Pumpkin bread', 12],
-  ]) {
-    const saved = await request(
-      'save',
-      { id, name, workflow: 'resale', netWeightOz: weight, price: 8 },
-      'products',
-    )
-    expect(saved.status, saved.error).toBe(200)
-  }
-  result = await request('templateAssignments', {
-    templateId: document.id,
-    productIds: ['paired-a', 'paired-b'],
+  const saved = await request('labelSave', { document, expectedRevision: 0 })
+  expect(saved.status, saved.error).toBe(200)
+  const copy = duplicateSavedLabel(document, document.source!)
+  const result = await request('labelSave', {
+    document: copy,
+    expectedRevision: 0,
   })
   expect(result.status, result.error).toBe(200)
-  const before = result.workspace
   expect(
-    before.products.filter((p: Item) => p.labelDesignId === document.id),
-  ).toHaveLength(2)
+    result.workspace.label_templates.filter(
+      (d: Item) => d.productId === document.productId,
+    ).length,
+  ).toBeGreaterThanOrEqual(2)
   expect(
-    (await request()).workspace.label_templates.find(
-      (d: Item) => d.id === document.id,
-    ).back,
+    result.workspace.label_templates.find((d: Item) => d.id === copy.id).back,
   ).toEqual(document.back)
-  const count = before.label_templates.length
-  for (const [parts, runIndex, side] of [
-    ['both', 0, 'front'],
-    ['both', 1, 'back'],
-    ['front', 0, 'front'],
-    ['back', 0, 'back'],
-  ]) {
-    const prepared = await request('labelPrint', {
-      templateId: document.id,
-      source: { kind: 'product', id: 'paired-a' },
-      copies: 12,
-      parts,
-      order: 'paired',
-      runIndex,
-      layout: defaultSheet,
-    })
-    expect(prepared.status, prepared.error).toBe(200)
-    const job = prepared.workspace.label_print_jobs.at(-1)
-    expect(job.sequence).toEqual(Array(12).fill(side))
-    expect(job.renderedDataSnapshot.values['product.displayName']).toBe(
-      'Banana bread',
-    )
-    expect(job.renderedDataSnapshot.values['product.netQuantity']).toBe(
-      'Net Wt. 9.5oz (269g)',
-    )
-    expect(prepared.workspace.label_templates).toHaveLength(count)
-    expect(prepared.workspace.products).toEqual(before.products)
-    expect(prepared.workspace.ledger).toEqual(before.ledger)
-  }
-  const forbidden = await request('labelDelete', {
-    ids: [document.id],
-    recordKind: 'template',
-  })
-  expect(forbidden.status).toBe(400)
-  expect(forbidden.error).toMatch(/assign/i)
-  runtime.user = 'label-owner-b'
-  for (const action of [
-    'templateAssignments',
-    'labelPrint',
-    'productLabelAssignment',
-  ]) {
-    const other = await request(action, {
-      templateId: document.id,
-      productIds: ['paired-a'],
-      productId: 'paired-a',
-      labelId: document.id,
-      source: { kind: 'product', id: 'paired-a' },
-      copies: 1,
-    })
-    expect(other.status).toBe(400)
-  }
+  copy.name = 'Independent edit'
   expect(
-    (await request()).workspace.products.some((p: Item) => p.id === 'paired-a'),
-  ).toBe(false)
-  runtime.user = 'label-owner-a'
-  const updated = await request(
+    (await request('labelSave', { document: copy, expectedRevision: 1 }))
+      .status,
+  ).toBe(200)
+  const deleted = await request('labelDelete', {
+    ids: [copy.id],
+    recordKind: 'label',
+  })
+  expect(deleted.status, deleted.error).toBe(200)
+  expect(
+    deleted.workspace.label_templates.find((d: Item) => d.id === document.id),
+  ).toMatchObject({ name: document.name, revision: 1, back: JSON.parse(JSON.stringify(document.back)) })
+  expect(
+    deleted.workspace.label_templates.find((d: Item) => d.id === copy.id)
+      .deletedAt,
+  ).toBeTruthy()
+  expect(
+    (await request('labelSave', { document: copy, expectedRevision: 2 }))
+      .status,
+  ).toBe(400)
+})
+it('rejects unsaved checkpoints and product changes without manual review, then resolves the new saved source', async () => {
+  const document = label()
+  expect(
+    (
+      await request('labelDraft', {
+        id: crypto.randomUUID(),
+        sessionId: crypto.randomUUID(),
+        sequence: 1,
+        document,
+      })
+    ).status,
+  ).toBe(400)
+  document.source = { kind: 'product', id: 'label-product-b' }
+  document.productId = 'label-product-b'
+  const blocked = await request('labelSave', { document, expectedRevision: 0 })
+  expect(blocked.status).toBe(400)
+  expect(blocked.error).toMatch(/manually entered/)
+  document.manualTextReviewedFor = sourceKey(document.source)
+  expect(
+    (await request('labelSave', { document, expectedRevision: 0 })).status,
+  ).toBe(200)
+  const wrong = await request('labelPrint', {
+    templateId: document.id,
+    source: { kind: 'product', id: 'label-product-a' },
+    copies: 1,
+    layout: defaultSheet,
+  })
+  expect(wrong.status).toBe(400)
+  const printed = await request('labelPrint', {
+    templateId: document.id,
+    source: document.source,
+    copies: 1,
+    layout: defaultSheet,
+  })
+  expect(printed.status, printed.error).toBe(200)
+  expect(printed.workspace.label_print_jobs.at(-1).productId).toBe(
+    'label-product-b',
+  )
+})
+it('preserves legacy templates and shared links and rejects obsolete assignment writes', async () => {
+  await db.query("SELECT set_config('app.business_id',$1,false)", [orgA])
+  const legacy = {
+    ...label(),
+    id: crypto.randomUUID(),
+    workflowVersion: undefined,
+    recordKind: 'template',
+    productId: undefined,
+    source: undefined,
+  }
+  await db.query(
+    'INSERT INTO label_templates(id,business_id,data) VALUES($1,$2,$3)',
+    [legacy.id, orgA, JSON.stringify(legacy)],
+  )
+  for (const id of ['label-product-a', 'label-product-b'])
+    await db.query(
+      "UPDATE products SET data=data || jsonb_build_object('labelDesignId',$1::text) WHERE business_id=$2 AND id=$3",
+      [legacy.id, orgA, id],
+    )
+  const before = (await request()).workspace
+  expect(
+    (
+      await request('labelSave', {
+        document: { ...legacy, name: 'Overwrite' },
+        expectedRevision: 0,
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (await request('labelDelete', { ids: [legacy.id], recordKind: 'template' }))
+      .status,
+  ).toBe(400)
+  for (const action of ['templateAssignments', 'productLabelAssignment'])
+    expect(
+      (
+        await request(action, {
+          templateId: legacy.id,
+          productId: 'label-product-a',
+          labelId: '',
+        })
+      ).status,
+    ).toBe(400)
+  const source = { kind: 'product' as const, id: 'label-product-a' }
+  const copy = duplicateSavedLabel(legacy as LabelDocument, source)
+  copy.manualTextReviewedFor = sourceKey(source)
+  expect(
+    (await request('labelSave', { document: copy, expectedRevision: 0 }))
+      .status,
+  ).toBe(200)
+  const after = (await request()).workspace
+  expect(after.products).toEqual(before.products)
+  expect(after.label_templates.find((d: Item) => d.id === legacy.id)).toEqual(
+    before.label_templates.find((d: Item) => d.id === legacy.id),
+  )
+})
+it('rejects cross-business product links and output and enforces the composite database foreign key', async () => {
+  runtime.user = 'label-owner-b'
+  const other = await request(
     'save',
-    {
-      ...before.products.find((p: Item) => p.id === 'paired-a'),
-      name: 'Banana renamed',
-    },
+    { id: 'only-business-b', name: 'B only', workflow: 'resale', price: 1 },
     'products',
   )
-  expect(updated.status, updated.error).toBe(200)
+  expect(other.status, other.error).toBe(200)
+  runtime.user = 'label-owner-a'
+  const document = label()
+  document.source = { kind: 'product', id: 'only-business-b' }
+  document.productId = 'only-business-b'
+  document.manualTextReviewedFor = sourceKey(document.source)
   expect(
-    updated.workspace.products.find((p: Item) => p.id === 'paired-b'),
-  ).toEqual(before.products.find((p: Item) => p.id === 'paired-b'))
+    (await request('labelSave', { document, expectedRevision: 0 })).status,
+  ).toBe(400)
+  await db.query("SELECT set_config('app.business_id',$1,false)", [orgA])
+  await expect(
+    db.query(
+      'INSERT INTO label_templates(id,business_id,data,product_id) VALUES($1,$2,$3,$4)',
+      [crypto.randomUUID(), orgA, '{}', 'only-business-b'],
+    ),
+  ).rejects.toThrow(/foreign key/)
+  const valid = label()
   expect(
-    updated.workspace.label_templates.find((d: Item) => d.id === document.id),
-  ).toEqual(before.label_templates.find((d: Item) => d.id === document.id))
+    (await request('labelSave', { document: valid, expectedRevision: 0 }))
+      .status,
+  ).toBe(200)
+  runtime.user = 'label-owner-b'
   expect(
     (
-      await request('templateAssignments', {
-        templateId: document.id,
-        productIds: [],
+      await request('labelPrint', {
+        templateId: valid.id,
+        source: valid.source,
+        copies: 1,
+        layout: defaultSheet,
       })
     ).status,
-  ).toBe(200)
+  ).toBe(400)
   expect(
-    (
-      await request('labelDelete', {
-        ids: [document.id],
-        recordKind: 'template',
-      })
-    ).status,
-  ).toBe(200)
+    (await request('labelDelete', { ids: [valid.id], recordKind: 'label' }))
+      .status,
+  ).toBe(400)
+  runtime.user = 'label-owner-a'
 })

@@ -140,35 +140,25 @@ it('selects existing resale variants without creating duplicate products', async
     expect.objectContaining({ id: 'resale-mug' }),
   )
 })
-it('keeps resale template assignment in its product draft until explicit save', async () => {
+it('creates a resale product without template assignment or automatically creating labels', async () => {
   const { save, user } = start('resale')
   fireEvent.change(screen.getByLabelText('Item name'), {
     target: { value: 'Local honey' },
   })
   await user.click(screen.getByRole('tab', { name: 'Images & Labels' }))
-  expect(screen.getByLabelText('Label template')).toHaveValue('')
-  await user.selectOptions(
-    screen.getByLabelText('Label template'),
-    'resale-template',
-  )
-  expect(save).not.toHaveBeenCalled()
-  await user.selectOptions(screen.getByLabelText('Item Type'), 'material')
   expect(
-    screen.queryByRole('tab', { name: 'Images & Labels' }),
-  ).not.toBeInTheDocument()
-  await user.selectOptions(screen.getByLabelText('Item Type'), 'resale')
-  await user.click(screen.getByRole('tab', { name: 'Images & Labels' }))
-  expect(screen.getByLabelText('Label template')).toHaveValue('resale-template')
+    screen.getByRole('region', { name: 'Linked labels' }),
+  ).toHaveTextContent('No linked labels.')
+  expect(screen.queryByLabelText('Label template')).not.toBeInTheDocument()
+  expect(save).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Save item' }))
   expect(save).toHaveBeenCalledWith(
     'products',
-    expect.objectContaining({
-      labelDesignId: 'resale-template',
-      labelAssignmentEdited: true,
-      initialStock: false,
-      openingCount: '',
-    }),
+    expect.objectContaining({ initialStock: false, openingCount: '' }),
   )
+  const payload = save.mock.calls[0][1]
+  expect(payload).not.toHaveProperty('labelDesignId')
+  expect(payload).not.toHaveProperty('labelAssignmentEdited')
 })
 it('shows resale food details only after explicit food classification', async () => {
   const { user } = start('resale')

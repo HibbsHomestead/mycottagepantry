@@ -1,4 +1,3 @@
-import { TemplateAssignments } from './label-template-assignment'
 import {
   labelLayout,
   labelSide,
@@ -62,7 +61,6 @@ import {
   Search,
   Grid2X2,
   SlidersHorizontal,
-  FileText,
 } from 'lucide-react'
 import {
   labelFilters,
@@ -105,15 +103,19 @@ import {
   mergeLabelWorkspace,
 } from '@/lib/label-persistence'
 import { applySelectionFont, editStaticText } from '@/lib/label-rich-text'
-import { copyLabelDesign, labelRecordKind } from '@/lib/label-library'
+import { labelRecordKind } from '@/lib/label-library'
 import {
-  TemplateSaveDialog,
-  DeleteDesignDialog,
-  type TemplateDialogAction,
-} from './label-library-dialogs'
+  duplicateSavedLabel,
+  labelSource,
+  manualLabelFields,
+  preservedManualTextWarnings,
+  sourceKey,
+  sourceProductId,
+  validateSavedLabelContext,
+} from '@/lib/saved-labels'
+import { DeleteDesignDialog } from './label-library-dialogs'
 const sections = [
-  'Templates',
-  'My Labels',
+  'Labels',
   'Brand Kit',
   'Graphics Library',
   'Print & Export',
@@ -141,6 +143,8 @@ export function LabelStudio({
   role,
   initialProductId,
   initialLabelId,
+  initialCreateRequest,
+  onCreateRequestHandled,
   initialSection,
   onSectionChange,
   onDirtyChange,
@@ -152,27 +156,29 @@ export function LabelStudio({
   initialProductId?: string
   /** Saved design to open in the editor (explicit Edit Label from a preview). */
   initialLabelId?: string
+  initialCreateRequest?: number
+  onCreateRequestHandled?: () => void
   initialSection?: string
   onSectionChange?: (section: string) => void
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const [editorSide, setEditorSide] = useState<LabelSide>('front')
-  const [parts, setParts] = useState<'both' | LabelSide>('both')
-  const [order, setOrder] = useState<'grouped' | 'paired'>('grouped')
+  const [partsDraft, setParts] = useState<'both' | LabelSide>('both')
+  const [orderDraft, setOrder] = useState<'grouped' | 'paired'>('grouped')
   const [runIndex, setRunIndex] = useState(0)
   const [section, setSection] = useState(
       initialSection && sections.includes(initialSection)
         ? initialSection
-        : 'Templates',
+        : 'Labels',
     ),
     [doc, setDoc] = useState<LabelDocument | null>(null),
     [selected, setSelectedValue] = useState(''),
     [left, setLeft] = useState('Elements'),
     [filter, setFilter] = useState('All styles'),
     [query, setQuery] = useState(''),
-    [source, setSource] = useState<LabelSource>({
+    [sourceDraft, setSource] = useState<LabelSource>({
       kind: 'product',
-      id: initialProductId || w.products[0]?.id || '',
+      id: initialProductId || '',
     }),
     [colorEditing, setColorEditing] = useState(false),
     [recentColors, setRecentColors] = useState<LabelColor[]>(
@@ -191,13 +197,12 @@ export function LabelStudio({
     [saveBusy, setSaveBusy] = useState(false),
     [draftStatus, setDraftStatus] = useState(''),
     [saveFailed, setSaveFailed] = useState(false),
-    [recoveryMode, setRecoveryMode] = useState(false),
     [textSelection, setTextSelection] = useState<[number, number]>([0, 0]),
-    [brandId, setBrandId] = useState(w.brand_kits?.[0]?.id || ''),
-    [printingMethod, setPrintingMethod] = useState(''),
+    [brandDraftId, setBrandId] = useState(w.brand_kits?.[0]?.id || ''),
+    [printingMethodDraft, setPrintingMethod] = useState(''),
     [connected, setConnected] = useState(false),
-    [copies, setCopies] = useState(1),
-    [layout, setLayout] = useState<SheetLayout>(defaultSheet),
+    [copiesDraft, setCopies] = useState(1),
+    [layoutDraft, setLayout] = useState<SheetLayout>(defaultSheet),
     [reviewed, setReviewed] = useState(false),
     [brandDraft, setBrandDraft] = useState<Item>({
       id: '',
@@ -213,37 +218,40 @@ export function LabelStudio({
     [imageProductId, setImageProductId] = useState(w.products[0]?.id || ''),
     [collection, setCollection] = useState('My graphics'),
     [displayUnit, setDisplayUnit] = useState<'in' | 'mm' | 'px'>('in')
+  const source =
+    doc?.workflowVersion === 1 && doc.source ? doc.source : sourceDraft
+  const parts =
+    doc?.workflowVersion === 1
+      ? (doc.printSettings?.parts ?? 'both')
+      : partsDraft
+  const order =
+    doc?.workflowVersion === 1
+      ? (doc.printSettings?.order ?? 'grouped')
+      : orderDraft
+  const brandId = doc?.workflowVersion === 1 ? doc.brandId || '' : brandDraftId
+  const printingMethod =
+    doc?.workflowVersion === 1
+      ? doc.printSettings?.printingMethod || 'browser'
+      : printingMethodDraft
+  const copies =
+    doc?.workflowVersion === 1 ? (doc.printSettings?.copies ?? 1) : copiesDraft
+  const layout =
+    doc?.workflowVersion === 1
+      ? (doc.printSettings?.layout ?? defaultSheet)
+      : layoutDraft
   const editorDoc = doc
     ? labelSide(doc, editorSide === 'back' && doc.back ? 'back' : 'front')
     : blankLabel()
-  const assignedProducts = w.products.filter((p) => p.labelDesignId === doc?.id)
-  const [templateAction, setTemplateAction] =
-    useState<TemplateDialogAction | null>(null)
   const [deleteTargets, setDeleteTargets] = useState<LabelDocument[] | null>(
     null,
   )
-  const [labelSelection, setSelectedLabels] = useState<string[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [libraryStatus, setLibraryStatus] = useState('')
+  const [showStarters, setShowStarters] = useState(false)
   const libraryRecords = ((w.label_templates || []) as LabelDocument[]).filter(
     (t) => !t.deletedAt,
   )
-  const savedTemplates = libraryRecords.filter(
-    (t) => labelRecordKind(t) === 'template',
-  )
-  const savedLabels = libraryRecords.filter(
-    (t) => labelRecordKind(t) === 'label',
-  )
-  const availableStarters = systemLabelTemplates.filter(
-    (t) =>
-      !w.label_templates?.some(
-        (record) => record.id === t.id && record.deletedAt,
-      ),
-  )
-  const filteredRecords = (
-    section === 'Templates'
-      ? [...savedTemplates, ...availableStarters]
-      : savedLabels
-  )
+  const filteredRecords = libraryRecords
     .filter(
       (t) =>
         t.name.toLowerCase().includes(query.toLowerCase()) &&
@@ -254,8 +262,11 @@ export function LabelStudio({
         String(a.savedAt || a.updatedAt || ''),
       ),
     )
-  const selectedLabels = labelSelection.filter((id) =>
-    filteredRecords.some((t) => t.id === id),
+  const selectableLabels = filteredRecords.filter(
+    (d) => d.workflowVersion === 1,
+  )
+  const selectedLabels = selectableLabels.filter((d) =>
+    selectedIds.includes(d.id),
   )
   const svgRef = useRef<SVGSVGElement | null>(null),
     outputBusy = useRef(false),
@@ -294,11 +305,6 @@ export function LabelStudio({
     operationId: string
     expectedRevision: number
   } | null>(null)
-  const templateSaveAttempt = useRef<{
-    content: string
-    operationId: string
-    expectedRevision: number
-  } | null>(null)
   const recoveryInput = useRef<HTMLInputElement>(null)
   const scope = w.settings[0]?.labelEditorScope
   const initialScope = useRef(scope)
@@ -321,23 +327,24 @@ export function LabelStudio({
     brand = (w.brand_kits || []).find((b) => b.id === brandId),
     data = resolveLabelData(w, source, brand),
     issues = doc
-      ? labelSides(doc).flatMap((side) =>
-          checkLabel(
-            labelSide(doc, side),
-            data,
-            assets,
-            customFonts,
-            labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
-          ).map((issue) =>
-            doc.format === 'front-back'
-              ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
-              : issue,
-          ),
-        )
+      ? labelSides(doc)
+          .flatMap((side) =>
+            checkLabel(
+              labelSide(doc, side),
+              data,
+              assets,
+              customFonts,
+              labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
+            ).map((issue) =>
+              doc.format === 'front-back'
+                ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
+                : issue,
+            ),
+          )
+          .concat(preservedManualTextWarnings(doc))
       : [],
     element = editorDoc?.elements.find((e) => e.id === selected),
     canEdit = ready && ['Owner', 'Manager'].includes(role)
-  const [newTypography, setNewTypography] = useState('template')
   function setSelected(id: string) {
     setTextSelection([0, 0])
     setSelectedValue(id)
@@ -463,6 +470,10 @@ export function LabelStudio({
     )
   }
   function commit(next: LabelDocument) {
+    if (doc && doc.workflowVersion !== 1) {
+      setError('Duplicate this preserved design to edit an independent label.')
+      return
+    }
     if (doc) {
       history.current = [...history.current.slice(-39), doc]
       future.current = []
@@ -472,7 +483,7 @@ export function LabelStudio({
     setDoc(next)
     setStatus('Unsaved changes')
     setLibraryStatus('')
-    setRecoveryMode(false)
+
     setReviewed(false)
   }
   function change(patch: Partial<LabelDocument>) {
@@ -563,34 +574,16 @@ export function LabelStudio({
     )
       return
     setEditorSide('front')
-    setParts('both')
     setRunIndex(0)
-    const next = saved
-      ? structuredClone(t)
-      : copyLabelDesign(t, labelRecordKind(t))
-    next.elements = next.elements.map((e) =>
-      e.type === 'shape' &&
-      e.fill === 'transparent' &&
-      e.fillOpacity === undefined
-        ? { ...e, fill: e.color, fillOpacity: 1 }
-        : e,
-    )
-    if (!saved) {
-      next.name = t.isSystem ? t.name + ' · my template' : t.name
-      if (labelRecordKind(next) === 'template') next.renderVersion = 2
-    }
-    if (!saved && newTypography === 'brand' && brand)
-      next.elements = applyFontPairing(next.elements, {
-        name: 'Brand Kit',
-        heading: brand.headingFont || 'Oswald',
-        body: brand.bodyFont || 'DM Sans',
-        compliance: brand.complianceFont || 'DM Sans',
-        accent: brand.accentFont,
-      })
-    if (!saved && newTypography !== 'template' && newTypography !== 'brand') {
-      const pairing = fontPairings.find((p) => p.name === newTypography)
-      if (pairing) next.elements = applyFontPairing(next.elements, pairing)
-    }
+    const nextSource = labelSource(w, t, initialProductId)
+    const next = saved ? structuredClone(t) : duplicateSavedLabel(t, nextSource)
+    setSource(nextSource)
+    setBrandId(next.brandId || '')
+    setParts(next.printSettings?.parts || 'both')
+    setOrder(next.printSettings?.order || 'grouped')
+    setCopies(next.printSettings?.copies || 1)
+    setPrintingMethod(next.printSettings?.printingMethod || 'browser')
+    setLayout(structuredClone(next.printSettings?.layout || defaultSheet))
     revision.current = saved ? t.revision : 0
     lastSaved.current = saved && t.revision > 0 ? labelContent(next) : ''
     saveAttempt.current = null
@@ -602,7 +595,6 @@ export function LabelStudio({
     future.current = []
     setDoc(next)
     setSelected('')
-    setSelectedLabels([])
     setTextSelection([0, 0])
     setDisplayUnit(next.displayUnit || 'in')
     setSection('Editor')
@@ -614,7 +606,7 @@ export function LabelStudio({
           : 'Preview only',
     )
     setSaveFailed(false)
-    setRecoveryMode(false)
+
     setError('')
     setReviewed(false)
     return true
@@ -632,8 +624,7 @@ export function LabelStudio({
       return
     setSection(next)
     onSectionChange?.(next)
-    setSelectedLabels([])
-    if (next === 'My Labels' || next === 'Templates') {
+    if (next === 'Labels') {
       setQuery('')
       setFilter('All styles')
     }
@@ -642,48 +633,102 @@ export function LabelStudio({
     if (initialSection && sections.includes(initialSection))
       setSection(initialSection)
   }, [initialSection])
+  function duplicateLabel(record: LabelDocument) {
+    if (choose(record, false)) {
+      setStatus(
+        'Unsaved independent copy · Save creates a new label; Cancel creates no record.',
+      )
+    }
+  }
+  function createLabel(starter?: LabelDocument) {
+    const initialSource: LabelSource =
+      starter && doc?.workflowVersion === 1 && revision.current === 0
+        ? source
+        : { kind: 'product', id: initialProductId || '' }
+    const fresh = starter
+      ? duplicateSavedLabel(starter, initialSource)
+      : {
+          ...blankLabel(),
+          id: crypto.randomUUID(),
+          workflowVersion: 1 as const,
+          recordKind: 'label' as const,
+          renderVersion: 2 as const,
+          source: initialSource,
+          productId: initialSource.id || undefined,
+          manualTextReviewedFor: sourceKey(initialSource),
+        }
+    fresh.name = starter ? starter.name : 'Untitled label'
+    if (
+      choose(
+        fresh,
+        true,
+        !!starter &&
+          revision.current === 0 &&
+          !doc?.elements.length &&
+          !doc?.back?.elements.length,
+      )
+    )
+      setShowStarters(false)
+  }
+  const createdRequest = useRef(0)
+  useEffect(() => {
+    if (
+      initialCreateRequest &&
+      createdRequest.current !== initialCreateRequest &&
+      !initialLabelId
+    ) {
+      createdRequest.current = initialCreateRequest
+      createLabel()
+      onCreateRequestHandled?.()
+    }
+  }, [initialCreateRequest])
   const openedLabel = useRef('')
   useEffect(() => {
     if (!initialLabelId || openedLabel.current === initialLabelId) return
     const record = libraryRecords.find((t) => t.id === initialLabelId)
     if (!record) return
     openedLabel.current = initialLabelId
-    choose(record, true)
+    choose(record, record.workflowVersion === 1)
     // Open once per explicit request; later library refreshes keep the editor.
   }, [initialLabelId, libraryRecords.length])
-  async function saveTemplate(
-    document: LabelDocument,
-    expectedRevision: number,
+  function cancelEditor() {
+    if (saveBusy) return
+    current.current = null
+    setDoc(null)
+    lastSaved.current = ''
+    revision.current = 0
+    saveAttempt.current = null
+    setSelected('')
+    setDraftStatus('')
+    setError('')
+    setStatus('')
+    setSection('Labels')
+    onSectionChange?.('Labels')
+  }
+  function changeSource(next: LabelSource) {
+    setSource(next)
+    setReviewed(false)
+    if (doc?.workflowVersion === 1)
+      change({
+        source: next,
+        productId: sourceProductId(next) || undefined,
+        manualTextReviewedFor: undefined,
+      })
+  }
+  function updatePrint(
+    patch: Partial<NonNullable<LabelDocument['printSettings']>>,
   ) {
-    if (saveInFlight.current) await saveInFlight.current
-    const content = labelContent(document)
-    if (templateSaveAttempt.current?.content !== content)
-      templateSaveAttempt.current = {
-        content,
-        operationId: crypto.randomUUID(),
-        expectedRevision,
-      }
-    const attempt = templateSaveAttempt.current
-    const operationId = attempt.operationId
-    const workspace = await request(
-      'labelSave',
-      { document, expectedRevision: attempt.expectedRevision, operationId },
-      operationId,
-    )
-    const saved = confirmLabelSave(workspace, document, operationId)
-    if (templateAction?.fromEditor) choose(saved, true, true)
-    else if (current.current?.id === saved.id) {
-      revision.current = saved.revision
-      lastSaved.current = labelContent(saved)
-      current.current = {
-        ...current.current,
-        name: saved.name,
-        revision: saved.revision,
-      }
-      setDoc(current.current)
-    }
-    setLibraryStatus(`Template “${saved.name}” saved to your oven.`)
-    templateSaveAttempt.current = null
+    if (doc?.workflowVersion === 1)
+      change({
+        printSettings: {
+          copies,
+          layout,
+          parts,
+          order,
+          printingMethod,
+          ...patch,
+        },
+      })
   }
   async function deleteDesigns() {
     if (!deleteTargets?.length) return
@@ -702,7 +747,7 @@ export function LabelStudio({
       throw new Error(
         'The server did not confirm deletion. Refresh the list and retry.',
       )
-    setSelectedLabels((selected) => selected.filter((id) => !ids.includes(id)))
+    setSelectedIds((old) => old.filter((id) => !ids.includes(id)))
     const closed = !!current.current && ids.includes(current.current.id)
     if (closed) {
       current.current = null
@@ -715,11 +760,7 @@ export function LabelStudio({
       setSelected('')
       setDraftStatus('')
       setStatus('')
-      setSection(
-        labelRecordKind(deleteTargets[0]) === 'template'
-          ? 'Templates'
-          : 'My Labels',
-      )
+      setSection('Labels')
     }
     setLibraryStatus(
       `${ids.length} ${labelRecordKind(deleteTargets[0]) === 'template' ? 'template' : 'label'}${ids.length === 1 ? '' : 's'} deleted.${closed ? ' The deleted design’s editor is closed.' : ''}`,
@@ -738,6 +779,18 @@ export function LabelStudio({
     }
     const latest = current.current
     if (!latest) return false
+    if (latest.workflowVersion !== 1) {
+      setError(
+        'This existing design is preserved. Duplicate it to save independent changes.',
+      )
+      return false
+    }
+    try {
+      validateSavedLabelContext(w, latest)
+    } catch (failure) {
+      setError((failure as Error).message)
+      return false
+    }
     const content = labelContent(latest)
     if (content === lastSaved.current) return true
     const attempt =
@@ -777,8 +830,6 @@ export function LabelStudio({
           current.current = { ...current.current!, revision: saved.revision }
           setDoc(current.current)
           setStatus('Saved · ' + new Date(saved.savedAt).toLocaleString())
-          if (labelRecordKind(latest) === 'template')
-            setLibraryStatus(`Template “${saved.name}” updated in your oven.`)
           setDraftStatus(
             'Recovery checkpoint retained in history; this layout is saved to your oven.',
           )
@@ -787,7 +838,7 @@ export function LabelStudio({
             'Unsaved changes · earlier edits saved at ' +
               new Date(saved.savedAt).toLocaleTimeString(),
           )
-        setRecoveryMode(false)
+
         return unchanged
       } catch (e) {
         setError(
@@ -811,7 +862,8 @@ export function LabelStudio({
     const latest = current.current
     if (
       !latest ||
-      templateAction ||
+      latest.workflowVersion !== 1 ||
+      revision.current < 1 ||
       deleteTargets ||
       !canEdit ||
       draftInFlight.current ||
@@ -894,39 +946,13 @@ export function LabelStudio({
       )
     )
       return
-    if (sourceData) setSource(sourceData)
+    if (sourceData) changeSource(sourceData)
     if (unit) setDisplayUnit(unit)
-    setRecoveryMode(true)
+
     setStatus(
       'Recovered draft · unsaved copy. Review and Save to confirm persistence.',
     )
   }
-  useEffect(() => {
-    if (
-      !doc ||
-      labelRecordKind(doc) === 'template' ||
-      templateAction ||
-      deleteTargets ||
-      colorEditing ||
-      !canEdit ||
-      saveBusy ||
-      saveFailed ||
-      recoveryMode ||
-      labelContent(doc) === lastSaved.current
-    )
-      return
-    const timer = setTimeout(() => void saveDocument(), 1400)
-    return () => clearTimeout(timer)
-  }, [
-    doc,
-    canEdit,
-    colorEditing,
-    saveBusy,
-    saveFailed,
-    recoveryMode,
-    templateAction,
-    deleteTargets,
-  ])
   useEffect(() => {
     if (!doc) return
     const before = (e: BeforeUnloadEvent) => {
@@ -1095,6 +1121,10 @@ export function LabelStudio({
   }
   async function output(type: LabelOutputType) {
     if (!doc || outputBusy.current || colorEditing) return
+    if (doc.workflowVersion === 1 && (dirty || revision.current < 1)) {
+      setError('Save this label before printing or exporting.')
+      return
+    }
     outputBusy.current = true
     setBusy(true)
     setError('')
@@ -1117,7 +1147,7 @@ export function LabelStudio({
           ),
         setStatus,
         onWorkspace,
-        beforeOutput: saveDocument,
+        beforeOutput: async () => !dirty,
         parts,
         order,
         runIndex,
@@ -1275,7 +1305,7 @@ export function LabelStudio({
           } else commit(next)
           setColorEditing(false)
           setRecentColors((prev) => recentColorList(prev, c))
-          if (canEdit)
+          if (canEdit && revision.current > 0)
             request('labelColorRecent', { color: c }).catch((e) =>
               setError(e.message),
             )
@@ -1315,15 +1345,7 @@ export function LabelStudio({
           value={source.kind}
           onChange={(e) => {
             const kind = e.target.value as LabelSource['kind']
-            setSource({
-              kind,
-              id:
-                (kind === 'product'
-                  ? w.products
-                  : kind === 'batch'
-                    ? w.batches
-                    : w.ingredients)[0]?.id || '',
-            })
+            changeSource({ kind, id: '' })
             setReviewed(false)
           }}
         >
@@ -1332,11 +1354,11 @@ export function LabelStudio({
           <option value="ingredient">Pantry item</option>
         </select>
       </Control>
-      <Control label="Choose record">
+      <Control label={source.kind === 'product' ? 'Product' : 'Choose record'}>
         <select
           value={source.id}
           onChange={(e) => {
-            setSource({ ...source, id: e.target.value })
+            changeSource({ kind: source.kind, id: e.target.value })
             setReviewed(false)
           }}
         >
@@ -1354,7 +1376,7 @@ export function LabelStudio({
           <select
             value={source.productId || ''}
             onChange={(e) =>
-              setSource({ ...source, productId: e.target.value })
+              changeSource({ ...source, productId: e.target.value })
             }
           >
             <option value="">Choose product…</option>
@@ -1448,7 +1470,7 @@ export function LabelStudio({
             aria-current={section === s ? 'page' : undefined}
             onClick={() => navigateStudio(s)}
           >
-            {s === 'My Labels' ? 'Saved Labels' : s}
+            {s}
           </button>
         ))}
         {doc && (
@@ -1464,14 +1486,6 @@ export function LabelStudio({
         <p className="studio-notice" role="status">
           {libraryStatus}
         </p>
-      )}
-      {templateAction && (
-        <TemplateSaveDialog
-          action={templateAction}
-          templates={savedTemplates}
-          onSave={saveTemplate}
-          onClose={() => setTemplateAction(null)}
-        />
       )}
       {deleteTargets && (
         <DeleteDesignDialog
@@ -1590,78 +1604,34 @@ export function LabelStudio({
           export.
         </p>
       )}
-      {(section === 'Templates' || section === 'My Labels') && (
+      {section === 'Labels' && (
         <>
           <div className="studio-gallery-heading">
             <div>
-              <span className="eyebrow">A GOOD LABEL STARTS HERE</span>
-              <h2>
-                {section === 'Templates'
-                  ? 'Made for what you make.'
-                  : 'Your labels, ready for the next bake.'}
-              </h2>
+              <span className="eyebrow">LABELS</span>
+              <h2>Your labels</h2>
               <p>
-                Create a reusable template → assign to products → preview and
-                print.
+                Create, choose a product, design, save and print. Duplicate a
+                label to reuse its design.
               </p>
-              <Control label="Brand Kit">
-                <select
-                  value={brandId}
-                  onChange={(e) => setBrandId(e.target.value)}
-                >
-                  <option value="">Choose Brand Kit…</option>
-                  {(w.brand_kits || []).map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </Control>
-              <Control label="New template typography">
-                <select
-                  value={newTypography}
-                  onChange={(e) => setNewTypography(e.target.value)}
-                >
-                  <option value="template">Use template typography</option>
-                  <option value="brand" disabled={!brand}>
-                    Start with my Brand Kit fonts
-                  </option>
-                  {fontPairings.map((p) => (
-                    <option key={p.name}>{p.name}</option>
-                  ))}
-                </select>
-              </Control>
             </div>
             <button
               className="btn"
-              onClick={() =>
-                choose(
-                  {
-                    ...blankLabel(),
-                    id: crypto.randomUUID(),
-                    recordKind: 'template',
-                    renderVersion: 2,
-                    format: 'single',
-                  },
-                  true,
-                )
-              }
+              disabled={saveBusy}
+              onClick={() => createLabel()}
             >
-              <Plus size={18} />
-              Start blank
+              <Plus size={18} /> Create label
             </button>
           </div>
-          {sourceControls}
           <div className="studio-gallery-toolbar">
             <label className="search-field">
               <Search size={18} />
-              <span className="sr-only">Search label templates</span>
+              <span className="sr-only">Search labels</span>
               <input
-                placeholder="Find your style…"
+                placeholder="Search labels…"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value)
-                  setSelectedLabels([])
                 }}
               />
             </label>
@@ -1670,7 +1640,6 @@ export function LabelStudio({
                 value={filter}
                 onChange={(e) => {
                   setFilter(e.target.value)
-                  setSelectedLabels([])
                 }}
               >
                 {labelFilters.map((f) => (
@@ -1679,250 +1648,145 @@ export function LabelStudio({
               </select>
             </Control>
           </div>
-          {section === 'Templates' && (
-            <p className="studio-small-note">
-              {savedTemplates.length} saved templates ·{' '}
-              {availableStarters.length} starters. Open a template to edit or
-              assign it, or copy a starter into a reusable template.
+          {!filteredRecords.length && (
+            <p className="calm-empty">
+              No labels to show. Create a label or clear the search.
             </p>
           )}
-          {section === 'My Labels' && (
+          {!!selectableLabels.length && (
             <div className="studio-selection-toolbar">
               <label>
                 <input
                   type="checkbox"
                   aria-label="Select All filtered labels"
                   checked={
-                    filteredRecords.length > 0 &&
-                    filteredRecords.every((t) => selectedLabels.includes(t.id))
+                    selectedLabels.length > 0 &&
+                    selectedLabels.length === selectableLabels.length
                   }
-                  ref={(input) => {
-                    if (input)
-                      input.indeterminate =
-                        selectedLabels.length > 0 &&
-                        selectedLabels.length < filteredRecords.length
-                  }}
-                  disabled={!filteredRecords.length}
-                  onChange={(e) =>
-                    setSelectedLabels(
-                      e.target.checked ? filteredRecords.map((t) => t.id) : [],
+                  onChange={(event) =>
+                    setSelectedIds(
+                      event.target.checked
+                        ? selectableLabels.map((d) => d.id)
+                        : [],
                     )
                   }
                 />{' '}
                 Select All
               </label>
-              <span role="status">
-                {selectedLabels.length} selected · {filteredRecords.length}{' '}
-                matching labels
-              </span>
+              <span role="status">{selectedLabels.length} selected</span>
               <button
-                className="btn secondary studio-delete-button"
+                className="text-button studio-delete-button"
                 disabled={!canEdit || saveBusy || !selectedLabels.length}
-                onClick={() =>
-                  setDeleteTargets(
-                    filteredRecords.filter((t) =>
-                      selectedLabels.includes(t.id),
-                    ),
-                  )
-                }
+                onClick={() => setDeleteTargets(selectedLabels)}
               >
                 Delete Selected
               </button>
             </div>
           )}
-          {!filteredRecords.length &&
-            (section === 'Templates' || savedLabels.length > 0) && (
-              <p className="calm-empty">
-                No matching {section === 'Templates' ? 'templates' : 'labels'}.
-                Clear the search or style filter to see more.
-              </p>
-            )}
-          <div className="studio-template-grid">
-            {filteredRecords.map((t) => (
-              <article className="studio-template-card" key={t.id}>
-                {section === 'My Labels' && (
-                  <label className="studio-label-selection">
-                    <input
-                      type="checkbox"
-                      aria-label={'Select ' + t.name}
-                      checked={selectedLabels.includes(t.id)}
-                      onChange={(e) =>
-                        setSelectedLabels((ids) =>
-                          e.target.checked
-                            ? [...ids, t.id]
-                            : ids.filter((id) => id !== t.id),
-                        )
-                      }
-                    />
-                    Select label
-                  </label>
-                )}
-                <button
-                  className="studio-template-preview"
-                  aria-label={'Preview ' + t.name}
-                  onClick={() => choose(t, !t.isSystem)}
-                >
-                  {t.format === 'front-back' ? (
+          <div className="studio-label-list">
+            {filteredRecords.map((t) => {
+              const linkedSource = labelSource(w, t, initialProductId)
+              const linkedProducts = w.products.filter(
+                (p) => p.labelDesignId === t.id || p.id === t.productId,
+              )
+              const labelData = resolveLabelData(
+                w,
+                linkedSource,
+                w.brand_kits?.find((b) => b.id === t.brandId),
+              )
+              const product = w.products.find(
+                (p) => p.id === sourceProductId(linkedSource),
+              )
+              return (
+                <article className="studio-label-row" key={t.id}>
+                  <div className="studio-label-thumbnail">
                     <PairedLabelPreview
                       document={t}
-                      data={data}
+                      data={labelData}
                       assets={assets}
                     />
-                  ) : (
-                    <LabelCanvas document={t} data={data} assets={assets} />
-                  )}
-                  {t.format !== 'front-back' && (
-                    <span>
-                      {(t.width / 72).toFixed(1)} × {(t.height / 72).toFixed(1)}{' '}
-                      in
-                    </span>
-                  )}
-                </button>
-                <div className="studio-template-body">
-                  <div className="studio-template-info">
+                  </div>
+                  <div className="studio-label-description">
+                    {t.workflowVersion === 1 && (
+                      <label className="studio-small-note">
+                        <input
+                          type="checkbox"
+                          aria-label={'Select ' + t.name}
+                          checked={selectedIds.includes(t.id)}
+                          onChange={(event) =>
+                            setSelectedIds((ids) =>
+                              event.target.checked
+                                ? [...ids, t.id]
+                                : ids.filter((id) => id !== t.id),
+                            )
+                          }
+                        />{' '}
+                        Select
+                      </label>
+                    )}
                     <h3>{t.name}</h3>
                     <p>
-                      {t.category} ·{' '}
-                      {t.isSystem
-                        ? 'Original starter'
-                        : labelRecordKind(t) === 'template'
-                          ? 'Reusable template'
-                          : 'Your saved design'}
+                      {linkedProducts.length > 1
+                        ? `${linkedProducts.length} linked products · Preserved shared design`
+                        : product?.name ||
+                          (t.workflowVersion === 1
+                            ? 'No product link'
+                            : 'Preserved design')}{' '}
+                      · {(t.width / 72).toFixed(1)} ×{' '}
+                      {(t.height / 72).toFixed(1)} in
+                      {t.format === 'front-back' ? ' · Front + Back' : ''}
                     </p>
-                    {!t.isSystem && (
-                      <p className="studio-small-note">
-                        Revision {t.revision}
-                        {t.savedAt || t.updatedAt
-                          ? ' · ' +
-                            new Date(t.savedAt || t.updatedAt!).toLocaleString()
-                          : ''}
-                      </p>
-                    )}
                   </div>
                   <div className="studio-library-actions">
                     <button
                       className="text-button"
-                      onClick={() => choose(t, !t.isSystem)}
+                      aria-label={'Preview/Print ' + t.name}
+                      onClick={() => {
+                        if (choose(t, true)) setSection('Print & Export')
+                      }}
                     >
-                      {t.isSystem
-                        ? 'Use a copy'
-                        : labelRecordKind(t) === 'template'
-                          ? 'Open template'
-                          : 'Open label'}
-                      <ArrowRight size={16} />
+                      Preview/Print
                     </button>
-                    {!t.isSystem && labelRecordKind(t) === 'template' && (
-                      <button
-                        className="text-button"
-                        onClick={() => choose(t, true)}
-                      >
-                        Assign to products
-                      </button>
-                    )}
-                  </div>
-                  <div className="studio-library-actions studio-library-secondary-actions">
-                    {!t.isSystem && labelRecordKind(t) === 'template' && (
-                      <button
-                        className="text-button"
-                        disabled={!canEdit || saveBusy}
-                        onClick={() =>
-                          setTemplateAction({ mode: 'rename', document: t })
-                        }
-                      >
-                        Rename
-                      </button>
-                    )}
-                    {labelRecordKind(t) === 'template' &&
-                      t.format !== 'front-back' && (
-                        <button
-                          className="text-button"
-                          onClick={() => {
-                            const copy = copyLabelDesign(
-                              t,
-                              'template',
-                              t.name.slice(0, 75) + ' Front + Back',
-                            )
-                            choose(
-                              {
-                                ...copy,
-                                format: 'front-back',
-                                renderVersion: 2,
-                                back: { ...labelLayout(t), elements: [] },
-                              },
-                              true,
-                            )
-                          }}
-                        >
-                          Create front/back copy
-                        </button>
-                      )}
-                    {!t.isSystem && (
-                      <>
-                        <button
-                          className="text-button"
-                          aria-label={'Duplicate ' + t.name}
-                          disabled={
-                            saveBusy ||
-                            (labelRecordKind(t) === 'template' && !canEdit)
-                          }
-                          onClick={() =>
-                            labelRecordKind(t) === 'template'
-                              ? setTemplateAction({
-                                  mode: 'duplicate',
-                                  document: t,
-                                })
-                              : choose(
-                                  {
-                                    ...t,
-                                    name: t.name.slice(0, 90) + ' copy',
-                                    revision: 0,
-                                  },
-                                  false,
-                                )
-                          }
-                        >
-                          <Copy size={17} /> Duplicate
-                        </button>
-                      </>
-                    )}
                     <button
-                      className="text-button studio-delete-button"
-                      aria-label={'Delete ' + t.name}
-                      disabled={!canEdit || saveBusy}
-                      onClick={() => setDeleteTargets([t])}
+                      className="text-button"
+                      aria-label={'Edit ' + t.name}
+                      onClick={() =>
+                        t.workflowVersion === 1
+                          ? choose(t, true)
+                          : duplicateLabel(t)
+                      }
                     >
-                      <Trash2 size={17} /> Delete
+                      Edit
                     </button>
+                    <button
+                      className="text-button"
+                      aria-label={'Duplicate ' + t.name}
+                      disabled={!canEdit || saveBusy}
+                      onClick={() => duplicateLabel(t)}
+                    >
+                      <Copy size={16} /> Duplicate
+                    </button>
+                    {t.workflowVersion === 1 && (
+                      <button
+                        className="text-button studio-delete-button"
+                        aria-label={'Delete ' + t.name}
+                        disabled={!canEdit || saveBusy}
+                        onClick={() => setDeleteTargets([t])}
+                      >
+                        <Trash2 size={16} /> Delete
+                      </button>
+                    )}
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
-          {section === 'My Labels' && !!savedLabels.length && (
-            <p>
-              {savedLabels.length} labels in this oven.{' '}
-              <button
-                className="text-button"
-                onClick={() => {
-                  setFilter('All styles')
-                  setQuery('')
-                }}
-              >
-                Show all saved labels
-              </button>
+          {libraryRecords.some((t) => t.workflowVersion !== 1) && (
+            <p className="studio-small-note">
+              Existing designs and shared product links are preserved pending
+              conversion review. Edit opens an independent unsaved copy;
+              preview/print uses the original.
             </p>
-          )}
-          {section === 'My Labels' && !savedLabels.length && (
-            <div className="calm-empty">
-              <FileText size={32} />
-              <h3>Your first label starts with a style.</h3>
-              <button
-                className="btn"
-                onClick={() => navigateStudio('Templates')}
-              >
-                Browse templates
-              </button>
-            </div>
           )}
         </>
       )}
@@ -1931,18 +1795,12 @@ export function LabelStudio({
           <div className="studio-editor-toolbar">
             <button
               className="icon-button"
-              aria-label="Back to templates"
-              onClick={() => navigateStudio('Templates')}
+              aria-label="Back to labels"
+              onClick={() => navigateStudio('Labels')}
             >
               <ArrowLeft size={20} />
             </button>
-            <Control
-              label={
-                labelRecordKind(doc) === 'template'
-                  ? 'Template name'
-                  : 'Label name'
-              }
-            >
+            <Control label="Label name">
               <input
                 value={doc.name}
                 onChange={(e) => change({ name: e.target.value })}
@@ -1952,12 +1810,10 @@ export function LabelStudio({
               {saveBusy
                 ? 'Saving…'
                 : saveFailed
-                  ? 'Save failed — changes remain unsaved'
-                  : recoveryMode
-                    ? status
-                    : dirty
-                      ? 'Unsaved changes'
-                      : status}
+                  ? status
+                  : dirty && !status.startsWith('Recovered')
+                    ? 'Unsaved changes'
+                    : status}
             </span>
             <button className="icon-button" aria-label="Undo" onClick={undo}>
               <Undo2 size={19} />
@@ -1967,105 +1823,98 @@ export function LabelStudio({
             </button>
             <button
               className="btn secondary"
-              disabled={busy || saveBusy || !canEdit}
+              disabled={
+                busy || saveBusy || !canEdit || doc.workflowVersion !== 1
+              }
               onClick={() => void saveDocument()}
             >
-              <Save size={17} />
-              {labelRecordKind(doc) === 'template' ? 'Update Template' : 'Save'}
+              <Save size={17} /> Save
             </button>
             <button
               className="btn secondary"
-              disabled={busy || saveBusy || !canEdit}
-              onClick={() =>
-                setTemplateAction({
-                  mode: 'new',
-                  document: doc,
-                  fromEditor: true,
-                })
-              }
+              disabled={saveBusy}
+              onClick={cancelEditor}
             >
-              Save as New Template
+              Cancel
             </button>
-            {labelRecordKind(doc) === 'label' && (
-              <button
-                className="btn secondary"
-                disabled={
-                  busy || saveBusy || !canEdit || !savedTemplates.length
-                }
-                onClick={() =>
-                  setTemplateAction({
-                    mode: 'update',
-                    document: doc,
-                    fromEditor: true,
-                  })
-                }
-              >
-                Update Existing Template
-              </button>
-            )}
-            {labelRecordKind(doc) === 'template' && (
-              <button
-                className="btn secondary"
-                disabled={saveBusy}
-                onClick={() => navigateStudio('Templates')}
-              >
-                Template library
-              </button>
-            )}
-            {dirty && (
-              <button
-                className="btn secondary"
-                disabled={saveBusy}
-                onClick={() => {
-                  choose({ ...doc, name: doc.name + ' copy' }, false)
-                }}
-              >
-                Save as a separate copy
-              </button>
-            )}
-            {!dirty && (
-              <button
-                className="text-button"
-                onClick={() => {
-                  setSection(
-                    labelRecordKind(doc) === 'template'
-                      ? 'Templates'
-                      : 'My Labels',
-                  )
-                  setQuery('')
-                  setFilter('All styles')
-                }}
-              >
-                {labelRecordKind(doc) === 'template'
-                  ? 'View saved template in library'
-                  : 'View saved label in My Labels'}
-              </button>
-            )}
+            <button
+              className="text-button"
+              disabled={saveBusy || !canEdit}
+              onClick={() => duplicateLabel(doc)}
+            >
+              <Copy size={16} /> Duplicate
+            </button>
             <button
               className="btn"
               onClick={() => setSection('Print & Export')}
             >
-              <Printer size={17} />
-              Print & export
+              <Printer size={17} /> Preview/Print
             </button>
           </div>
-          {labelRecordKind(doc) === 'template' && (
-            <TemplateAssignments
-              key={doc.id}
-              document={doc}
-              workspace={w}
-              canEdit={canEdit}
-              request={request}
-            />
-          )}
-          {assignedProducts.length > 0 && (
-            <p role="status" className="warning-text">
-              Shared template · {assignedProducts.length} products. Saving
-              changes affects their future label previews and printing.
+          {doc.workflowVersion !== 1 && (
+            <p className="studio-notice">
+              This existing design is preserved. Duplicate it to edit an
+              independent label.
             </p>
           )}
+          {doc.workflowVersion === 1 && doc.revision === 0 && (
+            <>
+              <p className="studio-small-note">
+                Unsaved draft. Save creates a label; Cancel creates no record.
+              </p>
+              <button
+                className="text-button"
+                onClick={() => setShowStarters(!showStarters)}
+              >
+                Choose a starting design (optional)
+              </button>
+              {showStarters && (
+                <div className="studio-starters">
+                  {systemLabelTemplates.map((t) => (
+                    <button
+                      className="btn secondary"
+                      key={t.id}
+                      onClick={() => createLabel(t)}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+          {sourceControls}
+          {doc.workflowVersion === 1 &&
+            manualLabelFields(doc).length > 0 &&
+            doc.manualTextReviewedFor !== sourceKey(source) && (
+              <section className="studio-manual-review" role="alert">
+                <h3>Review manually entered text</h3>
+                <p>
+                  The selected product changed or this design has no recorded
+                  product source. Product-linked fields update automatically.
+                  This editable text stays as entered:
+                </p>
+                <ul>
+                  {manualLabelFields(doc).map((field) => (
+                    <li key={field.id}>
+                      {field.side === 'back' ? 'Back' : 'Front'}: {field.text}
+                    </li>
+                  ))}
+                </ul>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={() =>
+                      change({ manualTextReviewedFor: sourceKey(source) })
+                    }
+                  />{' '}
+                  I reviewed this manual text for the selected product.
+                </label>
+              </section>
+            )}
           <div className="studio-set-toolbar">
-            <Control label="Template format">
+            <Control label="Label format">
               <select
                 value={doc.format || 'single'}
                 onChange={(e) => {
@@ -2565,7 +2414,11 @@ export function LabelStudio({
               {element ? (
                 <div className="studio-inspector-fields">
                   <p className="studio-small-note">
-                    {element.binding || element.type}
+                    {element.binding
+                      ? 'Product-linked / dynamic · ' + element.binding
+                      : element.type === 'text'
+                        ? 'Manually entered text'
+                        : element.type}
                     {element.locked ? ' · locked' : ''}
                   </p>
                   <div className="studio-actions">
@@ -3215,7 +3068,11 @@ export function LabelStudio({
                   <Control label="Brand kit">
                     <select
                       value={brandId}
-                      onChange={(e) => setBrandId(e.target.value)}
+                      onChange={(e) => {
+                        setBrandId(e.target.value)
+                        if (doc?.workflowVersion === 1)
+                          change({ brandId: e.target.value })
+                      }}
                     >
                       <option value="">Business defaults</option>
                       {(w.brand_kits || []).map((b) => (
@@ -3725,7 +3582,37 @@ export function LabelStudio({
         (doc ? (
           <div className="studio-print-layout">
             <section className="panel studio-print-controls">
-              <h2>From your kitchen to the shelf.</h2>
+              <h2>Preview and print</h2>
+              {doc.workflowVersion === 1 && (
+                <div className="button-row">
+                  <button
+                    className="btn secondary"
+                    disabled={saveBusy || !canEdit}
+                    onClick={() => void saveDocument()}
+                  >
+                    Save label
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={() => setSection('Editor')}
+                  >
+                    Edit label
+                  </button>
+                  <button
+                    className="btn secondary"
+                    disabled={saveBusy}
+                    onClick={cancelEditor}
+                  >
+                    Cancel
+                  </button>
+                  {dirty && (
+                    <p role="status">
+                      Save your changes before printing. Review manually entered
+                      product text in the editor when changing products.
+                    </p>
+                  )}
+                </div>
+              )}
               {sourceControls}
               <LabelSetControls
                 document={doc}
@@ -3733,10 +3620,14 @@ export function LabelStudio({
                 parts={parts}
                 setParts={(v) => {
                   setParts(v)
+                  updatePrint({ parts: v })
                   setRunIndex(0)
                 }}
                 order={order}
-                setOrder={setOrder}
+                setOrder={(v) => {
+                  setOrder(v)
+                  updatePrint({ order: v })
+                }}
                 runIndex={runIndex}
                 setRunIndex={setRunIndex}
               />
@@ -3745,12 +3636,21 @@ export function LabelStudio({
                 printerProfiles={printerProfiles}
                 selectedPrinter={selectedPrinter}
                 printingMethod={printingMethod}
-                setPrintingMethod={setPrintingMethod}
+                setPrintingMethod={(value) => {
+                  setPrintingMethod(value)
+                  updatePrint({ printingMethod: value })
+                }}
                 connected={connected}
                 copies={copies}
-                setCopies={setCopies}
+                setCopies={(v) => {
+                  setCopies(v)
+                  updatePrint({ copies: v })
+                }}
                 layout={layout}
-                setLayout={setLayout}
+                setLayout={(v) => {
+                  setLayout(v)
+                  updatePrint({ layout: v })
+                }}
                 onManagePrinters={() => setSection('Label Settings')}
               />
               <div className="studio-print-buttons">
@@ -3861,8 +3761,8 @@ export function LabelStudio({
           <div className="calm-empty">
             <Printer size={35} />
             <h2>Choose a label first.</h2>
-            <button className="btn" onClick={() => navigateStudio('Templates')}>
-              Browse templates
+            <button className="btn" onClick={() => navigateStudio('Labels')}>
+              Browse labels
             </button>
           </div>
         ))}

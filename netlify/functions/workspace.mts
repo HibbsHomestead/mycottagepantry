@@ -1,3 +1,7 @@
+import {
+  assertSavedLabelOutput,
+  validateSavedLabelContext,
+} from '../../src/lib/saved-labels'
 import { exportSvgLabelPdf } from '../lib/label-svg-output'
 import {
   labelSide,
@@ -64,10 +68,7 @@ import {
   barcodeFormats as scanFormats,
 } from '../../src/lib/barcodes'
 import { labelRecordKind, templateNameKey } from '../../src/lib/label-library'
-import {
-  productLabelAssignment,
-  applyProductTemplateDraft,
-} from '../../src/lib/label-preview'
+import { applyProductTemplateDraft } from '../../src/lib/label-preview'
 import { validateShelfMedia } from '../../src/lib/shelf-labels'
 import {
   countQuantity,
@@ -596,6 +597,14 @@ export default async (req: Request, context: Context) => {
       )
         item.needsCostSetup = false
       if (table === 'products') {
+        const stored = state.products.find((p) => p.id === item.id)
+        if (item.labelAssignmentEdited === true)
+          throw new Error(
+            'Manage labels in Labels; existing design links are preserved.',
+          )
+        if (stored?.labelDesignId) item.labelDesignId = stored.labelDesignId
+        else delete item.labelDesignId
+
         if (
           item.workflow &&
           !['food', 'handmade', 'resale'].includes(item.workflow)
@@ -649,6 +658,7 @@ export default async (req: Request, context: Context) => {
       item.updatedBy = user?.id || 'demo-owner'
       item.updatedAt = new Date().toISOString()
       const financeLinks: Record<string, Record<string, string>> = {
+        label_templates: { product_id: 'productId' },
         consignment_items: { consignor_id: 'consignorId' },
         consignment_sales: { consignor_id: 'consignorId', item_id: 'itemId' },
         consignment_movements: {
@@ -1903,6 +1913,7 @@ export default async (req: Request, context: Context) => {
         !state.products.some((p) => p.id === source.productId)
       )
         throw new Error('Product is unavailable.')
+      assertSavedLabelOutput(masterDocument, source, data.brandId)
       const snapshot = resolveLabelData(
           state,
           source,
@@ -2860,46 +2871,11 @@ export default async (req: Request, context: Context) => {
         for (const assignment of labelArtworkAssignment(state, data))
           await save(assignment.table, assignment.record)
         await audit('Label artwork linked', String(data.target))
-      } else if (action === 'templateAssignments') {
-        if (!['Owner', 'Manager'].includes(role))
-          throw new Error('Only an Owner or Manager can assign templates.')
-        const template = state.label_templates.find(
-          (t) =>
-            t.id === data.templateId &&
-            !t.deletedAt &&
-            t.recordKind === 'template',
-        )
-        if (
-          !template ||
-          !Array.isArray(data.productIds) ||
-          data.productIds.length > 200 ||
-          new Set(data.productIds).size !== data.productIds.length ||
-          data.productIds.some(
-            (id: unknown) =>
-              typeof id !== 'string' ||
-              !state.products.some((p) => p.id === id),
-          )
-        )
-          throw new Error(
-            'Choose a saved template and products from this oven.',
-          )
-        for (const product of state.products) {
-          if (data.productIds.includes(product.id))
-            await save('products', { ...product, labelDesignId: template.id })
-          else if (product.labelDesignId === template.id) {
-            const next = { ...product }
-            delete next.labelDesignId
-            await save('products', next)
-          }
-        }
-      } else if (action === 'productLabelAssignment') {
-        if (!['Owner', 'Manager'].includes(role))
-          throw new Error('Only an Owner or Manager can assign labels.')
-        const product = productLabelAssignment(state, data || {})
-        await save('products', product)
-        await audit(
-          product.labelDesignId ? 'Label assigned' : 'Label unassigned',
-          String(product.name || product.id),
+      } else if (
+        ['templateAssignments', 'productLabelAssignment'].includes(action)
+      ) {
+        throw new Error(
+          'Create or duplicate a label in Labels. Existing product links are preserved pending conversion review.',
         )
       } else if (action === 'labelColorRecent') {
         const color = validateLabelColor(data.color),
@@ -3016,6 +2992,10 @@ export default async (req: Request, context: Context) => {
         const saved = state.label_templates.find(
           (t) => t.id === data.document.id,
         )
+        if (!saved || saved.workflowVersion !== 1)
+          throw new Error(
+            'Save this label before preserving recovery checkpoints.',
+          )
         if (saved?.deletedAt)
           throw new Error(
             'This design was deleted. Recover edits as a new copy.',
@@ -3069,6 +3049,11 @@ export default async (req: Request, context: Context) => {
           )
             throw new Error('An image does not belong to this business.')
         const previous = state.label_templates.find((t) => t.id === document.id)
+        if (previous && previous.workflowVersion !== 1)
+          throw new Error(
+            'This existing design is preserved pending conversion review. Duplicate it to edit independently.',
+          )
+        validateSavedLabelContext(state, document)
         if (previous?.deletedAt || document.deletedAt)
           throw new Error(
             'This design was deleted. Save your edits as a new copy.',
@@ -3213,6 +3198,10 @@ export default async (req: Request, context: Context) => {
           throw new Error(
             'A selected design is unavailable or has a different type. Refresh and select again.',
           )
+        if (targets.some((t: Item) => t.workflowVersion !== 1))
+          throw new Error(
+            'Existing designs are preserved pending conversion review. No original was deleted.',
+          )
         const affected = state.products.filter((p) =>
           targets.some((t: Item) => t.id === p.labelDesignId),
         )
@@ -3304,6 +3293,11 @@ export default async (req: Request, context: Context) => {
         )
         if (!template || template.deletedAt)
           throw new Error('Save an available label before printing.')
+        assertSavedLabelOutput(
+          template as LabelDocument,
+          data.source,
+          data.brandId,
+        )
         const source = data.source
         if (
           !source ||
