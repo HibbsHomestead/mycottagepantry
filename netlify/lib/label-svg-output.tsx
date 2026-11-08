@@ -12,6 +12,7 @@ import {
   labelFonts,
   elementAssetId,
   elementVisible,
+  labelTextRuns,
   type LabelData,
   type LabelDocument,
 } from '../../src/lib/label-studio'
@@ -60,10 +61,8 @@ export async function exportSvgLabelPdf(
     for (const element of document.elements.filter(
       (e) => e.type === 'text' && elementVisible(e, data),
     )) {
-      for (const name of [
-        element.font,
-        ...(element.textRuns || []).map((run) => run.font),
-      ]) {
+      for (const run of labelTextRuns(element, data)) {
+        const name = run.font
         const font = available.find((f) => f.name === name)
         if (!font)
           throw new Error(
@@ -71,7 +70,9 @@ export async function exportSvgLabelPdf(
           )
         fontKeys.add(
           font.file +
-            (element.bold && font.weights.includes(700) ? '-bold' : ''),
+            ((run.bold ?? element.bold) && font.weights.includes(700)
+              ? '-bold'
+              : ''),
         )
       }
     }

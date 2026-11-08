@@ -15,6 +15,11 @@ import {
   moveTo,
   appendBezierCurve,
   closePath,
+  setTextRenderingMode,
+  TextRenderingMode,
+  setLineWidth,
+  setStrokingRgbColor,
+  setGraphicsState,
 } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import {
@@ -24,6 +29,7 @@ import {
   elementVisible,
   labelFonts,
   labelTextLines,
+  labelTextRuns,
   type LabelDocument,
   type LabelData,
 } from './label-studio'
@@ -68,16 +74,15 @@ export async function exportLabelPdf(
   for (const e of d.elements.filter((e) => elementVisible(e, data))) {
     if (e.type === 'image' && e.binding && !elementAssetId(e, data)) continue
     if (e.type === 'text') {
-      for (const name of new Set([
-        e.font,
-        ...(e.textRuns || []).map((run) => run.font),
-      ])) {
+      for (const run of labelTextRuns(e, data)) {
+        const name = run.font
         const f = availableFonts.find((f) => f.name === name)
         if (!f)
           throw new Error(
             `Font “${name}” is unavailable. Upload the authorized font before exporting; no substitute is exported.`,
           )
-        const suffix = e.bold && f.weights.includes(700) ? '-bold' : ''
+        const suffix =
+          (run.bold ?? e.bold) && f.weights.includes(700) ? '-bold' : ''
         const key = f.file + suffix
         if (!fonts.has(key)) {
           const bytes = loaders
@@ -216,19 +221,19 @@ export async function exportLabelPdf(
           opacity =
             e.opacity * (e.color === 'transparent' ? 0 : (e.colorOpacity ?? 1))
         if (e.type === 'text') {
-          const face = (name: string) => {
+          const face = (name: string, bold = e.bold) => {
             const f = availableFonts.find((f) => f.name === name)!
             return fonts.get(
-              f.file + (e.bold && f.weights.includes(700) ? '-bold' : ''),
+              f.file + (bold && f.weights.includes(700) ? '-bold' : ''),
             )!
           }
           const lines = labelTextLines(
               e,
               data,
-              (text, name) =>
+              (text, name, bold) =>
                 Array.from(text).reduce(
                   (sum, char) =>
-                    sum + face(name).widthOfTextAtSize(char, e.fontSize),
+                    sum + face(name, bold).widthOfTextAtSize(char, e.fontSize),
                   0,
                 ) +
                 Math.max(0, Array.from(text).length - 1) * e.letterSpacing,
@@ -258,7 +263,10 @@ export async function exportLabelPdf(
                     Array.from(run.text).reduce(
                       (width, char) =>
                         width +
-                        face(run.font).widthOfTextAtSize(char, e.fontSize),
+                        face(run.font, run.bold ?? e.bold).widthOfTextAtSize(
+                          char,
+                          e.fontSize,
+                        ),
                       0,
                     ),
                   0,
@@ -279,7 +287,25 @@ export async function exportLabelPdf(
             // Per-character positioning preserves explicit letter spacing in vector text.
             let cursor = x
             for (const run of line) {
-              const font = face(run.font)
+              const font = face(run.font, run.bold ?? e.bold)
+              const outline =
+                run.bold &&
+                !availableFonts
+                  .find((f) => f.name === run.font)
+                  ?.weights.includes(700)
+              if (outline)
+                page.pushOperators(
+                  pushGraphicsState(),
+                  setGraphicsState(
+                    page.node.newExtGState(
+                      'IngredientBold',
+                      pdf.context.register(pdf.context.obj({ CA: opacity })),
+                    ),
+                  ),
+                  setLineWidth(e.fontSize * 0.02),
+                  setStrokingRgbColor(color.red, color.green, color.blue),
+                  setTextRenderingMode(TextRenderingMode.FillAndOutline),
+                )
               for (const char of run.text) {
                 page.drawText(char, {
                   x: cursor,
@@ -293,6 +319,11 @@ export async function exportLabelPdf(
                 cursor +=
                   font.widthOfTextAtSize(char, e.fontSize) + e.letterSpacing
               }
+              if (outline)
+                page.pushOperators(
+                  setTextRenderingMode(TextRenderingMode.Fill),
+                  popGraphicsState(),
+                )
             }
             if (e.underline)
               page.drawLine({

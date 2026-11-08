@@ -7,6 +7,7 @@ import {
   elementAssetId,
   elementVisible,
   labelTextLines,
+  labelFonts,
   type LabelDocument,
   type LabelElement,
   type LabelData,
@@ -286,7 +287,18 @@ export function LabelCanvas({
                         fontVariantLigatures: 'none',
                       }}
                       fontSize={e.fontSize}
-                      fontWeight={e.bold ? 700 : 400}
+                      fontWeight={
+                        e.binding === 'recipe.ingredients'
+                          ? 400
+                          : e.bold
+                            ? 700
+                            : 400
+                      }
+                      xmlSpace={
+                        e.binding === 'recipe.ingredients'
+                          ? 'preserve'
+                          : undefined
+                      }
                       fontStyle={e.italic ? 'italic' : 'normal'}
                       textDecoration={e.underline ? 'underline' : undefined}
                       letterSpacing={e.letterSpacing}
@@ -316,6 +328,38 @@ export function LabelCanvas({
                             <tspan
                               key={index}
                               fontFamily={JSON.stringify(run.font)}
+                              fontWeight={
+                                run.bold === undefined
+                                  ? undefined
+                                  : run.bold
+                                    ? 700
+                                    : 400
+                              }
+                              // A selected single-weight font keeps its family. Use the
+                              // same small outline in SVG/PNG/PDF instead of relying on
+                              // renderer-specific synthetic bold support.
+                              stroke={
+                                run.bold &&
+                                !labelFonts
+                                  .find((f) => f.name === run.font)
+                                  ?.weights.includes(700)
+                                  ? e.color
+                                  : undefined
+                              }
+                              strokeWidth={
+                                run.bold &&
+                                !labelFonts
+                                  .find((f) => f.name === run.font)
+                                  ?.weights.includes(700)
+                                  ? e.fontSize * 0.02
+                                  : undefined
+                              }
+                              strokeOpacity={e.colorOpacity ?? 1}
+                              style={
+                                run.bold === undefined
+                                  ? undefined
+                                  : { fontSynthesisWeight: 'none' }
+                              }
                             >
                               {run.text}
                             </tspan>

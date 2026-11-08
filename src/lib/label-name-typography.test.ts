@@ -157,7 +157,7 @@ it('embeds both static-run fonts and independent dynamic fonts in the PDF after 
     )
   expect(
     new Set(fonts?.values().map((reference) => reference.toString())).size,
-  ).toBe(3)
+  ).toBe(4) // The ingredient statement also embeds the DM Sans bold face.
   expect(pdf.getPage(0).getSize()).toEqual({ width: d.width, height: d.height })
 })
 it('rejects missing fonts and incomplete or mismatched save acknowledgements', async () => {
