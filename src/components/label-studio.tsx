@@ -361,7 +361,7 @@ export function LabelStudio({
         e,
         ...(e.textRuns || []).map((r) => ({ ...e, font: r.font })),
       ])
-      .map((e) => [e.font, e.bold]),
+      .map((e) => [e.font, e.bold, e.binding]),
   )
   useEffect(() => {
     let active = true
@@ -376,11 +376,14 @@ export function LabelStudio({
             e,
             ...(e.textRuns || []).map((r) => ({ ...e, font: r.font })),
           ])
-          .map((e) => {
+          .flatMap((e) => {
             const font = availableFonts.find((f) => f.name === e.font)
             return font && font.source !== 'bundled'
-              ? fontFaceKey(font, e.bold)
-              : ''
+              ? (e.binding === 'recipe.ingredients'
+                  ? [false, true]
+                  : [e.bold]
+                ).map((bold) => fontFaceKey(font, bold))
+              : []
           })
           .filter(Boolean),
       ),
@@ -400,7 +403,10 @@ export function LabelStudio({
             (f) =>
               fontFaceKey(f, false) === key || fontFaceKey(f, true) === key,
           )
-          if (font) labelFontMetrics[font.name] = metrics
+          if (font)
+            labelFontMetrics[
+              font.name + (key.endsWith('-bold') ? '-bold' : '')
+            ] = metrics
         }),
     )
       .then(() => {

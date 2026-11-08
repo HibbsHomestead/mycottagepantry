@@ -2,6 +2,7 @@ import type { LabelLayout } from './label-sets'
 import { libraryArtwork, withLibraryArtwork } from './artwork-library'
 import type { LabelFont } from './label-font-catalog'
 import { labelFontMetrics } from './label-font-metrics'
+import { ingredientStatementRuns } from './label-ingredient-statement'
 import { convert, money, type Workspace, type Item } from './domain'
 import { productNetWeight, productNetWeightText } from './net-weight'
 import { labelFonts } from './label-font-catalog'
@@ -697,9 +698,15 @@ export function elementVisible(e: LabelElement, data: LabelData) {
   )
 }
 export function measureLabelText(e: LabelElement, text: string) {
-  const f = labelFonts.find((f) => f.name === e.font) || labelFonts[0],
-    key = f.file + (e.bold && f.weights.includes(700) ? '-bold' : '')
-  const metrics = labelFontMetrics[e.font] || labelFontMetrics[key] || {}
+  const f = labelFonts.find((f) => f.name === e.font),
+    key = f
+      ? f.file + (e.bold && f.weights.includes(700) ? '-bold' : '')
+      : e.font + (e.bold ? '-bold' : '')
+  const metrics =
+    labelFontMetrics[e.font + (e.bold ? '-bold' : '')] ||
+    labelFontMetrics[key] ||
+    labelFontMetrics[e.font] ||
+    {}
   return (
     Array.from(text).reduce(
       (n, c) => n + (metrics[String(c.codePointAt(0))] ?? 0.55) * e.fontSize,
@@ -749,13 +756,32 @@ export function wrapLabelText(
   }
   return out
 }
+export type LabelTextRun = { text: string; font: string; bold?: boolean }
+
+/** Generated ingredient weights are derived, so saved bindings survive copies and either side. */
+export function labelTextRuns(
+  e: LabelElement,
+  data: LabelData,
+): LabelTextRun[] {
+  if (e.binding === 'recipe.ingredients')
+    return ingredientStatementRuns(data).map((run) => ({
+      ...run,
+      font: e.font,
+    }))
+  if (e.textRuns && !e.binding) return e.textRuns
+  return [
+    { text: e.binding ? data.values[e.binding] || '' : e.text, font: e.font },
+  ]
+}
+
 export function labelTextLines(
   e: LabelElement,
   data: LabelData,
-  measure = (text: string, font: string) =>
-    measureLabelText({ ...e, font }, text),
-) {
-  if (!e.textRuns || e.binding)
+  measure = (text: string, font: string, bold = e.bold) =>
+    measureLabelText({ ...e, font, bold }, text),
+): LabelTextRun[][] {
+  const ingredients = e.binding === 'recipe.ingredients'
+  if (!ingredients && (!e.textRuns || e.binding))
     return wrapLabelText(
       elementText(e, data),
       e.width,
@@ -764,7 +790,7 @@ export function labelTextLines(
       (text) => measure(text, e.font),
     ).map((text) => [{ text, font: e.font }])
   let previousCharacter = ''
-  const characters = e.textRuns.flatMap((run) =>
+  const characters = labelTextRuns(e, data).flatMap((run) =>
     Array.from(run.text).flatMap((char) => {
       const transformed =
         e.textCase === 'upper'
@@ -780,13 +806,17 @@ export function labelTextLines(
       return Array.from(transformed).map((value) => ({
         char: value,
         font: run.font,
+        bold: run.bold,
       }))
     }),
   )
   const lines: (typeof characters)[] = []
   let line: typeof characters = []
   const width = (items: typeof characters) =>
-    items.reduce((n, item) => n + measure(item.char, item.font), 0) +
+    items.reduce(
+      (n, item) => n + measure(item.char, item.font, item.bold ?? e.bold),
+      0,
+    ) +
     Math.max(0, items.length - 1) * e.letterSpacing
   for (const item of characters) {
     if (item.char === '\n') {
@@ -803,7 +833,7 @@ export function labelTextLines(
           break
         }
       if (space > 0) {
-        lines.push(line.slice(0, space))
+        lines.push(line.slice(0, space + (ingredients ? 1 : 0)))
         line = line.slice(space + 1)
       } else {
         lines.push(line.slice(0, -1))
@@ -813,11 +843,16 @@ export function labelTextLines(
   }
   lines.push(line)
   return lines.map((items) => {
-    const runs: { text: string; font: string }[] = []
+    const runs: LabelTextRun[] = []
     for (const item of items) {
-      if (runs.at(-1)?.font === item.font)
+      if (runs.at(-1)?.font === item.font && runs.at(-1)?.bold === item.bold)
         runs[runs.length - 1].text += item.char
-      else runs.push({ text: item.char, font: item.font })
+      else
+        runs.push({
+          text: item.char,
+          font: item.font,
+          ...(item.bold === undefined ? {} : { bold: item.bold }),
+        })
     }
     return runs
   })
