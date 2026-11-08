@@ -65,6 +65,7 @@ export const imageBindings = [
   'business.mark',
 ]
 export const imageBindingNames: Record<string, string> = {
+  'business.cottageFoodDisclaimer': 'Business cottage-food disclaimer',
   'product.labelMainName': 'Label main name',
   'product.labelProductType': 'Label product type',
   'product.image': 'Product photo',
@@ -108,6 +109,7 @@ export const bindings = [
   'business.email',
   'business.jurisdiction',
   'business.disclaimer',
+  'business.cottageFoodDisclaimer',
   'business.footer',
   'date',
 ]
@@ -534,6 +536,9 @@ export function resolveLabelData(
   ])
   values['business.disclaimer'] =
     product?.disclaimer || brand?.defaultDisclaimer || business.disclaimer || ''
+  // Explicit business text is independent of the legacy product/brand fallback.
+  // Keep that existing binding unchanged so saved designs retain their behavior.
+  values['business.cottageFoodDisclaimer'] = String(w.settings[0]?.disclaimer ?? '')
   values['business.footer'] = brand?.defaultFooter || ''
   values['product.storage'] = product?.storage || brand?.defaultStorage || ''
   values['recipe.name'] = recipe?.name || ''
@@ -864,7 +869,8 @@ export function checkLabel(
         key === 'product.name' &&
         (has('product.displayName') ||
           (has('product.labelMainName') && has('product.labelProductType')))
-      )
+      ) &&
+      !(key === 'business.disclaimer' && has('business.cottageFoodDisclaimer'))
     )
       issues.push(`Missing information: ${name}.`)
   for (const [key, name] of [
@@ -920,6 +926,7 @@ export function checkLabel(
           'recipe.ingredients',
           'recipe.allergens',
           'business.disclaimer',
+          'business.cottageFoodDisclaimer',
           'product.netQuantity',
         ].includes(e.binding || '')
       )

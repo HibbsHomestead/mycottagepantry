@@ -64,6 +64,43 @@ it('shows upload formats and avoids claiming unsupported PDF/SVG upload or print
     'image/png,image/jpeg,image/webp',
   )
 })
+it('offers the saved business disclaimer on either side with editable typography and geometry', async () => {
+  const user = userEvent.setup()
+  const workspace = demoData()
+  workspace.settings[0].disclaimer = 'Owner saved text'
+  render(
+    <LabelStudio
+      workspace={workspace}
+      onWorkspace={vi.fn()}
+      ready={false}
+      role="Owner"
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.selectOptions(screen.getByLabelText('Label format'), 'front-back')
+  for (const side of ['Front', 'Back']) {
+    await user.click(screen.getByRole('button', { name: side }))
+    await user.selectOptions(
+      screen.getByLabelText('Dynamic field'),
+      'business.cottageFoodDisclaimer',
+    )
+    expect(
+      screen.getAllByRole('option', {
+        name: 'Business cottage-food disclaimer',
+      }),
+    ).toHaveLength(2)
+    expect(screen.getByLabelText('Data binding')).toHaveValue(
+      'business.cottageFoodDisclaimer',
+    )
+    expect(screen.getByLabelText('Size (pt)')).toBeEnabled()
+    expect(screen.getByLabelText('X (pt)')).toBeEnabled()
+    expect(screen.getByLabelText('Width (pt)')).toBeEnabled()
+    expect(screen.getByLabelText('Rotation (°)')).toBeEnabled()
+    expect(document.querySelector('.studio-scroll-stage svg')).toHaveTextContent(
+      'Owner saved text',
+    )
+  }
+})
 it('moves, resizes and rotates on the canvas with one undo step per drag', async () => {
   const { fireEvent } = await import('@testing-library/react')
   const user = userEvent.setup()

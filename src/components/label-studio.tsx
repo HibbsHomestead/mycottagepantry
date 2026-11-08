@@ -2038,7 +2038,7 @@ export function LabelStudio({
                           .filter((b) => !imageBindings.includes(b))
                           .map((b) => (
                             <option key={b} value={b}>
-                              {b}
+                              {imageBindingNames[b] || b}
                             </option>
                           ))}
                       </optgroup>
