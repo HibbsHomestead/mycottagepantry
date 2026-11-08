@@ -177,7 +177,10 @@ export function RecipeDetail({
                     ))}
                   </dl>
                   <p>
-                    Labor: {cost.laborMinutes} minutes ÷ 60 × {cost.laborRate}.
+                    Labor: {cost.laborMinutes} minutes ÷ 60 × {cost.laborRate} ={' '}
+                    {money(cost.labor)}.
+                    {r.baseRecipeId &&
+                      ' This time covers the entire recipe batch, including the base.'}{' '}
                     Imported prep/cook times are separate from paid labor.
                     Overhead uses the {r.overheadMode || 'batch'} method. Waste
                     is{' '}

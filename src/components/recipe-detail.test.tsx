@@ -4,6 +4,7 @@ import { expect, it, vi } from 'vitest'
 import { RecipeDetail } from './recipe-detail'
 import { bestCrumbleSource } from '../test/fixtures/best-crumble'
 import { parseRecipeText, recipeMethod } from '@/lib/recipe-import'
+import { breadBaseFixture } from '@/test/fixtures/bread-base'
 const r = {
   id: 'r',
   name: 'Bread',
@@ -31,6 +32,23 @@ function props() {
     save: vi.fn(async () => {}),
   }
 }
+it('shows the entire-recipe labor equation without adding linked-base labor', async () => {
+  const workspace = breadBaseFixture(),
+    recipe = workspace.recipes[1]
+  Object.assign(workspace.recipes[0], { laborMinutes: 20, laborRate: 15 })
+  Object.assign(recipe, { laborMinutes: 60, laborRate: 15 })
+  render(<RecipeDetail {...props()} recipe={recipe} workspace={workspace} />)
+  await userEvent.click(screen.getByText('Cost breakdown'))
+  const breakdown = screen.getByText('Cost breakdown').closest('details')!
+  const labor = within(breakdown).getByText('Labor').closest('div')!
+  expect(labor).toHaveTextContent('$15.00')
+  expect(within(breakdown).getByText(/Labor: 60 minutes/)).toHaveTextContent(
+    'Labor: 60 minutes ÷ 60 × 15 = $15.00.',
+  )
+  expect(within(breakdown).getByText(/Labor: 60 minutes/)).toHaveTextContent(
+    'This time covers the entire recipe batch, including the base.',
+  )
+})
 it('keeps real amounts, singular units, ingredients and instructions while collapsing details', () => {
   render(<RecipeDetail {...props()} />)
   expect(

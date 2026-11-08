@@ -406,8 +406,7 @@ export function costBreakdown(
     ? options.recipes?.find((r: Item) => r.id === recipe.baseRecipeId) ||
       recipe.baseRecipe
     : undefined
-  const baseCost:
-    { labor: number; overhead: number; waste: number } | undefined =
+  const baseCost: { overhead: number; waste: number } | undefined =
     options.baseCostOverride ||
     (base
       ? costBreakdown(base, ingredients, {
@@ -484,7 +483,9 @@ export function costBreakdown(
     'Labor minutes',
   )
   const laborRate = number(recipe.laborRate ?? 18, 'Labor rate')
-  const labor = (laborMinutes / 60) * laborRate + (baseCost?.labor || 0)
+  // Entered labor covers the whole recipe/run, including any linked base.
+  // Base ingredient quantities still expand, but its labor is not added again.
+  const labor = (laborMinutes / 60) * laborRate
   const product = options.product as Item | undefined
   const unitsPerPackage = number(
     product?.unitsPerPackage ?? 1,
