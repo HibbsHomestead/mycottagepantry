@@ -27,6 +27,7 @@ import type { Item, Workspace } from '@/lib/domain'
 import { ProductVendorReview } from './product-vendor-review'
 import { ItemPhotoField } from './item-photo-field'
 import { LookupActionContext, LookupError } from './lookup-error'
+import { productOfferDefault } from '@/lib/product-import-offers'
 import {
   blankIngredientImportPatch,
   commonImportFields,
@@ -185,6 +186,7 @@ export function ProductLinkImport({
     [screenshotAssets, setScreenshotAssets] = useState<Item[]>([]),
     [edits, setEdits] = useState<Record<string, string | number>>({})
   const [importNotice, setImportNotice] = useState('')
+  const [offerNotice, setOfferNotice] = useState('')
   useEffect(() => {
     if (!error) return
     const timer = setInterval(() => setClock(Date.now()), 1000)
@@ -256,6 +258,28 @@ export function ProductLinkImport({
           : {}),
       }
     : {}
+  const packageKeys = [
+    'packagePrice',
+    'purchaseQuantity',
+    'purchaseUnit',
+    'amountPerPackage',
+    'packCount',
+  ]
+  const packageProposed =
+    existing &&
+    Object.entries(availableFields).some(
+      ([key, value]) => packageKeys.includes(key) && importValuePresent(value),
+    )
+  const packageSelected =
+    existing && applicableSelected.some((key) => packageKeys.includes(key))
+  const photoAvailable = (() => {
+    try {
+      const image = new URL(product?.imageUrl || '')
+      return image.protocol === 'https:' && !image.username && !image.password
+    } catch {
+      return false
+    }
+  })()
   const resultSources = source ? [source] : products
   const unavailable =
     populateDraft && resultSources.length
@@ -428,10 +452,10 @@ export function ProductLinkImport({
       setReplaceReviewed(false)
       setCopied(false)
       setProducts(data.products)
-      setIndex(data.products.length === 1 ? 0 : -1)
-      preselectEmptyFields(
-        data.products.length === 1 ? data.products[0] : undefined,
-      )
+      const offerDefault = productOfferDefault(data.products)
+      setIndex(offerDefault.index)
+      setOfferNotice(offerDefault.notice)
+      preselectEmptyFields(data.products[offerDefault.index])
       setPhoto(false)
       setImageFailed(false)
       setConfirmed(false)
@@ -496,6 +520,7 @@ export function ProductLinkImport({
     if (
       !product ||
       pending.current ||
+      (packageSelected && !confirmed) ||
       (replacesReviewed && !replaceReviewed) ||
       (selected.includes('vendor') && !vendorChoice)
     )
@@ -553,7 +578,7 @@ export function ProductLinkImport({
     )
       patch.reviewed = false
     try {
-      if (photo && product.imageUrl) {
+      if (photo && photoAvailable) {
         try {
           const r = await fetch('/api/workspace?productImage=1', {
             method: 'POST',
@@ -1015,7 +1040,12 @@ export function ProductLinkImport({
           Existing values are kept; review the package or enter these manually.
         </p>
       )}
-      {products.length > 1 && (
+      {products.length > 0 && offerNotice && (
+        <p role="status" className="form-hint">
+          {offerNotice}
+        </p>
+      )}
+      {products.length > 0 && (products.length > 1 || offerNotice) && (
         <label className="field">
           <span>Choose the exact product / package / offer</span>
           <select
@@ -1037,12 +1067,24 @@ export function ProductLinkImport({
             <option value={-1}>Select a variant</option>
             {products.map((p, n) => (
               <option key={n} value={n}>
-                {p.title} · {p.fields.packagePrice ?? 'Price not provided'}{' '}
+                {p.title} ·{' '}
+                {p.fields.purchaseQuantity != null && p.fields.purchaseUnit
+                  ? `${p.fields.purchaseQuantity} ${p.fields.purchaseUnit}`
+                  : p.fields.packageSize || 'Package not provided'}
+                {p.fields.packCount != null
+                  ? ` · ${p.fields.packCount} pack`
+                  : ''}{' '}
+                · {p.fields.packagePrice ?? 'Price not provided'}{' '}
                 {p.fields.currency} · {p.conditions.join(' · ')}
               </option>
             ))}
           </select>
         </label>
+      )}
+      {product && product.conditions.length > 0 && (
+        <p className="form-hint">
+          Selected offer: {product.conditions.join(' · ')}
+        </p>
       )}
       {populateDraft && products.length > 0 && !product && (
         <p role="status">
@@ -1170,7 +1212,7 @@ export function ProductLinkImport({
             <button
               type="button"
               className="text-button"
-              onClick={() =>
+              onClick={() => {
                 setSelected(
                   Object.entries(availableFields)
                     .filter(
@@ -1181,7 +1223,9 @@ export function ProductLinkImport({
                     )
                     .map(([key]) => key),
                 )
-              }
+                setPhoto(photoAvailable)
+                setConfirmed(packageProposed)
+              }}
             >
               Select all
             </button>
@@ -1189,7 +1233,11 @@ export function ProductLinkImport({
             <button
               type="button"
               className="text-button"
-              onClick={() => setSelected([])}
+              onClick={() => {
+                setSelected([])
+                setPhoto(false)
+                setConfirmed(false)
+              }}
             >
               Clear selection
             </button>
@@ -1257,7 +1305,7 @@ export function ProductLinkImport({
                 <p key={n}>{warning}</p>
               ))}
           </details>
-          {product.imageUrl && (
+          {photoAvailable && (
             <label className="check-label">
               <input
                 type="checkbox"
@@ -1268,21 +1316,18 @@ export function ProductLinkImport({
               confirm permission to copy)
             </label>
           )}
-          {existing &&
-            applicableSelected.some((k) =>
-              ['packagePrice', 'purchaseQuantity', 'purchaseUnit'].includes(k),
-            ) && (
-              <label className="check-label">
-                <input
-                  type="checkbox"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmed(e.target.checked)}
-                />
-                I approve changing the current package reference when I save.
-                Future estimates may change; stock valuation and historical
-                batches stay unchanged.
-              </label>
-            )}
+          {packageProposed && (
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              I approve changing the current package reference when I save.
+              Future estimates may change; stock valuation and historical
+              batches stay unchanged.
+            </label>
+          )}
           {replacesReviewed && (
             <label className="check-label">
               <input
@@ -1310,15 +1355,7 @@ export function ProductLinkImport({
                   (replacesReviewed && !replaceReviewed) ||
                   (selected.includes('vendor') && !vendorChoice) ||
                   (!applicableSelected.length && !photo) ||
-                  (existing &&
-                    applicableSelected.some((k) =>
-                      [
-                        'packagePrice',
-                        'purchaseQuantity',
-                        'purchaseUnit',
-                      ].includes(k),
-                    ) &&
-                    !confirmed)
+                  (packageSelected && !confirmed)
                 }
                 onClick={commit}
               >
