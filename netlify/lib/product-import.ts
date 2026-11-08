@@ -185,8 +185,20 @@ function rejectProductChallenge($: ReturnType<typeof load>, sourceUrl: string) {
 export function productDetails(html: string, sourceUrl: string) {
   const $ = load(html)
   rejectProductChallenge($, sourceUrl)
+  // A delayed reload of this same document is not a redirect (ALDI uses 86400).
+  // Never execute refresh directives; reject destinations and immediate/invalid reloads.
+  const redirectRefresh = $('meta[http-equiv="refresh" i]')
+    .toArray()
+    .some((element) => {
+      const content = ($(element).attr('content') || '').trim()
+      return (
+        !/^\d+(?:\.\d+)?$/.test(content) ||
+        !Number.isFinite(Number(content)) ||
+        Number(content) <= 0
+      )
+    })
   if (
-    $('meta[http-equiv="refresh"]').length ||
+    redirectRefresh ||
     /window\.location\.replace\(["']https:\/\/www\.amazon\.com\/error\//i.test(
       html,
     ) ||
@@ -322,9 +334,15 @@ export function productDetails(html: string, sourceUrl: string) {
           fields.packagePrice = Number(price)
         }
         const title = scalar(p.name)
-        const packageMatch = title.match(
-          /\b(\d+(?:\.\d+)?(?:\s*\/\s*\d+)?)\s*((?:US\s+)?(?:fl\.?\s*oz|gallons?|gal|quarts?|qt|pints?|pt|cups?|tbsp|tsp)|lbs?|pounds?|oz|ounces?|mg|kg|g|ml|liters?|l)\b/i,
-        )
+        const packagePattern =
+          /\b(\d+(?:\.\d+)?(?:\s*\/\s*\d+)?)\s*((?:US\s+)?(?:fl\.?\s*oz|gallons?|gal|quarts?|qt|pints?|pt|cups?|tbsp|tsp)|lbs?|pounds?|oz|ounces?|mg|kg|g|ml|liters?|l)\b/i
+        const titlePackageMatch = title.match(packagePattern)
+        // ALDI supplies the package size separately from the name in Product.size.
+        // Accept only a complete, explicit measure, never a clothing size or multipack fragment.
+        const size = typeof p.size === 'string' ? p.size.trim() : ''
+        const sizeMatch = size.match(packagePattern)
+        const packageMatch =
+          titlePackageMatch || (sizeMatch?.[0] === size ? sizeMatch : null)
         const count = title.match(
           /\b(\d+)\s*[- ]?(?:pack|pk|count|ct)\b|\b\d+\s*[x×]\s*\d/i,
         )
@@ -381,7 +399,9 @@ export function productDetails(html: string, sourceUrl: string) {
               : []),
             ...(packageMatch && !count
               ? [
-                  'Package quantity was read from the product title; confirm against the actual package.',
+                  titlePackageMatch
+                    ? 'Package quantity was read from the product title; confirm against the actual package.'
+                    : 'Package quantity was read from the product’s structured size; confirm against the actual package.',
                 ]
               : ['Package size needs checking.']),
             ...(!fields.currency && fields.packagePrice !== undefined
@@ -412,36 +432,52 @@ export async function fetchProductDetails(url: string) {
   const requestedUrl = productUrl(url)
   const input = new URL(requestedUrl)
   if (input.protocol === 'http:') input.protocol = 'https:'
+  const failure = (
+    message: string,
+    source: 'retailer' | 'network',
+    hops: ProductImportFailure['diagnostics']['hops'] = [],
+    stage: 'fetch' | 'parse' = 'fetch',
+  ) =>
+    new ProductImportFailure(
+      message,
+      {
+        requestedAt,
+        requestedUrl: diagnosticUrl(requestedUrl),
+        source,
+        stage,
+        hops,
+      },
+      hops.at(-1)?.headers['retry-after'],
+    )
   let page
   try {
     page = await fetchRecipeUrl(input.href, false, PRODUCT_PAGE_BYTES)
   } catch (e) {
     if (e instanceof PageFetchHttpError) {
-      if (e.page?.mime === 'text/html')
-        rejectProductChallenge(load(e.page.bytes.toString('utf8')), e.page.url)
+      let message = `The product details could not be retrieved (HTTP ${e.status}).`
       if ([401, 403].includes(e.status))
-        throw new Error(
-          `The retailer denied access to this request (HTTP ${e.status}). You can enter the details manually; access restrictions are not bypassed.`,
-        )
+        message = `The retailer denied access to this request (HTTP ${e.status}). You can enter the details manually; access restrictions are not bypassed.`
       if ([404, 410].includes(e.status))
-        throw new Error(
-          `The retailer did not find this product page (HTTP ${e.status}). Check the link or enter the details manually.`,
-        )
-      throw new ProductImportFailure(
-        `The product details could not be retrieved (HTTP ${e.status}).`,
-        {
-          requestedAt,
-          requestedUrl: diagnosticUrl(requestedUrl),
-          source: 'retailer',
-          hops: e.hops,
-        },
-        e.hops.at(-1)?.headers['retry-after'],
-      )
+        message = `The retailer did not find this product page (HTTP ${e.status}). Check the link or enter the details manually.`
+      if (e.page?.mime === 'text/html') {
+        try {
+          rejectProductChallenge(
+            load(e.page.bytes.toString('utf8')),
+            e.page.url,
+          )
+        } catch (challenge) {
+          if (challenge instanceof ProductHumanVerificationError)
+            throw challenge
+          message = `The retailer returned an access challenge (HTTP ${e.status}). You can enter the details manually; access restrictions are not bypassed.`
+        }
+      }
+      throw failure(message, 'retailer', e.hops)
     }
     const message = e instanceof Error ? e.message : ''
     if (/timed out/i.test(message))
-      throw new Error(
+      throw failure(
         'The product page request timed out. Retry or enter the details manually.',
+        'network',
       )
     // Only relay our own bounded validation messages, never arbitrary network errors.
     if (
@@ -459,57 +495,76 @@ export async function fetchProductDetails(url: string) {
         'ETIMEDOUT',
       ].includes(String((e as { code?: string })?.code))
     )
-      throw new Error(
+      throw failure(
         'The product page could not be fetched because of a network error. Retry or enter the details manually.',
+        'network',
       )
-    throw new Error(
+    throw failure(
       'We couldn’t automatically read this product page. You can enter the details manually.',
+      'network',
     )
   }
-  const requestedAsin = input.hostname.match(/(^|\.)amazon\.[a-z.]+$/i)
-    ? input.pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i)?.[1]
-    : undefined
-  if (requestedAsin) {
-    const finalUrl = new URL(page.url)
-    const finalAsin = finalUrl.pathname.match(
-      /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i,
-    )?.[1]
+  try {
+    const requestedAsin = input.hostname.match(/(^|\.)amazon\.[a-z.]+$/i)
+      ? input.pathname.match(
+          /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i,
+        )?.[1]
+      : undefined
+    if (requestedAsin) {
+      const finalUrl = new URL(page.url)
+      const finalAsin = finalUrl.pathname.match(
+        /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i,
+      )?.[1]
+      if (
+        !finalUrl.hostname.match(/(^|\.)amazon\.[a-z.]+$/i) ||
+        finalAsin?.toUpperCase() !== requestedAsin.toUpperCase() ||
+        ['th', 'psc'].some(
+          (key) =>
+            input.searchParams.has(key) &&
+            finalUrl.searchParams.get(key) !== input.searchParams.get(key),
+        )
+      )
+        throw new Error(
+          'The product request changed its identifier or selected options. No details were imported. Keep the original URL or continue manually.',
+        )
+    }
+    if (page.mime !== 'text/html')
+      throw new Error('This product link does not return an HTML product page.')
+    const parsed = productImportResponse.safeParse({
+      products: productDetails(page.bytes.toString('utf8'), page.url),
+    })
+    if (!parsed.success)
+      throw new Error(
+        'We couldn’t automatically read this product page. You can enter the details manually.',
+      )
     if (
-      !finalUrl.hostname.match(/(^|\.)amazon\.[a-z.]+$/i) ||
-      finalAsin?.toUpperCase() !== requestedAsin.toUpperCase() ||
-      ['th', 'psc'].some(
-        (key) =>
-          input.searchParams.has(key) &&
-          finalUrl.searchParams.get(key) !== input.searchParams.get(key),
+      requestedAsin &&
+      parsed.data.products.some(
+        (product) =>
+          /^[A-Z0-9]{10}$/i.test(String(product.fields.retailerSku || '')) &&
+          String(product.fields.retailerSku).toUpperCase() !==
+            requestedAsin.toUpperCase(),
       )
     )
       throw new Error(
-        'The product request changed its identifier or selected options. No details were imported. Keep the original URL or continue manually.',
+        'The page describes a different Amazon identifier or variant. No details were imported; continue manually or verify the original product link.',
       )
+    return parsed.data.products.map((product) => ({
+      ...product,
+      requestedUrl,
+    }))
+  } catch (error) {
+    if (error instanceof ProductHumanVerificationError) throw error
+    throw failure(
+      error instanceof Error &&
+        /^(The (?:source|retailer|product|page)|This product|We couldn’t)/.test(
+          error.message,
+        )
+        ? error.message
+        : 'We couldn’t automatically read this product page. You can enter the details manually.',
+      'retailer',
+      page.hops,
+      'parse',
+    )
   }
-  if (page.mime !== 'text/html')
-    throw new Error('This product link does not return an HTML product page.')
-  const parsed = productImportResponse.safeParse({
-    products: productDetails(page.bytes.toString('utf8'), page.url),
-  })
-  if (!parsed.success)
-    throw new Error(
-      'We couldn’t automatically read this product page. You can enter the details manually.',
-    )
-  if (
-    requestedAsin &&
-    parsed.data.products.some(
-      (product) =>
-        /^[A-Z0-9]{10}$/i.test(String(product.fields.retailerSku || '')) &&
-        String(product.fields.retailerSku).toUpperCase() !==
-          requestedAsin.toUpperCase(),
-    )
-  )
-    throw new Error(
-      'The page describes a different Amazon identifier or variant. No details were imported; continue manually or verify the original product link.',
-    )
-  return parsed.data.products.map((product) => ({
-    ...product,
-    requestedUrl,
-  }))
 }

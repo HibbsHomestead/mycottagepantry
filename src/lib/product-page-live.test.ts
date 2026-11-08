@@ -9,6 +9,28 @@ import { fetchProductDetails } from '../../netlify/lib/product-import'
 import { PRODUCT_PAGE_BYTES } from '../../netlify/lib/page-response'
 import { ProductImportFailure } from './product-import-diagnostics'
 
+it.skipIf(!process.env.TEST_LIVE_ALDI)(
+  'retrieves the reported ALDI Parmesan page through the actual protected product importer',
+  async () => {
+    const url =
+      'https://www.aldi.us/store/aldi/products/20733588-emporium-selection-italian-parmesan-cheese-wedge-8-oz'
+    const products = await fetchProductDetails(url)
+    expect(products).toHaveLength(1)
+    expect(products[0]).toMatchObject({
+      sourceUrl: url,
+      requestedUrl: url,
+      fields: {
+        name: 'Emporium Selection Parmesan Cheese Wedge',
+        brand: 'Emporium Selection',
+        packageSize: '8 oz',
+        purchaseQuantity: 8,
+        purchaseUnit: 'oz',
+      },
+    })
+  },
+  20000,
+)
+
 it.skipIf(!process.env.TEST_OWNER_AMAZON)(
   'compares the confirmed original Amazon URL with the same ASIN and variant without referral parameters',
   async () => {

@@ -1059,6 +1059,94 @@ it('honors Retry-After, performs only two explicit retries and preserves the com
   }
 })
 
+it.each([
+  [
+    'retailer',
+    'parse',
+    'Product page was retrieved, but its details could not be imported.',
+  ],
+  ['retailer', 'fetch', 'Upstream page request failed.'],
+  [
+    'network',
+    'fetch',
+    'Product page could not be retrieved; no retailer HTTP response was confirmed.',
+  ],
+])(
+  'shows ALDI %s/%s evidence and keeps the manual draft intact',
+  async (source, stage, message) => {
+    const url =
+      'https://www.aldi.us/store/aldi/products/20733588-emporium-selection-italian-parmesan-cheese-wedge-8-oz'
+    const draft = {
+      name: 'My cheese',
+      productSourceUrl: url,
+      packagePrice: 4,
+      quantity: 2,
+    }
+    const before = structuredClone(draft)
+    const apply = vi.fn()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: 'Product details could not be retrieved.',
+            diagnostics: {
+              requestedUrl: url,
+              requestedAt: '2026-11-08T02:27:10.541Z',
+              requestId: 'aldi-request-ref',
+              source,
+              stage,
+              hops:
+                source === 'retailer'
+                  ? [
+                      {
+                        url,
+                        at: '2026-11-08T02:27:10.541Z',
+                        status: stage === 'parse' ? 200 : 403,
+                        headers: { 'content-type': 'text/html' },
+                        bodySummary:
+                          stage === 'parse'
+                            ? 'Successful response.'
+                            : 'Non-success response; body excluded from product extraction.',
+                      },
+                    ]
+                  : [],
+            },
+          },
+          { status: 400 },
+        ),
+      ),
+    )
+    render(
+      <ProductLinkImport
+        draft={draft}
+        apply={apply}
+        populateDraft
+        onWorkspace={vi.fn()}
+      />,
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Import details' }),
+    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your entries are still in this form.',
+    )
+    await userEvent.click(
+      screen.getByText('Technical details', { selector: 'summary' }),
+    )
+    expect(screen.getByText(message)).toBeVisible()
+    expect(screen.getByText(/Request aldi-request-ref/)).toBeVisible()
+    if (source === 'retailer')
+      expect(
+        screen.getByText(new RegExp(`HTTP ${stage === 'parse' ? 200 : 403}`)),
+      ).toBeVisible()
+    expect(screen.getByLabelText('Product URL')).toHaveValue(url)
+    expect(draft).toEqual(before)
+    expect(apply).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  },
+)
+
 it('requires explicit review after a successful retry without filling even blank manual fields', async () => {
   const apply = vi.fn(),
     fetcher = vi

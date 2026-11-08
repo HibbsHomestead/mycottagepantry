@@ -802,8 +802,12 @@ export function ProductLinkImport({
             <summary>Technical details</summary>
             <p>
               {diagnostics?.source === 'retailer'
-                ? 'Upstream page request failed.'
-                : 'Import request failed; retailer HTTP source is not confirmed.'}
+                ? diagnostics.stage === 'parse'
+                  ? 'Product page was retrieved, but its details could not be imported.'
+                  : 'Upstream page request failed.'
+                : diagnostics?.source === 'network'
+                  ? 'Product page could not be retrieved; no retailer HTTP response was confirmed.'
+                  : 'Import request failed; retailer HTTP source is not confirmed.'}
             </p>
             <p>
               {diagnostics?.requestedAt}{' '}
