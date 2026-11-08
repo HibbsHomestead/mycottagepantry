@@ -166,7 +166,7 @@ export function InventoryPackageFields({
         {packageError && <p className="form-hint">{packageError}</p>}
       </fieldset>
       <fieldset className="inventory-package-group">
-        <legend>Opening Count</legend>
+        <legend>Opening stock</legend>
         <label className="check-label">
           <input
             type="checkbox"

@@ -3,7 +3,13 @@ import { libraryArtwork, withLibraryArtwork } from './artwork-library'
 import type { LabelFont } from './label-font-catalog'
 import { labelFontMetrics } from './label-font-metrics'
 import { ingredientStatementRuns } from './label-ingredient-statement'
-import { convert, money, type Workspace, type Item } from './domain'
+import {
+  convert,
+  money,
+  effectiveRecipeLines,
+  type Workspace,
+  type Item,
+} from './domain'
 import { productNetWeight, productNetWeightText } from './net-weight'
 import { labelFonts } from './label-font-catalog'
 export { labelFonts } from './label-font-catalog'
@@ -437,6 +443,7 @@ export type LabelData = {
     name: string
     subingredients: string
     weight: number | null
+    sourceRecipeIds?: string[]
   }[]
 }
 export function resolveLabelData(
@@ -571,7 +578,7 @@ export function resolveLabelData(
       }
       try {
         const scale = convert(q, u, prep.yieldUnit, i.conversions) / prep.yield
-        for (const line of prep.lines || []) {
+        for (const line of effectiveRecipeLines(prep, w.recipes)) {
           const child = w.ingredients.find((x) => x.id === line.ingredientId)
           if (child)
             visit(child, line.quantity * scale, line.unit, [...path, prep.id])
@@ -602,12 +609,19 @@ export function resolveLabelData(
         p.name === (i.statement || i.name) &&
         p.subingredients === (i.subingredients || ''),
     )
-    if (existing && weight !== null && existing.weight !== null)
+    if (existing && weight !== null && existing.weight !== null) {
       existing.weight += weight
-    else
+      if (recipe?.baseRecipeId && path.length)
+        existing.sourceRecipeIds = [
+          ...new Set([...(existing.sourceRecipeIds || []), ...path]),
+        ]
+    } else
       parts.push({
         name: i.statement || i.name,
         subingredients: i.subingredients || '',
+        ...(recipe?.baseRecipeId && path.length
+          ? { sourceRecipeIds: [...path] }
+          : {}),
         weight,
       })
   }
@@ -621,7 +635,9 @@ export function resolveLabelData(
         (l.quantity !== undefined || l.inventoryQuantity !== undefined),
     )
       ? actual
-      : recipe?.lines || []
+      : recipe
+        ? effectiveRecipeLines(recipe, w.recipes)
+        : []
   // Only new explicit workflows bypass food ingredient/allergen review. Legacy labels retain their existing behavior.
   const classification = (business.productCategories || []).find(
     (c: Item) => c.id === product?.productCategoryId,
@@ -645,7 +661,7 @@ export function resolveLabelData(
           l.normalized !== undefined || l.inventoryQuantity !== undefined
             ? l.storageUnit
             : l.unit,
-          recipe ? [recipe.id] : [],
+          l.sourceRecipePath || (recipe ? [recipe.id] : []),
         )
       else
         warnings.push('Missing information: recipe ingredient is unavailable.')

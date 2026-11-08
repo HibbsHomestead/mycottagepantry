@@ -26,6 +26,7 @@ import { inventoryPackagePreview } from '@/lib/inventory-package'
 import type { Item, Workspace } from '@/lib/domain'
 import { ProductVendorReview } from './product-vendor-review'
 import { ItemPhotoField } from './item-photo-field'
+import { LookupActionContext, LookupError } from './lookup-error'
 import {
   blankIngredientImportPatch,
   commonImportFields,
@@ -136,6 +137,7 @@ export function ProductLinkImport({
   packageSetup = false,
   vendors = [],
   afterLookup,
+  lookupPanel = false,
 }: {
   draft: Item | Record<string, Item[string]>
   apply: (patch: Record<string, Item[string]>) => void
@@ -150,11 +152,15 @@ export function ProductLinkImport({
   vendors?: Item[]
   /** Additional lookup controls, before status messages and the inline review. */
   afterLookup?: ReactNode | ((selectUrl: (url: string) => void) => ReactNode)
+  lookupPanel?: boolean
 }) {
   const reviewId = useId()
   const [diagnostics, setDiagnostics] =
     useState<ProductImportDiagnostics | null>(null)
   const [retryAt, setRetryAt] = useState(0)
+  const [errorCode, setErrorCode] = useState<string | undefined>()
+  const [errorStatus, setErrorStatus] = useState<number | undefined>()
+  const [lookupAction, setLookupAction] = useState('url')
   const [clock, setClock] = useState(() => Date.now())
   const [attempts, setAttempts] = useState({ url: '', count: 0 })
   const [url, setUrl] = useState(
@@ -370,20 +376,23 @@ export function ProductLinkImport({
     }
   }
   async function search() {
+    setLookupAction('url')
     // This handler runs only from explicit Import/Retry clicks.
     // eslint-disable-next-line react-hooks/purity
     const clickedAt = Date.now()
     if (
       pending.current ||
       uploadingScreenshot ||
-      verificationUrls.includes(url.trim()) ||
+      (!lookupPanel && verificationUrls.includes(url.trim())) ||
       (attempts.url === url.trim() &&
-        (attempts.count >= 3 || clickedAt < retryAt))
+        ((!lookupPanel && attempts.count >= 3) || clickedAt < retryAt))
     )
       return
     pending.current = true
     setBusy(true)
     setError('')
+    setErrorCode(undefined)
+    setDiagnostics(null)
     setImportNotice('')
     setApplied(false)
     try {
@@ -434,7 +443,7 @@ export function ProductLinkImport({
       if (e instanceof ProductHumanVerificationError) {
         const blockedUrl = productUrl(url)
         setVerificationUrls((old) => [...old, blockedUrl])
-        setPasting(true)
+        if (!lookupPanel) setPasting(true)
       }
       setDiagnostics(
         e instanceof ProductImportFailure
@@ -446,6 +455,19 @@ export function ProductLinkImport({
               hops: [],
             },
       )
+      setErrorCode(
+        e instanceof ProductImportFailure ||
+          e instanceof ProductHumanVerificationError
+          ? e.code
+          : undefined,
+      )
+      setErrorStatus(e instanceof ProductImportFailure ? e.status : undefined)
+      let invalidUrl = false
+      try {
+        productUrl(url)
+      } catch {
+        invalidUrl = true
+      }
       const amazon = (() => {
         try {
           return /(^|\.)amazon\.[a-z.]+$/i.test(new URL(url).hostname)
@@ -454,9 +476,15 @@ export function ProductLinkImport({
         }
       })()
       setError(
-        amazon
-          ? 'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.'
-          : (e as Error).message +
+        lookupPanel
+          ? invalidUrl
+            ? 'Enter a valid product URL.'
+            : e instanceof ProductHumanVerificationError
+              ? 'Walmart import requires verification.'
+              : 'Import failed.'
+          : amazon
+            ? 'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.'
+            : (e as Error).message +
               ' Your entries are still in this form. Keep this page open to continue manually.',
       )
     } finally {
@@ -707,13 +735,62 @@ export function ProductLinkImport({
       </li>
     )
   }
+  const pasteFields = (
+    <>
+      {pasting && (
+        <div>
+          <label className="field">
+            <span>Product text / notes</span>
+            <textarea
+              rows={4}
+              aria-label="Product text / notes"
+              maxLength={6000}
+              value={draft.notes || ''}
+              onChange={(e) => apply({ notes: e.target.value })}
+            />
+            <small>
+              Pasted text is kept as notes. Enter name, package quantity, unit
+              and price in the form below, then save. Keep this page open until
+              saved.
+            </small>
+          </label>
+          {lookupPanel && (
+            <ItemPhotoField
+              value={{
+                id: 'product-screenshot',
+                name: 'Product screenshot',
+                imageAssetId: screenshotId,
+              }}
+              assets={screenshotAssets}
+              kind="product"
+              uploadLabel="Upload product screenshot"
+              showPhotoPicker={false}
+              disabled={busy}
+              onChange={(_key, value) => setScreenshotId(value)}
+              onWorkspace={(workspace) => {
+                setScreenshotAssets(workspace.graphic_assets || [])
+                onWorkspace(workspace)
+              }}
+              onBusy={setUploadingScreenshot}
+            >
+              <small>Reference image only. Enter its details manually.</small>
+            </ItemPhotoField>
+          )}
+        </div>
+      )}
+    </>
+  )
   return (
     <section
-      className={`product-link-panel product-import${compact ? ' product-import-compact' : ''}`}
+      className={`product-link-panel product-import${compact ? ' product-import-compact' : ''}${lookupPanel ? ' find-product-panel' : ''}`}
       aria-label="Import from product link"
     >
       {!compact && (
-        <strong>Have a product link? Fill details from a store page.</strong>
+        <strong>
+          {lookupPanel
+            ? 'Find product details'
+            : 'Have a product link? Fill details from a store page.'}
+        </strong>
       )}
       <div className="product-link-entry">
         <label className="field">
@@ -723,6 +800,7 @@ export function ProductLinkImport({
             inputMode="url"
             autoComplete="url"
             value={url}
+            disabled={busy}
             onChange={(e) => {
               setUrl(e.target.value)
               setError('')
@@ -740,22 +818,51 @@ export function ProductLinkImport({
             busy ||
             uploadingScreenshot ||
             !url.trim() ||
-            verificationUrls.includes(url.trim()) ||
+            (!lookupPanel && verificationUrls.includes(url.trim())) ||
             (attempts.url === url.trim() &&
-              (attempts.count >= 3 || clock < retryAt))
+              ((!lookupPanel && attempts.count >= 3) || clock < retryAt))
           }
           onClick={search}
         >
           {busy ? 'Getting product details…' : 'Import details'}
         </button>
       </div>
-      <p className="form-hint">
-        <strong>
-          Walmart imports are currently experiencing issues. We’re working on a
-          fix.
-        </strong>
-      </p>
-      {typeof afterLookup === 'function' ? afterLookup(setUrl) : afterLookup}
+      {lookupPanel && lookupAction === 'url' && error && (
+        <LookupError
+          message={error}
+          code={errorCode}
+          status={errorStatus}
+          diagnostics={diagnostics}
+        >
+          {clock < retryAt && (
+            <p>Retry with Import details after the source wait period.</p>
+          )}
+        </LookupError>
+      )}
+      <LookupActionContext.Provider
+        value={
+          lookupPanel
+            ? {
+                active: lookupAction,
+                start: (action) => {
+                  setLookupAction(action)
+                  setError('')
+                  setDiagnostics(null)
+                },
+              }
+            : null
+        }
+      >
+        {typeof afterLookup === 'function'
+          ? afterLookup((value) => {
+              setUrl(value)
+              setError('')
+              setDiagnostics(null)
+              setRetryAt(0)
+              setAttempts({ url: '', count: 0 })
+            })
+          : afterLookup}
+      </LookupActionContext.Provider>
       {!afterLookup && (
         <p className="muted">
           Use Share → Copy link on the Amazon product page.
@@ -764,7 +871,7 @@ export function ProductLinkImport({
         </p>
       )}
       {busy && <p role="status">Reading product details…</p>}
-      {error && (
+      {!lookupPanel && error && (
         <div>
           <p role="alert">{error}</p>
           {!verificationUrl && (
@@ -776,7 +883,7 @@ export function ProductLinkImport({
                 busy ||
                 uploadingScreenshot ||
                 (attempts.url === url.trim() &&
-                  (attempts.count >= 3 || clock < retryAt))
+                  ((!lookupPanel && attempts.count >= 3) || clock < retryAt))
               }
             >
               Retry
@@ -825,7 +932,7 @@ export function ProductLinkImport({
           </details>
         </div>
       )}
-      {(verificationUrl || error) && (
+      {!lookupPanel && (verificationUrl || error) && (
         <div className="product-import-review">
           <p>
             Continue here with pasted product text, a screenshot for reference,
@@ -868,29 +975,27 @@ export function ProductLinkImport({
           </ItemPhotoField>
         </div>
       )}
-      <button
-        type="button"
-        className="text-button"
-        aria-expanded={pasting}
-        onClick={() => setPasting(!pasting)}
-      >
-        Paste product text instead
-      </button>
-      {pasting && (
-        <label className="field">
-          <span>Product text / notes</span>
-          <textarea
-            rows={4}
-            aria-label="Product text / notes"
-            maxLength={6000}
-            value={draft.notes || ''}
-            onChange={(e) => apply({ notes: e.target.value })}
-          />
-          <small>
-            Pasted text is kept as notes. Enter name, package quantity, unit and
-            price in the form below, then save. Keep this page open until saved.
-          </small>
-        </label>
+      {lookupPanel ? (
+        <details
+          className="product-paste-action"
+          open={pasting}
+          onToggle={(e) => setPasting(e.currentTarget.open)}
+        >
+          <summary>Paste product text</summary>
+          {pasteFields}
+        </details>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="text-button"
+            aria-expanded={pasting}
+            onClick={() => setPasting(!pasting)}
+          >
+            Paste product text instead
+          </button>
+          {pasteFields}
+        </>
       )}
       {(populateDraft ? importNotice : applied) && (
         <p role="status" className="product-import-applied">

@@ -2,6 +2,8 @@ import { ProductLabelsInfo } from './product-labels'
 import { labelsForProduct } from '@/lib/saved-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
 import { componentStock } from '@/lib/recipe-components'
+import { RecipeBaseFields } from './recipe-base-fields'
+import { effectiveRecipeLines, recipeProductionLines } from '@/lib/domain'
 import { ItemDetailHeader, ItemDetailLayout } from './item-detail-layout'
 import { NetWeightField } from './net-weight-field'
 import { RecipeLineCost } from './recipe-line-cost'
@@ -3419,6 +3421,17 @@ export function WorkspaceApp() {
                   <Field label="Recipe name">
                     {input('name', 'text', 'e.g. Homestyle White Bread')}
                   </Field>
+                  <RecipeBaseFields
+                    recipe={{
+                      ...draft,
+                      id: draft.id || 'preview',
+                      name: draft.name || 'Recipe',
+                      lines,
+                    }}
+                    recipes={recipes}
+                    ingredients={ingredients}
+                    change={change}
+                  />
                   <div className="form-grid">
                     <Field label="Category">
                       {select('category', [
@@ -3438,7 +3451,9 @@ export function WorkspaceApp() {
                     </Field>
                   </div>
                   <div className="form-section-title">
-                    <h3>1 · Ingredients</h3>
+                    <h3>
+                      1 · {draft.baseRecipeId ? 'Inclusions' : 'Ingredients'}
+                    </h3>
                     <div className="recipe-add-actions">
                       <button
                         type="button"
@@ -3637,6 +3652,9 @@ export function WorkspaceApp() {
                   <RecipeCalculation
                     recipe={{
                       ...draft,
+                      baseRecipe: recipes.find(
+                        (r) => r.id === draft.baseRecipeId,
+                      ),
                       id: draft.id || 'preview',
                       name: draft.name || 'Recipe',
                       lines,
@@ -4012,9 +4030,14 @@ export function WorkspaceApp() {
                     <h3>Actual ingredient use</h3>
                     <small>Adjust to match what you used.</small>
                   </div>
-                  {(
-                    recipes.find((r) => r.id === selected?.recipeId)?.lines ||
-                    []
+                  {recipeProductionLines(
+                    recipes.find((r) => r.id === selected?.recipeId) || {
+                      id: 'missing',
+                      name: '',
+                      lines: [],
+                    },
+                    ingredients,
+                    recipes,
                   ).map((l: any) => {
                     const i = ingredients.find((i) => i.id === l.ingredientId)!
                     return (
@@ -5288,7 +5311,9 @@ function RecipeCalculation({
 }) {
   let c: ReturnType<typeof costBreakdown> | undefined,
     warning = ''
+  let calculationLines = recipe.lines || []
   try {
+    calculationLines = effectiveRecipeLines(recipe)
     c = costBreakdown(recipe, ingredients)
   } catch (e) {
     warning = (e as Error).message
@@ -5297,7 +5322,7 @@ function RecipeCalculation({
     <div className="recipe-calculation">
       <details className="calculation-box">
         <summary>How was this calculated? · ingredients</summary>
-        {(recipe.lines || []).map((l: any, index: number) => {
+        {calculationLines.map((l: any, index: number) => {
           const i = ingredients.find((i) => i.id === l.ingredientId)
           let needsConversion = false
           if (i) {

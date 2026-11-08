@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { LookupActionContext, LookupError } from './lookup-error'
 import {
   photoEvidenceSchema,
   photoLabels,
@@ -21,6 +22,12 @@ export function PackagePhotoImport({
   packageSetup?: boolean
   processingReady?: boolean
 }) {
+  const lookupContext = useContext(LookupActionContext)
+  const compact = lookupContext !== null
+  const [failure, setFailure] = useState<{
+    code?: string
+    status?: number
+  }>({})
   const [photos, setPhotos] = useState<Record<string, Photo>>({}),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
@@ -52,6 +59,8 @@ export function PackagePhotoImport({
   async function choose(id: string, file: File, turns = 0) {
     if (pending.current) return
     pending.current = true
+    lookupContext?.start('photo')
+    setFailure({})
     setBusy(true)
     setError('')
     const version = ++generation.current
@@ -127,7 +136,9 @@ export function PackagePhotoImport({
   }
   return (
     <details className="package-photo-import">
-      <summary>Read package photos (optional)</summary>
+      <summary>
+        {compact ? 'Read package photos' : 'Read package photos (optional)'}
+      </summary>
       {!processingReady && (
         <p className="form-hint" role="status">
           Your private pilot is configured. Paid processing is disabled pending
@@ -167,6 +178,8 @@ export function PackagePhotoImport({
           onClick={async () => {
             if (pending.current) return
             pending.current = true
+            lookupContext?.start('photo')
+            setFailure({})
             setBusy(true)
             setError('')
             setEvidence(null)
@@ -185,11 +198,13 @@ export function PackagePhotoImport({
                 signal: controller.signal,
               })
               const data = await res.json().catch(() => null)
-              if (!res.ok)
+              if (!res.ok) {
+                setFailure({ code: data?.code, status: res.status })
                 throw new Error(
                   data?.error ||
                     `Photo reading failed (HTTP ${res.status}). Retry; your draft is preserved.`,
                 )
+              }
               const result = photoEvidenceSchema.parse({
                 fields: data.fields,
                 warnings: data.warnings,
@@ -226,7 +241,18 @@ export function PackagePhotoImport({
         )}
       </div>
       {busy && <p role="status">Reading selected package photos…</p>}
-      {error && <p role="alert">{error}</p>}
+      {error &&
+        (compact ? (
+          lookupContext.active === 'photo' && (
+            <LookupError
+              message="Package photo reading failed."
+              code={failure.code}
+              status={failure.status}
+            />
+          )
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
       {usage && <p className="form-hint">{usage}</p>}
       {evidence && (
         <>

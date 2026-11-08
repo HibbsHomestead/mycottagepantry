@@ -158,6 +158,11 @@ import { getDatabase } from '@netlify/database'
 import type { Context } from '@netlify/functions'
 import { randomBytes, createHash, randomUUID } from 'node:crypto'
 import { rollup } from '../../src/lib/demo'
+import { openingStockEntry } from '../../src/lib/ingredient-opening-stock'
+import {
+  effectiveRecipeLines,
+  recipeProductionLines,
+} from '../../src/lib/domain'
 import {
   convert,
   number,
@@ -646,6 +651,7 @@ export default async (req: Request, context: Context) => {
       }
       if (table === 'recipes' && item.workflow !== 'handmade')
         validateRecipeComponents(item, state)
+      if (table === 'recipes') delete item.baseRecipe
       if (table === 'recipes' && item.workflow === 'handmade' && !stockMutation)
         throw new Error('Save handmade designs through the design editor.')
       if (table === 'settings' && !dateApproval && state.settings?.[0])
@@ -766,6 +772,22 @@ export default async (req: Request, context: Context) => {
           [item.id, org, JSON.stringify(item)],
         )
       if (table === 'recipes') {
+        await client.query(
+          'DELETE FROM recipe_base_links WHERE business_id=$1 AND recipe_id=$2',
+          [org, item.id],
+        )
+        if (item.baseRecipeId)
+          await client.query(
+            'INSERT INTO recipe_base_links(id,business_id,data,recipe_id,base_recipe_id,multiplier) VALUES($1,$2,$3,$4,$5,$6)',
+            [
+              item.id,
+              org,
+              '{}',
+              item.id,
+              item.baseRecipeId,
+              item.baseMultiplier,
+            ],
+          )
         await client.query(
           'DELETE FROM recipe_lines WHERE business_id=$1 AND recipe_id=$2',
           [org, item.id],
@@ -3566,7 +3588,7 @@ export default async (req: Request, context: Context) => {
           item.laborMinutes = number(item.laborMinutes || 0, 'Labor')
           item.laborRate = number(item.laborRate ?? 18, 'Labor rate')
           item.overhead = number(item.overhead || 0, 'Overhead')
-          if (!item.lines?.length)
+          if (!item.lines?.length && !item.baseRecipeId)
             throw new Error('Add at least one ingredient.')
           if (
             new Set(item.lines.map((l: any) => l.ingredientId)).size !==
@@ -3589,7 +3611,9 @@ export default async (req: Request, context: Context) => {
             if (at < 0) state.ingredients.push(stock)
             else state.ingredients[at] = stock
           }
-          costBreakdown(item, state.ingredients)
+          costBreakdown(item, state.ingredients, {
+            recipes: [...state.recipes.filter((r) => r.id !== item.id), item],
+          })
         }
         if (table === 'products') {
           const previous = state.products.find((p) => p.id === item.id)
@@ -3815,8 +3839,10 @@ export default async (req: Request, context: Context) => {
             quantity: prep?.quantity || 0,
             unit: item.yieldUnit,
             cost:
-              prep?.cost ?? recipeCost(item, state.ingredients) / item.yield,
-            currentCost: recipeCost(item, state.ingredients) / item.yield,
+              prep?.cost ??
+              recipeCost(item, state.ingredients, state.recipes) / item.yield,
+            currentCost:
+              recipeCost(item, state.ingredients, state.recipes) / item.yield,
             compoundRecipeId: item.id,
             usedAs: 'ingredient',
             category: prep?.category || 'Preps & fillings',
@@ -3835,134 +3861,167 @@ export default async (req: Request, context: Context) => {
           throw new Error(
             `${isPackaging(data) ? 'Packaging' : 'Ingredient'} is unavailable in this oven.`,
           )
-        if (data.expectedUpdatedAt !== existing.updatedAt)
-          throw new Error(
-            `This ${isPackaging(existing) ? 'packaging' : 'ingredient'} changed elsewhere. Reopen it before saving.`,
-          )
-        let updated: Item
-        if (action === 'ingredientUpdate') {
-          const { purchaseOffers: _offers, ...input } = data
-          updated = updateIngredient(existing, input)
-          if (
-            (updated.usedAs || 'ingredient') !==
-            (existing.usedAs || 'ingredient')
-          )
-            throw new Error(
-              'Item Type is fixed for an existing item. Create a separate item instead of converting stock or history.',
-            )
-          Object.assign(
-            updated,
-            ingredientVendor(input, state.vendors, existing),
-          )
-          if (updated.currency !== (existing.currency || 'USD'))
-            throw new Error(
-              'Reference prices must use the existing costing currency; currency conversion is not configured.',
-            )
-          if (
-            updated.imageAssetId &&
-            !state.graphic_assets.some((a) => a.id === updated.imageAssetId)
-          )
-            throw new Error('Choose a photo from this oven.')
-        } else {
-          updated = {
-            ...existing,
-            purchaseOffers: [...(existing.purchaseOffers || [])],
-          }
-          const offers = updated.purchaseOffers as any[]
-          const offer = offers.find((o) => o.id === data.offerId)
-          if (data.operation === 'save') {
-            const saved = validateOffer(
-              existing,
-              { ...data.offer, id: data.offer?.id || randomUUID() },
-              state.vendors,
-            )
-            const index = offers.findIndex((o) => o.id === saved.id)
-            if (index < 0 && offers.length >= 100)
-              throw new Error('Use at most 100 offers per ingredient.')
-            if (index < 0) offers.push(saved)
-            else offers[index] = { ...offers[index], ...saved }
-          } else {
-            if (!offer) throw new Error('This store offer is unavailable.')
-            if (data.operation === 'remove')
-              updated.purchaseOffers = offers.filter((o) => o.id !== offer.id)
-            else if (data.operation === 'preferred') {
-              updated.purchaseOffers = offers.map((o) => ({
-                ...o,
-                preferred: o.id === offer.id,
-              }))
-              updated.referenceVendor =
-                existing.referenceVendor || existing.vendor || ''
-              updated.vendor = offer.vendor
-              updated.vendorId = offer.vendorId
-            } else if (data.operation === 'reference') {
-              if (
-                offer.source === 'connected_provider' &&
-                Date.now() -
-                  Date.parse(offer.checkedAt || offer.priceCheckedAt) >
-                  3600000
-              )
-                throw new Error(
-                  'Refresh and save a current web quote before using it as a reference.',
-                )
-              if (data.confirmed !== true)
-                throw new Error('Review and confirm the new reference price.')
-              if (offer.currency !== (existing.currency || 'USD'))
-                throw new Error(
-                  'Reference prices must use the existing costing currency.',
-                )
-              if (offer.offerExpiresAt && offer.offerExpiresAt < today)
-                throw new Error(
-                  'This offer has expired. Check its price first.',
-                )
-              packageCost(existing, offer)
-              updated = updateIngredient(existing, {
-                ...offer,
-                id: existing.id,
-                name: existing.name,
-                vendor: existing.vendor,
-                notes: existing.notes,
-                threshold: convert(
-                  existing.threshold || 0,
-                  existing.unit,
-                  existing.storageUnit || existing.unit,
-                  existing.conversions,
-                ),
-                reorderQuantity: convert(
-                  existing.reorderQuantity || 0,
-                  existing.unit,
-                  existing.storageUnit || existing.unit,
-                  existing.conversions,
-                ),
-                reviewed: existing.reviewed,
-                allergens: existing.allergens,
-                brand: existing.brand,
-                subingredients: existing.subingredients,
-                barcode: existing.barcode,
-              })
-              updated.purchaseOffers = offers
-              updated.referenceOfferId = offer.id
-              updated.referenceVendor = offer.vendor
-              if (
-                (offer.brand && offer.brand !== existing.brand) ||
-                offer.subingredients !==
-                  String(existing.subingredients || '') ||
-                JSON.stringify(offer.allergens) !==
-                  JSON.stringify(existing.allergens || [])
-              ) {
-                updated.reviewed = false
-                updated.labelReviewReason =
-                  'Reference package changed. Review supplier ingredients and allergens before using labels.'
-              }
-            } else throw new Error('Choose a supported offer action.')
-          }
-        }
-        await save('ingredients', updated)
-        await audit(
-          `${existing.name} updated`,
+        const opening =
           action === 'ingredientUpdate'
-            ? 'Ingredient details/reference updated; stock and historical valuation preserved.'
-            : `Store offer ${data.operation}; no purchase posted.`,
+            ? openingStockEntry(existing, data.openingStock, state.ledger)
+            : null
+        const openingSaveFingerprint = opening
+          ? createHash('sha256').update(JSON.stringify(data)).digest('hex')
+          : undefined
+        if (
+          opening?.replay &&
+          opening.previous.ingredientSaveFingerprint !== openingSaveFingerprint
         )
+          throw new Error(
+            'Opening stock was already recorded. Your changed details remain in this draft; reopen the ingredient to review the saved version before saving them.',
+          )
+        if (!opening?.replay) {
+          if (data.expectedUpdatedAt !== existing.updatedAt)
+            throw new Error(
+              `This ${isPackaging(existing) ? 'packaging' : 'ingredient'} changed elsewhere. Reopen it before saving.`,
+            )
+          let updated: Item
+          if (action === 'ingredientUpdate') {
+            const input = { ...data }
+            delete input.purchaseOffers
+            delete input.openingStock
+            updated = updateIngredient(existing, input)
+            if (
+              (updated.usedAs || 'ingredient') !==
+              (existing.usedAs || 'ingredient')
+            )
+              throw new Error(
+                'Item Type is fixed for an existing item. Create a separate item instead of converting stock or history.',
+              )
+            Object.assign(
+              updated,
+              ingredientVendor(input, state.vendors, existing),
+            )
+            if (updated.currency !== (existing.currency || 'USD'))
+              throw new Error(
+                'Reference prices must use the existing costing currency; currency conversion is not configured.',
+              )
+            if (
+              updated.imageAssetId &&
+              !state.graphic_assets.some((a) => a.id === updated.imageAssetId)
+            )
+              throw new Error('Choose a photo from this oven.')
+          } else {
+            updated = {
+              ...existing,
+              purchaseOffers: [...(existing.purchaseOffers || [])],
+            }
+            const offers = updated.purchaseOffers as any[]
+            const offer = offers.find((o) => o.id === data.offerId)
+            if (data.operation === 'save') {
+              const saved = validateOffer(
+                existing,
+                { ...data.offer, id: data.offer?.id || randomUUID() },
+                state.vendors,
+              )
+              const index = offers.findIndex((o) => o.id === saved.id)
+              if (index < 0 && offers.length >= 100)
+                throw new Error('Use at most 100 offers per ingredient.')
+              if (index < 0) offers.push(saved)
+              else offers[index] = { ...offers[index], ...saved }
+            } else {
+              if (!offer) throw new Error('This store offer is unavailable.')
+              if (data.operation === 'remove')
+                updated.purchaseOffers = offers.filter((o) => o.id !== offer.id)
+              else if (data.operation === 'preferred') {
+                updated.purchaseOffers = offers.map((o) => ({
+                  ...o,
+                  preferred: o.id === offer.id,
+                }))
+                updated.referenceVendor =
+                  existing.referenceVendor || existing.vendor || ''
+                updated.vendor = offer.vendor
+                updated.vendorId = offer.vendorId
+              } else if (data.operation === 'reference') {
+                if (
+                  offer.source === 'connected_provider' &&
+                  Date.now() -
+                    Date.parse(offer.checkedAt || offer.priceCheckedAt) >
+                    3600000
+                )
+                  throw new Error(
+                    'Refresh and save a current web quote before using it as a reference.',
+                  )
+                if (data.confirmed !== true)
+                  throw new Error('Review and confirm the new reference price.')
+                if (offer.currency !== (existing.currency || 'USD'))
+                  throw new Error(
+                    'Reference prices must use the existing costing currency.',
+                  )
+                if (offer.offerExpiresAt && offer.offerExpiresAt < today)
+                  throw new Error(
+                    'This offer has expired. Check its price first.',
+                  )
+                packageCost(existing, offer)
+                updated = updateIngredient(existing, {
+                  ...offer,
+                  id: existing.id,
+                  name: existing.name,
+                  vendor: existing.vendor,
+                  notes: existing.notes,
+                  threshold: convert(
+                    existing.threshold || 0,
+                    existing.unit,
+                    existing.storageUnit || existing.unit,
+                    existing.conversions,
+                  ),
+                  reorderQuantity: convert(
+                    existing.reorderQuantity || 0,
+                    existing.unit,
+                    existing.storageUnit || existing.unit,
+                    existing.conversions,
+                  ),
+                  reviewed: existing.reviewed,
+                  allergens: existing.allergens,
+                  brand: existing.brand,
+                  subingredients: existing.subingredients,
+                  barcode: existing.barcode,
+                })
+                updated.purchaseOffers = offers
+                updated.referenceOfferId = offer.id
+                updated.referenceVendor = offer.vendor
+                if (
+                  (offer.brand && offer.brand !== existing.brand) ||
+                  offer.subingredients !==
+                    String(existing.subingredients || '') ||
+                  JSON.stringify(offer.allergens) !==
+                    JSON.stringify(existing.allergens || [])
+                ) {
+                  updated.reviewed = false
+                  updated.labelReviewReason =
+                    'Reference package changed. Review supplier ingredients and allergens before using labels.'
+                }
+              } else throw new Error('Choose a supported offer action.')
+            }
+          }
+          if (opening && !opening.replay) {
+            validateDate(data.openingStock.date)
+            // The owned business row is already locked for this transaction.
+            // Keep quantity and value in the saved canonical inventory unit.
+            updated.quantity = opening.item.quantity
+            updated.cost = opening.item.cost
+            updated.openingStockRecorded = true
+            await save('ledger', {
+              ...opening.ledger,
+              ingredientSaveFingerprint: openingSaveFingerprint,
+            })
+            if (opening.journal) await save('journals', opening.journal)
+          }
+          await save('ingredients', updated)
+          await audit(
+            `${existing.name} updated`,
+            action === 'ingredientUpdate'
+              ? opening
+                ? 'Opening stock already owned recorded once, with a matching ledger entry.'
+                : 'Ingredient details/reference updated; stock and historical valuation preserved.'
+              : `Store offer ${data.operation}; no purchase posted.`,
+          )
+        }
       } else if (action === 'pantryView') {
         if (!['cards', 'table'].includes(data.view))
           throw new Error('Choose Cards or Table.')
@@ -4345,7 +4404,12 @@ export default async (req: Request, context: Context) => {
         const count = number(b.count, 'Batch count', 0.000001)
         const yieldActual = number(data.actualYield, 'Actual yield', 0.000001)
         const usage = new Map<string, number>()
-        for (const line of r.lines) {
+        const productionLines = recipeProductionLines(
+          r,
+          state.ingredients,
+          state.recipes,
+        )
+        for (const line of productionLines) {
           const i = state.ingredients.find((i) => i.id === line.ingredientId)!
           const actual = data.usage?.[i.id] ?? line.quantity * count
           const q = convert(
@@ -4424,7 +4488,11 @@ export default async (req: Request, context: Context) => {
         )
         const actualRecipe = {
           ...r,
-          lines: r.lines.map((l: any) => ({
+          // Snapshot the actual aggregated raw use, so overlapping inputs are
+          // charged and deducted once and later base edits cannot rewrite it.
+          baseRecipeId: undefined,
+          baseRecipe: undefined,
+          lines: productionLines.map((l: any) => ({
             ...l,
             quantity:
               number(
@@ -4440,7 +4508,25 @@ export default async (req: Request, context: Context) => {
           laborMinutes: b.laborMinutes,
           wasteCost: data.wasteCost,
           historical: true,
+          baseCostOverride: r.baseRecipeId
+            ? costBreakdown(
+                state.recipes.find((source) => source.id === r.baseRecipeId)!,
+                state.ingredients,
+                {
+                  recipes: state.recipes,
+                  reusableBase: true,
+                  multiplier: count * r.baseMultiplier,
+                  historical: true,
+                },
+              )
+            : undefined,
         })
+        b.recipeSnapshot = {
+          recipeId: r.id,
+          baseRecipeId: r.baseRecipeId,
+          baseMultiplier: r.baseMultiplier,
+          lines: effectiveRecipeLines(r, state.recipes),
+        }
         b.historicalCost = b.costSnapshot.total
         b.usage = lockedUsage
         b.completedAt = new Date().toISOString()
@@ -4580,7 +4666,7 @@ export default async (req: Request, context: Context) => {
               throw new Error('Recipes need ingredient lines.')
             for (const l of item.lines)
               l.quantity = number(l.quantity, 'Ingredient quantity', 0.000001)
-            recipeCost(item, state.ingredients)
+            recipeCost(item, state.ingredients, state.recipes)
             await save(table, item)
           } else if (table === 'products') {
             if (!state.recipes.find((r) => r.id === item.recipeId))

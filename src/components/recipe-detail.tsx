@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react'
 import {
   costBreakdown,
+  effectiveRecipeLines,
   convert,
   money,
   packagingLines,
@@ -78,7 +79,7 @@ export function RecipeDetail({
   let cost: ReturnType<typeof costBreakdown> | undefined,
     warning = ''
   try {
-    cost = costBreakdown(r, w.ingredients)
+    cost = costBreakdown(r, w.ingredients, { recipes: w.recipes })
   } catch (e) {
     warning = (e as Error).message
   }
@@ -188,42 +189,65 @@ export function RecipeDetail({
                   </p>
                 </>
               )}
-              {(r.lines || []).map((l: any, index: number) => {
-                const i = w.ingredients.find((i) => i.id === l.ingredientId)
-                let text = 'Ingredient unavailable',
-                  needs = false
-                if (i)
-                  try {
-                    const normalized = convert(
-                      l.quantity,
-                      l.unit,
-                      i.unit,
-                      i.conversions,
-                    )
-                    text = `${precise(l.quantity)} ${l.unit} = ${precise(normalized)} ${i.unit} × ${precise(i.currentCost ?? i.cost)} = ${money(normalized * (i.currentCost ?? i.cost))}`
-                  } catch (e) {
-                    text = (e as Error).message
-                    needs = true
-                  }
-                return (
-                  <div key={index}>
-                    <p>
-                      {i?.name}: {text}
-                    </p>
-                    {needs && i && (
-                      <button
-                        className="text-button"
-                        onClick={() => open('ingredient-detail', i)}
-                      >
-                        Review ingredient conversion
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
+              {effectiveRecipeLines(r, w.recipes).map(
+                (l: any, index: number) => {
+                  const i = w.ingredients.find((i) => i.id === l.ingredientId)
+                  let text = 'Ingredient unavailable',
+                    needs = false
+                  if (i)
+                    try {
+                      const normalized = convert(
+                        l.quantity,
+                        l.unit,
+                        i.unit,
+                        i.conversions,
+                      )
+                      text = `${precise(l.quantity)} ${l.unit} = ${precise(normalized)} ${i.unit} × ${precise(i.currentCost ?? i.cost)} = ${money(normalized * (i.currentCost ?? i.cost))}`
+                    } catch (e) {
+                      text = (e as Error).message
+                      needs = true
+                    }
+                  return (
+                    <div key={index}>
+                      <p>
+                        {i?.name}: {text}
+                      </p>
+                      {needs && i && (
+                        <button
+                          className="text-button"
+                          onClick={() => open('ingredient-detail', i)}
+                        >
+                          Review ingredient conversion
+                        </button>
+                      )}
+                    </div>
+                  )
+                },
+              )}
             </details>
             <section aria-label="Ingredients">
               <h3>Ingredients</h3>
+              {r.baseRecipeId && (
+                <p>
+                  <strong>
+                    {w.recipes.find((base) => base.id === r.baseRecipeId)?.name}{' '}
+                    × {r.baseMultiplier} batch(es)
+                  </strong>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() =>
+                      open(
+                        'recipe-detail',
+                        w.recipes.find((base) => base.id === r.baseRecipeId),
+                      )
+                    }
+                  >
+                    Open base recipe
+                  </button>
+                </p>
+              )}
               <table className="recipe-ingredients">
                 <thead>
                   <tr>
@@ -233,51 +257,55 @@ export function RecipeDetail({
                   </tr>
                 </thead>
                 <tbody>
-                  {(r.lines || []).map((l: any, index: number) => {
-                    const i = w.ingredients.find((i) => i.id === l.ingredientId)
-                    let amount: number | undefined,
-                      issue = ''
-                    try {
-                      if (
-                        !i ||
-                        i.needsCostSetup ||
-                        !Number.isFinite(i.currentCost ?? i.cost)
+                  {effectiveRecipeLines(r, w.recipes).map(
+                    (l: any, index: number) => {
+                      const i = w.ingredients.find(
+                        (i) => i.id === l.ingredientId,
                       )
-                        throw new Error('Cost needs setup')
-                      amount =
-                        convert(l.quantity, l.unit, i.unit, i.conversions) *
-                        (i.currentCost ?? i.cost)
-                    } catch (e) {
-                      issue = (e as Error).message
-                    }
-                    return (
-                      <tr key={index}>
-                        <td>
-                          {i ? (
-                            <button
-                              className="text-button"
-                              onClick={() => open('ingredient-detail', i)}
-                            >
-                              {i.name}
-                            </button>
-                          ) : (
-                            l.originalText || 'Unresolved ingredient'
-                          )}
-                          {l.group && <small>{l.group}</small>}
-                          {l.preparation && <small>{l.preparation}</small>}
-                          {issue && (
-                            <small className="warning-text">{issue}</small>
-                          )}
-                        </td>
-                        <td>
-                          {precise(l.quantity)} {l.unit}
-                        </td>
-                        <td>
-                          {amount == null ? 'Needs setup' : money(amount)}
-                        </td>
-                      </tr>
-                    )
-                  })}
+                      let amount: number | undefined,
+                        issue = ''
+                      try {
+                        if (
+                          !i ||
+                          i.needsCostSetup ||
+                          !Number.isFinite(i.currentCost ?? i.cost)
+                        )
+                          throw new Error('Cost needs setup')
+                        amount =
+                          convert(l.quantity, l.unit, i.unit, i.conversions) *
+                          (i.currentCost ?? i.cost)
+                      } catch (e) {
+                        issue = (e as Error).message
+                      }
+                      return (
+                        <tr key={index}>
+                          <td>
+                            {i ? (
+                              <button
+                                className="text-button"
+                                onClick={() => open('ingredient-detail', i)}
+                              >
+                                {i.name}
+                              </button>
+                            ) : (
+                              l.originalText || 'Unresolved ingredient'
+                            )}
+                            {l.group && <small>{l.group}</small>}
+                            {l.preparation && <small>{l.preparation}</small>}
+                            {issue && (
+                              <small className="warning-text">{issue}</small>
+                            )}
+                          </td>
+                          <td>
+                            {precise(l.quantity)} {l.unit}
+                          </td>
+                          <td>
+                            {amount == null ? 'Needs setup' : money(amount)}
+                          </td>
+                        </tr>
+                      )
+                    },
+                  )}
                 </tbody>
               </table>
             </section>

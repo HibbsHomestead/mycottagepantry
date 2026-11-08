@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { LookupActionContext, LookupError } from './lookup-error'
+import { ProductImportFailure } from '@/lib/product-import-diagnostics'
 import { type Item, type Workspace } from '@/lib/domain'
 import {
   catalogKinds,
@@ -22,9 +24,19 @@ export async function catalogRequest(body: unknown, signal?: AbortSignal) {
   })
   const data = await res.json().catch(() => null)
   if (!res.ok || data?.version !== 1)
-    throw new Error(
+    throw new ProductImportFailure(
       data?.error ||
         `Catalog request failed (HTTP ${res.status}). Retry; your draft is preserved.`,
+      {
+        requestedAt: new Date().toISOString(),
+        requestedUrl: '',
+        source: 'backend',
+        hops: [],
+        requestId: data?.reference,
+      },
+      undefined,
+      data?.code,
+      res.status,
     )
   const parsed = catalogResponseSchema.safeParse(data)
   if (!parsed.success)
@@ -50,6 +62,8 @@ export function CatalogLookup({
   packageSetup?: boolean
   onSourceUrl?: (url: string) => void
 }) {
+  const lookupContext = useContext(LookupActionContext)
+  const compact = lookupContext !== null
   const kind = (
     catalogKinds.includes(draft.usedAs) ? draft.usedAs : 'ingredient'
   ) as CatalogSnapshot['kind']
@@ -61,6 +75,8 @@ export function CatalogLookup({
     [opened, setOpened] = useState<Item | null>(null)
   const pending = useRef(false),
     abort = useRef<AbortController | null>(null)
+  const [failure, setFailure] = useState<ProductImportFailure | null>(null)
+  const [failedAction, setFailedAction] = useState('barcode')
   useEffect(() => () => abort.current?.abort(), [])
   const barcode = String(draft.barcode || '')
   const format = String(draft.barcodeFormat || '')
@@ -78,6 +94,10 @@ export function CatalogLookup({
   async function lookup(operation: string, search: string) {
     if (pending.current || !search.trim()) return
     pending.current = true
+    const action = operation === 'search' ? 'catalog' : 'barcode'
+    lookupContext?.start(action)
+    setFailedAction(action)
+    setFailure(null)
     const controller = new AbortController()
     abort.current = controller
     setBusy(true)
@@ -95,7 +115,10 @@ export function CatalogLookup({
       )
       if (!controller.signal.aborted) setData(result)
     } catch (e) {
-      if (!controller.signal.aborted) setError((e as Error).message)
+      if (!controller.signal.aborted) {
+        setError((e as Error).message)
+        setFailure(e instanceof ProductImportFailure ? e : null)
+      }
     } finally {
       if (!controller.signal.aborted) {
         pending.current = false
@@ -114,7 +137,7 @@ export function CatalogLookup({
     <section className="catalog-lookup" aria-label="Product lookup">
       <div className="barcode-entry-row">
         <label className="field">
-          <span>Scan or enter barcode</span>
+          <span>{compact ? 'Barcode' : 'Scan or enter barcode'}</span>
           <input
             autoComplete="off"
             value={barcode}
@@ -135,7 +158,7 @@ export function CatalogLookup({
           disabled={busy || !barcode.trim()}
           onClick={() => void lookup('lookup', barcode)}
         >
-          Look up barcode
+          {compact ? 'Look up' : 'Look up barcode'}
         </button>
         {onScan && (
           <button type="button" className="btn secondary" onClick={onScan}>
@@ -143,6 +166,17 @@ export function CatalogLookup({
           </button>
         )}
       </div>
+      {compact &&
+        failedAction === 'barcode' &&
+        lookupContext.active === 'barcode' &&
+        error && (
+          <LookupError
+            message="Barcode lookup failed."
+            code={failure?.code}
+            status={failure?.status}
+            diagnostics={failure?.diagnostics}
+          />
+        )}
       {/^\d{8}$/.test(barcode) && (
         <label className="field">
           <span>Eight-digit barcode format</span>
@@ -158,7 +192,7 @@ export function CatalogLookup({
       )}
       <div className="catalog-search-row">
         <label className="field">
-          <span>Search catalog by name or brand</span>
+          <span>{compact ? 'Catalog' : 'Search catalog by name or brand'}</span>
           <input
             value={query}
             onChange={(e) => {
@@ -184,11 +218,22 @@ export function CatalogLookup({
           disabled={busy || !query.trim()}
           onClick={() => void lookup('search', query)}
         >
-          Search catalog
+          {compact ? 'Search' : 'Search catalog'}
         </button>
       </div>
       {busy && <p role="status">Checking product references…</p>}
-      {error && <p role="alert">{error}</p>}
+      {compact &&
+        failedAction === 'catalog' &&
+        lookupContext.active === 'catalog' &&
+        error && (
+          <LookupError
+            message="Catalog search failed."
+            code={failure?.code}
+            status={failure?.status}
+            diagnostics={failure?.diagnostics}
+          />
+        )}
+      {!compact && error && <p role="alert">{error}</p>}
       {data?.notice && <p role="status">{data.notice}</p>}
       {data?.existing?.map((item: Item) => (
         <div key={item.id} className="catalog-result">
@@ -352,6 +397,8 @@ export function CatalogUpdates({
   draft: Record<string, Item[string]>
   apply: (patch: Record<string, Item[string]>) => void
 }) {
+  const lookupContext = useContext(LookupActionContext)
+  const [failure, setFailure] = useState<ProductImportFailure | null>(null)
   const [update, setUpdate] = useState<CatalogResult | null>(null),
     [error, setError] = useState(''),
     [checking, setChecking] = useState(false),
@@ -364,6 +411,7 @@ export function CatalogUpdates({
         className="text-button"
         disabled={checking}
         onClick={async () => {
+          lookupContext?.start('updates')
           setChecking(true)
           setError('')
           try {
@@ -374,6 +422,7 @@ export function CatalogUpdates({
             setChecked(true)
           } catch (e) {
             setError((e as Error).message)
+            setFailure(e instanceof ProductImportFailure ? e : null)
           } finally {
             setChecking(false)
           }
@@ -381,7 +430,18 @@ export function CatalogUpdates({
       >
         Check catalog updates
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error &&
+        (lookupContext ? (
+          lookupContext.active === 'updates' && (
+            <LookupError
+              message="Catalog update check failed."
+              code={failure?.code}
+              status={failure?.status}
+            />
+          )
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
       {checked && !update && (
         <small>Your accepted catalog revision is current.</small>
       )}
@@ -425,6 +485,9 @@ export function CatalogContribution({
 }: {
   draft: Record<string, Item[string]>
 }) {
+  const lookupContext = useContext(LookupActionContext)
+  const compact = lookupContext !== null
+  const [failure, setFailure] = useState<ProductImportFailure | null>(null)
   const [snapshot, setSnapshot] = useState<CatalogSnapshot | null>(null),
     [error, setError] = useState(''),
     [rights, setRights] = useState(false),
@@ -433,7 +496,11 @@ export function CatalogContribution({
   const requestId = useRef(crypto.randomUUID())
   return (
     <details className="catalog-contribution">
-      <summary>Suggest a catalog product or correction</summary>
+      <summary>
+        {compact
+          ? 'Suggest product/correction'
+          : 'Suggest a catalog product or correction'}
+      </summary>
       <p className="form-hint">
         Only the fields shown below are submitted. Prices, suppliers, stock,
         notes and private images stay private. An administrator reviews
@@ -443,6 +510,8 @@ export function CatalogContribution({
         type="button"
         className="text-button"
         onClick={() => {
+          lookupContext?.start('contribution')
+          setFailure(null)
           try {
             setSnapshot(
               sharedSnapshot(
@@ -492,6 +561,7 @@ export function CatalogContribution({
             className="btn secondary"
             disabled={!rights || busy || sent}
             onClick={async () => {
+              lookupContext?.start('contribution')
               setBusy(true)
               setError('')
               try {
@@ -505,6 +575,7 @@ export function CatalogContribution({
                 setSent(true)
               } catch (e) {
                 setError((e as Error).message)
+                setFailure(e instanceof ProductImportFailure ? e : null)
               } finally {
                 setBusy(false)
               }
@@ -519,7 +590,18 @@ export function CatalogContribution({
           Submitted for administrator review. Nothing was published.
         </p>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error &&
+        (compact ? (
+          lookupContext.active === 'contribution' && (
+            <LookupError
+              message="Product suggestion failed. Check the product details."
+              code={failure?.code}
+              status={failure?.status}
+            />
+          )
+        ) : (
+          <p role="alert">{error}</p>
+        ))}
     </details>
   )
 }

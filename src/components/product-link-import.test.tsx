@@ -421,10 +421,10 @@ it('keeps edited parent form values and the account page intact after a retailer
     screen.queryByRole('link', { name: 'Open Walmart Product Page' }),
   ).not.toBeInTheDocument()
   expect(
-    screen.getByText(
+    screen.queryByText(
       'Walmart imports are currently experiencing issues. We’re working on a fix.',
-    ).tagName,
-  ).toBe('STRONG')
+    ),
+  ).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Import details' })).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Import details' }))
   fireEvent.change(screen.getByLabelText('Product URL'), {

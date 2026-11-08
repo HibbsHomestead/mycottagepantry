@@ -6,6 +6,7 @@ import {
   parseQuantity,
   convert,
   costBreakdown,
+  recipeProductionLines,
   type Item,
   type TaxRate,
   calculateTax,
@@ -789,7 +790,9 @@ export function BatchCostPreview({
     if (!recipe) return null
     const adjusted = {
       ...recipe,
-      lines: recipe.lines.map((l: any) => ({
+      baseRecipeId: undefined,
+      baseRecipe: undefined,
+      lines: recipeProductionLines(recipe, ingredients).map((l: any) => ({
         ...l,
         quantity:
           usage?.[l.ingredientId] !== undefined
@@ -804,6 +807,13 @@ export function BatchCostPreview({
       laborMinutes,
       wasteCost,
       historical: true,
+      baseCostOverride: recipe.baseRecipeId
+        ? costBreakdown(recipe.baseRecipe, ingredients, {
+            multiplier: multiplier * recipe.baseMultiplier,
+            reusableBase: true,
+            historical: true,
+          })
+        : undefined,
     })
     return (
       <details className="calculation-box">
