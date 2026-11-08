@@ -159,6 +159,7 @@ import type { Context } from '@netlify/functions'
 import { randomBytes, createHash, randomUUID } from 'node:crypto'
 import { rollup } from '../../src/lib/demo'
 import { openingStockEntry } from '../../src/lib/ingredient-opening-stock'
+import { ingredientHasStockHistory } from '../../src/lib/ingredient-stock-unit'
 import {
   effectiveRecipeLines,
   recipeProductionLines,
@@ -3885,7 +3886,13 @@ export default async (req: Request, context: Context) => {
             const input = { ...data }
             delete input.purchaseOffers
             delete input.openingStock
-            updated = updateIngredient(existing, input)
+            updated = updateIngredient(existing, input, {
+              hasStockHistory: ingredientHasStockHistory(existing, state),
+            })
+            if (opening && updated.unit !== existing.unit)
+              throw new Error(
+                'Save the new stock basis first, then reopen the ingredient to enter opening stock in its saved unit.',
+              )
             if (
               (updated.usedAs || 'ingredient') !==
               (existing.usedAs || 'ingredient')

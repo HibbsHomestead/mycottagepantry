@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IngredientDetail } from './ingredient-detail'
 import { demoData } from '@/lib/demo'
+import { updateIngredient } from '@/lib/ingredients'
 function props() {
   return {
     workspace: demoData(),
@@ -13,6 +14,126 @@ function props() {
     onWorkspace: vi.fn(),
   }
 }
+const jarFixture = () => ({
+  id: 'jar-weight-regression',
+  name: 'Jar ingredient',
+  unit: 'ml',
+  storageUnit: 'cup',
+  recipeUnit: 'oz',
+  quantity: 0,
+  cost: 0.1,
+  currentCost: 0.1,
+  purchaseQuantity: 1,
+  purchaseUnit: 'jar',
+  packagePrice: 6.98,
+  currency: 'USD',
+  threshold: 0,
+  reorderQuantity: 0,
+  conversions: [
+    { from: 'jar', to: 'cup', amountFrom: 1, amountTo: 0.375, verified: true },
+  ],
+})
+it('keeps oz enabled and accepts it without reverting or reinterpreting cup contents', async () => {
+  const p = props(),
+    user = userEvent.setup(),
+    ingredient = jarFixture()
+  const { rerender } = render(
+    <IngredientDetail ingredient={ingredient} initialEditing {...p} />,
+  )
+  const shelf = screen.getByLabelText('Stock shelf unit')
+  expect(
+    screen
+      .getAllByRole('option', { name: 'oz (weight)' })
+      .every((option) => !(option as HTMLOptionElement).disabled),
+  ).toBe(true)
+  expect(
+    screen.getByLabelText('# of stock units in purchasing unit'),
+  ).toHaveValue(0.375)
+  await user.selectOptions(shelf, 'oz')
+  expect(shelf).toHaveValue('oz')
+  expect(
+    screen.getByLabelText('# of stock units in purchasing unit'),
+  ).toHaveValue(null)
+  expect(screen.getByLabelText('Purchasing package unit')).toHaveValue('jar')
+  expect(screen.getByLabelText('Recipe unit')).toHaveValue('oz')
+  expect(
+    screen.getByText(/previous package contents in US cup were cleared/),
+  ).toBeVisible()
+  fireEvent.change(screen.getByLabelText('Name'), {
+    target: { value: 'Still editing' },
+  })
+  rerender(<IngredientDetail ingredient={ingredient} initialEditing {...p} />)
+  expect(shelf).toHaveValue('oz')
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(p.save).not.toHaveBeenCalled()
+  expect(ingredient.storageUnit).toBe('cup')
+})
+it('requires a confirmed package net weight and explicit new basis for a zero-stock ingredient', async () => {
+  const p = props(),
+    user = userEvent.setup(),
+    ingredient = jarFixture()
+  render(<IngredientDetail ingredient={ingredient} initialEditing {...p} />)
+  await user.selectOptions(screen.getByLabelText('Stock shelf unit'), 'oz')
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(p.save).not.toHaveBeenCalled()
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Confirm the new stock basis',
+  )
+  fireEvent.change(
+    screen.getByLabelText('# of stock units in purchasing unit'),
+    { target: { value: '3' } },
+  )
+  await user.click(
+    screen.getByRole('checkbox', {
+      name: /I confirm the verified package contents/,
+    }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  const data = p.save.mock.calls[0][1]
+  expect(data).toMatchObject({
+    id: ingredient.id,
+    storageUnit: 'oz',
+    purchaseSetup: { packageUnit: 'jar', price: 6.98, stockUnits: '3' },
+  })
+  const saved = updateIngredient(ingredient, data, { hasStockHistory: false })
+  expect(saved).toMatchObject({ unit: 'g', storageUnit: 'oz', quantity: 0 })
+  expect(saved.conversions).toMatchObject([
+    { from: 'jar', to: 'oz', amountTo: 3, verified: true },
+  ])
+})
+it('explains the historical-stock restriction and opens explicit conversion review without saving', async () => {
+  const p = props(),
+    user = userEvent.setup(),
+    ingredient = jarFixture()
+  p.workspace.ledger.push({
+    id: 'jar-old-stock',
+    name: 'Past receipt',
+    ingredientId: ingredient.id,
+    quantity: 1,
+    unit: 'ml',
+  })
+  render(<IngredientDetail ingredient={ingredient} initialEditing {...p} />)
+  await user.selectOptions(screen.getByLabelText('Stock shelf unit'), 'oz')
+  expect(
+    screen.getByText(/Existing stock\/history is recorded in mL/),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('checkbox', {
+      name: /I confirm the verified package contents/,
+    }),
+  ).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Add a measured, verified conversion',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Review stock-unit conversion' }),
+  )
+  expect(screen.getByLabelText('From unit')).toBeVisible()
+  expect(screen.getByLabelText('To unit')).toBeVisible()
+  expect(p.save).not.toHaveBeenCalled()
+  expect(ingredient.quantity).toBe(0)
+})
 it('groups ingredient details into Product Details cards in a portal modal and resets when another ingredient opens', async () => {
   const p = props(),
     user = userEvent.setup()

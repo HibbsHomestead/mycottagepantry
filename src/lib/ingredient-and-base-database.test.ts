@@ -85,6 +85,31 @@ beforeAll(async () => {
   }
   for (const i of [
     ...w.ingredients,
+    ...['empty-jar', 'history-jar'].map((id) => ({
+      id,
+      name: id,
+      unit: 'ml',
+      storageUnit: 'cup',
+      recipeUnit: 'oz',
+      quantity: 0,
+      cost: 0.1,
+      currentCost: 0.1,
+      purchaseQuantity: 1,
+      purchaseUnit: 'jar',
+      packagePrice: 6.98,
+      threshold: 0,
+      reorderQuantity: 0,
+      currency: 'USD',
+      conversions: [
+        {
+          from: 'jar',
+          to: 'cup',
+          amountFrom: 1,
+          amountTo: 0.375,
+          verified: true,
+        },
+      ],
+    })),
     {
       id: 'applesauce',
       name: 'Applesauce',
@@ -107,6 +132,23 @@ beforeAll(async () => {
       'INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5)',
       [i.id, org, JSON.stringify(i), i.quantity, i.cost],
     )
+  await db.query(
+    'INSERT INTO ledger(id,business_id,data,ingredient_id) VALUES($1,$2,$3,$4)',
+    [
+      'history-jar-count',
+      org,
+      JSON.stringify({
+        id: 'history-jar-count',
+        name: 'Past count',
+        ingredientId: 'history-jar',
+        quantity: 0,
+        unit: 'ml',
+        amount: 0,
+        type: 'inventory_count',
+      }),
+      'history-jar',
+    ],
+  )
   await db.exec(
     'CREATE ROLE base_test_app; GRANT USAGE ON SCHEMA public TO base_test_app; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO base_test_app; SET ROLE base_test_app;',
   )
@@ -116,6 +158,107 @@ beforeAll(async () => {
   }
 }, 30000)
 afterAll(async () => db.close())
+
+it('changes an explicitly confirmed empty jar to weight without posting stock or inferring density', async () => {
+  const w = (await request()).workspace
+  const existing = w.ingredients.find((i: Item) => i.id === 'empty-jar')
+  const data = {
+    ...existing,
+    expectedUpdatedAt: existing.updatedAt,
+    storageUnit: 'oz',
+    threshold: 0,
+    reorderQuantity: 0,
+    purchaseSetup: { packageUnit: 'jar', price: 6.98, stockUnits: 3 },
+  }
+  const unconfirmed = await request({ action: 'ingredientUpdate', data })
+  expect(unconfirmed.status).toBe(400)
+  expect(unconfirmed.error).toContain('Confirm the new stock basis')
+  const simultaneousOpening = await request({
+    action: 'ingredientUpdate',
+    data: {
+      ...data,
+      confirmEmptyStockUnitChange: true,
+      openingStock: {
+        enabled: true,
+        operationId: 'jar-basis-opening',
+        quantity: 1,
+        unit: 'cup',
+        value: 1,
+        date: '2026-11-08',
+      },
+    },
+  })
+  expect(simultaneousOpening.status).toBe(400)
+  expect(simultaneousOpening.error).toContain('Save the new stock basis first')
+  const result = await request({
+    action: 'ingredientUpdate',
+    data: { ...data, confirmEmptyStockUnitChange: true },
+  })
+  expect(result.status, result.error).toBe(200)
+  expect(
+    result.workspace.ingredients.find((i: Item) => i.id === existing.id),
+  ).toMatchObject({
+    unit: 'g',
+    storageUnit: 'oz',
+    recipeUnit: 'oz',
+    purchaseUnit: 'jar',
+    quantity: 0,
+    conversions: [{ from: 'jar', to: 'oz', amountTo: 3, verified: true }],
+  })
+  expect(result.workspace.ledger).toEqual(w.ledger)
+  expect(result.workspace.journals).toEqual(w.journals)
+})
+
+it('protects a zero-balance jar with history and accepts only an explicit measured conversion', async () => {
+  const w = (await request()).workspace
+  const existing = w.ingredients.find((i: Item) => i.id === 'history-jar')
+  const data = {
+    ...existing,
+    expectedUpdatedAt: existing.updatedAt,
+    storageUnit: 'oz',
+    threshold: 0,
+    reorderQuantity: 0,
+    purchaseSetup: { packageUnit: 'jar', price: 6.98, stockUnits: 3 },
+    confirmEmptyStockUnitChange: true,
+    hasStockHistory: false,
+  }
+  const denied = await request({ action: 'ingredientUpdate', data })
+  expect(denied.status).toBe(400)
+  expect(denied.error).toContain('Stock/history')
+  const unchanged = (await request()).workspace
+  expect(unchanged.ingredients.find((i: Item) => i.id === existing.id)).toEqual(
+    existing,
+  )
+  const measured = await request({
+    action: 'ingredientUpdate',
+    data: {
+      ...data,
+      conversions: [
+        ...existing.conversions,
+        {
+          from: 'cup',
+          to: 'oz',
+          amountFrom: 1,
+          amountTo: 8,
+          verified: true,
+          source: 'user_entered',
+          notes: 'Synthetic measured conversion',
+        },
+      ],
+    },
+  })
+  expect(measured.status, measured.error).toBe(200)
+  expect(
+    measured.workspace.ingredients.find((i: Item) => i.id === existing.id),
+  ).toMatchObject({
+    unit: 'ml',
+    storageUnit: 'oz',
+    quantity: existing.quantity,
+    cost: existing.cost,
+  })
+  expect(measured.workspace.ledger).toEqual(w.ledger)
+  expect(measured.workspace.journals).toEqual(w.journals)
+})
 
 it('posts applesauce opening stock as each once; retries, unrelated saves and invalid operations preserve history', async () => {
   let w = (await request()).workspace

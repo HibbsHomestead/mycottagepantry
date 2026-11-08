@@ -1,6 +1,7 @@
 import { applyPurchaseSetup, validateConversions } from './purchase-setup'
 import { inventoryProductKeys } from './inventory-product'
 import { isPackaging, selectPantryCategory } from './pantry-category'
+import { prepareStockUnitBasis } from './ingredient-stock-unit'
 import {
   barcodeText,
   barcodeFormats as scanFormats,
@@ -281,8 +282,13 @@ const textFields = [
   'packageSize',
   'productSourcePackageSize',
 ]
-export function updateIngredient(existing: Item, input: any) {
-  input = applyPurchaseSetup(existing, input)
+export function updateIngredient(
+  existing: Item,
+  input: any,
+  options: { hasStockHistory: boolean } = { hasStockHistory: true },
+) {
+  const basis = prepareStockUnitBasis(existing, input, options.hasStockHistory)
+  input = applyPurchaseSetup(existing, basis.input)
   const next = { ...existing }
   for (const key of ['purchaseSetup', 'legacyPurchaseBasis'])
     if (input[key] !== undefined) next[key] = input[key]
@@ -319,7 +325,8 @@ export function updateIngredient(existing: Item, input: any) {
   next.storageUnit = String(
     input.storageUnit || existing.storageUnit || existing.unit,
   )
-  // Canonical stock unit and weighted-average valuation never change in ordinary editing.
+  // A new canonical basis requires explicit confirmation and server-verified empty history.
+  next.unit = basis.unit
   next.conversions = input.conversions ?? existing.conversions ?? []
   if (!Array.isArray(next.conversions) || next.conversions.length > 100)
     throw new Error('Use at most 100 conversions.')
@@ -338,7 +345,7 @@ export function updateIngredient(existing: Item, input: any) {
       )
         throw new Error('Choose supported conversion units.')
     }
-  convert(1, existing.unit, next.storageUnit, next.conversions)
+  convert(1, next.unit, next.storageUnit, next.conversions)
   // A missing recipe conversion is visible in the editor and still blocks recipe costing.
   if (next.recipeUnit && !ingredientUnits(next.conversions)[next.recipeUnit])
     throw new Error('Choose a supported recipe unit.')
@@ -381,21 +388,30 @@ export function updateIngredient(existing: Item, input: any) {
       next.packagePrice !== Number(existing.packagePrice) ||
       JSON.stringify(next.conversions) !==
         JSON.stringify(existing.conversions || [])
-    if (referenceChanged) {
+    if (referenceChanged || basis.changed) {
       next.currentCost = calculated
       next.needsCostSetup = false
     }
+    if (basis.changed) next.cost = calculated
   }
+  if (basis.changed && preserveMissingPackage)
+    throw new Error(
+      'Enter verified package contents and price before changing the stock basis.',
+    )
+  if (input.threshold === '' || input.reorderQuantity === '')
+    throw new Error(
+      'Re-enter reorder threshold and quantity in the selected stock shelf unit.',
+    )
   next.threshold = convert(
     number(input.threshold, 'Reorder threshold'),
     next.storageUnit,
-    existing.unit,
+    next.unit,
     next.conversions,
   )
   next.reorderQuantity = convert(
     number(input.reorderQuantity ?? 0, 'Reorder quantity'),
     next.storageUnit,
-    existing.unit,
+    next.unit,
     next.conversions,
   )
   if (

@@ -57,6 +57,12 @@ import './ingredient-detail.css'
 import { PantryPhoto } from './pantry-photo'
 import { editActionLabel } from '@/lib/item-actions'
 import { inventoryMovementView } from '@/lib/inventory-adjustment'
+import {
+  changeStockShelfUnit,
+  ingredientHasStockHistory,
+  prepareStockUnitBasis,
+  stockUnitNeedsNewBasis,
+} from '@/lib/ingredient-stock-unit'
 function Measure({ children }: { children: () => ReactNode }) {
   try {
     return <>{children()}</>
@@ -192,6 +198,8 @@ export function IngredientDetail({
   const usage = affectedRecipes(i.id, w.ingredients, w.recipes)
   const offers = i.purchaseOffers || []
   const history = w.ledger.filter((l) => l.ingredientId === i.id)
+  const hasStockHistory = ingredientHasStockHistory(i, w)
+  const needsStockBasis = editing && stockUnitNeedsNewBasis(i, draft)
   const units = Object.keys(ingredientUnits(draft.conversions || i.conversions))
   const guard = (next: () => void) => {
     if (busy || importBusy) return
@@ -218,6 +226,7 @@ export function IngredientDetail({
         next.purchaseSetup = mapping.setup
         next.purchaseSetupReview = mapping.review || ''
         next.purchaseSetupConfirmed = false
+        next.confirmEmptyStockUnitChange = false
       }
       return next
     })
@@ -628,7 +637,12 @@ export function IngredientDetail({
                 }
                 if (editing) {
                   try {
-                    applyPurchaseSetup(i, draft)
+                    const basis = prepareStockUnitBasis(
+                      i,
+                      draft,
+                      hasStockHistory,
+                    )
+                    applyPurchaseSetup(i, basis.input)
                   } catch (e) {
                     setError((e as Error).message)
                     setEditTab('details')
@@ -942,45 +956,88 @@ export function IngredientDetail({
                           change={change}
                           conversions={() => setEditTab('conversions')}
                           changeStorage={(u) => {
-                            try {
-                              const threshold = convert(
-                                Number(draft.threshold),
-                                draft.storageUnit,
-                                u,
-                                draft.conversions,
-                              )
-                              const reorder = convert(
-                                Number(draft.reorderQuantity),
-                                draft.storageUnit,
-                                u,
-                                draft.conversions,
-                              )
-                              change('storageUnit', u)
-                              change('threshold', threshold)
-                              change('reorderQuantity', reorder)
-                              if (draft.purchaseSetup) {
-                                let count = draft.purchaseSetup.stockUnits
-                                try {
-                                  count = convert(
-                                    Number(count),
-                                    draft.storageUnit,
-                                    u,
-                                    draft.conversions,
-                                  )
-                                } catch {
-                                  count = ''
-                                }
-                                change('purchaseSetup', {
-                                  ...draft.purchaseSetup,
-                                  stockUnits: count,
-                                })
-                              }
-                              setError('')
-                            } catch (e) {
-                              setError((e as Error).message)
-                            }
+                            setDraft((current: Item) => ({
+                              ...current,
+                              ...changeStockShelfUnit(current, u),
+                            }))
+                            setDirty(true)
+                            setError('')
                           }}
                         />
+                        {draft.stockUnitChangeNotice && (
+                          <p className="form-hint" role="status">
+                            {draft.stockUnitChangeNotice}
+                          </p>
+                        )}
+                        {(draft.threshold === '' ||
+                          draft.reorderQuantity === '') && (
+                          <p className="form-hint warning-text">
+                            Re-enter the reorder threshold and reorder quantity
+                            in {unitLabel(draft.storageUnit)} under Stock &
+                            Other Details. Their previous amounts could not be
+                            converted.
+                          </p>
+                        )}
+                        {needsStockBasis &&
+                          (hasStockHistory ? (
+                            <div
+                              className="form-hint warning-text"
+                              role="status"
+                            >
+                              <p>
+                                Existing stock/history is recorded in{' '}
+                                {unitLabel(i.unit)}. Saving{' '}
+                                {unitLabel(draft.storageUnit)} requires a
+                                measured conversion from that saved basis.
+                                Entering a new net weight per jar alone does not
+                                verify the old cup amount. Quantities, valuation
+                                and historical records stay unchanged.
+                              </p>
+                              <button
+                                type="button"
+                                className="text-button"
+                                onClick={() => setEditTab('conversions')}
+                              >
+                                Review stock-unit conversion
+                              </button>
+                              <p>
+                                In Unit Conversions, enter a measured
+                                relationship between the saved inventory unit
+                                and the new shelf unit, cite the measurement or
+                                supplier reference, and mark it verified. If
+                                that relationship is unknown, keep the existing
+                                item for its history and create a separate
+                                weight-tracked ingredient.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="form-hint">
+                              <p>
+                                This item has zero stock and no stock history.
+                                Confirming a new basis replaces its old package
+                                relationship and recalculates the unit cost from
+                                the verified package contents. No stock is
+                                added.
+                              </p>
+                              <label className="check-label">
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    draft.confirmEmptyStockUnitChange === true
+                                  }
+                                  onChange={(event) =>
+                                    change(
+                                      'confirmEmptyStockUnitChange',
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                                I confirm the verified package contents and new
+                                stock basis in {unitLabel(draft.storageUnit)}{' '}
+                                for this empty item.
+                              </label>
+                            </div>
+                          ))}
                         <Field label="Currency">{input('currency')}</Field>
                         <div className="form-grid">
                           {basis('includesTax', 'Purchase tax')}
