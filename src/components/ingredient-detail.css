@@ -472,3 +472,114 @@
 .ingredient-tab-details .ingredient-edit-identity-body {
   grid-template-columns: minmax(0, 1fr);
 }
+
+/* Only the lookup panel in Edit Ingredient. One outer dialog scroll area. */
+.ingredient-modal-shell .ingredient-import-tools {
+  padding: 0;
+  border: 0;
+}
+.ingredient-import-tools .find-product-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 12px;
+  margin: 0;
+}
+.find-product-panel > * {
+  flex-basis: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.find-product-panel > strong {
+  font-size: 15px;
+}
+.find-product-panel .product-link-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.find-product-panel .field {
+  margin: 0;
+  gap: 4px;
+}
+.find-product-panel .field > span {
+  font-size: 13px;
+}
+.ingredient-import-tools .find-product-panel input:not([type='checkbox']),
+.ingredient-import-tools .find-product-panel .btn {
+  min-height: 36px;
+  height: 36px;
+  padding: 6px 10px;
+  font-size: 14px;
+  line-height: 22px;
+}
+.find-product-panel .catalog-lookup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+}
+.find-product-panel .catalog-lookup > * {
+  grid-column: 1 / -1;
+}
+.find-product-panel .catalog-lookup > .barcode-entry-row,
+.find-product-panel .catalog-lookup > .catalog-search-row {
+  grid-column: auto;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.find-product-panel > .package-photo-import,
+.find-product-panel > .catalog-contribution,
+.find-product-panel > .product-paste-action {
+  flex: 0 1 auto;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+.ingredient-detail-body .find-product-panel details > summary {
+  min-height: 28px;
+  line-height: 22px;
+  padding: 3px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.find-product-panel > details[open] {
+  flex-basis: 100%;
+}
+.find-product-panel .lookup-error {
+  margin: 0;
+  font-size: 13px;
+}
+.lookup-error > p {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: #a12b28;
+  margin: 0;
+}
+.lookup-error svg {
+  flex-shrink: 0;
+}
+.lookup-error-references {
+  overflow-wrap: anywhere;
+}
+.lookup-error-references p {
+  margin: 3px 0;
+}
+.ingredient-detail-body .find-product-panel .lookup-error summary {
+  font-weight: 500;
+}
+@media (max-width: 600px) {
+  .find-product-panel .catalog-lookup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .find-product-panel .catalog-lookup > .barcode-entry-row,
+  .find-product-panel .catalog-lookup > .catalog-search-row {
+    grid-row: auto;
+  }
+}

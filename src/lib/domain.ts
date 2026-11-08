@@ -254,9 +254,109 @@ export function number(value: unknown, label: string, min = 0) {
 export function recipeCost(
   recipe: Item,
   ingredients: Item[],
-  _seen: string[] = [],
+  recipes?: Item[],
 ): number {
-  return costBreakdown(recipe, ingredients).total
+  return costBreakdown(recipe, ingredients, { recipes }).total
+}
+
+/** A base batch expands its saved raw lines; prepared-stock lines stay intact. */
+export function effectiveRecipeLines(
+  recipe: Item,
+  recipes?: Item[],
+  path: string[] = [],
+): any[] {
+  if (path.includes(recipe.id))
+    throw new Error(
+      'A recipe cannot contain itself, directly or through another recipe.',
+    )
+  const own = (recipe.lines || []).map((line: any) => ({
+    ...line,
+    ...(path.length ? { sourceRecipePath: [...path, recipe.id] } : {}),
+  }))
+  if (!recipe.baseRecipeId) return own
+  const base =
+    recipes?.find((r) => r.id === recipe.baseRecipeId) ||
+    (!recipes ? recipe.baseRecipe : undefined)
+  if (!base || base.id !== recipe.baseRecipeId)
+    throw new Error('The linked base recipe is unavailable in this oven.')
+  const scale = number(recipe.baseMultiplier, 'Base batch multiplier', 0.000001)
+  return [
+    ...effectiveRecipeLines(base, recipes, [...path, recipe.id]).map(
+      (line) => ({
+        ...line,
+        quantity:
+          number(line.quantity, 'Base ingredient quantity', 0.000001) * scale,
+      }),
+    ),
+    ...own,
+  ]
+}
+
+export function baseIngredientOverlap(recipe: Item, recipes: Item[]) {
+  if (!recipe.baseRecipeId) return null
+  const base = recipes.find((r) => r.id === recipe.baseRecipeId)
+  if (!base) return null
+  const baseLines = effectiveRecipeLines(base, recipes)
+  const ids = [
+    ...new Set<string>(
+      (recipe.lines || [])
+        .filter((line: any) =>
+          baseLines.some((b) => b.ingredientId === line.ingredientId),
+        )
+        .map((line: any) => line.ingredientId),
+    ),
+  ]
+  return ids.length
+    ? {
+        ids,
+        approval: JSON.stringify([
+          recipe.baseRecipeId,
+          Number(recipe.baseMultiplier),
+          baseLines.map((l) => [l.ingredientId, Number(l.quantity), l.unit]),
+          (recipe.lines || []).map((l: any) => [
+            l.ingredientId,
+            Number(l.quantity),
+            l.unit,
+          ]),
+        ]),
+      }
+    : null
+}
+
+/** Aggregate shared raw inputs before an actual-use override or stock deduction. */
+export function recipeProductionLines(
+  recipe: Item,
+  ingredients: Item[],
+  recipes?: Item[],
+): any[] {
+  if (!recipe.baseRecipeId)
+    return (recipe.lines || []).map((line: any) => ({
+      ...line,
+      sources: [line],
+    }))
+  const result = new Map<string, any>()
+  for (const line of effectiveRecipeLines(recipe, recipes)) {
+    const item = ingredients.find((i) => i.id === line.ingredientId)
+    if (!item) throw new Error('Ingredient is unavailable.')
+    const quantity = convert(
+      line.quantity,
+      line.unit,
+      item.unit,
+      item.conversions,
+    )
+    const prior = result.get(item.id)
+    if (prior) {
+      prior.quantity += quantity
+      prior.sources.push(line)
+    } else
+      result.set(item.id, {
+        ingredientId: item.id,
+        quantity,
+        unit: item.unit,
+        sources: [line],
+      })
+  }
+  return [...result.values()]
 }
 
 export function packagingLines(product: Item): any[] {
@@ -278,12 +378,47 @@ export function costBreakdown(
   recipe: Item,
   ingredients: Item[],
   options: any = {},
-) {
+): {
+  lines: any[]
+  packaging: any[]
+  ingredient: number
+  packagingCost: number
+  laborMinutes: number
+  laborRate: number
+  labor: number
+  overhead: number
+  waste: number
+  total: number
+  plannedYield: number
+  actualYield: number
+  packages: number
+  unitsPerPackage: number
+  perItem: number
+  perPackage: number
+} {
   const multiplier = number(
     options.multiplier ?? 1,
     'Batch multiplier',
     0.000001,
   )
+  const recipeLines = effectiveRecipeLines(recipe, options.recipes)
+  const base = recipe.baseRecipeId
+    ? options.recipes?.find((r: Item) => r.id === recipe.baseRecipeId) ||
+      recipe.baseRecipe
+    : undefined
+  const baseCost:
+    { labor: number; overhead: number; waste: number } | undefined =
+    options.baseCostOverride ||
+    (base
+      ? costBreakdown(base, ingredients, {
+          recipes: options.recipes,
+          multiplier:
+            multiplier *
+            number(recipe.baseMultiplier, 'Base batch multiplier', 0.000001),
+          reusableBase: true,
+          historical: options.historical,
+        })
+      : undefined)
   const plannedYield =
     number(recipe.yield, 'Recipe yield', 0.000001) * multiplier
   const actualYield = number(
@@ -291,7 +426,7 @@ export function costBreakdown(
     'Actual yield',
     0.000001,
   )
-  const missingCosts = (recipe.lines || []).filter((line: any) => {
+  const missingCosts = recipeLines.filter((line: any) => {
     const i = ingredients.find((i) => i.id === line.ingredientId)
     if (!i || i.needsCostSetup) return true
     const price = i.currentCost ?? i.cost
@@ -312,7 +447,7 @@ export function costBreakdown(
   if (
     missingCosts &&
     (recipe.importProvenance ||
-      (recipe.lines || []).some(
+      recipeLines.some(
         (l: any) =>
           ingredients.find((i) => i.id === l.ingredientId)?.needsCostSetup,
       ))
@@ -320,7 +455,7 @@ export function costBreakdown(
     throw new Error(
       `Cost incomplete — ${missingCosts} ingredient${missingCosts === 1 ? '' : 's'} need setup.`,
     )
-  const lines = (recipe.lines || []).map((line: any) => {
+  const lines = recipeLines.map((line: any) => {
     const i = ingredients.find((i) => i.id === line.ingredientId)
     if (!i) throw new Error('Ingredient is unavailable.')
     const quantity = number(line.quantity, 'Recipe quantity') * multiplier
@@ -338,6 +473,9 @@ export function costBreakdown(
       storageUnit: i.unit,
       unitCost,
       cost: normalized * unitCost,
+      ...(line.sourceRecipePath
+        ? { sourceRecipePath: line.sourceRecipePath }
+        : {}),
     }
   })
   const ingredient = lines.reduce((s: number, l: any) => s + l.cost, 0)
@@ -346,7 +484,7 @@ export function costBreakdown(
     'Labor minutes',
   )
   const laborRate = number(recipe.laborRate ?? 18, 'Labor rate')
-  const labor = (laborMinutes / 60) * laborRate
+  const labor = (laborMinutes / 60) * laborRate + (baseCost?.labor || 0)
   const product = options.product as Item | undefined
   const unitsPerPackage = number(
     product?.unitsPerPackage ?? 1,
@@ -380,28 +518,32 @@ export function costBreakdown(
     : []
   const packagingCost =
     packaging.reduce((s: number, l: any) => s + l.cost, 0) +
-    number(recipe.packagingCost || 0, 'Batch packaging') * multiplier
+    (options.reusableBase
+      ? 0
+      : number(recipe.packagingCost || 0, 'Batch packaging') * multiplier)
   const overheadValue = number(recipe.overhead || 0, 'Overhead')
   const overheadMode = recipe.overheadMode || 'batch'
   if (!['batch', 'unit', 'percent'].includes(overheadMode))
     throw new Error('Choose a valid overhead method.')
-  const overhead =
+  const ownOverhead =
     overheadMode === 'percent'
       ? ((ingredient + packagingCost + labor) * overheadValue) / 100
       : overheadMode === 'unit'
         ? overheadValue * actualYield
         : overheadValue * multiplier
+  const overhead = ownOverhead + (baseCost?.overhead || 0)
   const wastePercent = number(recipe.wastePercent || 0, 'Waste percentage')
   if (wastePercent > 100)
     throw new Error('Waste percentage must not exceed 100%.')
   const subtotal = ingredient + packagingCost + labor + overhead
   const waste =
-    recipe.wasteMode === 'actual'
+    (baseCost?.waste || 0) +
+    (recipe.wasteMode === 'actual'
       ? number(
           options.wasteCost ?? recipe.wasteCost ?? 0,
           'Actual waste cost',
         ) * (options.wasteCost === undefined ? multiplier : 1)
-      : (subtotal * wastePercent) / 100
+      : (subtotal * wastePercent) / 100)
   const total = subtotal + waste
   return {
     lines,
@@ -441,7 +583,10 @@ export function productCosting(product: Item, workspace: Workspace) {
   }
   const recipe = workspace.recipes.find((r) => r.id === product.recipeId)
   if (!recipe) throw new Error('Choose a recipe.')
-  return costBreakdown(recipe, workspace.ingredients, { product })
+  return costBreakdown(recipe, workspace.ingredients, {
+    product,
+    recipes: workspace.recipes,
+  })
 }
 export type TaxRate = {
   id: string

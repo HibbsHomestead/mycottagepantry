@@ -67,6 +67,29 @@ export const inventoryCounts = orgTable('inventory_counts')
 export const ingredientConversions = orgTable('ingredient_conversions')
 export const compoundIngredientLines = orgTable('compound_ingredient_lines')
 export const recipes = orgTable('recipes')
+export const recipeBaseLinks = pgTable(
+  'recipe_base_links',
+  {
+    ...base(),
+    recipeId: text('recipe_id').notNull(),
+    baseRecipeId: text('base_recipe_id').notNull(),
+    multiplier: numeric({ precision: 20, scale: 8 }).notNull(),
+  },
+  (t) => [
+    uniqueIndex('recipe_base_links_org_id').on(t.businessId, t.id),
+    uniqueIndex('recipe_base_links_parent').on(t.businessId, t.recipeId),
+    foreignKey({
+      columns: [t.businessId, t.recipeId],
+      foreignColumns: [recipes.businessId, recipes.id],
+    }),
+    foreignKey({
+      columns: [t.businessId, t.baseRecipeId],
+      foreignColumns: [recipes.businessId, recipes.id],
+    }),
+    check('recipe_base_links_positive', sql`${t.multiplier} > 0`),
+    check('recipe_base_links_no_self', sql`${t.recipeId} <> ${t.baseRecipeId}`),
+  ],
+)
 export const recipeImports = orgTable('recipe_imports')
 export const recipeLines = pgTable(
   'recipe_lines',

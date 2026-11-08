@@ -1,5 +1,6 @@
 import {
   recipeCost,
+  effectiveRecipeLines,
   productCosting,
   convert,
   baseUnit,
@@ -649,6 +650,27 @@ export function demoData(): Workspace {
 }
 
 export function rollup(data: Workspace) {
+  const linked = new Set<string>(),
+    linking = new Set<string>()
+  function link(r: Item) {
+    if (linking.has(r.id))
+      throw new Error(
+        'A recipe cannot contain itself, directly or through another recipe.',
+      )
+    if (linked.has(r.id)) return
+    linking.add(r.id)
+    delete r.baseRecipe
+    if (r.baseRecipeId) {
+      const source = data.recipes.find((base) => base.id === r.baseRecipeId)
+      if (!source)
+        throw new Error('The linked base recipe is unavailable in this oven.')
+      link(source)
+      r.baseRecipe = source
+    }
+    linking.delete(r.id)
+    linked.add(r.id)
+  }
+  for (const r of data.recipes) link(r)
   const done = new Set<string>(),
     visiting = new Set<string>()
   function update(i: Item) {
@@ -657,16 +679,16 @@ export function rollup(data: Workspace) {
     visiting.add(i.id)
     const r = data.recipes.find((r) => r.id === i.compoundRecipeId)
     if (!r) throw new Error('Compound recipe is missing.')
-    for (const line of r.lines || []) {
+    for (const line of effectiveRecipeLines(r, data.recipes)) {
       const child = data.ingredients.find((i) => i.id === line.ingredientId)
       if (child) update(child)
     }
     i.currentCost = recipeCost(r, data.ingredients) / r.yield
-    const children = (r.lines || [])
+    const children = effectiveRecipeLines(r, data.recipes)
       .map((l: any) =>
         data.ingredients.find((child) => child.id === l.ingredientId),
       )
-      .filter(Boolean)
+      .filter((child): child is Item => Boolean(child))
     i.componentAllergens = [
       ...new Set(
         children.flatMap((child: Item) => [

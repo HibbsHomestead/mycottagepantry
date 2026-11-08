@@ -133,12 +133,23 @@ export async function readImportResponse(response: Response) {
         : 'Product details could not be retrieved.',
       data.diagnostics as ProductImportDiagnostics,
       response.headers.get('retry-after') || undefined,
+      typeof data.code === 'string' ? data.code : undefined,
+      response.status,
     )
   if (!response.ok)
-    throw new Error(
+    throw new ProductImportFailure(
       typeof data?.error === 'string'
         ? data.error
         : 'The product-import request failed. Retry or enter details manually.',
+      {
+        requestedAt: new Date().toISOString(),
+        requestedUrl: '',
+        source: 'backend',
+        hops: [],
+      },
+      response.headers.get('retry-after') || undefined,
+      typeof data?.code === 'string' ? data.code : undefined,
+      response.status,
     )
   return data
 }

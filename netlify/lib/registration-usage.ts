@@ -1,5 +1,5 @@
 import type { Item, Workspace } from '../../src/lib/domain'
-import { packagingLines } from '../../src/lib/domain'
+import { packagingLines, effectiveRecipeLines } from '../../src/lib/domain'
 import { proposedRecordLimits, type PlanId } from '../../src/lib/launch-plans'
 import type { RegistrationClient } from './registration-core'
 const active = (item: Item) => item.active !== false && item.archived !== true
@@ -97,7 +97,9 @@ export function assertFullFreeStockCoverage(state: Workspace, batchId: string) {
   if (!recipe) throw new Error('The batch recipe is unavailable.')
   const products = state.products.filter((p) => p.recipeId === recipe.id)
   const ids = [
-    ...(recipe.lines || []).map((l: Item) => l.ingredientId),
+    ...effectiveRecipeLines(recipe, state.recipes).map(
+      (l: Item) => l.ingredientId,
+    ),
     ...products.flatMap((p) =>
       packagingLines(p).map((l: Item) => l.ingredientId),
     ),

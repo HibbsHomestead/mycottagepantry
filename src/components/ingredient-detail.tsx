@@ -234,6 +234,7 @@ export function IngredientDetail({
     setEditTab('details')
     setDraft({
       ...i,
+      openingStock: undefined,
       purchaseSetup: purchaseSetupView(i).setup,
       purchaseOffers: undefined,
       purchaseQuantity: i.purchaseQuantity ?? i.packageQuantity ?? '',
@@ -775,6 +776,7 @@ export function IngredientDetail({
                   )}
                   <div className="product-link-panel ingredient-import-tools">
                     <ProductLinkImport
+                      lookupPanel
                       afterLookup={(selectUrl) => (
                         <IngredientLookupTools
                           draft={draft}
@@ -1014,6 +1016,130 @@ export function IngredientDetail({
                       )}
                     </div>
                     <div className="ingredient-edit-secondary">
+                      <section className="ingredient-section">
+                        <h3>Opening stock</h3>
+                        <p className="form-hint">
+                          Current balance:{' '}
+                          {precise(
+                            convert(i.quantity, i.unit, storage, i.conversions),
+                          )}{' '}
+                          {unitLabel(storage)}.{' '}
+                          {history.some((l) => l.type === 'opening_balance') ||
+                          i.openingStockRecorded
+                            ? 'Opening stock has been recorded.'
+                            : history.length || Number(i.quantity) !== 0
+                              ? 'Stock history already exists. Use a count or adjustment.'
+                              : 'No opening stock recorded.'}
+                        </p>
+                        {!history.length &&
+                        Number(i.quantity) === 0 &&
+                        !i.openingStockRecorded ? (
+                          <>
+                            <label className="check-label">
+                              <input
+                                type="checkbox"
+                                checked={draft.openingStock?.enabled === true}
+                                onChange={(e) =>
+                                  change('openingStock', {
+                                    operationId:
+                                      draft.openingStock?.operationId ||
+                                      crypto.randomUUID(),
+                                    quantity: '',
+                                    value: '',
+                                    date: today(),
+                                    ...draft.openingStock,
+                                    unit: storage,
+                                    enabled: e.target.checked,
+                                  })
+                                }
+                              />
+                              Enter opening stock already owned
+                            </label>
+                            {draft.openingStock?.enabled && (
+                              <>
+                                <div className="form-grid">
+                                  <Field
+                                    label={`Opening stock quantity (${unitLabel(storage)})`}
+                                  >
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0.000001"
+                                      required
+                                      value={draft.openingStock.quantity}
+                                      onChange={(e) =>
+                                        change('openingStock', {
+                                          ...draft.openingStock,
+                                          quantity: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Inventory unit">
+                                    <input
+                                      readOnly
+                                      value={unitLabel(storage)}
+                                    />
+                                  </Field>
+                                  <Field label="Opening stock value">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      required
+                                      value={draft.openingStock.value}
+                                      onChange={(e) =>
+                                        change('openingStock', {
+                                          ...draft.openingStock,
+                                          value: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                  <Field label="Inventory as of">
+                                    <input
+                                      type="date"
+                                      required
+                                      value={draft.openingStock.date}
+                                      onChange={(e) =>
+                                        change('openingStock', {
+                                          ...draft.openingStock,
+                                          date: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </Field>
+                                </div>
+                                <p className="form-hint">
+                                  Save records this quantity as the initial
+                                  balance, once. It records stock already owned,
+                                  with its value posted to owner equity. Cancel
+                                  records nothing.
+                                </p>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="btn secondary"
+                              disabled={dirty || busy}
+                              onClick={() => open('adjust', i)}
+                            >
+                              Stock count / adjustment
+                            </button>
+                            <p className="form-hint">
+                              Choose Set total balance to replace the balance
+                              with your count, or Add / remove to change it by a
+                              quantity.
+                              {dirty
+                                ? ' Save or cancel your ingredient edits before adjusting stock.'
+                                : ''}
+                            </p>
+                          </>
+                        )}
+                      </section>
                       <section className="ingredient-section">
                         <h3>
                           {packaging ? 'Inventory' : 'Inventory settings'}

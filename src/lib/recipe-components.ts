@@ -1,5 +1,6 @@
 import {
   convert,
+  baseIngredientOverlap,
   parseQuantity,
   recipeCost,
   units,
@@ -64,6 +65,19 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
         'The component source recipe is unavailable in this oven.',
       )
     visiting.add(id)
+    if (r.baseRecipeId) {
+      if (r.baseRecipeId === r.id)
+        throw new Error(
+          'A recipe cannot contain itself, directly or through another recipe.',
+        )
+      const multiplier = parseQuantity(r.baseMultiplier)
+      if (!Number.isFinite(multiplier) || multiplier <= 0)
+        throw new Error('Enter a positive base batch multiplier.')
+      const base = recipes.find((source) => source.id === r.baseRecipeId)
+      if (!base || base.workflow === 'handmade')
+        throw new Error('The linked base recipe is unavailable in this oven.')
+      visit(r.baseRecipeId)
+    }
     for (const line of r.lines || []) {
       const child = sourceId(line)
       if (child) visit(child)
@@ -72,6 +86,13 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
     done.add(id)
   }
   visit(recipe.id)
+  if (recipe.baseRecipeId)
+    recipe.baseMultiplier = parseQuantity(recipe.baseMultiplier)
+  const overlap = baseIngredientOverlap(recipe, recipes)
+  if (overlap && recipe.baseOverlapApproval !== overlap.approval)
+    throw new Error(
+      'Some inclusions also occur in the base. Review and approve keeping both quantities before saving. No ingredients were removed.',
+    )
   const stocks: Item[] = []
   for (const line of recipe.lines || []) {
     const id = sourceId(line)

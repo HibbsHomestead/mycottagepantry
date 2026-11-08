@@ -46,6 +46,8 @@ export class ProductImportFailure extends Error {
     message: string,
     readonly diagnostics: ProductImportDiagnostics,
     readonly retryAfter?: string,
+    readonly code?: string,
+    readonly status?: number,
   ) {
     super(message)
   }
