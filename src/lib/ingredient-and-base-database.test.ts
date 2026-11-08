@@ -359,7 +359,7 @@ it('links explicit bread batches without stock, consumes raw ingredients once an
       w.recipes.find((r: Item) => r.id === variation.id),
       w.ingredients,
     ).total,
-  ).toBeCloseTo(7.97)
+  ).toBeCloseTo(4.97)
   const scheduled = await request({
     action: 'save',
     table: 'batches',
@@ -399,7 +399,10 @@ it('links explicit bread batches without stock, consumes raw ingredients once an
   expect(w.ingredients.find((i: Item) => i.id === 'flour').quantity).toBe(8950)
   expect(w.ledger.filter((l: Item) => l.batchId === 'base-run')).toHaveLength(6)
   expect(batch.costSnapshot.ingredient).toBeCloseTo(5.04)
-  expect(batch.historicalCost).toBeCloseTo(16.04)
+  expect(batch.costSnapshot.laborMinutes).toBe(10)
+  expect(batch.costSnapshot.laborRate).toBe(18)
+  expect(batch.costSnapshot.labor).toBe(3)
+  expect(batch.historicalCost).toBeCloseTo(10.04)
   const snapshot = structuredClone(batch)
   expect(
     (

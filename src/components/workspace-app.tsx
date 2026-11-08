@@ -3598,7 +3598,14 @@ export function WorkspaceApp() {
                   })}
                   <h3>2 · Yield & labor</h3>
                   <div className="form-grid three">
-                    <Field label="Labor (minutes)">
+                    <Field
+                      label="Labor (minutes)"
+                      hint={
+                        draft.baseRecipeId
+                          ? 'Total time for this entire recipe batch, including the base.'
+                          : undefined
+                      }
+                    >
                       {input('laborMinutes', 'number')}
                     </Field>
                     <Field label="Labor rate ($ / h)">
@@ -4002,7 +4009,10 @@ export function WorkspaceApp() {
                         onChange={(e) => change('actualYield', e.target.value)}
                       />
                     </Field>
-                    <Field label="Actual labor (minutes)">
+                    <Field
+                      label="Actual labor (minutes)"
+                      hint="Total time for the entire run, including any linked base."
+                    >
                       <input
                         type="number"
                         min="0"

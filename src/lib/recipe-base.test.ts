@@ -4,6 +4,7 @@ import {
   baseIngredientOverlap,
   costBreakdown,
   effectiveRecipeLines,
+  productCosting,
   recipeProductionLines,
 } from './domain'
 import { componentStock, validateRecipeComponents } from './recipe-components'
@@ -11,10 +12,63 @@ import { resolveLabelData } from './label-studio'
 import { rollup } from './demo'
 
 describe('Homestyle White Bread linked into Spinach Parmesan', () => {
+  it('costs 60 minutes at $15/hour as $15 for the whole variation, including its base', () => {
+    const w = breadBaseFixture(),
+      base = w.recipes[0],
+      variation = w.recipes[1]
+    Object.assign(base, { laborMinutes: 20, laborRate: 15 })
+    Object.assign(variation, { laborMinutes: 60, laborRate: 15, yield: 4 })
+    const before = structuredClone(w)
+    const c = productCosting(w.products[0], w)
+    expect(c.laborMinutes).toBe(60)
+    expect(c.laborRate).toBe(15)
+    expect(c.labor).toBe(15)
+    expect(c.labor / c.packages).toBe(3.75)
+    expect(w).toEqual(before)
+  })
+
+  it.each([0.5, 1, 2])(
+    'scales whole-recipe labor by the production multiplier %s, independently of the base',
+    (multiplier) => {
+      const w = breadBaseFixture(),
+        variation = w.recipes[1]
+      Object.assign(variation, {
+        laborMinutes: 60,
+        laborRate: 15,
+        baseMultiplier: 2,
+      })
+      const c = costBreakdown(variation, w.ingredients, {
+        recipes: w.recipes,
+        multiplier,
+      })
+      expect(c.laborMinutes).toBe(60 * multiplier)
+      expect(c.labor).toBe(15 * multiplier)
+      expect(c.lines.find((l) => l.ingredientId === 'flour').quantity).toBe(
+        2000 * multiplier,
+      )
+    },
+  )
+
+  it.each([0, 30, 90])(
+    'uses %s actual labor minutes for the entire production run without adding base labor',
+    (laborMinutes) => {
+      const w = breadBaseFixture(),
+        variation = w.recipes[1]
+      variation.laborRate = 15
+      const c = costBreakdown(variation, w.ingredients, {
+        recipes: w.recipes,
+        multiplier: 2,
+        laborMinutes,
+      })
+      expect(c.laborMinutes).toBe(laborMinutes)
+      expect(c.labor).toBe((laborMinutes / 60) * 15)
+    },
+  )
+
   for (const [scale, flour, ingredientCost, total] of [
-    [0.5, 500, 2.47, 7.97],
-    [1, 1000, 3.54, 12.54],
-    [2, 2000, 5.68, 21.68],
+    [0.5, 500, 2.47, 4.97],
+    [1, 1000, 3.54, 6.54],
+    [2, 2000, 5.68, 9.68],
   ]) {
     it(`scales only the base at ${scale} batches, without a loaf conversion or base packaging`, () => {
       const w = breadBaseFixture(),
@@ -31,6 +85,7 @@ describe('Homestyle White Bread linked into Spinach Parmesan', () => {
         recipes: w.recipes,
       })
       expect(c.ingredient).toBeCloseTo(ingredientCost)
+      expect(c.labor).toBe(1.5)
       expect(c.total).toBeCloseTo(total)
       expect(c.packagingCost).toBe(0)
       expect(c.plannedYield).toBe(3)
@@ -48,7 +103,7 @@ describe('Homestyle White Bread linked into Spinach Parmesan', () => {
       recipes: w.recipes,
       multiplier: 2,
     })
-    expect(c.total).toBeCloseTo(25.08)
+    expect(c.total).toBeCloseTo(13.08)
     expect(c.lines.find((l) => l.ingredientId === 'flour').normalized).toBe(
       2000,
     )
