@@ -5,7 +5,12 @@ import type { Item } from './domain'
 import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
-import { blankLabel, newElement, type LabelDocument } from './label-studio'
+import {
+  blankLabel,
+  newElement,
+  resolveLabelData,
+  type LabelDocument,
+} from './label-studio'
 import { labelContent } from './label-persistence'
 import { labelLayout } from './label-sets'
 import { defaultSheet } from './label-print-layout'
@@ -369,6 +374,56 @@ it('stores multiple independent product labels and copies both layouts without i
       .status,
   ).toBe(400)
 })
+it('reopens independent page backgrounds and preserves them in duplicates and print snapshots', async () => {
+  const document: LabelDocument = {
+    ...label(),
+    background: '#ffd08a',
+    format: 'front-back',
+    back: {
+      ...labelLayout(label()),
+      background: '#9dd8f0',
+      elements: [newElement('text', 'Back details')],
+    },
+  }
+  let result = await request('labelSave', { document, expectedRevision: 0 })
+  expect(result.status, result.error).toBe(200)
+  let reopened = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === document.id,
+  ) as LabelDocument
+  expect(labelContent(reopened)).toBe(labelContent(document))
+  const before = structuredClone(reopened)
+  reopened.back!.background = '#b8dfef'
+  result = await request('labelSave', { document: reopened, expectedRevision: 1 })
+  expect(result.status, result.error).toBe(200)
+  reopened = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === document.id,
+  )
+  expect(reopened.background).toBe(before.background)
+  expect(reopened.back).toEqual({ ...before.back, background: '#b8dfef' })
+  expect(reopened.elements).toEqual(before.elements)
+  const copy = duplicateSavedLabel(reopened, reopened.source!)
+  result = await request('labelSave', { document: copy, expectedRevision: 0 })
+  expect(result.status, result.error).toBe(200)
+  const savedCopy = (await request()).workspace.label_templates.find(
+    (d: Item) => d.id === copy.id,
+  )
+  expect(savedCopy.background).toBe('#ffd08a')
+  expect(savedCopy.back).toEqual(reopened.back)
+  const printed = await request('labelPrint', {
+    templateId: copy.id,
+    source: copy.source,
+    copies: 1,
+    parts: 'both',
+    order: 'paired',
+    layout: { ...defaultSheet, mode: 'roll' },
+  })
+  expect(printed.status, printed.error).toBe(200)
+  const job = printed.workspace.label_print_jobs.at(-1)
+  expect(job.sequence).toEqual(['front', 'back'])
+  expect(job.documentSnapshot.background).toBe('#ffd08a')
+  expect(job.documentSnapshot.back.background).toBe('#b8dfef')
+})
+
 it('rejects unsaved checkpoints and product changes without manual review, then resolves the new saved source', async () => {
   const document = label()
   expect(
@@ -507,4 +562,83 @@ it('rejects cross-business product links and output and enforces the composite d
       .status,
   ).toBe(400)
   runtime.user = 'label-owner-a'
+})
+it('saves and resolves only the verified business disclaimer and rejects a read-only change', async () => {
+  runtime.user = 'label-owner-a'
+  const beforeA = (await request()).workspace.settings[0]
+  const saveA = await request(
+    'save',
+    { ...beforeA, disclaimer: 'Business A saved text' },
+    'settings',
+  )
+  expect(saveA.status, saveA.error).toBe(200)
+  runtime.user = 'label-owner-b'
+  const beforeB = (await request()).workspace.settings[0]
+  expect(beforeB.disclaimer).not.toBe('Business A saved text')
+  const saveB = await request(
+    'save',
+    { ...beforeB, disclaimer: 'Business B saved text' },
+    'settings',
+  )
+  expect(saveB.status, saveB.error).toBe(200)
+  const workspaceB = (await request()).workspace
+  const source = { kind: 'product' as const, id: 'label-product-a' }
+  expect(
+    resolveLabelData(workspaceB, source).values['business.cottageFoodDisclaimer'],
+  ).toBe('Business B saved text')
+  runtime.user = 'label-reader'
+  const rejected = await request(
+    'save',
+    { ...beforeA, disclaimer: 'Rejected text' },
+    'settings',
+  )
+  expect(rejected.status).toBe(400)
+  runtime.user = 'label-owner-a'
+  const workspaceA = (await request()).workspace
+  expect(
+    resolveLabelData(workspaceA, source).values['business.cottageFoodDisclaimer'],
+  ).toBe('Business A saved text')
+  expect(workspaceA.settings[0]).toMatchObject({
+    ...beforeA,
+    disclaimer: 'Business A saved text',
+  })
+  const bound = newElement('text', '', 'business.cottageFoodDisclaimer')
+  const document: LabelDocument = {
+    ...label(),
+    format: 'front-back',
+    elements: [bound],
+    back: labelLayout({
+      ...blankLabel(),
+      elements: [{ ...bound, id: crypto.randomUUID() }],
+    }),
+  }
+  const saved = await request('labelSave', { document, expectedRevision: 0 })
+  expect(saved.status, saved.error).toBe(200)
+  const copy = duplicateSavedLabel(document, source)
+  const savedCopy = await request('labelSave', {
+    document: copy,
+    expectedRevision: 0,
+  })
+  expect(savedCopy.status, savedCopy.error).toBe(200)
+  const printed = await request('labelPrint', {
+    templateId: copy.id,
+    source,
+    copies: 1,
+    parts: 'both',
+    order: 'paired',
+    layout: { ...defaultSheet, mode: 'roll' },
+  })
+  expect(printed.status, printed.error).toBe(200)
+  const job = printed.workspace.label_print_jobs.at(-1)
+  expect(job.documentSnapshot.elements[0]).toMatchObject({
+    binding: 'business.cottageFoodDisclaimer',
+    text: '',
+  })
+  expect(job.documentSnapshot.back.elements[0]).toMatchObject({
+    binding: 'business.cottageFoodDisclaimer',
+    text: '',
+  })
+  expect(job.renderedDataSnapshot.values['business.cottageFoodDisclaimer']).toBe(
+    'Business A saved text',
+  )
 })

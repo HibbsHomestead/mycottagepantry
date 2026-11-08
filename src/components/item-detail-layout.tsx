@@ -45,7 +45,13 @@ export function ItemDetailLayout({
     <div className="product-detail-layout">
       <div className="product-detail-information">{children}</div>
       {photoDetails ? (
-        <div className="ingredient-detail-media">
+        <div
+          className={
+            kind === 'product'
+              ? 'product-detail-media'
+              : 'ingredient-detail-media'
+          }
+        >
           {photo}
           {photoDetails}
         </div>

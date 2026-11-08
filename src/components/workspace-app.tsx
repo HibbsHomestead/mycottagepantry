@@ -4624,89 +4624,95 @@ export function WorkspaceApp() {
               item={selected}
               assets={state.graphic_assets || []}
               kind="product"
+              photoDetails={
+                <>
+                  <section
+                    aria-label="Product labels"
+                    className="product-linked-labels"
+                  >
+                    <h3>Labels</h3>
+                    {labelsForProduct(state, selected).length ? (
+                      labelsForProduct(state, selected).map((label) => (
+                        <div className="product-linked-label" key={label.id}>
+                          <span>
+                            <strong>{label.name}</strong>
+                            {label.format === 'front-back'
+                              ? ' · Front + Back'
+                              : ''}
+                          </span>
+                          <Btn
+                            secondary
+                            small
+                            onClick={() => {
+                              setPreviewLabelId(label.id)
+                              setPreviewProduct(selected)
+                            }}
+                          >
+                            Preview/Print
+                          </Btn>
+                          <Btn
+                            secondary
+                            small
+                            onClick={() => {
+                              setLabelProduct(selected.id)
+                              setLabelDesign(label.id)
+                              setModal(null)
+                              go('Labels', 'Editor')
+                            }}
+                          >
+                            Edit
+                          </Btn>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="table-note">
+                        No linked labels. Create one in Labels when needed.
+                      </p>
+                    )}
+                  </section>
+                  <div className="button-row product-detail-actions">
+                    <Btn onClick={() => open('product', selected)}>
+                      Edit Product
+                    </Btn>
+                    <Btn
+                      secondary
+                      onClick={() => {
+                        setLabelProduct(selected.id)
+                        setLabelDesign('')
+                        setLabelCreateRequest((n) => n + 1)
+                        setModal(null)
+                        go('Labels', 'Labels')
+                      }}
+                    >
+                      Create label
+                    </Btn>
+                  </div>
+                  <p className="table-note product-detail-recipe">
+                    Connected recipe:{' '}
+                    {recipes.find((r) => r.id === selected.recipeId)?.name ||
+                      'Not linked — current recipe cost unavailable'}
+                    {recipes.find((r) => r.id === selected.recipeId) && (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          open(
+                            'recipe-detail',
+                            recipes.find((r) => r.id === selected.recipeId)!,
+                          )
+                        }
+                      >
+                        Open recipe
+                      </button>
+                    )}
+                  </p>
+                </>
+              }
             >
               <ProductCostCards
                 product={selected}
                 cost={productCost(selected)}
                 workspace={state}
               />
-              <section
-                aria-label="Product labels"
-                className="product-linked-labels"
-              >
-                <h3>Labels</h3>
-                {labelsForProduct(state, selected).length ? (
-                  labelsForProduct(state, selected).map((label) => (
-                    <div className="product-linked-label" key={label.id}>
-                      <span>
-                        <strong>{label.name}</strong>
-                        {label.format === 'front-back' ? ' · Front + Back' : ''}
-                      </span>
-                      <Btn
-                        secondary
-                        small
-                        onClick={() => {
-                          setPreviewLabelId(label.id)
-                          setPreviewProduct(selected)
-                        }}
-                      >
-                        Preview/Print
-                      </Btn>
-                      <Btn
-                        secondary
-                        small
-                        onClick={() => {
-                          setLabelProduct(selected.id)
-                          setLabelDesign(label.id)
-                          setModal(null)
-                          go('Labels', 'Editor')
-                        }}
-                      >
-                        Edit
-                      </Btn>
-                    </div>
-                  ))
-                ) : (
-                  <p className="table-note">
-                    No linked labels. Create one in Labels when needed.
-                  </p>
-                )}
-              </section>
-              <div className="button-row">
-                <Btn onClick={() => open('product', selected)}>
-                  Edit Product
-                </Btn>
-                <Btn
-                  secondary
-                  onClick={() => {
-                    setLabelProduct(selected.id)
-                    setLabelDesign('')
-                    setLabelCreateRequest((n) => n + 1)
-                    setModal(null)
-                    go('Labels', 'Labels')
-                  }}
-                >
-                  Create label
-                </Btn>
-              </div>
-              <p className="table-note">
-                Connected recipe:{' '}
-                {recipes.find((r) => r.id === selected.recipeId)?.name ||
-                  'Not linked — current recipe cost unavailable'}
-                {recipes.find((r) => r.id === selected.recipeId) && (
-                  <button
-                    className="text-button"
-                    onClick={() =>
-                      open(
-                        'recipe-detail',
-                        recipes.find((r) => r.id === selected.recipeId)!,
-                      )
-                    }
-                  >
-                    Open recipe
-                  </button>
-                )}
-              </p>
             </ItemDetailLayout>
           )}
           {modal === 'batch-detail' && selected && (

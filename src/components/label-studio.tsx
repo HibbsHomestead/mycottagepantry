@@ -1265,6 +1265,21 @@ export function LabelStudio({
     apply: (d: LabelDocument, c: LabelColor) => LabelDocument,
     allowNone = false,
   ) {
+    // Color callbacks edit a layout. Route both live preview and Apply to the
+    // selected side, just as change() does for the other layout controls.
+    const applyToSide = (document: LabelDocument, color: LabelColor) => {
+      if (editorSide === 'back' && document.back) {
+        const next = apply({ ...document, ...document.back }, color)
+        return {
+          ...document,
+          back: {
+            ...document.back,
+            ...Object.fromEntries(layoutKeys.map((key) => [key, next[key]])),
+          },
+        }
+      }
+      return apply(document, color)
+    }
     return (
       <LabelColorPicker
         label={label}
@@ -1286,16 +1301,23 @@ export function LabelStudio({
           setColorEditing(true)
         }}
         onPreview={(c) => {
-          if (current.current) setDoc(apply(current.current, c))
+          if (current.current) {
+            const next = applyToSide(current.current, c)
+            current.current = next
+            setDoc(next)
+          }
         }}
         onCancel={() => {
-          if (colorOriginal.current) setDoc(colorOriginal.current)
+          if (colorOriginal.current) {
+            current.current = colorOriginal.current
+            setDoc(colorOriginal.current)
+          }
           colorOriginal.current = null
           setColorEditing(false)
         }}
         onApply={(c) => {
           if (!current.current) return
-          const next = apply(current.current, c)
+          const next = applyToSide(current.current, c)
           if (colorOriginal.current) {
             history.current = [
               ...history.current.slice(-39),
@@ -1303,6 +1325,7 @@ export function LabelStudio({
             ]
             future.current = []
             colorOriginal.current = null
+            current.current = next
             setDoc(next)
             setReviewed(false)
           } else commit(next)
@@ -2015,7 +2038,7 @@ export function LabelStudio({
                           .filter((b) => !imageBindings.includes(b))
                           .map((b) => (
                             <option key={b} value={b}>
-                              {b}
+                              {imageBindingNames[b] || b}
                             </option>
                           ))}
                       </optgroup>

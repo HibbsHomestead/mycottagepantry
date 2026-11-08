@@ -101,7 +101,52 @@
   gap: 16px;
   align-content: start;
 }
+.product-detail-media {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  align-content: start;
+}
+.product-detail-media .product-linked-labels {
+  min-width: 0;
+}
+.product-detail-media .product-linked-labels h3 {
+  margin: 0;
+}
+.product-detail-media .product-linked-label {
+  gap: 8px;
+  padding: 8px 0;
+}
+.product-detail-media .product-linked-label > span {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.product-detail-media .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.product-detail-media .product-detail-actions {
+  gap: 8px;
+}
+.product-detail-media .table-note,
+.product-detail-media .text-button {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.product-detail-recipe {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.product-detail-recipe .text-button {
+  white-space: normal;
+}
 @media (max-width: 640px) {
+  .product-detail-media {
+    grid-row: 1;
+  }
   .cost-card-grid,
   .detail-stats.cost-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
