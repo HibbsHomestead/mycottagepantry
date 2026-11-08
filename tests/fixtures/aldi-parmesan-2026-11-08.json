@@ -1,0 +1,23 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Product",
+      "name": "Emporium Selection Parmesan Cheese Wedge",
+      "image": [
+        "https://d1s8987jlndkbs.cloudfront.net/assets/missing-item-4bbe82b8555e4d1c12626fd482cb2409713e8e30835645ff3650ef66a725d03c.png"
+      ],
+      "category": "Parmesan",
+      "brand": { "@type": "Brand", "name": "Emporium Selection" },
+      "size": "8 oz",
+      "offers": {
+        "@type": "Offer",
+        "price": "3.99",
+        "priceCurrency": "USD",
+        "url": "https://www.aldi.us/store/aldi/products/20733588-emporium-selection-italian-parmesan-cheese-wedge-8-oz",
+        "itemCondition": "https://schema.org/NewCondition",
+        "availability": "https://schema.org/InStock"
+      }
+    }
+  ]
+}

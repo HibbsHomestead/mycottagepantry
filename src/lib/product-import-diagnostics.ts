@@ -10,6 +10,7 @@ export type ProductImportDiagnostics = {
   requestedAt: string
   requestedUrl: string
   source: 'retailer' | 'backend' | 'network'
+  stage?: 'fetch' | 'parse'
   hops: ProductFetchHop[]
 }
 /** Keep identifiers/selection while excluding arbitrary query values from diagnostics. */

@@ -7,6 +7,7 @@ vi.mock('../../netlify/lib/recipe-import', async (original) => ({
 }))
 import { PageFetchHttpError } from '../../netlify/lib/recipe-import'
 import { fetchProductDetails } from '../../netlify/lib/product-import'
+import aldi from '../../tests/fixtures/aldi-parmesan-2026-11-08.json'
 beforeEach(() => {
   fixture.fetch.mockReset()
 })
@@ -168,4 +169,120 @@ it('rejects Amazon metadata for a different ASIN even if the final URL is unchan
   await expect(
     fetchProductDetails('https://www.amazon.com/dp/B0BQMJJBNP?th=1'),
   ).rejects.toThrow(/different Amazon identifier or variant/)
+})
+
+const aldiUrl = aldi['@graph'][0].offers.url
+const aldiHop = {
+  url: aldiUrl,
+  at: '2026-11-08T02:27:10.541Z',
+  status: 200,
+  headers: { 'content-type': 'text/html; charset=utf-8' },
+  bodySummary: 'Successful response.',
+}
+it('imports the observed ALDI Product graph including its separately declared package size', async () => {
+  fixture.fetch.mockResolvedValue({
+    url: aldiUrl,
+    mime: 'text/html',
+    bytes: Buffer.from(
+      `<meta http-equiv="refresh" content="86400"><script type="application/ld+json">${JSON.stringify(aldi)}</script>`,
+    ),
+    hops: [aldiHop],
+  })
+  const [product] = await fetchProductDetails(aldiUrl)
+  expect(product).toMatchObject({
+    sourceUrl: aldiUrl,
+    requestedUrl: aldiUrl,
+    fields: {
+      name: 'Emporium Selection Parmesan Cheese Wedge',
+      brand: 'Emporium Selection',
+      packageSize: '8 oz',
+      purchaseQuantity: 8,
+      purchaseUnit: 'oz',
+      packagePrice: 3.99,
+      currency: 'USD',
+    },
+  })
+  expect(product.fields.subingredients).toBeUndefined()
+  expect(product.fields.barcode).toBeUndefined()
+  expect(product.warnings).toContain(
+    'Package quantity was read from the product’s structured size; confirm against the actual package.',
+  )
+  expect(fixture.fetch).toHaveBeenCalledTimes(1)
+})
+it.each([
+  '0;url=/error/500',
+  '86400; URL=https://other.example/item',
+  '0',
+  '',
+  'invalid',
+])(
+  'rejects a redirect or invalid refresh %s even with ALDI product metadata',
+  async (refresh) => {
+    fixture.fetch.mockResolvedValue({
+      url: aldiUrl,
+      mime: 'text/html',
+      bytes: Buffer.from(
+        `<meta http-equiv="REFRESH" content="${refresh}"><script type="application/ld+json">${JSON.stringify(aldi)}</script>`,
+      ),
+      hops: [aldiHop],
+    })
+    await expect(fetchProductDetails(aldiUrl)).rejects.toMatchObject({
+      message:
+        'The source returned an error document instead of product details.',
+      diagnostics: { source: 'retailer', stage: 'parse', hops: [aldiHop] },
+    })
+    expect(fixture.fetch).toHaveBeenCalledTimes(1)
+  },
+)
+it.each(['', 'Large', '2 x 8 oz', '8 oz / 227 g', '8 oz pack of 2'])(
+  'does not guess package contents from ambiguous structured size %s',
+  async (size) => {
+    const graph = structuredClone(aldi)
+    graph['@graph'][0].size = size
+    fixture.fetch.mockResolvedValue({
+      url: aldiUrl,
+      mime: 'text/html',
+      bytes: Buffer.from(
+        `<script type="application/ld+json">${JSON.stringify(graph)}</script>`,
+      ),
+    })
+    const [product] = await fetchProductDetails(aldiUrl)
+    expect(product.fields.purchaseQuantity).toBeUndefined()
+    expect(product.fields.purchaseUnit).toBeUndefined()
+  },
+)
+it('keeps HTTP 200 evidence when ALDI responds without usable product metadata', async () => {
+  fixture.fetch.mockResolvedValue({
+    url: aldiUrl,
+    mime: 'text/html',
+    bytes: Buffer.from('<html><title>ALDI</title></html>'),
+    hops: [aldiHop],
+  })
+  await expect(fetchProductDetails(aldiUrl)).rejects.toMatchObject({
+    diagnostics: {
+      source: 'retailer',
+      stage: 'parse',
+      requestedUrl: aldiUrl,
+      hops: [aldiHop],
+    },
+  })
+})
+it.each([403, 404, 410, 429, 503])(
+  'keeps ALDI HTTP %s evidence and Retry-After on failed imports',
+  async (status) => {
+    const hop = { ...aldiHop, status, headers: { 'retry-after': '45' } }
+    fixture.fetch.mockRejectedValue(
+      new PageFetchHttpError(status, undefined, [hop]),
+    )
+    await expect(fetchProductDetails(aldiUrl)).rejects.toMatchObject({
+      retryAfter: '45',
+      diagnostics: { source: 'retailer', stage: 'fetch', hops: [hop] },
+    })
+  },
+)
+it('identifies a request timeout without inventing a retailer HTTP status', async () => {
+  fixture.fetch.mockRejectedValue(new Error('Recipe link timed out.'))
+  await expect(fetchProductDetails(aldiUrl)).rejects.toMatchObject({
+    diagnostics: { source: 'network', stage: 'fetch', hops: [] },
+  })
 })
