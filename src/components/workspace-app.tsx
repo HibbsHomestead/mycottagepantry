@@ -1,3 +1,5 @@
+import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
+import './workspace-mobile.css'
 import { ProductLabelsInfo } from './product-labels'
 import { labelsForProduct } from '@/lib/saved-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
@@ -264,6 +266,7 @@ function Empty({
   )
 }
 export function WorkspaceApp() {
+  useWorkspaceViewport()
   const [page, setPage] = useState('Dashboard'),
     [sub, setSub] = useState('All items'),
     [mobile, setMobile] = useState(false),

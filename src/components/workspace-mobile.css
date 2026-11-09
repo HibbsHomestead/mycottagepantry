@@ -1,0 +1,107 @@
+/* Keep workspace overlays above both navigation layers. Radix owns focus and
+   background scroll locking; portals remain outside the scrolling app content. */
+body:has(.stage-one-shell) [data-slot='dialog-overlay'] {
+  z-index: 80;
+}
+body:has(.stage-one-shell) [data-slot='dialog-content'] {
+  z-index: 90;
+}
+/* Scanner may be a nested portal opened from an ingredient editor. */
+body:has(.stage-one-shell)
+  [data-slot='dialog-overlay'].barcode-scanner-overlay {
+  z-index: 100;
+}
+body:has(.stage-one-shell) [data-slot='dialog-content'].barcode-scanner-dialog {
+  z-index: 110;
+}
+@media (max-width: 1024px) {
+  body:has(.stage-one-shell) [data-slot='dialog-content'] {
+    top: calc(var(--workspace-view-top, 0px) + 12px);
+    left: 50%;
+    bottom: auto;
+    right: auto;
+    transform: translateX(-50%);
+    translate: none;
+    max-height: calc(var(--workspace-view-height, 100dvh) - 24px);
+    max-width: calc(100vw - 24px) !important;
+    overscroll-behavior: contain;
+    scroll-padding-block: 24px;
+    animation: none;
+  }
+  body:has(.stage-one-shell) [data-slot='dialog-overlay'] {
+    position: fixed;
+    inset: 0;
+  }
+  /* A single shell scroll is preferable to clipped nested detail bodies. The
+     ingredient editor retains its existing bounded body and fixed actions. */
+  body:has(.stage-one-shell) .recipe-detail-shell,
+  body:has(.stage-one-shell) .ingredient-detail-view,
+  body:has(.stage-one-shell) .item-detail-dialog {
+    display: block;
+    height: auto;
+    overflow-y: auto;
+  }
+  body:has(.stage-one-shell) .recipe-detail-body,
+  body:has(.stage-one-shell) .ingredient-detail-view .ingredient-detail-body {
+    overflow: visible;
+    flex: none;
+  }
+  body:has(.stage-one-shell) [data-slot='dialog-content'] input,
+  body:has(.stage-one-shell) [data-slot='dialog-content'] select,
+  body:has(.stage-one-shell) [data-slot='dialog-content'] textarea {
+    font-size: 16px;
+  }
+}
+@media (max-width: 700px) {
+  .stage-one-shell main {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  }
+  .stage-one-shell .mobile-bottom-nav {
+    bottom: var(--workspace-view-bottom, 0px);
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+  }
+  .workspace-keyboard .mobile-bottom-nav,
+  body:has(.stage-one-shell):has([data-slot='dialog-content'])
+    .mobile-bottom-nav {
+    display: none;
+  }
+  .stage-one-shell
+    .product-card-photo-first
+    .pantry-card-photo-button
+    .pantry-photo {
+    min-height: 0;
+    height: 144px;
+    aspect-ratio: auto;
+  }
+  .stage-one-shell
+    .product-card-photo-first
+    .pantry-card-photo-button
+    .pantry-photo:not(:has(img)) {
+    height: 64px;
+  }
+  .stage-one-shell .product-card-photo-first .pantry-card-main,
+  .stage-one-shell .product-card-photo-first footer {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .stage-one-shell .product-card-photo-first .pantry-card-top {
+    padding: 12px 16px 0;
+  }
+  .stage-one-shell .product-card-photo-first dt,
+  .stage-one-shell .product-card-photo-first dd {
+    padding-block: 6px;
+  }
+  .stage-one-shell .recipe-cover {
+    height: 120px;
+  }
+  .stage-one-shell .recipe-cover:not(:has(img)) {
+    height: 64px;
+  }
+  .stage-one-shell .recipe-cover img {
+    object-fit: contain;
+  }
+  .stage-one-shell .recipe-card-body {
+    padding: 14px 16px;
+  }
+}

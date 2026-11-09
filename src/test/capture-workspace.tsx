@@ -23,3 +23,20 @@ export function mountScreenshotWorkspace() {
     </TooltipProvider>,
   )
 }
+
+/** Camera lifecycle harness; only imported by browser tests. */
+export async function mountScannerFixture() {
+  const { BarcodeScanner } = await import('@/components/barcode-scanner')
+  const host = document.createElement('div')
+  document.body.replaceChildren(host)
+  const root = createRoot(host)
+  root.render(
+    <BarcodeScanner
+      onCode={(code) => {
+        document.body.dataset.scanned = code
+        root.unmount()
+      }}
+      onClose={() => root.unmount()}
+    />,
+  )
+}
