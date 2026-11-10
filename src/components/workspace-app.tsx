@@ -1,3 +1,5 @@
+import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
+import { KitEditor } from './kit-editor'
 import { ProductLabelsInfo } from './product-labels'
 import { labelsForProduct } from '@/lib/saved-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
@@ -605,6 +607,20 @@ export function WorkspaceApp() {
     })
     return () => unsubscribe()
   }, [])
+  const refreshAccessOnReturn = useEffectEvent(() => {
+    if (ready && !modal && !busy) void load()
+  })
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') refreshAccessOnReturn()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
   async function mutate(
     action: string,
     table: string,
@@ -709,6 +725,57 @@ export function WorkspaceApp() {
     }
   }
   function open(kind: string, item?: Item) {
+    const resolution = state.settings[0]?.effectiveAccess
+    const access =
+      resolution?.manualValid ||
+      resolution?.suspended ||
+      resolution?.source?.startsWith('square_')
+        ? resolution?.access
+        : undefined
+    if (
+      access &&
+      ![
+        'product-detail',
+        'recipe-detail',
+        'ingredient-detail',
+        'label-preview',
+        'export',
+      ].includes(kind)
+    ) {
+      const record = item || {
+        workflow: kind.includes('resale')
+          ? 'resale'
+          : kind.includes('trade')
+            ? 'handmade'
+            : 'food',
+      }
+      const action = kind.includes('receive')
+        ? 'receive'
+        : kind.includes('adjust')
+          ? 'adjust'
+          : 'save'
+      const table =
+        kind.includes('product') || kind === 'kit'
+          ? 'products'
+          : kind === 'sale'
+            ? 'sales'
+            : kind.includes('recipe')
+              ? 'recipes'
+              : 'ingredients'
+      const decision = planGateDecision(access, {
+        method: 'POST',
+        url: new URL('/api/workspace', window.location.origin),
+        body: { action, table, data: record },
+        existing: item,
+      })
+      if (!decision.allowed) {
+        toast.error(
+          'This workflow is not included in your current access. Existing records and exports remain available.',
+        )
+        return
+      }
+    }
+
     if (['label-preview', 'label-print'].includes(kind) && item) {
       setPreviewLabelId('')
       setPreviewProduct(item)
@@ -783,6 +850,14 @@ export function WorkspaceApp() {
     }
     if (kind === 'ingredient' && !item && route.tab === 'Craft Materials')
       kind = 'trade-material'
+    if (
+      kind === 'kit' ||
+      (item?.workflow === 'kit' && ['product', 'product-detail'].includes(kind))
+    ) {
+      setSelected(item || null)
+      setModal('kit')
+      return
+    }
     if (kind.startsWith('trade-')) {
       setSelected(item || null)
       setModal(kind)
@@ -1776,6 +1851,12 @@ export function WorkspaceApp() {
                     <div className="toolbar">
                       <button
                         className="btn secondary"
+                        onClick={() => open('kit')}
+                      >
+                        Create kit
+                      </button>
+                      <button
+                        className="btn secondary"
                         onClick={() => open('product')}
                       >
                         Create food product
@@ -2582,6 +2663,22 @@ export function WorkspaceApp() {
           }}
         />
       )}
+      {modal === 'kit' && (
+        <KitEditor
+          key={selected?.id || 'new'}
+          kind="kit"
+          item={selected}
+          workspace={state}
+          role={role}
+          mutate={mutate}
+          onWorkspace={setState}
+          close={() => setModal(null)}
+          onDirty={(dirty) => {
+            workflowDirty.current = dirty
+          }}
+          openProduct={(p) => open('product-detail', p)}
+        />
+      )}
       {modal?.startsWith('trade-') && (
         <ProductWorkflowDialog
           key={`${modal}-${selected?.id || 'new'}`}
@@ -2656,7 +2753,9 @@ export function WorkspaceApp() {
           !!modal &&
           !modal.startsWith('trade-') &&
           !modal.startsWith('fabric-') &&
-          !['ingredient-detail', 'recipe-import', 'add-item'].includes(modal)
+          !['ingredient-detail', 'recipe-import', 'add-item', 'kit'].includes(
+            modal,
+          )
         }
         onOpenChange={(v) => {
           if (!v) setModal(null)

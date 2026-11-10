@@ -1,3 +1,9 @@
+import type { BillingPolicyRow } from './billing-entitlements'
+import {
+  effectiveAccess,
+  latestManualGrant,
+  assignableTierIssue,
+} from './manual-access'
 import { z } from 'zod'
 import { launchPricing, launchFeatures } from '../../src/lib/launch-plans'
 import { AdminError, type AdminClient } from './platform-admin-core'
@@ -19,7 +25,7 @@ const queryInput = z.object({
   id: z.uuid().optional(),
 })
 const pageSize = 25
-const customerWhere = `b.identity_owner IS NOT NULL AND NOT EXISTS(SELECT 1 FROM registration_drafts d WHERE d.workspace_id=b.id AND d.test_only=true)`
+const customerWhere = `b.identity_owner IS NOT NULL`
 const accountsCTE = `WITH account_memberships AS (
   SELECT u.identity_id,u.business_id,u.active,u.created_at FROM users u JOIN businesses b ON b.id=u.business_id WHERE ${customerWhere}
   UNION ALL SELECT b.identity_owner,b.id,true,b.created_at FROM businesses b WHERE ${customerWhere}
@@ -27,7 +33,7 @@ const accountsCTE = `WITH account_memberships AS (
 ), customer_accounts AS (SELECT identity_id,MIN(created_at) AS first_recorded_at,COUNT(DISTINCT business_id)::int AS oven_count,
   COUNT(*) FILTER(WHERE active=true)::int AS active_memberships,COUNT(*) FILTER(WHERE active=false)::int AS inactive_memberships
   FROM account_memberships GROUP BY identity_id)`
-const billingProjection = `w.business_id,w.plan_id,w.source,w.status,w.paid_from,w.paid_through,w.updated_at,
+const billingProjection = `w.business_id,w.plan_id,w.source,w.status,w.paid_from,w.paid_through,w.updated_at,w.environment,w.entitlement_policy,w.last_reconciled_at,
   CASE WHEN w.subscription_id IS NOT NULL THEN '••••' || RIGHT(w.subscription_id,4) ELSE NULL END AS subscription_reference`
 const billingNotice =
   'Square synchronization uses signed webhook references and canonical provider reads. Production checkout and policy-dependent access changes remain release-gated. Record update time alone is not proof of successful synchronization.'
@@ -102,9 +108,9 @@ export async function readAdministration(
       asOf: new Date().toISOString(),
       definitions: {
         customer_accounts:
-          'Distinct persisted owner/member Identity IDs attached to a non-demo, non-test Oven. Identity accounts without an Oven are unavailable.',
+          'Distinct persisted owner/member Identity IDs attached to an owned Oven, including persisted test businesses. Anonymous demos and Identity accounts without an Oven are excluded.',
         ovens:
-          'Current Ovens with an Identity owner, excluding private test registrations and anonymous demos.',
+          'Current Ovens with an Identity owner, including persisted test businesses and excluding anonymous demos.',
         recent_accounts:
           'Accounts first recorded in Oven ownership/membership during the last 30 days; this is not the Identity signup timestamp.',
         subscriptions:
@@ -151,6 +157,18 @@ export async function readAdministration(
           'Recorded reason restricted to the existing billing audit; free text is excluded from this metadata view.',
         expiresAt: null,
       }))
+      const manualGrant = await latestManualGrant(c, input.id)
+      const effective = effectiveAccess(
+        billing as BillingPolicyRow | null,
+        manualGrant,
+        oven.identity_owner,
+      )
+      const manualHistory = (
+        await c.query(
+          'SELECT id,plan_id,grant_source,operation,actor_identity,owner_identity,reason,expires_at,created_at FROM complimentary_grants WHERE business_id=$1 AND grant_source IS NOT NULL ORDER BY created_at DESC,id DESC',
+          [input.id],
+        )
+      ).rows
       const integrations = (
         await c.query(
           `SELECT id,CASE WHEN data->>'status' IN ('connected','disconnected','not_connected','error','unavailable','Not connected') THEN data->>'status' ELSE 'unrecorded' END AS recorded_status,updated_at FROM integrations WHERE business_id=$1 ORDER BY id`,
@@ -163,9 +181,23 @@ export async function readAdministration(
           [input.id],
         )
       ).rows
+      const accessAudit = (
+        await c.query(
+          "SELECT actor_id,action,reason,before,after,created_at FROM platform_audit WHERE target=$1 AND action IN ('access:grant','access:revoke') ORDER BY created_at DESC,id DESC LIMIT 100",
+          [input.id],
+        )
+      ).rows
       const operations = await operationalRecords(c, input.id)
       return {
         oven,
+        effective,
+        manualGrant,
+        manualHistory,
+        accessAudit,
+        tierCatalog: launchPricing.plans.map((p) => ({
+          ...p,
+          issue: assignableTierIssue(p.id),
+        })),
         memberships,
         billing,
         grants,
@@ -176,10 +208,10 @@ export async function readAdministration(
           'No global account-status field is recorded. Membership activity is shown separately.',
         access: {
           policy:
-            'Current Oven membership and existing server-side application checks govern access. Commercial tier restrictions are not globally enabled. Recorded billing state alone is not proof of effective feature access.',
+            'Security and active membership checks come first, then a valid explicit manual override, then billing-derived access. Unassigned legacy ovens retain existing registration access. Manual access never modifies provider billing.',
           commercialRestrictionsEnabled: launchPricing.restrictionsEnabled,
           temporaryOverrides:
-            'Unavailable: no temporary override backend exists.',
+            'Expired or revoked overrides return to billing-derived or existing unassigned access.',
         },
         notes:
           'Unavailable: a dedicated administrative notes store is not implemented.',
@@ -224,7 +256,32 @@ export async function readAdministration(
         [search, pageSize, offset],
       )
     ).rows
-    return { rows, total, page: input.page, pageSize, kind: input.kind }
+    const resolvedRows = []
+    for (const row of rows) {
+      const grant = await latestManualGrant(c, row.id)
+      const billing = (
+        await c.query(
+          'SELECT plan_id,status,source,paid_through,environment,entitlement_policy FROM workspace_billing WHERE business_id=$1',
+          [row.id],
+        )
+      ).rows[0]
+      resolvedRows.push({
+        ...row,
+        effective: effectiveAccess(
+          billing as BillingPolicyRow | null,
+          grant,
+          row.identity_owner,
+        ),
+        manualGrant: grant,
+      })
+    }
+    return {
+      rows: resolvedRows,
+      total,
+      page: input.page,
+      pageSize,
+      kind: input.kind,
+    }
   }
   if (input.section === 'plans') {
     const assignments = (
@@ -236,7 +293,7 @@ export async function readAdministration(
       pricing: launchPricing,
       features: launchFeatures,
       assignments,
-      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes the intended full program; its user allowance is undecided. No plan-wide edits or access overrides are enabled.',
+      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes the intended full program; its user allowance is undecided. Internal assignments are managed per business, independently of public availability. Mercantile assignment remains blocked until its team allowance is configured.',
     }
   }
   if (input.section === 'billing') {

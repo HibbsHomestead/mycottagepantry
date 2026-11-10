@@ -2622,3 +2622,112 @@ it('starts owner OAuth in the existing password session and commits its bound st
   ])
   expect(JSON.stringify(data)).not.toContain('fixture-secret')
 })
+
+it('previews and appends manual access with audit without billing writes, and rejects ordinary callers', async () => {
+  const input = {
+    businessId: oven,
+    operation: 'grant',
+    plan: 'cottage-kitchen',
+    source: 'test',
+    expiresAt: null,
+    reason: 'Disposable fixture access test',
+  }
+  const before = (
+    await database.query(
+      'SELECT * FROM workspace_billing WHERE business_id=$1',
+      [oven],
+    )
+  ).rows
+  expect(
+    (await handler(request('action=business-access', input), context)).status,
+  ).toBe(401)
+  await session(false)
+  expect(
+    (
+      await handler(
+        request('action=business-access', input, { token }),
+        context,
+      )
+    ).status,
+  ).toBe(403)
+  await database.query('UPDATE platform_sessions SET mfa_at=NOW()')
+  const previewResponse = await handler(
+    request('action=business-access', input, { token }),
+    context,
+  )
+  expect(previewResponse.status).toBe(200)
+  const preview = await previewResponse.json()
+  expect(preview.preview.business.id).toBe(oven)
+  expect(preview.preview.billingContinues).toBe(true)
+  expect(preview.preview.after.plan).toBe('cottage-kitchen')
+  const applied = await handler(
+    request(
+      'action=business-access',
+      { ...input, confirmation: preview.confirmation },
+      { token },
+    ),
+    context,
+  )
+  expect(applied.status).toBe(200)
+  expect((await applied.json()).applied).toBe(true)
+  expect(
+    (
+      await database.query(
+        'SELECT * FROM workspace_billing WHERE business_id=$1',
+        [oven],
+      )
+    ).rows,
+  ).toEqual(before)
+  const detail = await handler(
+    request('section=customers&id=' + oven, undefined, { token }),
+    context,
+  )
+  expect((await detail.json()).effective).toMatchObject({
+    plan: 'cottage-kitchen',
+    source: 'test',
+    manualValid: true,
+  })
+  const entries = (
+    await database.query(
+      "SELECT * FROM platform_audit WHERE action='access:grant'",
+    )
+  ).rows as any[]
+  expect(entries).toHaveLength(1)
+  expect(entries[0]).toMatchObject({
+    target: oven,
+    actor_id: 'platform-owner',
+    reason: input.reason,
+  })
+  expect(entries[0].before).toBeTruthy()
+  expect(entries[0].after.grant.expires_at).toBeNull()
+  const revoke = {
+    ...input,
+    operation: 'revoke',
+    reason: 'End disposable access test',
+  }
+  const r = await handler(
+    request('action=business-access', revoke, { token }),
+    context,
+  )
+  const rp = await r.json()
+  expect(
+    (
+      await handler(
+        request(
+          'action=business-access',
+          { ...revoke, confirmation: rp.confirmation },
+          { token },
+        ),
+        context,
+      )
+    ).status,
+  ).toBe(200)
+  expect(
+    (
+      await database.query(
+        'SELECT operation FROM complimentary_grants WHERE business_id=$1 ORDER BY created_at DESC',
+        [oven],
+      )
+    ).rows,
+  ).toHaveLength(2)
+})

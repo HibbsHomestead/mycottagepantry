@@ -8,6 +8,7 @@ import {
   convert,
   costBreakdown,
   productCosting,
+  validateKit,
   roundMoney,
   type Item,
   type Workspace,
@@ -237,9 +238,53 @@ export async function handleProductWorkflow(
       )
     if (
       data.workflow &&
-      !['food', 'handmade', 'resale'].includes(data.workflow)
+      !['food', 'handmade', 'resale', 'kit'].includes(data.workflow)
     )
       throw new Error('Choose a supported workflow.')
+  }
+  if (action === 'save' && table === 'products' && data.workflow === 'kit') {
+    const item: Item = existingProduct
+      ? preserveStoredProductFields(data, existingProduct)
+      : { ...data, id: data.id || randomUUID() }
+    item.name = text(item.name, 'a kit name')
+    validateKit(item, state)
+    if (!['draft', 'active'].includes(item.status))
+      throw new Error('Choose draft or active kit status.')
+    const category = (state.settings[0]?.productCategories || []).find(
+      (c: Item) => c.id === item.productCategoryId,
+    )
+    if (
+      item.productCategoryId &&
+      (!category || category.active === false) &&
+      item.productCategoryId !== existingProduct?.productCategoryId
+    )
+      throw new Error('Choose an active product category.')
+    if (
+      item.imageAssetId &&
+      !state.graphic_assets.some((a) => a.id === item.imageAssetId)
+    )
+      throw new Error('Choose a photo from this oven.')
+    item.price = number(
+      required(item.price, 'Kit selling price'),
+      'Kit selling price',
+    )
+    item.quantity = existingProduct?.quantity || 0
+    item.cost = existingProduct?.cost || 0
+    item.recipeId = null
+    item.unitsPerPackage = 1
+    if (!existingProduct) item.taxSource = 'category'
+    else
+      for (const key of [
+        'taxSource',
+        'taxStatus',
+        'taxRateIds',
+        'taxAssignments',
+      ])
+        item[key] = existingProduct[key]
+    if (item.status === 'active' && !item.archived) productCosting(item, state)
+    await save('products', item)
+    await audit('Kit definition saved; stock unchanged', item.name)
+    return true
   }
   const existingDesign = state.recipes.find((r) => r.id === data.id)
   if (

@@ -751,6 +751,9 @@ export const complimentaryGrants = pgTable('complimentary_grants', {
   actorIdentity: text('actor_identity').notNull(),
   reason: text().notNull(),
   planId: text('plan_id').notNull().default('cottage-kitchen'),
+  grantSource: text('grant_source'),
+  operation: text().notNull().default('grant'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

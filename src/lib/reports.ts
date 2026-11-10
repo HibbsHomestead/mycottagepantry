@@ -77,10 +77,17 @@ export function reportRows(name: string, state: Workspace): Item[] {
     ]
   if (name === 'Sales by product' || name === 'Product profitability')
     return products.map((p) => {
-      const cost = productCost(p),
-        transactions = sales.filter((s) => s.productId === p.id)
+      let cost: number | null
+      try {
+        cost = productCost(p)
+      } catch (error) {
+        if (p.workflow !== 'kit') throw error
+        cost = null
+      }
+      const transactions = sales.filter((s) => s.productId === p.id)
       let marginPercent: number | string
       try {
+        if (cost === null) throw new Error('Incomplete kit estimate')
         marginPercent = profitability(p, cost, state.settings[0]).margin
       } catch {
         marginPercent = 'Unavailable — review tax configuration'
@@ -90,7 +97,7 @@ export function reportRows(name: string, state: Workspace): Item[] {
         name: p.name,
         packages: transactions.reduce((s, i) => s + i.quantity, 0),
         revenue: transactions.reduce((s, i) => s + i.amount, 0),
-        unitCost: cost,
+        unitCost: cost === null ? 'Unavailable — incomplete estimate' : cost,
         retail: p.price,
         marginPercent,
       }

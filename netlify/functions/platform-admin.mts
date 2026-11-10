@@ -1,3 +1,4 @@
+import { handleAdminAccess } from '../lib/admin-access'
 import { handleAdminCatalog } from '../lib/catalog-admin'
 import { handleRegistrationPolicies } from '../lib/registration-policies'
 import type { Context } from '@netlify/functions'
@@ -658,6 +659,8 @@ export default async (request: Request, context: Context) => {
           )
         }
       }
+      if (action === 'business-access')
+        return handleAdminAccess(c, request, session, reference)
       if (action === 'catalog')
         return handleAdminCatalog(c, request, session, reference)
       if (action === 'registration-policies')
