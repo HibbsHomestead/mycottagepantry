@@ -1,0 +1,59 @@
+.opening-oven {
+  display: block;
+  width: clamp(136px, 24vw, 180px);
+  height: auto;
+  margin: 0 auto 10px;
+  overflow: visible;
+}
+.opening-oven-door {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  transform: perspective(450px) rotateX(-112deg);
+  animation: oven-door-open 1.9s cubic-bezier(0.3, 0, 0.2, 1) 0.35s both;
+}
+@keyframes oven-door-open {
+  from {
+    transform: perspective(450px) rotateX(0deg);
+  }
+  to {
+    transform: perspective(450px) rotateX(-112deg);
+  }
+}
+.oven-steam {
+  opacity: 0;
+  animation: oven-steam-rise 4.8s ease-in-out infinite both;
+}
+.oven-steam-one {
+  animation-delay: 2s;
+}
+.oven-steam-two {
+  animation-delay: 3.5s;
+}
+.oven-steam-three {
+  animation-delay: 5s;
+}
+@keyframes oven-steam-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 5px) scaleX(0.95);
+  }
+  30% {
+    opacity: 0.5;
+  }
+  65% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(5px, -39px) scaleX(1.04);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opening-oven-door {
+    animation: none;
+  }
+  .oven-steam {
+    animation: none;
+    opacity: 0;
+  }
+}
