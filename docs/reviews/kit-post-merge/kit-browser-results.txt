@@ -1,0 +1,66 @@
+
+Running 37 tests using 1 worker
+(node:3970) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+······················F(node:4586) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+F(node:4668) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+·············
+
+  1) tests/kit-details.spec.ts:519:3 › kit details, navigation and save 1440 ───────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true })
+    Expected: visible
+    Error: strict mode violation: getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true }) resolved to 2 elements:
+        1) <button type="button" class="btn secondary">Edit kit</button> aka getByRole('status').getByRole('button', { name: 'Edit kit' })
+        2) <button type="button" class="btn  ">Edit kit</button> aka getByRole('button', { name: 'Edit kit' }).nth(1)
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true }) with timeout 5000ms
+      - waiting for getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true })
+
+
+      580 |     await expect(
+      581 |       dialog.getByRole('button', { name: 'Edit kit', exact: true }),
+    > 582 |     ).toBeVisible()
+          |       ^
+      583 |     await expect(
+      584 |       dialog.getByText('Product category not configured.', { exact: false }),
+      585 |     ).toBeVisible()
+        at /opt/build/repo/tests/kit-details.spec.ts:582:7
+
+    Error Context: test-results/kit-details-kit-details-navigation-and-save-1440/error-context.md
+
+  2) tests/kit-details.spec.ts:519:3 › kit details, navigation and save 390 ────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true })
+    Expected: visible
+    Error: strict mode violation: getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true }) resolved to 2 elements:
+        1) <button type="button" class="btn secondary">Edit kit</button> aka getByRole('status').getByRole('button', { name: 'Edit kit' })
+        2) <button type="button" class="btn  ">Edit kit</button> aka getByRole('button', { name: 'Edit kit' }).nth(1)
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true }) with timeout 5000ms
+      - waiting for getByRole('dialog').getByRole('button', { name: 'Edit kit', exact: true })
+
+
+      580 |     await expect(
+      581 |       dialog.getByRole('button', { name: 'Edit kit', exact: true }),
+    > 582 |     ).toBeVisible()
+          |       ^
+      583 |     await expect(
+      584 |       dialog.getByText('Product category not configured.', { exact: false }),
+      585 |     ).toBeVisible()
+        at /opt/build/repo/tests/kit-details.spec.ts:582:7
+
+    Error Context: test-results/kit-details-kit-details-navigation-and-save-390/error-context.md
+
+  2 failed
+    tests/kit-details.spec.ts:519:3 › kit details, navigation and save 1440 ────────────────────────
+    tests/kit-details.spec.ts:519:3 › kit details, navigation and save 390 ─────────────────────────
+  35 passed (2.1m)

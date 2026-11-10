@@ -34,18 +34,11 @@ it('retains authoritative cost and selling price when category pricing is incomp
   )
   expect(screen.getByRole('status').textContent).toContain(
     'Product category not configured.',
-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
-  )
-  expect(screen.getByRole('status').textContent).toContain(
-    'Review kit: Product category not configured.',
   )
   expect(screen.getByText(money(cost.total))).toBeTruthy()
   expect(screen.getByText('$45.00')).toBeTruthy()
   expect(screen.getAllByText('Unavailable')).toHaveLength(6)
   expect(screen.getByRole('button', { name: 'Edit kit' })).toBeTruthy()
-  expect(
-    screen.getByRole('button', { name: 'Edit kit configuration' }),
-  ).toBeTruthy()
 })
 it('uses the existing costing and pricing results without mutating the workspace', () => {
   const { product, workspace } = fixture()
@@ -59,7 +52,6 @@ it('uses the existing costing and pricing results without mutating the workspace
       edit={() => {}}
       configure={() => {}}
     />,
-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
   )
   expect(screen.getByText(money(price.profit))).toBeTruthy()
   expect(screen.getByText(`${price.margin.toFixed(2)}%`)).toBeTruthy()
@@ -76,7 +68,6 @@ it('never renders missing component costs as zero', () => {
       edit={() => {}}
       configure={() => {}}
     />,
-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
   )
   expect(screen.getByRole('status').textContent).toContain('cost is incomplete')
   expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(7)

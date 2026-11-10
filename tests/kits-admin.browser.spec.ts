@@ -62,9 +62,6 @@ for (const width of [1440, 390]) {
         .getByRole('dialog')
         .getByRole('heading', { name: 'Holiday bake drop', exact: true }),
     ).toBeVisible()
-        .getByRole('button', { name: 'Edit kit', exact: true }),
-    ).toBeVisible()
-    await page.keyboard.press('Escape')
     expect(saved).toBe(true)
     expect(
       JSON.stringify(
@@ -84,7 +81,6 @@ for (const width of [1440, 390]) {
       .getByRole('dialog')
       .getByRole('button', { name: 'Edit kit', exact: true })
       .click()
-    await page.getByRole('button', { name: 'Edit kit', exact: true }).click()
     await expect(page.getByLabel('Whole selling packages').first()).toHaveValue(
       '2',
     )

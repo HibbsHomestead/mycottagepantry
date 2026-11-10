@@ -1,0 +1,17 @@
+
+> test
+> vitest run src/components/kit-cost-cards.test.tsx src/components/kit-details.test.tsx src/components/product-cards.test.tsx src/lib/product-kits.test.ts
+
+
+ RUN  v5.0.5 /opt/build/repo
+
+
+ Test Files  4 passed (4)
+      Tests  30 passed (30)
+   Start at  13:39:15
+   Duration  3.21s (environment 49%, tests 23%, setup 13%, import 11%, transform 4%, worker 1%)
+
+Environment  jsdom was created 4 times · 3.79s total, 49% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
