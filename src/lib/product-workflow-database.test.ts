@@ -1072,3 +1072,135 @@ it('enforces the clarified Kitchen and Mercantile modules through the real works
     full.consignors.some((row: Item) => row.name === 'Included consignor'),
   ).toBe(true)
 })
+
+it('persists a two-product kit without stock changes and guards sales, receipt and batch actions', async () => {
+  session.user = 'trade-owner-a'
+  await db.exec('BEGIN')
+  await db.query("SELECT set_config('app.business_id',$1,true)", [a])
+  await db.query(
+    'INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,0,0.5)',
+    [
+      'kit-gift-box',
+      a,
+      JSON.stringify({
+        id: 'kit-gift-box',
+        name: 'Kit gift box',
+        usedAs: 'packaging',
+        unit: 'each',
+        quantity: 0,
+        cost: 0.5,
+      }),
+    ],
+  )
+  await db.exec('COMMIT')
+
+  const before = await ok()
+  const components = before.products
+    .filter((p: Item) => p.workflow !== 'kit')
+    .slice(0, 2)
+  expect(components).toHaveLength(2)
+  const kit = {
+    id: 'test-holiday-kit',
+    name: 'Fixed holiday kit',
+    workflow: 'kit',
+    status: 'draft',
+    price: 45,
+    assemblyMinutes: 12,
+    assemblyRate: 18,
+    kitComponents: components.map((p: Item, i: number) => ({
+      productId: p.id,
+      quantity: i + 1,
+      basis: 'package',
+    })),
+    packagingLines: [
+      { ingredientId: 'kit-gift-box', quantity: 2, unit: 'each' },
+    ],
+  }
+  const saved = await ok('save', 'products', kit)
+  expect(find(saved.products, kit.id).kitComponents).toEqual(kit.kitComponents)
+  expect(saved.ledger).toEqual(before.ledger)
+  expect(saved.ingredients).toEqual(before.ingredients)
+  expect(saved.products.filter((p: Item) => p.id !== kit.id)).toEqual(
+    before.products,
+  )
+  const activated = await ok('save', 'products', {
+    ...find(saved.products, kit.id),
+    status: 'active',
+  })
+  expect(activated.ledger).toEqual(before.ledger)
+  const reopened = await ok()
+  expect(find(reopened.products, kit.id).assemblyMinutes).toBe(12)
+  expect(find(reopened.products, kit.id).packagingLines).toEqual(
+    kit.packagingLines,
+  )
+  for (const [action, table, data] of [
+    ['save', 'sales', { id: 'kit-sale', productId: kit.id, quantity: 1 }],
+    [
+      'receive',
+      'products',
+      { id: kit.id, quantity: 1, price: 1, reason: 'Unsafe kit receipt' },
+    ],
+    [
+      'save',
+      'batches',
+      { id: 'kit-batch', productId: kit.id, recipeId: components[0].recipeId },
+    ],
+  ] as const) {
+    expect((await call(action, table, data)).status).not.toBe(200)
+  }
+  expect((await ok()).ledger).toEqual(before.ledger)
+})
+
+it('enforces a manual Kitchen assignment for owner and a new member session, then restores the billing fallback on revocation', async () => {
+  session.user = 'trade-owner-a'
+  const fallback = (await ok()).settings[0].effectiveAccess
+  await db.exec('BEGIN')
+  await db.query("SELECT set_config('app.platform_gateway','true',true)")
+  await db.query(
+    "INSERT INTO complimentary_grants(business_id,owner_identity,actor_identity,plan_id,reason,grant_source) VALUES($1,'trade-owner-a','fixture-admin','cottage-kitchen','Disposable enforcement test','test')",
+    [a],
+  )
+  await db.exec('COMMIT')
+  session.user = 'trade-owner-a'
+  let w = await ok()
+  expect(w.settings[0].effectiveAccess).toMatchObject({
+    plan: 'cottage-kitchen',
+    source: 'test',
+    manualValid: true,
+  })
+  const before = w.ledger
+  const denied = await call('save', 'products', {
+    id: 'excluded-resale',
+    name: 'Excluded resale entry',
+    workflow: 'resale',
+    price: 5,
+  })
+  expect(denied.status).not.toBe(200)
+  await db.exec('BEGIN')
+  await db.query("SELECT set_config('app.business_id',$1,true)", [a])
+  await expect(
+    db.query(
+      "INSERT INTO users(id,business_id,data,identity_id,role) VALUES('excess-member',$1,'{}','excess-member','Production Staff')",
+      [a],
+    ),
+  ).rejects.toThrow(/manual tier allows 2/)
+  await db.exec('ROLLBACK')
+  session.user = 'trade-reader'
+  w = await ok()
+  expect(w.settings[0].effectiveAccess.plan).toBe('cottage-kitchen')
+  expect(w.ledger).toEqual(before)
+  await db.exec('BEGIN')
+  await db.query("SELECT set_config('app.platform_gateway','true',true)")
+  await db.query(
+    "INSERT INTO complimentary_grants(business_id,owner_identity,actor_identity,plan_id,reason,grant_source,operation) VALUES($1,'trade-owner-a','fixture-admin','cottage-kitchen','End disposable enforcement test','test','revoke')",
+    [a],
+  )
+  await db.exec('COMMIT')
+  w = await ok()
+  expect(w.settings[0].effectiveAccess).toMatchObject({
+    plan: fallback.plan,
+    source: fallback.source,
+    manualValid: false,
+  })
+  session.user = 'trade-owner-a'
+})

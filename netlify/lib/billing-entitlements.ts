@@ -60,8 +60,9 @@ export async function enforceSquareBilledWrite(input: {
   url: URL
   body: any
   now?: number
+  access?: AccessResult
 }) {
-  const access = squareBilledAccess(input.row, input.now)
+  const access = input.access || squareBilledAccess(input.row, input.now)
   if (input.method !== 'POST') {
     const decision = planGateDecision(access, {
       method: input.method,

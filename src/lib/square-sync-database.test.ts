@@ -410,3 +410,61 @@ it('invalidates the failed checkout before allowing a retry and never grants fai
     ).rows[0].plan_id,
   ).toBe('free')
 })
+
+it('keeps a manual override intact through signed webhook reconciliation while updating only billing state', async () => {
+  const { business } = await checkoutFixture('mixing-bowl', 1000)
+  await db.query('UPDATE businesses SET identity_owner=$2 WHERE id=$1', [
+    business,
+    'manual-fixture-owner',
+  ])
+  await db.query(
+    "INSERT INTO complimentary_grants(business_id,owner_identity,actor_identity,plan_id,grant_source,reason) VALUES($1,'manual-fixture-owner','fixture-platform-admin','cottage-kitchen','test','Disposable billing separation test')",
+    [business],
+  )
+  const before = (
+    await db.query('SELECT * FROM complimentary_grants WHERE business_id=$1', [
+      business,
+    ])
+  ).rows
+  const { state, transport } = billingProvider(1000)
+  await reconcileBusiness(client, business, transport)
+  state.version++
+  expect(
+    (
+      await squareBillingWebhook(
+        webhook('manual-override-preserved'),
+        'sandbox',
+      )
+    ).status,
+  ).toBe(200)
+  await db.query('BEGIN')
+  await runBillingReconciliation(client, transport, 10, 'sandbox')
+  await db.query('COMMIT')
+  expect(
+    (
+      await db.query(
+        'SELECT * FROM complimentary_grants WHERE business_id=$1',
+        [business],
+      )
+    ).rows,
+  ).toEqual(before)
+  const { effectiveAccess, latestManualGrant } =
+    await import('../../netlify/lib/manual-access')
+  const billing = (
+    await db.query(
+      'SELECT plan_id,status,source,paid_through,environment,entitlement_policy FROM workspace_billing WHERE business_id=$1',
+      [business],
+    )
+  ).rows[0]
+  const grant = await latestManualGrant(client, business)
+  expect(
+    effectiveAccess(billing as never, grant, 'manual-fixture-owner'),
+  ).toMatchObject({ plan: 'cottage-kitchen', source: 'test' })
+  expect(
+    effectiveAccess(
+      billing as never,
+      { ...grant!, operation: 'revoke' },
+      'manual-fixture-owner',
+    ).plan,
+  ).toBe('mixing-bowl')
+})

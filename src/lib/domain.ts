@@ -565,7 +565,150 @@ export function costBreakdown(
     perPackage: total / packages,
   }
 }
+/** Fixed kits contain whole selling packages. Unpackaged allocation is deliberately unsupported. */
+export function validateKit(product: Item, workspace: Workspace) {
+  if (
+    !Array.isArray(product.kitComponents) ||
+    !product.kitComponents.length ||
+    product.kitComponents.length > 100
+  )
+    throw new Error('Add 1 to 100 included products.')
+  const seen = new Set<string>()
+  for (const line of product.kitComponents) {
+    const component = workspace.products.find((p) => p.id === line.productId)
+    if (!component)
+      throw new Error(
+        `Component ${line.productId} is unavailable; restore its reference.`,
+      )
+    if (component.id === product.id || component.workflow === 'kit')
+      throw new Error('Kits cannot contain kits.')
+    if (line.basis !== 'package')
+      throw new Error(
+        'Individual contents are unavailable: separate unpackaged production and packaging costs are not configured. Use whole selling packages.',
+      )
+    const quantity = number(line.quantity, 'Component packages', 1)
+    if (!Number.isInteger(quantity))
+      throw new Error(
+        'Use whole selling packages; unpackaged contents are unsupported.',
+      )
+    if (seen.has(component.id))
+      throw new Error(
+        'Combine duplicate product entries into one package quantity.',
+      )
+    seen.add(component.id)
+  }
+  for (const line of packagingLines(product)) {
+    number(line.quantity, 'Kit packaging quantity', 0.000001)
+    const packaging = workspace.ingredients.find(
+      (i) => i.id === line.ingredientId && i.usedAs === 'packaging',
+    )
+    if (!packaging) throw new Error('Choose available kit packaging.')
+    convert(
+      number(line.quantity, 'Kit packaging quantity', 0.000001),
+      line.unit || packaging.unit,
+      packaging.unit,
+      packaging.conversions,
+    )
+  }
+  number(product.assemblyMinutes ?? 0, 'Assembly minutes')
+  number(product.assemblyRate ?? 0, 'Assembly hourly rate')
+  return product
+}
+export function kitCosting(
+  product: Item,
+  workspace: Workspace,
+): ReturnType<typeof costBreakdown> {
+  validateKit(product, workspace)
+  const lines = product.kitComponents.map((line: Item) => {
+    const component = workspace.products.find((p) => p.id === line.productId)!
+    if (
+      component.workflow === 'resale' &&
+      (component.cost == null || String(component.cost).trim() === '')
+    )
+      throw new Error(`${component.name}: received cost is unavailable.`)
+    if (component.needsCostSetup)
+      throw new Error(`${component.name}: cost is incomplete.`)
+    if (component.workflow !== 'resale') {
+      const recipe = workspace.recipes.find((r) => r.id === component.recipeId)
+      if (!recipe?.lines?.length)
+        throw new Error(`${component.name}: recipe cost is unavailable.`)
+      const sources = [
+        ...effectiveRecipeLines(recipe, workspace.recipes),
+        ...packagingLines(component),
+      ]
+      for (const source of sources) {
+        const ingredient = workspace.ingredients.find(
+          (i) => i.id === source.ingredientId,
+        )
+        const price = ingredient?.currentCost ?? ingredient?.cost
+        if (
+          !ingredient ||
+          ingredient.needsCostSetup ||
+          price == null ||
+          String(price).trim() === '' ||
+          !Number.isFinite(Number(price))
+        )
+          throw new Error(
+            `${component.name}: ingredient or packaging cost is incomplete.`,
+          )
+      }
+    }
+    const cost =
+      productCosting(component, workspace).perPackage *
+      number(line.quantity, 'Component packages', 1)
+    return { ...line, name: component.name, cost }
+  })
+  const ingredient = lines.reduce(
+    (sum: number, line: Item) => sum + line.cost,
+    0,
+  )
+  const packaging = packagingLines(product).map((line: Item) => {
+    const item = workspace.ingredients.find(
+      (i) => i.id === line.ingredientId && i.usedAs === 'packaging',
+    )
+    const price = item?.currentCost ?? item?.cost
+    if (
+      !item ||
+      item.needsCostSetup ||
+      price == null ||
+      String(price).trim() === ''
+    )
+      throw new Error('Kit packaging cost is unavailable.')
+    const quantity = number(line.quantity, 'Kit packaging quantity', 0.000001)
+    const cost =
+      convert(quantity, line.unit || item.unit, item.unit, item.conversions) *
+      number(price, 'Kit packaging cost')
+    return { ...line, name: item.name, cost }
+  })
+  const packagingCost = packaging.reduce(
+    (sum: number, line: Item) => sum + line.cost,
+    0,
+  )
+  const laborMinutes = number(product.assemblyMinutes ?? 0, 'Assembly minutes')
+  const laborRate = number(product.assemblyRate ?? 0, 'Assembly rate')
+  const labor = (laborMinutes / 60) * laborRate
+  const total = ingredient + packagingCost + labor
+  return {
+    lines,
+    packaging,
+    ingredient,
+    packagingCost,
+    laborMinutes,
+    laborRate,
+    labor,
+    overhead: 0,
+    waste: 0,
+    total,
+    plannedYield: 1,
+    actualYield: 1,
+    packages: 1,
+    unitsPerPackage: 1,
+    perItem: total,
+    perPackage: total,
+  }
+}
 export function productCosting(product: Item, workspace: Workspace) {
+  if (product.workflow === 'kit') return kitCosting(product, workspace)
   if (product.workflow === 'resale') {
     if (product.stockCostKnown !== true)
       throw new Error('Receive resale stock to establish its cost.')

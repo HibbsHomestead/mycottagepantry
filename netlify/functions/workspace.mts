@@ -1,3 +1,4 @@
+import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
 import {
   assertSavedLabelOutput,
   validateSavedLabelContext,
@@ -387,8 +388,8 @@ export default async (req: Request, context: Context) => {
       await client.query("SELECT set_config('app.billing_worker','true',true)")
       managedBilling = (
         await client.query(
-          "SELECT plan_id,status,source,paid_through,environment,entitlement_policy FROM workspace_billing WHERE business_id=$1 AND (entitlement_policy='kitchen-two-v1' OR $2='Owner')",
-          [org, role],
+          'SELECT plan_id,status,source,paid_through,environment,entitlement_policy FROM workspace_billing WHERE business_id=$1 ',
+          [org],
         )
       ).rows[0]
     } finally {
@@ -396,11 +397,49 @@ export default async (req: Request, context: Context) => {
         previousBillingWorker,
       ])
     }
+    const manualGrant = await latestManualGrant(client, org)
+    const resolvedAccess = effectiveAccess(
+      managedBilling,
+      manualGrant,
+      business.identity_owner,
+    )
     let moduleAccess: import('../lib/billing-state').AccessResult | undefined
     let moduleContinuation = false
     // Ovens without a billing row (legacy/owner ovens, including complimentary
     // access) and app-managed Free/complimentary rows keep unrestricted access.
-    if (
+    if (resolvedAccess.suspended || resolvedAccess.manualValid) {
+      if (resolvedAccess.suspended && req.method !== 'GET')
+        throw new Error(
+          'Account access is suspended; a manual grant cannot bypass suspension.',
+        )
+      const { enforceSquareBilledWrite } =
+        await import('../lib/billing-entitlements')
+      moduleAccess = await enforceSquareBilledWrite({
+        client,
+        org,
+        row: managedBilling || {
+          plan_id: null,
+          source: 'unassigned',
+          status: 'unassigned',
+        },
+        access: resolvedAccess.access!,
+        method: req.method,
+        url: requestUrl,
+        body:
+          req.method === 'POST'
+            ? await req
+                .clone()
+                .json()
+                .catch(() => null)
+            : null,
+      })
+      // Only the request-local quota basis changes. Provider billing is never written here.
+      managedBilling = {
+        ...(managedBilling || { source: 'unassigned', status: 'unassigned' }),
+        plan_id: moduleAccess.plan,
+        entitlement_policy: 'kitchen-two-v1',
+      }
+    } else if (
       managedBilling &&
       ['free_sandbox', 'unassigned'].includes(managedBilling.source)
     ) {
@@ -456,27 +495,27 @@ export default async (req: Request, context: Context) => {
             : null,
       })
       moduleAccess = access
-      if (req.method === 'POST') {
-        const operation = await req
-          .clone()
-          .json()
-          .catch(() => null)
-        moduleContinuation = [
-          'refund',
-          'returnFinishedSale',
-          'consignmentRefund',
-          'consignmentPayout',
-          'receiptCancel',
-          'receiptDismissExtraction',
-          'financeReverse',
-          'inventoryCountCancel',
-        ].includes(operation?.action)
-      }
       // Record quotas follow the plan that currently applies (Free after a lapse).
       managedBilling.plan_id = access.plan
     } else if (managedBilling) {
       // free_app / complimentary rows: no plan restrictions while unapproved.
       managedBilling.plan_id = null
+    }
+    if (moduleAccess && req.method === 'POST') {
+      const operation = await req
+        .clone()
+        .json()
+        .catch(() => null)
+      moduleContinuation = [
+        'refund',
+        'returnFinishedSale',
+        'consignmentRefund',
+        'consignmentPayout',
+        'receiptCancel',
+        'receiptDismissExtraction',
+        'financeReverse',
+        'inventoryCountCancel',
+      ].includes(operation?.action)
     }
     let deviceCookie = context.cookies.get('cp_print_device')
     if (!deviceCookie || !/^[a-f0-9]{64}$/.test(deviceCookie)) {
@@ -524,6 +563,7 @@ export default async (req: Request, context: Context) => {
         settings: workspace.settings.map((s) => {
           const view: Item = {
             ...s,
+            effectiveAccess: resolvedAccess,
             labelEditorScope: createHash('sha256')
               .update(org + ':' + user!.id)
               .digest('hex'),
@@ -614,7 +654,7 @@ export default async (req: Request, context: Context) => {
 
         if (
           item.workflow &&
-          !['food', 'handmade', 'resale'].includes(item.workflow)
+          !['food', 'handmade', 'resale', 'kit'].includes(item.workflow)
         )
           throw new Error('Choose a supported product workflow.')
         const previous = state.products.find((p) => p.id === item.id)
@@ -2064,6 +2104,10 @@ export default async (req: Request, context: Context) => {
         throw new Error('Recorded sales are immutable. Use a refund.')
       const p = state.products.find((p) => p.id === item.productId)
       if (!p) throw new Error('Choose a product.')
+      if (p.workflow === 'kit')
+        throw new Error(
+          'Kit fulfillment is unavailable: finished-package consumption is not supported for every component. No stock or sale was posted.',
+        )
       if (item.refundOf)
         throw new Error('Use the refund action to reverse a recorded sale.')
       item.quantity = number(item.quantity, 'Packages sold', 0.000001)
@@ -2221,6 +2265,52 @@ export default async (req: Request, context: Context) => {
           type: action,
           actor: user?.id || 'Demo owner',
         })
+      if (
+        table === 'users' &&
+        ['save', 'import'].includes(action) &&
+        moduleAccess?.plan
+      ) {
+        const { launchPricing } = await import('../../src/lib/launch-plans')
+        const limit = launchPricing.plans.find(
+          (p) => p.id === moduleAccess!.plan,
+        )?.users
+        const existing = state.users?.find((u) => u.id === data.id)
+        if (
+          typeof limit === 'number' &&
+          data.active !== false &&
+          !existing?.active
+        ) {
+          const active = (
+            await client.query(
+              'SELECT count(DISTINCT identity_id)::int AS count FROM users WHERE business_id=$1 AND active=true',
+              [org],
+            )
+          ).rows[0].count
+          if (active >= limit)
+            throw new Error(
+              'This business is at its configured user limit. Existing members are preserved.',
+            )
+        }
+      }
+      const kitTarget = state.products.find(
+        (p) => p.id === (data.id || data.productId),
+      )
+      if (
+        kitTarget?.workflow === 'kit' &&
+        !['save', 'archive'].includes(action)
+      )
+        throw new Error(
+          'Kit stock, production and fulfillment actions are unavailable. Definitions do not move stock.',
+        )
+      if (
+        table === 'batches' &&
+        state.products.some(
+          (p) => p.id === data.productId && p.workflow === 'kit',
+        )
+      )
+        throw new Error(
+          'Produce component products separately; kit production is unavailable.',
+        )
       if (action === 'receivedDateCorrection') {
         const settings = state.settings[0]
         const record = applyReceivedDateCorrections(
