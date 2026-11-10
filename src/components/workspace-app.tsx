@@ -1,3 +1,4 @@
+import { OpeningOven } from './opening-oven'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
 import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
@@ -728,6 +729,7 @@ export function WorkspaceApp() {
               ? `${data.name || 'Product'} changes saved.`
               : 'Saved to your oven.',
       )
+      return result
     } finally {
       setBusy(false)
     }
@@ -1288,6 +1290,7 @@ export function WorkspaceApp() {
   if (!ready)
     return (
       <main className="public-auth">
+        {!error && <OpeningOven />}
         <h1>{error ? 'Oven unavailable' : 'Opening your oven…'}</h1>
         <p role={error ? 'alert' : 'status'}>
           {error || 'Loading your private business records.'}

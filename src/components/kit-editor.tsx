@@ -97,6 +97,13 @@ export function KitEditor({
             <p>Estimate incomplete: {estimate.pricingError}</p>
           )}
           <p>{estimate.explanation}</p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setTab('contents')}
+          >
+            Review contents &amp; details
+          </button>
         </div>
       )}
     </>
