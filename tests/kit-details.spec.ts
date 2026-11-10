@@ -227,9 +227,8 @@ for (const width of [1440, 768, 390]) {
       exact: true,
     })
     await expect(included.getByRole('listitem')).toHaveCount(2)
-    await expect(included).toContainText('2 whole selling packages')
-    await expect(included).toContainText('9 rolls per package')
-    await expect(included).toContainText('Selling unit: 9ct tray')
+    await expect(included).toContainText(`${regularName} ×2`)
+    await expect(included).not.toContainText('per package')
     await expect(
       dialog.getByText('Connected recipe:', { exact: false }),
     ).toHaveCount(0)
@@ -257,7 +256,7 @@ for (const width of [1440, 768, 390]) {
       ),
     )
     await included
-      .getByRole('button', { name: regularName, exact: true })
+      .getByRole('button', { name: `${regularName} ×2`, exact: true })
       .click()
     await expect(
       dialog.getByRole('heading', { name: regularName, exact: true }),
@@ -269,7 +268,7 @@ for (const width of [1440, 768, 390]) {
       dialog.getByRole('heading', { name: kitName, exact: true }),
     ).toBeVisible()
     await included
-      .getByRole('button', { name: regularName, exact: true })
+      .getByRole('button', { name: `${regularName} ×2`, exact: true })
       .click()
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
     await expect(

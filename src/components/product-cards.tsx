@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu'
 import './product-cards.css'
+import { KitProductList } from './kit-included-products'
 
 // Presentation guard: missing source prices must not look like a zero-cost product.
 // All amounts still come from the existing costing and profitability functions.
@@ -237,28 +238,11 @@ export function ProductCards({
               </dl>
               {reason && <p className="muted">{reason}</p>}
               {product.workflow === 'kit' && (
-                <ul>
-                  {(product.kitComponents || []).map((line: Item) => {
-                    const component = workspace.products.find(
-                      (p) => p.id === line.productId,
-                    )
-                    return (
-                      <li key={line.productId}>
-                        {line.quantity} package(s) ·{' '}
-                        <button
-                          type="button"
-                          className="text-button"
-                          onClick={() =>
-                            component && open('product-detail', component)
-                          }
-                        >
-                          {component?.name || `Unavailable ${line.productId}`}
-                        </button>
-                        {component?.archived ? ' · Archived' : ''}
-                      </li>
-                    )
-                  })}
-                </ul>
+                <KitProductList
+                  product={product}
+                  workspace={workspace}
+                  openProduct={(component) => open('product-detail', component)}
+                />
               )}
 
               {recipe && (
@@ -267,12 +251,14 @@ export function ProductCards({
                   {recipe.name}
                 </p>
               )}
-              {product.workflow && (
-                <p className="muted">
-                  {product.workflow} {product.variant && `· ${product.variant}`}{' '}
-                  {product.sku && `· ${product.sku}`}
-                </p>
-              )}
+              {(product.workflow !== 'kit' || product.variant || product.sku) &&
+                product.workflow && (
+                  <p className="muted">
+                    {product.workflow !== 'kit' && product.workflow}{' '}
+                    {product.variant && `· ${product.variant}`}{' '}
+                    {product.sku && `· ${product.sku}`}
+                  </p>
+                )}
               {['handmade', 'resale'].includes(product.workflow) && (
                 <p>
                   {product.quantity || 0}{' '}

@@ -170,7 +170,7 @@ it('retains independent tax results when a target margin is invalid', () => {
   expect(estimate.pricingError).toContain('Target margin')
 })
 
-it('distinguishes whole selling packages from their contents and exposes unavailable or archived references', () => {
+it('shows compact configured counts and exposes unavailable or archived references', () => {
   const { workspace, kit } = fixture()
   Object.assign(workspace.products[0], {
     unitsPerPackage: 9,
@@ -190,10 +190,12 @@ it('distinguishes whole selling packages from their contents and exposes unavail
       openProduct={vi.fn()}
     />,
   )
-  expect(screen.getByText('2 whole selling packages')).toBeVisible()
-  expect(screen.getByText('9 rolls per package')).toBeVisible()
-  expect(screen.getByText('Selling unit: tray')).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: `${workspace.products[0].name} ×2` }),
+  ).toBeVisible()
+  expect(screen.queryByText('9 rolls per package')).not.toBeInTheDocument()
+  expect(screen.queryByText('Selling unit: tray')).not.toBeInTheDocument()
   expect(screen.getByText('Archived product')).toBeVisible()
-  expect(screen.getByText('Unavailable product · missing')).toBeVisible()
+  expect(screen.getByText('Unavailable product · missing ×3')).toBeVisible()
   expect(screen.getByText(/Unsupported quantity basis/)).toBeVisible()
 })

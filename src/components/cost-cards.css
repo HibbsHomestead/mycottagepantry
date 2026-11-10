@@ -149,32 +149,6 @@
 .kit-included-products h3 {
   margin: 0;
 }
-.kit-included-products ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.kit-included-products li {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
-  gap: 8px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.kit-included-products li > span {
-  min-width: 0;
-}
-.kit-included-products .text-button {
-  text-align: left;
-  white-space: normal;
-}
-.kit-included-products small {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-}
 .kit-estimate-issue {
   padding: 12px;
   border: 1px solid var(--border);

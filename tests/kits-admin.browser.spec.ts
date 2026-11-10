@@ -72,7 +72,7 @@ for (const width of [1440, 390]) {
     ).toBe(stock)
     await expect(
       page.getByRole('region', { name: 'Included products', exact: true }),
-    ).toContainText('2 whole selling packages')
+    ).toContainText('×2')
     await page.screenshot({
       path: `.netlify/screenshots/kit-details-${width}.png`,
       fullPage: true,
