@@ -1,5 +1,6 @@
 import { OpeningOven } from './opening-oven'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
+import { KitCostCards } from './kit-cost-cards'
 import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
 import { KitIncludedProducts } from './kit-included-products'
@@ -280,6 +281,8 @@ export function WorkspaceApp() {
     [modal, setModal] = useState<string | null>(null),
     [productTab, setProductTab] = useState('details'),
     [selectedRecord, setSelected] = useState<Item | null>(null),
+    [selected, setSelected] = useState<Item | null>(null),
+    [kitContext, setKitContext] = useState<string | null>(null),
     [filter, setFilter] = useState('All items'),
     [role, setRole] = useState('Owner'),
     [demo, setDemo] = useState(true),
@@ -1898,6 +1901,12 @@ export function WorkspaceApp() {
                         ? workflowOf(p) === 'kit'
                         : !['Food', 'Handmade', 'Resale'].includes(sub) ||
                           workflowOf(p) === sub.toLowerCase(),
+                    products={filtered(products).filter(
+                      (p) =>
+                        !['Food', 'Handmade', 'Resale', 'Kits'].includes(sub) ||
+                        (sub === 'Kits'
+                          ? p.workflow === 'kit'
+                          : workflowOf(p) === sub.toLowerCase()),
                     )}
                     workspace={state}
                     open={open}
@@ -2685,10 +2694,18 @@ export function WorkspaceApp() {
         <KitEditor
           key={selected?.id || 'new'}
           kind="kit"
+          onSaved={() => setModal('product-detail')}
           item={selected}
           workspace={state}
           role={role}
-          mutate={mutate}
+          mutate={async (action, table, data) => {
+            const result = await mutate(action, table, data)
+            setSelected(
+              result.workspace.products.find((p: Item) => p.id === data.id) ||
+                (data as Item),
+            )
+            return result
+          }}
           onWorkspace={setState}
           close={() => {
             if (kitEditorReturn) {
@@ -2703,10 +2720,14 @@ export function WorkspaceApp() {
             setKitEditorReturn(null)
             setModal('product-detail')
           }}
+          close={() => setModal(selected ? 'product-detail' : null)}
           onDirty={(dirty) => {
             workflowDirty.current = dirty
           }}
-          openProduct={(p) => open('product-detail', p)}
+          openProduct={(p) => {
+            setKitContext(selected?.id || null)
+            open('product-detail', p)
+          }}
         />
       )}
       {modal?.startsWith('trade-') && (
@@ -2797,6 +2818,8 @@ export function WorkspaceApp() {
               setSelected(kit)
               setKitContext(null)
             } else setModal(null)
+            setModal(null)
+            setKitContext(null)
           }
         }}
       >
@@ -4815,6 +4838,58 @@ export function WorkspaceApp() {
                       >
                         Edit kit
                       </Btn>
+                    <section
+                      className="kit-included-products"
+                      aria-label="Included products"
+                    >
+                      <h3>Included products</h3>
+                      <ul>
+                        {(selected.kitComponents || []).map(
+                          (line: Item, index: number) => {
+                            const component = state.products.find(
+                              (p) => p.id === line.productId,
+                            )
+                            return (
+                              <li key={index}>
+                                {component ? (
+                                  <button
+                                    className="text-button"
+                                    onClick={() => {
+                                      setKitContext(selected.id)
+                                      open('product-detail', component)
+                                    }}
+                                  >
+                                    {component.name}
+                                  </button>
+                                ) : (
+                                  <span>
+                                    Unavailable product {line.productId}
+                                  </span>
+                                )}
+                                <span>
+                                  {line.quantity}{' '}
+                                  {line.basis === 'package'
+                                    ? 'selling packages'
+                                    : line.basis || 'basis unavailable'}
+                                  {component && line.basis === 'package' && (
+                                    <small>
+                                      {component.sellingUnit
+                                        ? ` · ${component.sellingUnit}`
+                                        : ''}
+                                      {component.unitsPerPackage
+                                        ? ` · ${component.unitsPerPackage} ${component.contentUnit || state.recipes.find((r) => r.id === component.recipeId)?.yieldUnit || 'contents'} per package`
+                                        : ' · Contents per package not configured'}
+                                    </small>
+                                  )}
+                                </span>
+                              </li>
+                            )
+                          },
+                        )}
+                      </ul>
+                    </section>
+                    <div className="button-row product-detail-actions">
+                      <Btn onClick={() => open('kit', selected)}>Edit kit</Btn>
                     </div>
                   </>
                 ) : (
@@ -4898,6 +4973,78 @@ export function WorkspaceApp() {
                           go('Labels', 'Labels')
                         }}
                       >
+                    {kitContext && (
+                      <Btn
+                        secondary
+                        onClick={() => {
+                          const kit = state.products.find(
+                            (p) => p.id === kitContext,
+                          )
+                          setKitContext(null)
+                          if (kit) open('product-detail', kit)
+                        }}
+                      >
+                        Back to kit
+                      </Btn>
+                    )}
+                    <section
+                      aria-label="Product labels"
+                      className="product-linked-labels"
+                    >
+                      <h3>Labels</h3>
+                      {labelsForProduct(state, selected).length ? (
+                        labelsForProduct(state, selected).map((label) => (
+                          <div className="product-linked-label" key={label.id}>
+                            <span>
+                              <strong>{label.name}</strong>
+                              {label.format === 'front-back'
+                                ? ' · Front + Back'
+                                : ''}
+                            </span>
+                            <Btn
+                              secondary
+                              small
+                              onClick={() => {
+                                setPreviewLabelId(label.id)
+                                setPreviewProduct(selected)
+                              }}
+                            >
+                              Preview/Print
+                            </Btn>
+                            <Btn
+                              secondary
+                              small
+                              onClick={() => {
+                                setLabelProduct(selected.id)
+                                setLabelDesign(label.id)
+                                setModal(null)
+                                go('Labels', 'Editor')
+                              }}
+                            >
+                              Edit
+                            </Btn>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="table-note">
+                          No linked labels. Create one in Labels when needed.
+                        </p>
+                      )}
+                    </section>
+                    <div className="button-row product-detail-actions">
+                      <Btn onClick={() => open('product', selected)}>
+                        Edit Product
+                      </Btn>
+                      <Btn
+                        secondary
+                        onClick={() => {
+                          setLabelProduct(selected.id)
+                          setLabelDesign('')
+                          setLabelCreateRequest((n) => n + 1)
+                          setModal(null)
+                          go('Labels', 'Labels')
+                        }}
+                      >
                         Create label
                       </Btn>
                     </div>
@@ -4936,6 +5083,7 @@ export function WorkspaceApp() {
                       section,
                     )
                   }}
+                  edit={() => open('kit', selected)}
                 />
               ) : (
                 <ProductCostCards

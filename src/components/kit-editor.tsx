@@ -13,6 +13,7 @@ import { kitEstimate } from '@/lib/kit-estimate'
 import './kit-components.css'
 
 type Props = Parameters<typeof ProductEditor>[0] & {
+  onSaved?: () => void
   openProduct: (item: Item) => void
   onSaved?: (id: string) => void
 }
@@ -107,6 +108,21 @@ export function KitEditor({
         </div>
       )}
     </>
+  ) : (
+    <p role="status">
+      Estimate incomplete: {draft.name || 'This kit'}: {estimateError}
+      {estimateError.includes('category') ||
+      estimateError.includes('Tax treatment')
+        ? ' Review this kit’s Category in Contents & details, then its classification and tax treatment in Products → Categories.'
+        : ' Review the referenced component or kit packaging configuration.'}
+      <button
+        type="button"
+        className="text-button"
+        onClick={() => setTab('contents')}
+      >
+        Review contents &amp; details
+      </button>
+    </p>
   )
   const contents = (
     <>
@@ -475,6 +491,7 @@ export function KitEditor({
           await mutate('save', 'products', draft)
           onDirty(false)
           if (onSaved) onSaved(draft.id)
+          if (onSaved) onSaved()
           else close()
         } catch (e) {
           setError((e as Error).message)
