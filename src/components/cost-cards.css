@@ -155,3 +155,30 @@
     font-size: 22px;
   }
 }
+
+.kit-included-products h3 {
+  margin: 0 0 10px;
+}
+.kit-included-products ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.kit-included-products li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.kit-included-products .text-button {
+  text-align: left;
+  white-space: normal;
+  min-width: 0;
+  padding: 0;
+}
+.kit-included-products small {
+  display: block;
+}
