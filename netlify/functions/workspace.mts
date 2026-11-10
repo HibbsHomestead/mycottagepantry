@@ -4961,6 +4961,12 @@ export default async (req: Request, context: Context) => {
           at: error.diagnostics.requestedAt,
           source: error.diagnostics.source,
           status: error.diagnostics.hops.at(-1)?.status,
+          stage: error.diagnostics.stage,
+          requestedUrl: error.diagnostics.requestedUrl,
+          normalizedUrl: error.diagnostics.normalizedUrl,
+          retrieval: error.diagnostics.retrieval,
+          fallback: error.diagnostics.fallback,
+          hops: error.diagnostics.hops,
         }),
       )
     }

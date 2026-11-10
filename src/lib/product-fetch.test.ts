@@ -77,6 +77,10 @@ it('sends an Amazon Share link through the shared protected fetcher and retains 
     requested,
     false,
     expect.any(Number),
+    expect.objectContaining({
+      deadline: expect.any(Number),
+      validateRedirect: expect.any(Function),
+    }),
   )
   expect(product).toMatchObject({
     sourceUrl: 'https://www.amazon.com/dp/B000EXAMPLE',

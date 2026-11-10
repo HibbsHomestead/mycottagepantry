@@ -226,7 +226,10 @@ export function AddItemDialog({
   function change(key: string, v: Item[string]) {
     setDirty(true)
     if (key === 'materialType')
-      setDrafts((d) => ({ ...d, material: { ...d.material, materialType: v } }))
+      setDrafts((d) => ({
+        ...d,
+        material: { ...d.material, materialType: v },
+      }))
     else if (
       sharedKeys.includes(key) &&
       !(packageSetup && ['initialStock', 'packagePrice'].includes(key))
@@ -312,6 +315,18 @@ export function AddItemDialog({
     </Tabs.Content>
   )
   const hasCatalog = ['ingredient', 'packaging', 'supply'].includes(type)
+  const photoField = (
+    <ItemPhotoField
+      value={value}
+      assets={workspace.graphic_assets || []}
+      kind={type === 'resale' ? 'product' : 'pantry'}
+      disabled={busy || importBusy}
+      onChange={change}
+      onWorkspace={onWorkspace}
+      onBusy={setBusy}
+      onError={setError}
+    />
+  )
   const applyImport = (patch: Record<string, Item[string]>) => {
     for (const [key, v] of Object.entries(patch)) change(key, v)
   }
@@ -543,234 +558,239 @@ export function AddItemDialog({
                   </Tabs.List>
                   {panel(
                     'details',
-                    <>
-                      {!hasCatalog && (
-                        <div
-                          className="add-item-methods"
-                          role="group"
-                          aria-label="Entry method"
-                        >
-                          {['manual', 'barcode', 'url'].map((entry) => (
-                            <button
-                              key={entry}
-                              type="button"
-                              aria-pressed={method === entry}
-                              disabled={importBusy}
-                              onClick={() => setMethod(entry)}
-                            >
-                              {entry === 'url'
-                                ? 'URL'
-                                : entry === 'barcode'
-                                  ? 'Barcode'
-                                  : 'Manual'}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {!hasCatalog && (
-                        <div hidden={method !== 'barcode'}>{barcodeLookup}</div>
-                      )}
-                      <div
-                        className={
-                          hasCatalog ? 'add-ingredient-lookups' : undefined
-                        }
-                        hidden={!hasCatalog && method !== 'url'}
-                      >
-                        <ProductLinkImport
-                          compact
-                          afterLookup={
-                            hasCatalog
-                              ? (selectUrl) => (
-                                  <IngredientLookupTools
-                                    key={type + reviewVersion}
-                                    draft={value}
-                                    workspace={workspace}
-                                    apply={applyImport}
-                                    onScan={() => {
-                                      scanned.current = true
-                                      setScanner(true)
-                                    }}
-                                    autoSearch={reviewVersion > 0}
-                                    packageSetup={packageSetup}
-                                    onSourceUrl={selectUrl}
-                                  />
-                                )
-                              : undefined
-                          }
-                          populateDraft={type === 'ingredient'}
-                          packageSetup={packageSetup}
-                          vendors={workspace.vendors}
-                          key={type + subtype}
-                          settings={workspace.settings[0]}
-                          draft={value}
-                          onWorkspace={onWorkspace}
-                          onBusyChange={setImportBusy}
-                          apply={(patch) => {
-                            for (const [key, v] of Object.entries(patch))
-                              if (
-                                ![
-                                  'usedAs',
-                                  'workflow',
-                                  'materialType',
-                                  'categoryId',
-                                  'fabricTracking',
-                                ].includes(key)
-                              )
-                                change(key, v)
-                          }}
-                        />
-                      </div>
-                      {type === 'resale' && (
-                        <Field label="Resale product / variant">
-                          <select
-                            value={value.existingProductId || ''}
-                            onChange={(e) =>
-                              change('existingProductId', e.target.value)
-                            }
+                    <div
+                      className={`add-item-details-layout${type === 'packaging' ? ' packaging-details-layout' : ''}`}
+                    >
+                      <div className="add-item-details-main">
+                        {!hasCatalog && (
+                          <div
+                            className="add-item-methods"
+                            role="group"
+                            aria-label="Entry method"
                           >
-                            <option value="">
-                              Create a new resale product / variant
-                            </option>
-                            {workspace.products
-                              .filter((p) => p.workflow === 'resale')
-                              .map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                  {p.variant ? ` · ${p.variant}` : ''}
-                                </option>
-                              ))}
-                          </select>
-                        </Field>
-                      )}
-                      {existingProduct ? (
-                        <p>
-                          {receiptLine
-                            ? 'Selects the existing item without posting stock.'
-                            : 'Continue to Receive Stock for this existing product.'}
-                        </p>
-                      ) : (
-                        <>
-                          <div className="add-item-details-grid">
-                            <div className="add-item-basics">
-                              <Field label="Item name">
-                                <input
-                                  data-item-name
-                                  value={value.name || ''}
-                                  required
-                                  onChange={(e) =>
-                                    change('name', e.target.value)
-                                  }
-                                />
-                              </Field>
-                              {type === 'material' && (
-                                <Field label="Material Subtype">
-                                  <select
-                                    value={subtype}
+                            {['manual', 'barcode', 'url'].map((entry) => (
+                              <button
+                                key={entry}
+                                type="button"
+                                aria-pressed={method === entry}
+                                disabled={importBusy}
+                                onClick={() => setMethod(entry)}
+                              >
+                                {entry === 'url'
+                                  ? 'URL'
+                                  : entry === 'barcode'
+                                    ? 'Barcode'
+                                    : 'Manual'}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {!hasCatalog && (
+                          <div hidden={method !== 'barcode'}>
+                            {barcodeLookup}
+                          </div>
+                        )}
+                        <div
+                          className={
+                            hasCatalog ? 'add-ingredient-lookups' : undefined
+                          }
+                          hidden={!hasCatalog && method !== 'url'}
+                        >
+                          <ProductLinkImport
+                            compact
+                            afterLookup={
+                              hasCatalog
+                                ? (selectUrl) => (
+                                    <IngredientLookupTools
+                                      key={type + reviewVersion}
+                                      draft={value}
+                                      workspace={workspace}
+                                      apply={applyImport}
+                                      onScan={() => {
+                                        scanned.current = true
+                                        setScanner(true)
+                                      }}
+                                      autoSearch={reviewVersion > 0}
+                                      packageSetup={packageSetup}
+                                      onSourceUrl={selectUrl}
+                                    />
+                                  )
+                                : undefined
+                            }
+                            populateDraft={type === 'ingredient'}
+                            packageSetup={packageSetup}
+                            vendors={workspace.vendors}
+                            key={type + subtype}
+                            settings={workspace.settings[0]}
+                            draft={value}
+                            onWorkspace={onWorkspace}
+                            onBusyChange={setImportBusy}
+                            apply={(patch) => {
+                              for (const [key, v] of Object.entries(patch))
+                                if (
+                                  ![
+                                    'usedAs',
+                                    'workflow',
+                                    'materialType',
+                                    'categoryId',
+                                    'fabricTracking',
+                                  ].includes(key)
+                                )
+                                  change(key, v)
+                            }}
+                          />
+                        </div>
+                        {type === 'resale' && (
+                          <Field label="Resale product / variant">
+                            <select
+                              value={value.existingProductId || ''}
+                              onChange={(e) =>
+                                change('existingProductId', e.target.value)
+                              }
+                            >
+                              <option value="">
+                                Create a new resale product / variant
+                              </option>
+                              {workspace.products
+                                .filter((p) => p.workflow === 'resale')
+                                .map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                    {p.variant ? ` · ${p.variant}` : ''}
+                                  </option>
+                                ))}
+                            </select>
+                          </Field>
+                        )}
+                        {existingProduct ? (
+                          <p>
+                            {receiptLine
+                              ? 'Selects the existing item without posting stock.'
+                              : 'Continue to Receive Stock for this existing product.'}
+                          </p>
+                        ) : (
+                          <>
+                            <div className="add-item-details-grid">
+                              <div className="add-item-basics">
+                                <Field label="Item name">
+                                  <input
+                                    data-item-name
+                                    value={value.name || ''}
+                                    required
                                     onChange={(e) =>
-                                      change('materialType', e.target.value)
+                                      change('name', e.target.value)
                                     }
-                                  >
-                                    <option value="fabric">Fabric</option>
-                                    <option value="yarn">Yarn</option>
-                                    <option value="other">
-                                      Other craft material
-                                    </option>
-                                  </select>
+                                  />
                                 </Field>
-                              )}
-                              <div className="form-grid">
-                                {type === 'ingredient' && (
-                                  <Field label="Category">
+                                {type === 'material' && (
+                                  <Field label="Material Subtype">
                                     <select
-                                      value={value.categoryId}
+                                      value={subtype}
                                       onChange={(e) =>
-                                        change('categoryId', e.target.value)
+                                        change('materialType', e.target.value)
                                       }
                                     >
-                                      {pantryCategories
-                                        .filter(
-                                          (c) =>
-                                            ![
-                                              'packaging',
-                                              'supplies',
-                                              'craft-materials',
-                                            ].includes(c.value),
-                                        )
-                                        .map((c) => (
-                                          <option key={c.value} value={c.value}>
-                                            {c.label}
-                                          </option>
-                                        ))}
+                                      <option value="fabric">Fabric</option>
+                                      <option value="yarn">Yarn</option>
+                                      <option value="other">
+                                        Other craft material
+                                      </option>
                                     </select>
                                   </Field>
                                 )}
-                                {type === 'resale' && (
-                                  <>
-                                    <Field label="Product category">
+                                <div className="form-grid">
+                                  {type === 'ingredient' && (
+                                    <Field label="Category">
                                       <select
-                                        value={value.productCategoryId || ''}
+                                        value={value.categoryId}
                                         onChange={(e) =>
-                                          change(
-                                            'productCategoryId',
-                                            e.target.value,
-                                          )
+                                          change('categoryId', e.target.value)
                                         }
                                       >
-                                        <option value="">Uncategorized</option>
-                                        {(
-                                          workspace.settings[0]
-                                            ?.productCategories || []
-                                        )
+                                        {pantryCategories
                                           .filter(
-                                            (c: Item) => c.active !== false,
+                                            (c) =>
+                                              ![
+                                                'packaging',
+                                                'supplies',
+                                                'craft-materials',
+                                              ].includes(c.value),
                                           )
-                                          .map((c: Item) => (
-                                            <option key={c.id} value={c.id}>
-                                              {c.name}
+                                          .map((c) => (
+                                            <option
+                                              key={c.value}
+                                              value={c.value}
+                                            >
+                                              {c.label}
                                             </option>
                                           ))}
                                       </select>
                                     </Field>
-                                    <Field label="Food classification">
-                                      <select
-                                        value={value.foodClass || ''}
-                                        onChange={(e) =>
-                                          change('foodClass', e.target.value)
-                                        }
-                                      >
-                                        <option value="">Not specified</option>
-                                        <option value="food">Food</option>
-                                        <option value="non-food">
-                                          Non-food
-                                        </option>
-                                      </select>
-                                    </Field>
-                                    <Field label="Variant (optional)">
-                                      {input('variant')}
-                                    </Field>
-                                    <Field label="Selling price">
-                                      {input('price', 'number')}
-                                    </Field>
-                                  </>
-                                )}
+                                  )}
+                                  {type === 'resale' && (
+                                    <>
+                                      <Field label="Product category">
+                                        <select
+                                          value={value.productCategoryId || ''}
+                                          onChange={(e) =>
+                                            change(
+                                              'productCategoryId',
+                                              e.target.value,
+                                            )
+                                          }
+                                        >
+                                          <option value="">
+                                            Uncategorized
+                                          </option>
+                                          {(
+                                            workspace.settings[0]
+                                              ?.productCategories || []
+                                          )
+                                            .filter(
+                                              (c: Item) => c.active !== false,
+                                            )
+                                            .map((c: Item) => (
+                                              <option key={c.id} value={c.id}>
+                                                {c.name}
+                                              </option>
+                                            ))}
+                                        </select>
+                                      </Field>
+                                      <Field label="Food classification">
+                                        <select
+                                          value={value.foodClass || ''}
+                                          onChange={(e) =>
+                                            change('foodClass', e.target.value)
+                                          }
+                                        >
+                                          <option value="">
+                                            Not specified
+                                          </option>
+                                          <option value="food">Food</option>
+                                          <option value="non-food">
+                                            Non-food
+                                          </option>
+                                        </select>
+                                      </Field>
+                                      <Field label="Variant (optional)">
+                                        {input('variant')}
+                                      </Field>
+                                      <Field label="Selling price">
+                                        {input('price', 'number')}
+                                      </Field>
+                                    </>
+                                  )}
 
-                                <Field label="Brand">{input('brand')}</Field>
+                                  <Field label="Brand">{input('brand')}</Field>
+                                </div>
                               </div>
+                              {type !== 'packaging' && photoField}
                             </div>
-                            <ItemPhotoField
-                              value={value}
-                              assets={workspace.graphic_assets || []}
-                              kind={type === 'resale' ? 'product' : 'pantry'}
-                              disabled={busy || importBusy}
-                              onChange={change}
-                              onWorkspace={onWorkspace}
-                              onBusy={setBusy}
-                              onError={setError}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </>,
+                          </>
+                        )}
+                      </div>
+                      {type === 'packaging' && photoField}
+                    </div>,
                   )}
                   {!existingProduct &&
                     type === 'resale' &&

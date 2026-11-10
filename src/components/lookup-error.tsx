@@ -50,6 +50,19 @@ export function LookupError({
             Number.isFinite(Date.parse(diagnostics.requestedAt)) && (
               <p>{new Date(diagnostics.requestedAt).toISOString()}</p>
             )}
+          {diagnostics?.normalizedUrl &&
+            (() => {
+              try {
+                return (
+                  <p>
+                    Requested product:{' '}
+                    {diagnosticUrl(diagnostics.normalizedUrl)}
+                  </p>
+                )
+              } catch {
+                return null
+              }
+            })()}
           {hops.slice(0, 8).map((hop, index) => {
             let url = ''
             try {
@@ -61,6 +74,10 @@ export function LookupError({
               <p key={index}>
                 {url}
                 {Number.isInteger(hop.status) ? ` · HTTP ${hop.status}` : ''}
+                {hop.attempt ? ` · attempt ${hop.attempt}` : ''}
+                {hop.browserRedirect?.kind === 'error'
+                  ? ' · error-page browser redirect was not followed'
+                  : ''}
               </p>
             ) : null
           })}

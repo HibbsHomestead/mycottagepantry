@@ -81,9 +81,9 @@ for (const width of [1440, 390]) {
     await expect(modal.getByLabel('Item name', { exact: true })).toHaveValue(
       baking.products[0].fields.name,
     )
-    await expect(modal.getByLabel('Brand', { exact: true })).toHaveValue(
-      'ARM & HAMMER',
-    )
+    await expect(
+      modal.getByRole('textbox', { name: 'Brand', exact: true }),
+    ).toHaveValue('ARM & HAMMER')
     await modal
       .getByLabel('Item name', { exact: true })
       .scrollIntoViewIfNeeded()
@@ -95,7 +95,7 @@ for (const width of [1440, 390]) {
       .getByRole('tab', { name: 'Purchase & Stock', exact: true })
       .click()
     await expect(
-      modal.getByLabel('Purchase unit', { exact: true }),
+      modal.getByRole('combobox', { name: 'Purchase unit', exact: true }),
     ).toHaveValue('package')
     await expect(modal.getByLabel('Stock unit', { exact: true })).toHaveValue(
       'g',
@@ -212,11 +212,15 @@ for (const width of [1440, 390]) {
     const f = await setup(page)
     const modal = await add(page)
     await modal.getByLabel('Item name', { exact: true }).fill('My baking soda')
-    await modal.getByLabel('Brand', { exact: true }).fill('Manual brand')
+    await modal
+      .getByRole('textbox', { name: 'Brand', exact: true })
+      .fill('Manual brand')
     await modal
       .getByRole('tab', { name: 'Purchase & Stock', exact: true })
       .click()
-    await modal.getByLabel('Purchase unit', { exact: true }).selectOption('bag')
+    await modal
+      .getByRole('combobox', { name: 'Purchase unit', exact: true })
+      .selectOption('bag')
     await modal.getByLabel('Stock unit', { exact: true }).selectOption('lb')
     await modal.getByLabel('Amount in each package', { exact: true }).fill('2')
     await modal.getByLabel('Cost per package', { exact: true }).fill('7.25')
@@ -235,9 +239,9 @@ for (const width of [1440, 390]) {
     await modal
       .getByRole('button', { name: 'Apply selected values', exact: true })
       .click()
-    await expect(modal.getByLabel('Brand', { exact: true })).toHaveValue(
-      'ARM & HAMMER',
-    )
+    await expect(
+      modal.getByRole('textbox', { name: 'Brand', exact: true }),
+    ).toHaveValue('ARM & HAMMER')
     await expect(modal.getByLabel('Item name', { exact: true })).toHaveValue(
       'My baking soda',
     )
@@ -251,7 +255,7 @@ for (const width of [1440, 390]) {
       }),
     ).toHaveValue('13.5')
     await expect(
-      modal.getByLabel('Purchase unit', { exact: true }),
+      modal.getByRole('combobox', { name: 'Purchase unit', exact: true }),
     ).toHaveValue('bag')
     await expect(
       modal.getByLabel('Cost per package', { exact: true }),
@@ -333,9 +337,9 @@ test('existing ingredient keeps identity, stock, manual values and reviewed word
   await modal
     .getByRole('button', { name: 'Import details', exact: true })
     .click()
-  await expect(modal.getByLabel('Brand', { exact: true })).toHaveValue(
-    'ARM & HAMMER',
-  )
+  await expect(
+    modal.getByRole('textbox', { name: 'Brand', exact: true }),
+  ).toHaveValue('ARM & HAMMER')
   await modal
     .getByLabel('Choose the exact product / package / offer')
     .selectOption('0')
@@ -355,7 +359,9 @@ test('existing ingredient keeps identity, stock, manual values and reviewed word
   await modal
     .getByRole('button', { name: 'Apply selected values', exact: true })
     .click()
-  await modal.getByText('Label information & notes', { exact: true }).click()
+  await modal
+    .getByRole('button', { name: 'Images & Label Info', exact: true })
+    .click()
   await expect(
     modal.getByRole('textbox', { name: 'Subingredients text', exact: true }),
   ).toHaveValue('Sodium Bicarbonate 100%')
@@ -498,9 +504,9 @@ test('manual edits entered during the request are preserved', async ({
     .getByLabel('Item name', { exact: true })
     .fill('Entered while loading')
   f.release()
-  await expect(modal.getByLabel('Brand', { exact: true })).toHaveValue(
-    'ARM & HAMMER',
-  )
+  await expect(
+    modal.getByRole('textbox', { name: 'Brand', exact: true }),
+  ).toHaveValue('ARM & HAMMER')
   await expect(modal.getByLabel('Item name', { exact: true })).toHaveValue(
     'Entered while loading',
   )
