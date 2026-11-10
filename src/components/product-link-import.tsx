@@ -216,6 +216,7 @@ export function ProductLinkImport({
       }
     : undefined
   const packaging = isPackaging(draft)
+  const ManualReference = compact && packaging ? 'details' : 'div'
   const food = foodProduct(draft)
   const itemWord = packaging
     ? 'packaging'
@@ -505,7 +506,7 @@ export function ProductLinkImport({
             ? 'Enter a valid product URL.'
             : e instanceof ProductHumanVerificationError
               ? 'Walmart import requires verification.'
-              : 'Import failed.'
+              : `Product details unavailable${e instanceof ProductImportFailure && e.diagnostics.hops.at(-1)?.status ? ` (HTTP ${e.diagnostics.hops.at(-1)!.status})` : ''}. Your entries are preserved. Retry or enter details manually.`
           : amazon
             ? 'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.'
             : (e as Error).message +
@@ -853,16 +854,45 @@ export function ProductLinkImport({
         </button>
       </div>
       {lookupPanel && lookupAction === 'url' && error && (
-        <LookupError
-          message={error}
-          code={errorCode}
-          status={errorStatus}
-          diagnostics={diagnostics}
-        >
-          {clock < retryAt && (
-            <p>Retry with Import details after the source wait period.</p>
-          )}
-        </LookupError>
+        <div>
+          <LookupError
+            message={error}
+            code={errorCode}
+            status={errorStatus}
+            diagnostics={diagnostics}
+          >
+            {clock < retryAt && (
+              <p>Retry with Import details after the source wait period.</p>
+            )}
+          </LookupError>
+          <div className="button-row">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={search}
+              disabled={
+                busy ||
+                uploadingScreenshot ||
+                clock < retryAt ||
+                errorCode === 'PRODUCT_HUMAN_VERIFICATION'
+              }
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={(e) =>
+                e.currentTarget
+                  .closest('form')
+                  ?.querySelector<HTMLInputElement>('[data-item-name]')
+                  ?.focus()
+              }
+            >
+              Enter details manually
+            </button>
+          </div>
+        </div>
       )}
       <LookupActionContext.Provider
         value={
@@ -914,6 +944,18 @@ export function ProductLinkImport({
               Retry
             </button>
           )}
+          <button
+            type="button"
+            className="text-button"
+            onClick={(e) =>
+              e.currentTarget
+                .closest('form')
+                ?.querySelector<HTMLInputElement>('[data-item-name]')
+                ?.focus()
+            }
+          >
+            Enter details manually
+          </button>
           {attempts.count >= 3 ? (
             <p className="form-hint">
               Retry limit reached. Continue manually, or reopen the importer
@@ -958,7 +1000,10 @@ export function ProductLinkImport({
         </div>
       )}
       {!lookupPanel && (verificationUrl || error) && (
-        <div className="product-import-review">
+        <ManualReference className="product-import-review">
+          {compact && packaging && (
+            <summary>Reference screenshot (optional)</summary>
+          )}
           <p>
             Continue here with pasted product text, a screenshot for reference,
             or manual entry below. Review all values before saving.
@@ -998,7 +1043,7 @@ export function ProductLinkImport({
               does not extract values or replace your product photo.
             </small>
           </ItemPhotoField>
-        </div>
+        </ManualReference>
       )}
       {lookupPanel ? (
         <details

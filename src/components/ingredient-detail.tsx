@@ -222,7 +222,10 @@ export function IngredientDetail({
           Object.hasOwn(patch, key),
         )
       ) {
-        const mapping = purchaseSetupView({ ...next, purchaseSetup: undefined })
+        const mapping = purchaseSetupView({
+          ...next,
+          purchaseSetup: undefined,
+        })
         next.purchaseSetup = mapping.setup
         next.purchaseSetupReview = mapping.review || ''
         next.purchaseSetupConfirmed = false
@@ -316,6 +319,7 @@ export function IngredientDetail({
   }
   const input = (key: string, type = 'text') => (
     <input
+      data-item-name={key === 'name' ? '' : undefined}
       type={type === 'number' && /quantity/i.test(key) ? 'text' : type}
       aria-label={
         key === 'purchaseQuantity'
@@ -657,7 +661,7 @@ export function IngredientDetail({
             >
               {editing ? (
                 <div
-                  className={`ingredient-detail-grid ingredient-tab-${editTab} ${packaging ? '' : 'ingredient-edit-grid'}`}
+                  className={`ingredient-detail-grid ingredient-tab-${editTab} ${packaging ? 'packaging-edit-grid' : 'ingredient-edit-grid'}`}
                 >
                   <div
                     className="ingredient-setup-tabs"
@@ -796,6 +800,9 @@ export function IngredientDetail({
                           draft={draft}
                           workspace={w}
                           existing
+                          onScan={
+                            packaging ? () => setScanning(true) : undefined
+                          }
                           onSourceUrl={selectUrl}
                           apply={applyImport}
                         />
@@ -889,13 +896,15 @@ export function IngredientDetail({
                           </Field>
                           <Field label="Default barcode">
                             {input('barcode')}
-                            <button
-                              type="button"
-                              className="btn secondary"
-                              onClick={() => setScanning(true)}
-                            >
-                              Scan barcode
-                            </button>
+                            {!packaging && (
+                              <button
+                                type="button"
+                                className="btn secondary"
+                                onClick={() => setScanning(true)}
+                              >
+                                Scan barcode
+                              </button>
+                            )}
                           </Field>
                         </div>
                         {!packaging && (
