@@ -515,14 +515,6 @@ for (const width of [1440, 390]) {
     assertStock()
   })
 }
-import { test, expect } from '@playwright/test'
-import { demoData } from '../src/lib/demo'
-import {
-  installWorkspaceFixture,
-  workspaceFixtureUrl,
-} from './workspace-fixture'
-import { mkdir } from 'node:fs/promises'
-
 for (const width of [1440, 390])
   test(`kit details, navigation and save ${width}`, async ({ page }) => {
     await mkdir('docs/reviews/kit-details', { recursive: true })
@@ -586,17 +578,17 @@ for (const width of [1440, 390])
     await page.getByLabel('Search products').fill('Gather')
     await page.getByRole('button', { name: kit.name, exact: true }).click()
     await expect(
-      dialog.getByRole('button', { name: 'Edit kit', exact: true }),
+      dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit kit', exact: true }),
     ).toBeVisible()
     await expect(
       dialog.getByText('Product category not configured.', { exact: false }),
     ).toBeVisible()
     await expect(
       dialog.getByRole('region', { name: 'Included products' }),
-    ).toContainText('2 selling packages')
+    ).toContainText(`${component.name} ×2`)
     await expect(
       dialog.getByRole('region', { name: 'Included products' }),
-    ).toContainText('9 rolls per package')
+    ).not.toContainText('per package')
     await expect(
       dialog.getByText('Connected recipe:', { exact: false }),
     ).toHaveCount(0)
@@ -620,10 +612,10 @@ for (const width of [1440, 390])
     })
     expect(writes).toBe(0)
     await dialog
-      .getByRole('button', { name: component.name, exact: true })
+      .getByRole('button', { name: `${component.name} ×2`, exact: true })
       .click()
-    await dialog.getByRole('button', { name: 'Back to kit' }).click()
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.getByRole('button', { name: `Back to ${kit.name}`, exact: true }).click()
+    await dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit kit', exact: true }).click()
     await page.getByRole('tab', { name: 'Packaging & cost' }).click()
     await page.getByLabel('Kit selling price').fill('49')
     await page.getByRole('button', { name: 'Save kit', exact: true }).click()

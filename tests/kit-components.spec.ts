@@ -196,6 +196,18 @@ for (const width of [1440, 768, 390]) {
         ).toBeVisible()
       }
       await expect(list).not.toContainText(/package|per loaf|per cookie/)
+      const rows = await list.locator('li').evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          display: getComputedStyle(node).display,
+          padding: getComputedStyle(node).paddingTop,
+          height: node.getBoundingClientRect().height,
+        })),
+      )
+      for (const row of rows) {
+        expect(row.display).toBe('block')
+        expect(row.padding).toBe('2px')
+        expect(row.height).toBeLessThan(50)
+      }
     }
     await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
     await expect(
