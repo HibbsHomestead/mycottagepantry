@@ -3,17 +3,19 @@ import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
 import {
   productCosting,
-  profitability,
   packagingLines,
   effectiveRecipeLines,
   money,
   type Item,
 } from '@/lib/domain'
 import type { ProductEditor } from './product-editor'
+import { kitEstimate } from '@/lib/kit-estimate'
+import './kit-components.css'
 
 type Props = Parameters<typeof ProductEditor>[0] & {
   onSaved?: () => void
   openProduct: (item: Item) => void
+  onSaved?: (id: string) => void
 }
 export function KitEditor({
   item,
@@ -62,35 +64,49 @@ export function KitEditor({
       key,
       rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
     )
-  let estimate:
-    | {
-        cost: ReturnType<typeof productCosting>
-        pricing: ReturnType<typeof profitability>
-      }
-    | undefined
-  let estimateError = ''
-  try {
-    const cost = productCosting(draft, workspace)
-    estimate = {
-      cost,
-      pricing: profitability(draft, cost.perPackage, workspace.settings[0]),
-    }
-  } catch (e) {
-    estimateError = (e as Error).message
-  }
-  const summary = estimate ? (
+  const estimate = kitEstimate(draft, workspace)
+  const summary = (
     <>
-      <p>Included packages: {money(estimate.cost.ingredient)}</p>
-      <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
-      <p>Additional assembly: {money(estimate.cost.labor)}</p>
+      {estimate.cost && (
+        <>
+          <p>Included packages: {money(estimate.cost.ingredient)}</p>
+          <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
+          <p>Additional assembly: {money(estimate.cost.labor)}</p>
+          <p>
+            <strong>
+              Total / sellable kit: {money(estimate.cost.perPackage)}
+            </strong>
+          </p>
+        </>
+      )}
       <p>
-        <strong>Total / sellable kit: {money(estimate.cost.perPackage)}</strong>
+        Selling price:{' '}
+        {Number.isFinite(estimate.price) ? money(estimate.price) : 'Not set'}
       </p>
-      <p>Selling price: {money(Number(draft.price))}</p>
-      <p>
-        Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
-        {estimate.pricing.margin.toFixed(1)}%
-      </p>
+      {estimate.pricing && (
+        <p>
+          Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
+          {estimate.pricing.margin.toFixed(1)}%
+        </p>
+      )}
+      {(estimate.costError || estimate.pricingError) && (
+        <div role="status">
+          {estimate.costError && (
+            <p>Estimate incomplete: {estimate.costError}</p>
+          )}
+          {estimate.pricingError && (
+            <p>Estimate incomplete: {estimate.pricingError}</p>
+          )}
+          <p>{estimate.explanation}</p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setTab('contents')}
+          >
+            Review contents &amp; details
+          </button>
+        </div>
+      )}
     </>
   ) : (
     <p role="status">
@@ -166,13 +182,16 @@ export function KitEditor({
       </label>
       <h3>Included products</h3>
       <p className="form-hint">
-        Whole selling packages include existing production labor, overhead and
-        attached packaging. Individual unpackaged contents are unavailable
-        because a separate unpackaged cost basis is not configured.
+        Quantities count whole selling packages. Individual unpackaged contents
+        are unavailable without a separate unpackaged cost basis.
       </p>
       {components.map((line, index) => {
         const p = workspace.products.find((p) => p.id === line.productId)
         let contribution = 'Cost unavailable'
+        let costIssue = p
+          ? ''
+          : 'Product unavailable. Remove this component or choose an available product.'
+        const sourceData = componentSources(p, workspace)
         try {
           if (p)
             contribution = money(
@@ -186,78 +205,121 @@ export function KitEditor({
                 workspace,
               ).perPackage,
             )
-        } catch {
-          /* Incomplete sources remain visible. */
+        } catch (error) {
+          costIssue = (error as Error).message
         }
         return (
-          <section className="calculation-box" key={line.productId}>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => p && openProduct(p)}
-            >
-              {p?.name || `Unavailable product ${line.productId}`}
-            </button>
-            {p?.archived && <small> Archived component</small>}
-            <p>
-              {p?.sellingUnit || 'Selling package'}
-              {p?.unitsPerPackage
-                ? ` · ${p.unitsPerPackage} ${p.contentUnit || workspace.recipes.find((r) => r.id === p.recipeId)?.yieldUnit || 'contents'} per package`
-                : ' · Contents per package not configured'}
-            </p>
-            <label className="field">
-              <span>Whole selling packages</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                required
-                value={line.quantity}
-                onChange={(e) =>
-                  updateLine(
+          <section className="kit-editor-component" key={line.productId}>
+            <div className="kit-component-row">
+              <div className="kit-component-name">
+                {p ? (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => openProduct(p)}
+                  >
+                    {p.name}
+                  </button>
+                ) : (
+                  <strong>Unavailable product {line.productId}</strong>
+                )}
+                {p?.archived && <small>Archived component</small>}
+              </div>
+              <label className="field kit-component-quantity">
+                <span>Quantity</span>
+                <input
+                  aria-label={`Whole selling packages quantity · ${p?.name || line.productId}`}
+                  type="number"
+                  min="1"
+                  step="1"
+                  required
+                  value={line.quantity}
+                  onChange={(e) =>
+                    updateLine(
+                      'kitComponents',
+                      components,
+                      index,
+                      'quantity',
+                      e.target.value,
+                    )
+                  }
+                />
+              </label>
+              <div className="kit-component-cost">
+                <span>Component cost</span>
+                <output
+                  aria-label={`Extended component cost · ${p?.name || line.productId}`}
+                >
+                  {contribution}
+                </output>
+              </div>
+              <button
+                type="button"
+                className="btn secondary kit-component-remove"
+                aria-label={`Remove ${p?.name || line.productId}`}
+                onClick={() =>
+                  change(
                     'kitComponents',
-                    components,
-                    index,
-                    'quantity',
-                    e.target.value,
+                    components.filter((_, i) => i !== index),
                   )
                 }
-              />
-            </label>
-            <p>{contribution} · Complete component package cost</p>
-            <p className="form-hint">
-              {p?.workflow === 'resale'
-                ? 'Includes recorded received-item cost. Production labor and packaging are not added again.'
-                : `Includes component production labor, overhead and existing packaging. Attached selling packaging: ${
-                    p && packagingLines(p).length
-                      ? packagingLines(p)
-                          .map(
-                            (l: Item) =>
-                              `${l.quantity} ${l.unit || 'each'} ${workspace.ingredients.find((i) => i.id === l.ingredientId)?.name || 'Unavailable packaging'}`,
-                          )
-                          .join(', ')
-                      : 'No separate selling packaging configured. Production packaging remains included.'
-                  }`}
-            </p>
-            <ComponentSources product={p} workspace={workspace} />
-
-            <p className="form-hint">
-              Ingredient/allergen information belongs to this component. Review
-              its source statement and missing data; this is not a verified kit
-              label.
-            </p>
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() =>
-                change(
-                  'kitComponents',
-                  components.filter((_, i) => i !== index),
-                )
-              }
-            >
-              Remove component
-            </button>
+              >
+                Remove
+              </button>
+            </div>
+            {(costIssue || sourceData.issue) && (
+              <p className="kit-component-warning warning-text" role="status">
+                {costIssue || sourceData.issue}{' '}
+                {p && 'Open product details to review its setup.'}
+              </p>
+            )}
+            <details className="kit-component-details">
+              <summary>Display component details</summary>
+              <div className="kit-component-explanation">
+                <h4>Quantity basis</h4>
+                <p>
+                  {line.basis === 'package'
+                    ? 'Whole selling packages'
+                    : `Unsupported quantity basis (${line.basis || 'not configured'}). Individual contents require a separate unpackaged cost basis.`}
+                </p>
+                <p>
+                  {p?.sellingUnit || 'Selling package'}
+                  {p?.unitsPerPackage
+                    ? ` · ${p.unitsPerPackage} ${p.contentUnit || workspace.recipes.find((r) => r.id === p.recipeId)?.yieldUnit || 'contents'} per package`
+                    : ' · Contents per package not configured'}
+                </p>
+                <h4>Component cost basis</h4>
+                <p>
+                  {contribution} · Complete component package cost for the
+                  included quantity.
+                </p>
+                {costIssue && <p className="warning-text">{costIssue}</p>}
+                <p>
+                  {p?.workflow === 'resale'
+                    ? 'Includes recorded received-item cost. Production labor and packaging are not added again.'
+                    : 'Includes component production labor, overhead and existing packaging. These costs are not added again.'}
+                </p>
+                <h4>Attached component packaging</h4>
+                <p>
+                  {p && packagingLines(p).length
+                    ? packagingLines(p)
+                        .map(
+                          (l: Item) =>
+                            `${l.quantity} ${l.unit || 'each'} ${workspace.ingredients.find((i) => i.id === l.ingredientId)?.name || 'Unavailable packaging'}`,
+                        )
+                        .join(', ')
+                    : p?.workflow === 'resale'
+                      ? 'No attached component packaging configured.'
+                      : 'No separate selling packaging configured. Production packaging remains included.'}
+                </p>
+                <ComponentSources data={sourceData} />
+                <p>
+                  Ingredient/allergen information belongs to this component.
+                  Review its source statement and missing data; this is not a
+                  verified kit label.
+                </p>
+              </div>
+            </details>
           </section>
         )
       })}
@@ -428,6 +490,7 @@ export function KitEditor({
         try {
           await mutate('save', 'products', draft)
           onDirty(false)
+          if (onSaved) onSaved(draft.id)
           if (onSaved) onSaved()
           else close()
         } catch (e) {
@@ -440,13 +503,10 @@ export function KitEditor({
   )
 }
 
-function ComponentSources({
-  product,
-  workspace,
-}: {
-  product: Item | undefined
-  workspace: Props['workspace']
-}) {
+function componentSources(
+  product: Item | undefined,
+  workspace: Props['workspace'],
+) {
   let sources: Item[] = []
   let issue = ''
   try {
@@ -456,20 +516,37 @@ function ComponentSources({
         'No recipe ingredient provenance is configured for this component. Review its supplier statement separately.'
     else
       sources = effectiveRecipeLines(recipe, workspace.recipes).map(
-        (line: Item) =>
-          workspace.ingredients.find((i) => i.id === line.ingredientId) || {
-            id: line.ingredientId,
-            name: 'Unavailable ingredient source',
-          },
+        (line: Item) => {
+          const ingredient = workspace.ingredients.find(
+            (i) => i.id === line.ingredientId,
+          )
+          if (!ingredient)
+            issue =
+              'Ingredient source unavailable. Open product details to review its recipe ingredients.'
+          return (
+            ingredient || {
+              id: line.ingredientId,
+              name: 'Unavailable ingredient source',
+            }
+          )
+        },
       )
   } catch (e) {
     issue = (e as Error).message
   }
+  return { sources, issue }
+}
+
+function ComponentSources({
+  data: { sources, issue },
+}: {
+  data: ReturnType<typeof componentSources>
+}) {
   return (
-    <details>
-      <summary>Component ingredient / allergen sources</summary>
+    <div>
+      <h4>Ingredient &amp; allergen sources</h4>
       <p>Source review only; this is not a verified kit label.</p>
-      {issue && <p>{issue}</p>}
+      {issue && <p className="warning-text">{issue}</p>}
       <ul>
         {sources.map((i, index) => (
           <li key={`${i.id}-${index}`}>
@@ -482,6 +559,6 @@ function ComponentSources({
           </li>
         ))}
       </ul>
-    </details>
+    </div>
   )
 }

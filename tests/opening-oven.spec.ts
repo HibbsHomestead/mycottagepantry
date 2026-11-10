@@ -43,6 +43,8 @@ for (const width of [1440, 390]) {
       },
     })
     const recorded = await context.newPage()
+    await installWorkspaceFixture(recorded)
+    await developmentAssets(recorded)
     await developmentAssets(recorded)
     await installWorkspaceFixture(recorded)
     let release!: () => void

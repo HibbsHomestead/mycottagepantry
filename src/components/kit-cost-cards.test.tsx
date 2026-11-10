@@ -25,6 +25,15 @@ it('retains authoritative cost and selling price when category pricing is incomp
   product.taxSource = 'category'
   const cost = productCosting(product, workspace)
   render(
+    <KitCostCards
+      product={product}
+      workspace={workspace}
+      edit={() => {}}
+      configure={() => {}}
+    />,
+  )
+  expect(screen.getByRole('status').textContent).toContain(
+    'Product category not configured.',
     <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
   )
   expect(screen.getByRole('status').textContent).toContain(
@@ -33,6 +42,7 @@ it('retains authoritative cost and selling price when category pricing is incomp
   expect(screen.getByText(money(cost.total))).toBeTruthy()
   expect(screen.getByText('$45.00')).toBeTruthy()
   expect(screen.getAllByText('Unavailable')).toHaveLength(6)
+  expect(screen.getByRole('button', { name: 'Edit kit' })).toBeTruthy()
   expect(
     screen.getByRole('button', { name: 'Edit kit configuration' }),
   ).toBeTruthy()
@@ -43,6 +53,12 @@ it('uses the existing costing and pricing results without mutating the workspace
   const cost = productCosting(product, workspace)
   const price = profitability(product, cost.perPackage, workspace.settings[0])
   render(
+    <KitCostCards
+      product={product}
+      workspace={workspace}
+      edit={() => {}}
+      configure={() => {}}
+    />,
     <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
   )
   expect(screen.getByText(money(price.profit))).toBeTruthy()
@@ -54,6 +70,12 @@ it('never renders missing component costs as zero', () => {
   const { product, workspace } = fixture()
   workspace.products[0].needsCostSetup = true
   render(
+    <KitCostCards
+      product={product}
+      workspace={workspace}
+      edit={() => {}}
+      configure={() => {}}
+    />,
     <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
   )
   expect(screen.getByRole('status').textContent).toContain('cost is incomplete')

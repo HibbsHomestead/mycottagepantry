@@ -1,0 +1,126 @@
+/* Shared compact kit summaries; no package/content conversions occur here. */
+.kit-component-list {
+  display: block;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.kit-component-list li {
+  display: block;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+.product-card .kit-component-list .text-button,
+.product-detail-media .kit-component-list .text-button,
+.kit-component-name .text-button {
+  display: inline;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.kit-component-count {
+  white-space: nowrap;
+}
+.kit-component-list small,
+.kit-component-name small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.kit-editor-component {
+  min-width: 0;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.kit-component-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 100px auto;
+  align-items: center;
+  gap: 12px;
+}
+.kit-component-name,
+.kit-component-quantity,
+.kit-component-cost {
+  min-width: 0;
+}
+.kit-component-quantity.field {
+  gap: 3px;
+  margin: 0;
+}
+.kit-component-quantity > span,
+.kit-component-cost > span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.kit-component-quantity input {
+  width: 100%;
+}
+.kit-component-cost output {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.kit-component-remove {
+  align-self: end;
+  min-height: 40px;
+}
+.kit-editor-component .kit-component-warning {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+.kit-component-details {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.kit-component-details > summary {
+  cursor: pointer;
+  color: var(--primary);
+  width: fit-content;
+  padding: 4px 0;
+}
+.kit-component-details > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.kit-component-explanation {
+  padding: 2px 0 4px;
+}
+.kit-component-explanation h4 {
+  font-size: 12px;
+  margin: 10px 0 3px;
+  font-weight: 600;
+}
+.kit-component-explanation p {
+  margin: 3px 0;
+}
+.kit-component-explanation ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+.kit-component-explanation li {
+  margin: 4px 0;
+}
+@media (max-width: 640px) {
+  .kit-component-row {
+    grid-template-columns: 70px minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+  .kit-component-name {
+    grid-column: 1 / -1;
+  }
+}

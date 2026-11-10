@@ -143,6 +143,21 @@
 .product-detail-recipe .text-button {
   white-space: normal;
 }
+.kit-included-products {
+  min-width: 0;
+}
+.kit-included-products h3 {
+  margin: 0;
+}
+.kit-estimate-issue {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.kit-estimate-issue p {
+  margin: 0 0 8px;
+}
 @media (max-width: 640px) {
   .product-detail-media {
     grid-row: 1;

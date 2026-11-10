@@ -1,0 +1,9 @@
+
+ RUN  v5.0.5 /opt/build/repo
+
+
+ Test Files  3 passed (3)
+      Tests  27 passed (27)
+   Start at  11:27:49
+   Duration  2.06s (environment 41%, tests 29%, setup 12%, import 10%, transform 8%)
+
