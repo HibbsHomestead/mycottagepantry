@@ -3,16 +3,17 @@ import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
 import {
   productCosting,
-  profitability,
   packagingLines,
   effectiveRecipeLines,
   money,
   type Item,
 } from '@/lib/domain'
 import type { ProductEditor } from './product-editor'
+import { kitEstimate } from '@/lib/kit-estimate'
 
 type Props = Parameters<typeof ProductEditor>[0] & {
   openProduct: (item: Item) => void
+  onSaved?: (id: string) => void
 }
 export function KitEditor({
   item,
@@ -23,6 +24,7 @@ export function KitEditor({
   close,
   onDirty,
   openProduct,
+  onSaved,
 }: Props) {
   const [draft, setDraft] = useState<Item>(() =>
     item
@@ -60,38 +62,43 @@ export function KitEditor({
       key,
       rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
     )
-  let estimate:
-    | {
-        cost: ReturnType<typeof productCosting>
-        pricing: ReturnType<typeof profitability>
-      }
-    | undefined
-  let estimateError = ''
-  try {
-    const cost = productCosting(draft, workspace)
-    estimate = {
-      cost,
-      pricing: profitability(draft, cost.perPackage, workspace.settings[0]),
-    }
-  } catch (e) {
-    estimateError = (e as Error).message
-  }
-  const summary = estimate ? (
+  const estimate = kitEstimate(draft, workspace)
+  const summary = (
     <>
-      <p>Included packages: {money(estimate.cost.ingredient)}</p>
-      <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
-      <p>Additional assembly: {money(estimate.cost.labor)}</p>
+      {estimate.cost && (
+        <>
+          <p>Included packages: {money(estimate.cost.ingredient)}</p>
+          <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
+          <p>Additional assembly: {money(estimate.cost.labor)}</p>
+          <p>
+            <strong>
+              Total / sellable kit: {money(estimate.cost.perPackage)}
+            </strong>
+          </p>
+        </>
+      )}
       <p>
-        <strong>Total / sellable kit: {money(estimate.cost.perPackage)}</strong>
+        Selling price:{' '}
+        {Number.isFinite(estimate.price) ? money(estimate.price) : 'Not set'}
       </p>
-      <p>Selling price: {money(Number(draft.price))}</p>
-      <p>
-        Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
-        {estimate.pricing.margin.toFixed(1)}%
-      </p>
+      {estimate.pricing && (
+        <p>
+          Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
+          {estimate.pricing.margin.toFixed(1)}%
+        </p>
+      )}
+      {(estimate.costError || estimate.pricingError) && (
+        <div role="status">
+          {estimate.costError && (
+            <p>Estimate incomplete: {estimate.costError}</p>
+          )}
+          {estimate.pricingError && (
+            <p>Estimate incomplete: {estimate.pricingError}</p>
+          )}
+          <p>{estimate.explanation}</p>
+        </div>
+      )}
     </>
-  ) : (
-    <p role="status">Estimate incomplete: {estimateError}</p>
   )
   const contents = (
     <>
@@ -413,7 +420,8 @@ export function KitEditor({
         try {
           await mutate('save', 'products', draft)
           onDirty(false)
-          close()
+          if (onSaved) onSaved(draft.id)
+          else close()
         } catch (e) {
           setError((e as Error).message)
         } finally {

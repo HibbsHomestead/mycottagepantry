@@ -1,0 +1,98 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 950
+  },
+  "reference": {
+    "width": 1000,
+    "height": 810,
+    "columns": "564.922px 353.078px",
+    "title": {
+      "x": 29,
+      "width": 942,
+      "height": 35,
+      "top": 57,
+      "font": "700 25px / 35px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "0px",
+      "background": "rgba(0, 0, 0, 0)"
+    },
+    "photo": {
+      "x": 617.921875,
+      "width": 353.078125,
+      "height": 353.078125,
+      "top": 141.1875,
+      "font": "15px / 22.5px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "14px",
+      "background": "rgb(240, 242, 247)"
+    },
+    "costCard": {
+      "x": 29,
+      "width": 182.96875,
+      "height": 111.765625,
+      "top": 246.515625,
+      "font": "",
+      "padding": "11px 12px",
+      "radius": "10px",
+      "background": "rgb(240, 234, 248)"
+    },
+    "button": {
+      "x": 617.921875,
+      "width": 120,
+      "height": 44,
+      "top": 559.15625,
+      "font": "650 14px / 16.8px \"DM Sans\", sans-serif",
+      "padding": "11px 16px",
+      "radius": "8px",
+      "background": "rgb(92, 58, 131)"
+    },
+    "overflow": 0
+  },
+  "kit": {
+    "width": 1000,
+    "height": 810,
+    "columns": "564.922px 353.078px",
+    "title": {
+      "x": 29,
+      "width": 942,
+      "height": 35,
+      "top": 57,
+      "font": "700 25px / 35px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "0px",
+      "background": "rgba(0, 0, 0, 0)"
+    },
+    "photo": {
+      "x": 617.921875,
+      "width": 353.078125,
+      "height": 353.078125,
+      "top": 141.1875,
+      "font": "15px / 22.5px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "14px",
+      "background": "rgb(240, 242, 247)"
+    },
+    "costCard": {
+      "x": 29,
+      "width": 182.96875,
+      "height": 111.765625,
+      "top": 261.90625,
+      "font": "",
+      "padding": "11px 12px",
+      "radius": "10px",
+      "background": "rgb(240, 234, 248)"
+    },
+    "button": {
+      "x": 617.921875,
+      "width": 82,
+      "height": 44,
+      "top": 677.265625,
+      "font": "650 14px / 16.8px \"DM Sans\", sans-serif",
+      "padding": "11px 16px",
+      "radius": "8px",
+      "background": "rgb(92, 58, 131)"
+    },
+    "overflow": 0
+  }
+}

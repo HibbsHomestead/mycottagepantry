@@ -57,7 +57,11 @@ for (const width of [1440, 390]) {
       fullPage: true,
     })
     await page.getByRole('button', { name: 'Save kit', exact: true }).click()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(
+      page
+        .getByRole('dialog')
+        .getByRole('heading', { name: 'Holiday bake drop', exact: true }),
+    ).toBeVisible()
     expect(saved).toBe(true)
     expect(
       JSON.stringify(
@@ -66,8 +70,16 @@ for (const width of [1440, 390]) {
           .map((p) => [p.id, p.quantity]),
       ),
     ).toBe(stock)
+    await expect(
+      page.getByRole('region', { name: 'Included products', exact: true }),
+    ).toContainText('2 whole selling packages')
+    await page.screenshot({
+      path: `.netlify/screenshots/kit-details-${width}.png`,
+      fullPage: true,
+    })
     await page
-      .getByRole('button', { name: 'Holiday bake drop', exact: true })
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Edit kit', exact: true })
       .click()
     await expect(page.getByLabel('Whole selling packages').first()).toHaveValue(
       '2',
@@ -77,10 +89,6 @@ for (const width of [1440, 390]) {
         exact: false,
       }),
     ).toBeVisible()
-    await page.screenshot({
-      path: `.netlify/screenshots/kit-details-${width}.png`,
-      fullPage: true,
-    })
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

@@ -1,0 +1,98 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 950
+  },
+  "reference": {
+    "width": 370,
+    "height": 810,
+    "columns": "324px",
+    "title": {
+      "x": 23,
+      "width": 324,
+      "height": 35,
+      "top": 51,
+      "font": "700 25px / 35px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "0px",
+      "background": "rgba(0, 0, 0, 0)"
+    },
+    "photo": {
+      "x": 23,
+      "width": 324,
+      "height": 280,
+      "top": 160.375,
+      "font": "14px / 21px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "14px",
+      "background": "rgb(240, 242, 247)"
+    },
+    "costCard": {
+      "x": 23,
+      "width": 158,
+      "height": 91.921875,
+      "top": 855.3125,
+      "font": "",
+      "padding": "11px 12px",
+      "radius": "10px",
+      "background": "rgb(240, 234, 248)"
+    },
+    "button": {
+      "x": 23,
+      "width": 95,
+      "height": 44,
+      "top": 505.265625,
+      "font": "650 10px / 12px \"DM Sans\", sans-serif",
+      "padding": "11px 16px",
+      "radius": "8px",
+      "background": "rgb(92, 58, 131)"
+    },
+    "overflow": 0
+  },
+  "kit": {
+    "width": 370,
+    "height": 810,
+    "columns": "324px",
+    "title": {
+      "x": 23,
+      "width": 324,
+      "height": 35,
+      "top": 51,
+      "font": "700 25px / 35px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "0px",
+      "background": "rgba(0, 0, 0, 0)"
+    },
+    "photo": {
+      "x": 23,
+      "width": 324,
+      "height": 280,
+      "top": 160.375,
+      "font": "14px / 21px \"DM Sans\", sans-serif",
+      "padding": "0px",
+      "radius": "14px",
+      "background": "rgb(240, 242, 247)"
+    },
+    "costCard": {
+      "x": 23,
+      "width": 158,
+      "height": 91.921875,
+      "top": 915.53125,
+      "font": "",
+      "padding": "11px 12px",
+      "radius": "10px",
+      "background": "rgb(240, 234, 248)"
+    },
+    "button": {
+      "x": 23,
+      "width": 69,
+      "height": 44,
+      "top": 644.875,
+      "font": "650 10px / 12px \"DM Sans\", sans-serif",
+      "padding": "11px 16px",
+      "radius": "8px",
+      "background": "rgb(92, 58, 131)"
+    },
+    "overflow": 0
+  }
+}

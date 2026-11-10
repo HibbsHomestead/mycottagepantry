@@ -168,7 +168,7 @@ export function ProductCards({
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onSelect={() => open('product', product)}>
-                    Edit Product
+                    {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -297,7 +297,7 @@ export function ProductCards({
                 className="btn secondary"
                 onClick={() => open('product', product)}
               >
-                Edit Product
+                {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
               </button>
             </footer>
           </article>
