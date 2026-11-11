@@ -473,6 +473,88 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Packaging Details alone: a continuous main form and a photo at the top.
+   The other item editors and read-only detail pages retain their layout. */
+.ingredient-modal-shell .packaging-edit-grid.ingredient-tab-details {
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 12px 20px;
+  align-items: start;
+}
+.packaging-edit-grid.ingredient-tab-details > .ingredient-import-tools {
+  grid-column: 1;
+  grid-row: 2;
+}
+.packaging-edit-grid.ingredient-tab-details > :not(.ingredient-setup-tabs),
+.packaging-edit-grid.ingredient-tab-details
+  .ingredient-edit-identification
+  > h3,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-fields,
+.packaging-edit-grid.ingredient-tab-details
+  .ingredient-edit-identification
+  > .field,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-primary > * {
+  grid-column: 1;
+}
+.ingredient-detail-body
+  .packaging-edit-grid.ingredient-tab-details
+  .ingredient-edit-identification,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-body,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-columns,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-primary {
+  display: contents;
+}
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-fields,
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-photo {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  align-content: start;
+}
+.packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-photo {
+  grid-column: 2;
+  grid-row: 2 / span 3;
+}
+.packaging-edit-grid.ingredient-tab-details > .form-step {
+  display: block;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.packaging-edit-grid.ingredient-tab-details .ingredient-section {
+  padding-bottom: 12px;
+}
+.packaging-edit-grid.ingredient-tab-details
+  .find-product-panel
+  .catalog-lookup {
+  grid-template-columns: minmax(0, 1fr);
+}
+.packaging-edit-grid.ingredient-tab-details
+  .catalog-lookup
+  > .barcode-entry-row,
+.packaging-edit-grid.ingredient-tab-details
+  .catalog-lookup
+  > .catalog-search-row {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.packaging-edit-grid.ingredient-tab-details .barcode-entry-row > .field,
+.packaging-edit-grid.ingredient-tab-details .catalog-search-row > .field {
+  flex: 1 1 160px;
+}
+@media (max-width: 760px) {
+  .ingredient-modal-shell .packaging-edit-grid.ingredient-tab-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .packaging-edit-grid.ingredient-tab-details .ingredient-edit-identity-photo {
+    grid-column: 1;
+    grid-row: auto;
+    order: 1;
+  }
+}
+
 /* Only the lookup panel in Edit Ingredient. One outer dialog scroll area. */
 .ingredient-modal-shell .ingredient-import-tools {
   padding: 0;

@@ -13,6 +13,16 @@ import {
 import { load } from 'cheerio'
 import { productStatements } from './product-statements'
 import { fetchRecipeUrl, PageFetchHttpError } from './recipe-import'
+import {
+  amazonAsin,
+  amazonSelectionKeys,
+  normalizeProductUrl,
+} from '../../src/lib/product-url'
+import {
+  retryDeadline,
+  type ProductFetchHop,
+} from '../../src/lib/product-import-diagnostics'
+import { pageEvidence } from './page-diagnostics'
 const scalar = (v: any): string =>
   typeof v === 'string'
     ? v.slice(0, 6000)
@@ -170,7 +180,9 @@ function rejectProductChallenge($: ReturnType<typeof load>, sourceUrl: string) {
   )
   const humanVerification =
     /robot or human|let us know you.re not a robot|robot check|captcha|human verification|verify (?:that )?you(?:.re| are)? (?:a )?human|confirm (?:that )?you(?:.re| are)? (?:a )?human/i
-  const challenge = humanVerification.test($('title').text())
+  const challenge =
+    humanVerification.test($('title').text()) ||
+    $('form[action*="captcha" i], input#captchacharacters').length > 0
   const walmartChallenge =
     walmart &&
     (challenge ||
@@ -197,11 +209,17 @@ export function productDetails(html: string, sourceUrl: string) {
         Number(content) <= 0
       )
     })
+  const browserRedirect = pageEvidence(
+    html,
+    new URL(sourceUrl),
+    $,
+  ).browserRedirect
   if (
     redirectRefresh ||
-    /window\.location\.replace\(["']https:\/\/www\.amazon\.com\/error\//i.test(
-      html,
-    ) ||
+    (browserRedirect &&
+      (browserRedirect.kind === 'error' ||
+        browserRedirect.kind === 'challenge' ||
+        !$('#productTitle').length)) ||
     /^(?:service unavailable|internal server error|sorry[!,.]?|error\s*[45]\d\d)/i.test(
       $('title').text().trim(),
     )
@@ -430,8 +448,7 @@ export function productDetails(html: string, sourceUrl: string) {
 export async function fetchProductDetails(url: string) {
   const requestedAt = new Date().toISOString()
   const requestedUrl = productUrl(url)
-  const input = new URL(requestedUrl)
-  if (input.protocol === 'http:') input.protocol = 'https:'
+  const input = new URL(normalizeProductUrl(requestedUrl))
   const failure = (
     message: string,
     source: 'retailer' | 'network',
@@ -443,6 +460,9 @@ export async function fetchProductDetails(url: string) {
       {
         requestedAt,
         requestedUrl: diagnosticUrl(requestedUrl),
+        normalizedUrl: diagnosticUrl(input.href),
+        retrieval: 'direct-https',
+        fallback: 'none-configured',
         source,
         stage,
         hops,
@@ -450,8 +470,78 @@ export async function fetchProductDetails(url: string) {
       hops.at(-1)?.headers['retry-after'],
     )
   let page
+  const hops: ProductFetchHop[] = []
+  const deadline = Date.now() + 28000
+  const requestedAsin = amazonAsin(input)
+  const validateRedirect = (destination: URL) => {
+    if (
+      requestedAsin &&
+      (amazonAsin(destination) !== requestedAsin ||
+        amazonSelectionKeys.some(
+          (key) =>
+            input.searchParams.has(key) &&
+            destination.searchParams.get(key) !== input.searchParams.get(key),
+        ))
+    )
+      throw new Error(
+        'The product request changed its identifier or selected options. No details were imported. Continue manually or verify the product link.',
+      )
+  }
   try {
-    page = await fetchRecipeUrl(input.href, false, PRODUCT_PAGE_BYTES)
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        page = await fetchRecipeUrl(input.href, false, PRODUCT_PAGE_BYTES, {
+          deadline,
+          validateRedirect,
+        })
+        hops.push(...(page.hops || []).map((hop) => ({ ...hop, attempt })))
+        page.hops = hops
+        break
+      } catch (error) {
+        if (error instanceof PageFetchHttpError) {
+          hops.push(...error.hops.map((hop) => ({ ...hop, attempt })))
+          const challenge =
+            error.page?.mime === 'text/html' &&
+            pageEvidence(
+              error.page.bytes.toString('utf8'),
+              new URL(error.page.url),
+            ).challenge
+          const transient =
+            [429, 500, 502, 503, 504].includes(error.status) && !challenge
+          const retryAfter = error.hops.at(-1)?.headers['retry-after']
+          const delay = retryAfter
+            ? retryDeadline(retryAfter) - Date.now()
+            : 500 * 2 ** (attempt - 1)
+          // Long Retry-After waits belong to the explicit UI retry. Do not
+          // truncate the wait and contact the source earlier than requested.
+          if (
+            attempt < 3 &&
+            transient &&
+            delay <= 5000 &&
+            Date.now() + delay + 1000 < deadline
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, delay))
+            continue
+          }
+          throw new PageFetchHttpError(error.status, error.page, hops)
+        }
+        hops.push(
+          ...((error as { hops?: ProductFetchHop[] })?.hops || []).map(
+            (hop) => ({ ...hop, attempt }),
+          ),
+        )
+        const transient = ['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT'].includes(
+          String((error as { code?: string })?.code),
+        )
+        const delay = 500 * 2 ** (attempt - 1)
+        if (attempt < 3 && transient && Date.now() + delay + 1000 < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          continue
+        }
+        throw error
+      }
+    }
+    if (!page) throw new Error('Product page request timed out.')
   } catch (e) {
     if (e instanceof PageFetchHttpError) {
       let message = `The product details could not be retrieved (HTTP ${e.status}).`
@@ -468,7 +558,11 @@ export async function fetchProductDetails(url: string) {
         } catch (challenge) {
           if (challenge instanceof ProductHumanVerificationError)
             throw challenge
-          message = `The retailer returned an access challenge (HTTP ${e.status}). You can enter the details manually; access restrictions are not bypassed.`
+          if (
+            pageEvidence(e.page.bytes.toString('utf8'), new URL(e.page.url))
+              .challenge
+          )
+            message = `The source returned an access challenge (HTTP ${e.status}). Enter the details manually.`
         }
       }
       throw failure(message, 'retailer', e.hops)
@@ -478,14 +572,19 @@ export async function fetchProductDetails(url: string) {
       throw failure(
         'The product page request timed out. Retry or enter the details manually.',
         'network',
+        hops,
       )
     // Only relay our own bounded validation messages, never arbitrary network errors.
     if (
-      /^(Private or|Use a public HTTPS|Too many recipe link|Recipe page exceeds|The page response was|Unsupported page compression|This link does not return a recipe)/.test(
+      /^(The product request changed|Private or|Use a public HTTPS|Too many recipe link|Recipe page exceeds|The page response was|Unsupported page compression|This link does not return a recipe)/.test(
         message,
       )
     )
-      throw new Error(message.replace(/recipe/gi, 'product'))
+      throw failure(
+        message.replace(/recipe/gi, 'product'),
+        hops.length ? 'retailer' : 'network',
+        hops,
+      )
     if (
       [
         'ENOTFOUND',
@@ -498,18 +597,15 @@ export async function fetchProductDetails(url: string) {
       throw failure(
         'The product page could not be fetched because of a network error. Retry or enter the details manually.',
         'network',
+        hops,
       )
     throw failure(
       'We couldn’t automatically read this product page. You can enter the details manually.',
       'network',
+      hops,
     )
   }
   try {
-    const requestedAsin = input.hostname.match(/(^|\.)amazon\.[a-z.]+$/i)
-      ? input.pathname.match(
-          /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i,
-        )?.[1]
-      : undefined
     if (requestedAsin) {
       const finalUrl = new URL(page.url)
       const finalAsin = finalUrl.pathname.match(
@@ -518,7 +614,7 @@ export async function fetchProductDetails(url: string) {
       if (
         !finalUrl.hostname.match(/(^|\.)amazon\.[a-z.]+$/i) ||
         finalAsin?.toUpperCase() !== requestedAsin.toUpperCase() ||
-        ['th', 'psc'].some(
+        amazonSelectionKeys.some(
           (key) =>
             input.searchParams.has(key) &&
             finalUrl.searchParams.get(key) !== input.searchParams.get(key),

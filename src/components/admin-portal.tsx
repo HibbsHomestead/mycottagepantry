@@ -1,3 +1,4 @@
+import { AdminBusinessAccess } from './admin-business-access'
 import { AdminCatalog } from './admin-catalog'
 import { AdminRegistrationPolicies } from './admin-registration-policies'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
@@ -383,7 +384,7 @@ export function AdminPortal() {
             Cottage Pantry Admin
           </span>
           <div>
-            <Badge>Phase 1 · Read-only</Badge>
+            <Badge>Operational access</Badge>
             {authenticated && (
               <button onClick={signOut} disabled={busy}>
                 <LogOut size={15} />
@@ -750,14 +751,37 @@ function AdminView({
                     cell: (r) => identityCell(r.identity_owner),
                   },
                   {
-                    title: 'Plan / billing status',
+                    title: 'Assigned tier',
+                    cell: (r) =>
+                      (r.manualGrant?.operation === 'grant'
+                        ? r.manualGrant.plan_id
+                        : null) ||
+                      r.plan_id ||
+                      'Unassigned',
+                  },
+                  {
+                    title: 'Effective access',
                     cell: (r) => (
                       <>
-                        {label(r.plan_id)}
-                        <small>
-                          {label(r.billing_status)} · {label(r.source)}
-                        </small>
+                        {r.effective?.plan || 'Unassigned'}
+                        {r.effective?.legacy && (
+                          <small>Existing legacy workspace access</small>
+                        )}
                       </>
+                    ),
+                  },
+                  {
+                    title: 'Access source',
+                    cell: (r) => r.effective?.source || 'unassigned',
+                  },
+                  {
+                    title: 'Billing status',
+                    cell: (r) => r.billing_status || 'No billing subscription',
+                  },
+                  {
+                    title: 'Manage',
+                    cell: (r) => (
+                      <a href={href('customers', { id: r.id })}>Manage</a>
                     ),
                   },
                   { title: 'Active members', cell: (r) => r.active_members },
@@ -788,7 +812,7 @@ function AdminView({
           </p>
           <p>
             Complimentary records appear in Oven details. Temporary access
-            overrides are unavailable.
+            overrides are managed from each business’s Access panel.
           </p>
         </section>
         <div className="admin-plan-grid">
@@ -1019,104 +1043,131 @@ function AdminView({
 }
 function OvenDetail({ data }: { data: AdminMetadata }) {
   const o = data.oven
+  const [tab, setTab] = useState('access')
   return (
     <>
       <a className="admin-back" href={href('customers')}>
-        ← All Ovens
+        ← All businesses
       </a>
       <section className="admin-panel">
-        <Badge>Metadata only</Badge>
         <h2>{o.business_name}</h2>
-        <dl className="admin-details">
-          <div>
-            <dt>Stable Oven ID</dt>
-            <dd>{identityCell(o.id)}</dd>
-          </div>
-          <div>
-            <dt>Owner Identity ID</dt>
-            <dd>{identityCell(o.identity_owner)}</dd>
-          </div>
-          <div>
-            <dt>Created</dt>
-            <dd>{date(o.created_at)}</dd>
-          </div>
-          <div>
-            <dt>Recorded account status</dt>
-            <dd>{data.accountStatus}</dd>
-          </div>
-          <div>
-            <dt>Plan / subscription state</dt>
-            <dd>
-              {label(data.billing?.plan_id)} / {label(data.billing?.status)}
-              <small>{label(data.billing?.source)}</small>
-            </dd>
-          </div>
-        </dl>
+        <p>
+          Business {identityCell(o.id)} · Owner {identityCell(o.identity_owner)}
+        </p>
+        <p>
+          Created {date(o.created_at)} · {data.accountStatus}
+        </p>
+        <div
+          className="button-row"
+          role="tablist"
+          aria-label="Business management"
+        >
+          {['access', 'members', 'billing', 'history'].map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="tab"
+              aria-selected={tab === name}
+              className="btn secondary"
+              onClick={() => setTab(name)}
+            >
+              {name[0].toUpperCase() + name.slice(1)}
+            </button>
+          ))}
+        </div>
       </section>
-      <section className="admin-panel">
-        <h2>Memberships</h2>
-        <DataTable
-          rows={data.memberships}
-          columns={[
-            { title: 'Account ID', cell: (r) => identityCell(r.identity_id) },
-            { title: 'Membership ID', cell: (r) => identityCell(r.id) },
-            { title: 'Oven role', cell: (r) => r.role },
-            {
-              title: 'Recorded activity',
-              cell: (r) => (r.active ? 'Active' : 'Inactive'),
-            },
-            { title: 'Created', cell: (r) => date(r.created_at) },
-          ]}
-        />
-      </section>
-      <section className="admin-panel">
-        <h2>Effective access</h2>
-        <p>{data.access.policy}</p>
-        <p>{data.access.temporaryOverrides}</p>
-        <h3>Recorded complimentary grants</h3>
-        <DataTable
-          rows={data.grants}
-          empty="No complimentary grants are recorded for this Oven."
-          columns={[
-            { title: 'Grant', cell: (r) => identityCell(r.id) },
-            { title: 'Plan', cell: (r) => r.plan_id },
-            {
-              title: 'Granted by',
-              cell: (r) => identityCell(r.actor_identity),
-            },
-            {
-              title: 'Owner binding',
-              cell: (r) => identityCell(r.owner_identity),
-            },
-            { title: 'Start', cell: (r) => date(r.created_at) },
-            {
-              title: 'Expiry',
-              cell: () => 'No expiry in existing grant schema',
-            },
-          ]}
-        />
-      </section>
-      <section className="admin-panel">
-        <h2>Integration connection metadata</h2>
-        <DataTable
-          rows={data.integrations}
-          empty="No integration connection metadata is recorded. Connectivity is unverified."
-          columns={[
-            { title: 'Connection reference', cell: (r) => identityCell(r.id) },
-            {
-              title: 'Recorded status',
-              cell: (r) => <Badge>{r.recorded_status}</Badge>,
-            },
-            { title: 'Record updated', cell: (r) => date(r.updated_at) },
-          ]}
-        />
-      </section>
-      <OperationalRecords rows={data.operations} />
-      <section className="admin-panel">
-        <h2>Admin notes & activity</h2>
-        <p>{data.notes}</p>
-        <ActivityTable rows={data.activity} />
-      </section>
+      <div role="tabpanel">
+        {tab === 'access' && <AdminBusinessAccess data={data} />}
+        {tab === 'members' && (
+          <section className="admin-panel">
+            <h2>Members and roles</h2>
+            <p>
+              Existing members remain after a downgrade. New additions follow
+              the effective tier’s configured limit. Invitations and member
+              administration are not available in this release.
+            </p>
+            <DataTable
+              rows={data.memberships}
+              columns={[
+                { title: 'Identity', cell: (r) => identityCell(r.identity_id) },
+                { title: 'Role', cell: (r) => r.role },
+                {
+                  title: 'Access',
+                  cell: (r) => (r.active ? 'Active' : 'Inactive'),
+                },
+                { title: 'Created', cell: (r) => date(r.created_at) },
+              ]}
+            />
+          </section>
+        )}
+        {tab === 'billing' && (
+          <section className="admin-panel">
+            <h2>Billing linkage</h2>
+            <dl className="admin-details">
+              <div>
+                <dt>Billing-linked tier</dt>
+                <dd>{data.billing?.plan_id || 'Unassigned'}</dd>
+              </div>
+              <div>
+                <dt>Status / source</dt>
+                <dd>
+                  {data.billing?.status || 'No billing subscription'} ·{' '}
+                  {data.billing?.source || 'None'}
+                </dd>
+              </div>
+              <div>
+                <dt>Provider reference</dt>
+                <dd>{data.billing?.subscription_reference || 'None'}</dd>
+              </div>
+              <div>
+                <dt>Paid through</dt>
+                <dd>{date(data.billing?.paid_through)}</dd>
+              </div>
+              <div>
+                <dt>Last reconciliation</dt>
+                <dd>{date(data.billing?.last_reconciled_at)}</dd>
+              </div>
+            </dl>
+            <p>{data.billingNotice}</p>
+            <p>
+              Business-specific billing sync errors are unavailable: stored
+              events have provider references without a business foreign key.
+              Review the platform Billing diagnostics; absence of a linked error
+              is not proof of successful synchronization.
+            </p>
+          </section>
+        )}
+        {tab === 'history' && (
+          <section className="admin-panel">
+            <h2>Access-change audit history</h2>
+            <DataTable
+              rows={data.accessAudit || []}
+              columns={[
+                { title: 'Time', cell: (r) => date(r.created_at) },
+                { title: 'Actor', cell: (r) => identityCell(r.actor_id) },
+                { title: 'Action', cell: (r) => r.action },
+                { title: 'Reason', cell: (r) => r.reason },
+                {
+                  title: 'Previous',
+                  cell: (r) => (
+                    <pre>{JSON.stringify(r.before?.effective, null, 2)}</pre>
+                  ),
+                },
+                {
+                  title: 'New',
+                  cell: (r) => (
+                    <pre>{JSON.stringify(r.after?.effective, null, 2)}</pre>
+                  ),
+                },
+                {
+                  title: 'Expiration',
+                  cell: (r) => r.after?.grant?.expires_at || 'No expiration',
+                },
+              ]}
+            />
+          </section>
+        )}
+      </div>
     </>
   )
 }

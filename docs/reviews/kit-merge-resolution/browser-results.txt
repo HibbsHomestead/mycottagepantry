@@ -1,0 +1,37 @@
+
+Running 31 tests using 1 worker
+
+
+
+[1/31] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 1440
+[2/31] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 768
+[3/31] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 390
+[4/31] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable cost warnings
+[5/31] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable basis warnings
+[6/31] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable sources warnings
+[7/31] tests/kit-components.spec.ts:390:3 › long names and expanded source information wrap at 768
+[8/31] tests/kit-components.spec.ts:390:3 › long names and expanded source information wrap at 390
+[9/31] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 1440
+[10/31] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 1440
+[11/31] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 768
+[12/31] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 768
+[13/31] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 390
+[14/31] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 390
+[15/31] tests/kit-details.spec.ts:401:3 › missing category retains valid costs and gives an actionable edit at 1440
+[16/31] tests/kit-details.spec.ts:464:3 › long included lists grow below a fixed photo with one scrolling region at 1440
+[17/31] tests/kit-details.spec.ts:401:3 › missing category retains valid costs and gives an actionable edit at 390
+[18/31] tests/kit-details.spec.ts:464:3 › long included lists grow below a fixed photo with one scrolling region at 390
+[19/31] tests/opening-oven.spec.ts:33:3 › pending oven animation and failure recovery 1440
+[20/31] tests/opening-oven.spec.ts:33:3 › pending oven animation and failure recovery 390
+[21/31] tests/opening-oven.spec.ts:109:1 › reduced motion stays open without moving steam
+[22/31] tests/opening-oven.spec.ts:135:1 › immediate records replace the illustration without an animation delay
+[23/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1762 × 854)
+[24/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1280 × 854)
+[25/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1440 × 900)
+[26/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1024 × 900)
+[27/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (768 × 900)
+[28/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (390 × 900)
+[29/31] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (320 × 900)
+[30/31] tests/product-detail-media.spec.ts:215:3 › long label lists retain the saved image and one accessible outer scroll area (1440)
+[31/31] tests/product-detail-media.spec.ts:215:3 › long label lists retain the saved image and one accessible outer scroll area (390)
+  31 passed (1.9m)

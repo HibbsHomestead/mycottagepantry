@@ -6,6 +6,7 @@ import {
 import { lookup } from 'node:dns/promises'
 import { request } from 'node:https'
 import { readPageResponse, RECIPE_PAGE_BYTES } from './page-response'
+import { pageEvidence } from './page-diagnostics'
 import ipaddr from 'ipaddr.js'
 import { load } from 'cheerio'
 import { GoogleGenAI } from '@google/genai'
@@ -83,162 +84,180 @@ export async function fetchRecipeUrl(
   value: string,
   image = false,
   cap = RECIPE_PAGE_BYTES,
+  options: { deadline?: number; validateRedirect?: (url: URL) => void } = {},
 ) {
-  const deadline = Date.now() + 12000
+  const deadline = Math.min(Date.now() + 12000, options.deadline ?? Infinity)
   const hops: ProductFetchHop[] = []
   for (let redirects = 0; redirects <= 3; redirects++) {
-    const { url, address } = await validateRecipeUrl(
-      value,
-      Math.max(1, deadline - Date.now()),
-    )
-    const remaining = deadline - Date.now()
-    if (remaining <= 0)
-      throw new Error(
-        'Recipe link timed out. Upload a file or paste the recipe instead.',
+    try {
+      const { url, address } = await validateRecipeUrl(
+        value,
+        Math.max(1, deadline - Date.now()),
       )
-    const response = await new Promise<{
-      status: number
-      location?: string
-      mime: string
-      bytes: Buffer
-      headers: Record<string, string>
-    }>((resolve, reject) => {
-      const req = request(
-        url,
-        {
-          method: 'GET',
-          headers: {
-            Accept: image
-              ? 'image/png,image/jpeg,image/webp'
-              : 'text/html,application/ld+json,text/plain',
-            'User-Agent': 'CottagePantryRecipeImport/1.0',
-            'Accept-Encoding': 'identity',
+      options.validateRedirect?.(url)
+      const remaining = deadline - Date.now()
+      if (remaining <= 0)
+        throw new Error(
+          'Recipe link timed out. Upload a file or paste the recipe instead.',
+        )
+      const response = await new Promise<{
+        status: number
+        location?: string
+        mime: string
+        bytes: Buffer
+        headers: Record<string, string>
+      }>((resolve, reject) => {
+        const req = request(
+          url,
+          {
+            method: 'GET',
+            headers: {
+              Accept: image
+                ? 'image/png,image/jpeg,image/webp'
+                : 'text/html,application/ld+json,text/plain',
+              'User-Agent': 'CottagePantryRecipeImport/1.0',
+              'Accept-Encoding': 'identity',
+            },
+            lookup: ((_host: any, options: any, cb: any) =>
+              options?.all
+                ? cb(null, [address])
+                : cb(null, address.address, address.family)) as any,
           },
-          lookup: ((_host: any, options: any, cb: any) =>
-            options?.all
-              ? cb(null, [address])
-              : cb(null, address.address, address.family)) as any,
-        },
-        (res) => {
-          void readPageResponse(res, cap)
-            .then(
-              (bytes) =>
-                resolve({
-                  status: res.statusCode || 500,
-                  headers: Object.fromEntries(
-                    [
-                      'content-type',
-                      'date',
-                      'server',
-                      'retry-after',
-                      'via',
-                      'x-cache',
-                      'x-amz-cf-id',
-                      'x-amz-rid',
-                      'x-nf-request-id',
-                    ]
-                      .filter((key) => typeof res.headers[key] === 'string')
-                      .map((key) => [
-                        key,
-                        String(res.headers[key]).slice(0, 500),
-                      ]),
-                  ),
-                  location: res.headers.location,
-                  mime: (res.headers['content-type'] || '')
-                    .split(';')[0]
-                    .trim()
-                    .toLowerCase(),
-                  bytes,
-                }),
-              reject,
-            )
-            .finally(() => clearTimeout(timer))
-        },
-      )
-      const timer = setTimeout(
-        () =>
-          req.destroy(
-            new Error('Recipe link timed out. Paste the recipe instead.'),
-          ),
-        remaining,
-      )
-      req.on('error', () => clearTimeout(timer))
-      req.on('error', reject)
-      req.end()
-    })
-    const errorHtml =
-      response.status !== 200 ? response.bytes.toString('utf8') : ''
-    hops.push({
-      url: diagnosticUrl(url.href),
-      at: new Date().toISOString(),
-      status: response.status,
-      headers: response.headers,
-      bodySummary: /(?:window\.location|http-equiv=["']?refresh)/i.test(
-        errorHtml,
-      )
-        ? 'Error document contains a browser redirect; not followed or parsed as product data.'
-        : /captcha|robot check|human verification/i.test(errorHtml)
-          ? 'Verification document; not parsed as product data.'
-          : response.status !== 200
-            ? 'Non-success response; body excluded from product extraction.'
-            : 'Successful response.',
-    })
-    if (
-      [301, 302, 303, 307, 308].includes(response.status) &&
-      response.location
-    ) {
-      if (redirects === 3) throw new Error('Too many recipe link redirects.')
-      value = new URL(response.location, url).href
-      continue
-    }
-    if (response.status !== 200)
-      throw new PageFetchHttpError(
-        response.status,
-        {
-          url: url.href,
-          mime: response.mime,
-          bytes: response.bytes,
-        },
-        hops,
-      )
-    // Some public product pages omit Content-Type. Only recognize an explicit HTML document,
-    // after the complete bounded body arrives; unsupported declared types still fail closed.
-    if (
-      !image &&
-      !response.mime &&
-      /^\s*(?:<!doctype\s+html|<html(?:\s|>))/i.test(
-        response.bytes.subarray(0, 512).toString('utf8'),
-      )
-    )
-      response.mime = 'text/html'
-    if (image && !response.mime) {
-      const head = response.bytes.subarray(0, 12)
-      response.mime = head
-        .subarray(0, 3)
-        .equals(Buffer.from([0xff, 0xd8, 0xff]))
-        ? 'image/jpeg'
-        : head
-              .subarray(0, 8)
-              .equals(
-                Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+          (res) => {
+            void readPageResponse(res, cap)
+              .then(
+                (bytes) =>
+                  resolve({
+                    status: res.statusCode || 500,
+                    headers: Object.fromEntries(
+                      [
+                        'content-type',
+                        'date',
+                        'server',
+                        'retry-after',
+                        'via',
+                        'x-cache',
+                        'x-amz-cf-id',
+                        'x-amz-rid',
+                        'x-nf-request-id',
+                      ]
+                        .filter((key) => typeof res.headers[key] === 'string')
+                        .map((key) => [
+                          key,
+                          String(res.headers[key]).slice(0, 500),
+                        ]),
+                    ),
+                    location: res.headers.location,
+                    mime: (res.headers['content-type'] || '')
+                      .split(';')[0]
+                      .trim()
+                      .toLowerCase(),
+                    bytes,
+                  }),
+                reject,
               )
-          ? 'image/png'
-          : head.subarray(0, 4).toString() === 'RIFF' &&
-              head.subarray(8, 12).toString() === 'WEBP'
-            ? 'image/webp'
-            : ''
-    }
-    if (
-      !(
-        image
-          ? ['image/png', 'image/jpeg', 'image/webp']
-          : ['text/html', 'text/plain', 'application/ld+json']
-      ).includes(response.mime)
-    )
-      throw new Error(
-        'This link does not return a recipe page. Use file upload for PDF or photos.',
+              .finally(() => clearTimeout(timer))
+          },
+        )
+        const timer = setTimeout(
+          () =>
+            req.destroy(
+              new Error('Recipe link timed out. Paste the recipe instead.'),
+            ),
+          remaining,
+        )
+        req.on('error', () => clearTimeout(timer))
+        req.on('error', reject)
+        req.end()
+      })
+      const errorHtml =
+        response.status !== 200 ? response.bytes.toString('utf8') : ''
+      const evidence =
+        errorHtml && response.mime === 'text/html'
+          ? pageEvidence(errorHtml, url)
+          : undefined
+      hops.push({
+        url: diagnosticUrl(url.href),
+        at: new Date().toISOString(),
+        status: response.status,
+        headers: response.headers,
+        ...(response.location
+          ? { location: diagnosticUrl(new URL(response.location, url).href) }
+          : {}),
+        ...(evidence?.browserRedirect
+          ? { browserRedirect: evidence.browserRedirect }
+          : {}),
+        bodySummary: /(?:window\.location|http-equiv=["']?refresh)/i.test(
+          errorHtml,
+        )
+          ? 'Error document contains a browser redirect; not followed or parsed as product data.'
+          : evidence?.challenge
+            ? 'Verification document; not parsed as product data.'
+            : response.status !== 200
+              ? 'Non-success response; body excluded from product extraction.'
+              : 'Successful response.',
+      })
+      if (
+        [301, 302, 303, 307, 308].includes(response.status) &&
+        response.location
+      ) {
+        if (redirects === 3) throw new Error('Too many recipe link redirects.')
+        value = new URL(response.location, url).href
+        continue
+      }
+      if (response.status !== 200)
+        throw new PageFetchHttpError(
+          response.status,
+          {
+            url: url.href,
+            mime: response.mime,
+            bytes: response.bytes,
+          },
+          hops,
+        )
+      // Some public product pages omit Content-Type. Only recognize an explicit HTML document,
+      // after the complete bounded body arrives; unsupported declared types still fail closed.
+      if (
+        !image &&
+        !response.mime &&
+        /^\s*(?:<!doctype\s+html|<html(?:\s|>))/i.test(
+          response.bytes.subarray(0, 512).toString('utf8'),
+        )
       )
-    return { ...response, url: url.href, hops }
+        response.mime = 'text/html'
+      if (image && !response.mime) {
+        const head = response.bytes.subarray(0, 12)
+        response.mime = head
+          .subarray(0, 3)
+          .equals(Buffer.from([0xff, 0xd8, 0xff]))
+          ? 'image/jpeg'
+          : head
+                .subarray(0, 8)
+                .equals(
+                  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+                )
+            ? 'image/png'
+            : head.subarray(0, 4).toString() === 'RIFF' &&
+                head.subarray(8, 12).toString() === 'WEBP'
+              ? 'image/webp'
+              : ''
+      }
+      if (
+        !(
+          image
+            ? ['image/png', 'image/jpeg', 'image/webp']
+            : ['text/html', 'text/plain', 'application/ld+json']
+        ).includes(response.mime)
+      )
+        throw new Error(
+          'This link does not return a recipe page. Use file upload for PDF or photos.',
+        )
+      return { ...response, url: url.href, hops }
+    } catch (error) {
+      if (error instanceof Error && !(error instanceof PageFetchHttpError))
+        Object.assign(error, { hops: [...hops] })
+      throw error
+    }
   }
   throw new Error('Recipe link could not be loaded.')
 }

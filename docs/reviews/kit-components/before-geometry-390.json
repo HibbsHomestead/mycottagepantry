@@ -1,0 +1,98 @@
+{
+  "width": 370,
+  "height": 810,
+  "columns": "324px",
+  "title": {
+    "x": 23,
+    "y": 51,
+    "width": 324,
+    "height": 35,
+    "font": "700 25px / 35px \"DM Sans\", sans-serif",
+    "padding": "0px",
+    "background": "rgba(0, 0, 0, 0)",
+    "radius": "0px"
+  },
+  "photo": {
+    "x": 23,
+    "y": 160.375,
+    "width": 324,
+    "height": 280,
+    "font": "14px / 21px \"DM Sans\", sans-serif",
+    "padding": "0px",
+    "background": "rgb(240, 242, 247)",
+    "radius": "14px"
+  },
+  "cards": [
+    {
+      "text": "Included products$7.96per kit",
+      "css": "",
+      "background": "rgb(240, 234, 248)"
+    },
+    {
+      "text": "Additional packaging$0.08per kit",
+      "css": "",
+      "background": "rgb(233, 242, 248)"
+    },
+    {
+      "text": "Assembly labor$1.80per kit",
+      "css": "",
+      "background": "rgb(251, 240, 223)"
+    },
+    {
+      "text": "Additional overhead$0.00per kit",
+      "css": "",
+      "background": "rgb(239, 239, 243)"
+    },
+    {
+      "text": "Total cost per kit$9.84one sellable kit",
+      "css": "",
+      "background": "rgb(240, 234, 248)"
+    },
+    {
+      "text": "Selling price$36.75No applicable tax",
+      "css": "",
+      "background": "rgb(233, 242, 248)"
+    },
+    {
+      "text": "Profit per kit$26.91Revenue less kit cost; excludes tax",
+      "css": "",
+      "background": "rgb(231, 242, 233)"
+    },
+    {
+      "text": "Margin73.23%Target margin: 65%",
+      "css": "",
+      "background": "rgb(231, 242, 233)"
+    },
+    {
+      "text": "Suggested selling price$28.11For 65% target margin",
+      "css": "",
+      "background": "rgb(240, 234, 248)"
+    },
+    {
+      "text": "Tax per kit$0.00Collected for tax; separate from revenue",
+      "css": "",
+      "background": "rgb(251, 240, 223)"
+    },
+    {
+      "text": "Customer price$36.75Total including tax; per kit",
+      "css": "",
+      "background": "rgb(233, 242, 248)"
+    },
+    {
+      "text": "Revenue excluding tax$36.75per kit",
+      "css": "",
+      "background": "rgb(239, 239, 243)"
+    }
+  ],
+  "firstCard": {
+    "x": 23,
+    "y": 813.875,
+    "width": 158,
+    "height": 89.328125,
+    "font": "",
+    "padding": "11px 12px",
+    "background": "rgb(240, 234, 248)",
+    "radius": "10px"
+  },
+  "image": "/artwork/cinnamon-roll.png"
+}

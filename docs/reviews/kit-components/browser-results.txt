@@ -1,0 +1,39 @@
+
+Running 33 tests using 1 worker
+
+
+
+[1/33] tests/compact-details.spec.ts:9:3 › compact recipe and ingredient details 1440
+[2/33] tests/compact-details.spec.ts:9:3 › compact recipe and ingredient details 390
+[3/33] tests/detail-cost-cards.spec.ts:10:3 › renders matching ingredient/product detail structures and cost cards at 1440
+[4/33] tests/detail-cost-cards.spec.ts:10:3 › renders matching ingredient/product detail structures and cost cards at 390
+[5/33] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 1440
+[6/33] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 768
+[7/33] tests/kit-components.spec.ts:129:3 › Pass the Bread matching screenshots and compact components at 390
+[8/33] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable cost warnings
+[9/33] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable basis warnings
+[10/33] tests/kit-components.spec.ts:364:3 › collapsed row preserves actionable sources warnings
+[11/33] tests/kit-components.spec.ts:390:3 › long names and expanded source information wrap at 768
+[12/33] tests/kit-components.spec.ts:390:3 › long names and expanded source information wrap at 390
+[13/33] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 1440
+[14/33] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 1440
+[15/33] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 768
+[16/33] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 768
+[17/33] tests/kit-details.spec.ts:166:3 › shared product/kit details, linked return, edit/save refresh and stock at 390
+[18/33] tests/kit-details.spec.ts:325:3 › Kits tab, search, type filters, hash refresh and Create kit at 390
+[19/33] tests/kit-details.spec.ts:401:3 › missing category retains valid costs and gives an actionable edit at 1440
+[20/33] tests/kit-details.spec.ts:464:3 › long included lists grow below a fixed photo with one scrolling region at 1440
+[21/33] tests/kit-details.spec.ts:401:3 › missing category retains valid costs and gives an actionable edit at 390
+[22/33] tests/kit-details.spec.ts:464:3 › long included lists grow below a fixed photo with one scrolling region at 390
+[23/33] tests/kits-admin.browser.spec.ts:11:3 › kit definition save and details at 1440px
+[24/33] tests/kits-admin.browser.spec.ts:11:3 › kit definition save and details at 390px
+[25/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1762 × 854)
+[26/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1280 × 854)
+[27/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1440 × 900)
+[28/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (1024 × 900)
+[29/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (768 × 900)
+[30/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (390 × 900)
+[31/33] tests/product-detail-media.spec.ts:19:3 › product details keep labels and actions below the unchanged photo (320 × 900)
+[32/33] tests/product-detail-media.spec.ts:215:3 › long label lists retain the saved image and one accessible outer scroll area (1440)
+[33/33] tests/product-detail-media.spec.ts:215:3 › long label lists retain the saved image and one accessible outer scroll area (390)
+  33 passed (1.9m)

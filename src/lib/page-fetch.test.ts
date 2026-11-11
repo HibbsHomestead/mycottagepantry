@@ -67,6 +67,116 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
 })
+it('normalizes the exact ASIN, backs off on 503 and extracts only the successful document', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  remote.replies = [
+    {
+      status: 503,
+      body: '<script>window.location.replace("https://www.amazon.com/error/500")</script><meta property="og:type" content="product"><meta property="og:title" content="Error title">',
+    },
+    {
+      body: '<input id="ASIN" value="B0G4WLFMWV"><span id="productTitle">Selected roasting pans</span>',
+    },
+  ]
+  const result = fetchProductDetails(
+    'https://www.amazon.com/Aluminum-Disposable-Containers-Roasting-Blackgold/dp/B0G4WLFMWV/?ref_=search',
+  )
+  await vi.advanceTimersByTimeAsync(499)
+  expect(remote.requests).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(1)
+  expect((await result)[0].fields.name).toBe('Selected roasting pans')
+  expect(remote.requests.map((r) => r.url)).toEqual(
+    Array(2).fill('https://www.amazon.com/dp/B0G4WLFMWV'),
+  )
+})
+it('cleans the reported search URL on every retry without parsing or following 503 error documents', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  remote.replies = Array.from({ length: 3 }, () => ({
+    status: 503,
+    body: '<script>window.location.replace("https://www.amazon.com/error/500")</script><input id="ASIN" value="B09V45JBKH"><span id="productTitle">Error document metadata</span>',
+  }))
+  const check = expect(
+    fetchProductDetails(
+      'https://www.amazon.com/dp/B09V45JBKH?refinements=example-filter&srs=example-search',
+    ),
+  ).rejects.toMatchObject({
+    diagnostics: {
+      stage: 'fetch',
+      normalizedUrl: 'https://www.amazon.com/dp/B09V45JBKH',
+      hops: [1, 2, 3].map((attempt) =>
+        expect.objectContaining({
+          attempt,
+          status: 503,
+          browserRedirect: {
+            url: 'https://www.amazon.com/error/500',
+            kind: 'error',
+          },
+        }),
+      ),
+    },
+  })
+  await vi.advanceTimersByTimeAsync(1500)
+  await check
+  expect(remote.requests).toHaveLength(3)
+  expect(remote.requests.map((request) => request.url)).toEqual(
+    Array(3).fill('https://www.amazon.com/dp/B09V45JBKH'),
+  )
+})
+it('honors a short Retry-After before retrying', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  remote.replies = [
+    {
+      status: 503,
+      headers: { 'retry-after': '2', 'content-type': 'text/html' },
+    },
+    {
+      body: '<meta property="og:type" content="product"><meta property="og:title" content="Recovered product">',
+    },
+  ]
+  const result = fetchProductDetails('https://shop.example/product')
+  await vi.advanceTimersByTimeAsync(1999)
+  expect(remote.requests).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(1)
+  expect((await result)[0].fields.name).toBe('Recovered product')
+})
+it.each(['60', 'Tue, 10 Nov 2026 06:00:00 GMT'])(
+  'returns a long Retry-After %s without early retries',
+  async (retryAfter) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    vi.setSystemTime(new Date('2026-11-10T05:00:00Z'))
+    remote.replies = [
+      {
+        status: 503,
+        headers: { 'retry-after': retryAfter, 'content-type': 'text/html' },
+      },
+    ]
+    await expect(
+      fetchProductDetails('https://shop.example/product'),
+    ).rejects.toMatchObject({ retryAfter })
+    expect(remote.requests).toHaveLength(1)
+  },
+)
+it('rejects a changed selected Amazon offer before requesting its redirect destination', async () => {
+  remote.replies = [
+    {
+      status: 302,
+      headers: { location: 'https://www.amazon.com/dp/B0G4WLFMWV?smid=other' },
+    },
+  ]
+  await expect(
+    fetchProductDetails('https://www.amazon.com/dp/B0G4WLFMWV?smid=selected'),
+  ).rejects.toMatchObject({
+    diagnostics: {
+      hops: [
+        expect.objectContaining({
+          status: 302,
+          location: expect.stringContaining('/dp/B0G4WLFMWV'),
+        }),
+      ],
+    },
+  })
+  expect(remote.requests).toHaveLength(1)
+})
 it.each([200, 403, 429])(
   'stops Walmart HTTP %s verification without extracting or retrying',
   async (status) => {

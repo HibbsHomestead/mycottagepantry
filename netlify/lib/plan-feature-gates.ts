@@ -184,6 +184,7 @@ export function assertPlanRecordWrite(
     )
       inspect(state[row.itemTable]?.find((r) => r.id === row.itemId))
     for (const line of row.lines || []) inspect(line)
+    for (const line of row.kitComponents || []) inspect(line)
   }
   inspect(state[table]?.find((r) => r.id === item.id))
   inspect(item)

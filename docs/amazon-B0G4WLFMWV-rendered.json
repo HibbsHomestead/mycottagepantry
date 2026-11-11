@@ -1,0 +1,35 @@
+{
+  "retrieval": "real protected HTTPS importer, rendered React popup; workspace/authentication isolated with fixtures",
+  "outcomes": [
+    {
+      "products": [
+        {
+          "fields": {
+            "name": "50 Pack 8\"x8\" Aluminum Pans with Plastic Lids,Disposable Tin Foil Pan For Cooking Baking Cakes Breads Square Food Containers for Heating Roasting Preping Storing,Blackgold",
+            "packCount": 50,
+            "brand": "Zycozzn",
+            "vendor": "Amazon",
+            "retailerSku": "B0G4WLFMWV",
+            "packagePrice": 33.99
+          },
+          "title": "50 Pack 8\"x8\" Aluminum Pans with Plastic Lids,Disposable Tin Foil Pan For Cooking Baking Cakes Breads Square Food Containers for Heating Roasting Preping Storing,Blackgold",
+          "imageUrl": "https://m.media-amazon.com/images/I/71Lx20HewGL._AC_SL1500_.jpg",
+          "sourceUrl": "https://www.amazon.com/dp/B0G4WLFMWV",
+          "checkedAt": "2026-11-10T05:17:12.983Z",
+          "warnings": [
+            "Verify the selected package and any membership, coupon, subscription or location conditions. Tax and shipping are not inferred.",
+            "Multipack detected. Confirm package count and contents manually; no total quantity was guessed.",
+            "Package size needs checking.",
+            "Source currency was not provided; confirm currency before using the price."
+          ],
+          "conditions": [
+            "Primary online offer; verify selected package, seller, coupons and checkout conditions. Currency needs confirmation when absent from the source."
+          ],
+          "requestedUrl": "https://www.amazon.com/Aluminum-Disposable-Containers-Roasting-Blackgold/dp/B0G4WLFMWV/"
+        }
+      ]
+    }
+  ],
+  "result": "Live review available; no fields applied or saved",
+  "writes": 0
+}

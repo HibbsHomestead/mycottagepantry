@@ -19,15 +19,21 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu'
 import './product-cards.css'
+import { KitProductList } from './kit-included-products'
 
 // Presentation guard: missing source prices must not look like a zero-cost product.
 // All amounts still come from the existing costing and profitability functions.
 function cardCost(product: Item, workspace: Workspace) {
-  if (product.workflow === 'resale') {
+  if (['resale', 'kit'].includes(product.workflow)) {
     try {
       return { cost: productCosting(product, workspace).perPackage }
-    } catch {
-      return { reason: 'Receive resale stock to establish its cost.' }
+    } catch (error) {
+      return {
+        reason:
+          product.workflow === 'kit'
+            ? (error as Error).message
+            : 'Receive resale stock to establish its cost.',
+      }
     }
   }
   const recipe = workspace.recipes.find((r) => r.id === product.recipeId)
@@ -79,7 +85,9 @@ export function ProductCards({
       {products.map((product) => {
         const recipe = workspace.recipes.find((r) => r.id === product.recipeId)
         const sellingUnit =
-          String(product.sellingUnit || '').trim() ||
+          String(
+            product.sellingUnit || (product.workflow === 'kit' ? 'kit' : ''),
+          ).trim() ||
           (['handmade', 'resale'].includes(product.workflow)
             ? 'item'
             : 'package')
@@ -98,7 +106,11 @@ export function ProductCards({
         }
         const belowTarget =
           pricing && pricing.margin < Number(product.targetMargin ?? 65)
-        const status = product.archived ? 'Archived' : product.status
+        const status = product.archived
+          ? 'Archived'
+          : product.workflow === 'kit'
+            ? `Kit · ${product.status}`
+            : product.status
         const stock = ['handmade', 'resale'].includes(product.workflow)
           ? stockStatus(product)
           : undefined
@@ -142,33 +154,39 @@ export function ProductCards({
                   >
                     View details
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => open('label-preview', product)}
-                  >
-                    Preview Label
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => open('label-print', product)}
-                  >
-                    Print Label
-                  </DropdownMenuItem>
+                  {product.workflow !== 'kit' && (
+                    <DropdownMenuItem
+                      onSelect={() => open('label-preview', product)}
+                    >
+                      Preview Label
+                    </DropdownMenuItem>
+                  )}
+                  {product.workflow !== 'kit' && (
+                    <DropdownMenuItem
+                      onSelect={() => open('label-print', product)}
+                    >
+                      Print Label
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onSelect={() => open('product', product)}>
-                    Edit Product
+                    {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-            <button
-              className="pantry-card-photo-button"
-              aria-label={`View photo and details for ${product.name}`}
-              onClick={() => open('product-detail', product)}
-            >
-              <PantryPhoto
-                item={product}
-                assets={workspace.graphic_assets || []}
-                kind="product"
-              />
-            </button>
+            {(product.workflow !== 'kit' || product.imageAssetId) && (
+              <button
+                className="pantry-card-photo-button"
+                aria-label={`View photo and details for ${product.name}`}
+                onClick={() => open('product-detail', product)}
+              >
+                <PantryPhoto
+                  item={product}
+                  assets={workspace.graphic_assets || []}
+                  kind="product"
+                />
+              </button>
+            )}
             <div className="pantry-card-main">
               <button
                 className="pantry-card-title"
@@ -219,18 +237,28 @@ export function ProductCards({
                 </dd>
               </dl>
               {reason && <p className="muted">{reason}</p>}
+              {product.workflow === 'kit' && (
+                <KitProductList
+                  product={product}
+                  workspace={workspace}
+                  openProduct={(component) => open('product-detail', component)}
+                />
+              )}
+
               {recipe && (
                 <p className="muted">
                   {product.workflow === 'handmade' ? 'Design' : 'Recipe'}:{' '}
                   {recipe.name}
                 </p>
               )}
-              {product.workflow && (
-                <p className="muted">
-                  {product.workflow} {product.variant && `· ${product.variant}`}{' '}
-                  {product.sku && `· ${product.sku}`}
-                </p>
-              )}
+              {(product.workflow !== 'kit' || product.variant || product.sku) &&
+                product.workflow && (
+                  <p className="muted">
+                    {product.workflow !== 'kit' && product.workflow}{' '}
+                    {product.variant && `· ${product.variant}`}{' '}
+                    {product.sku && `· ${product.sku}`}
+                  </p>
+                )}
               {['handmade', 'resale'].includes(product.workflow) && (
                 <p>
                   {product.quantity || 0}{' '}
@@ -255,7 +283,7 @@ export function ProductCards({
                 className="btn secondary"
                 onClick={() => open('product', product)}
               >
-                Edit Product
+                {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
               </button>
             </footer>
           </article>

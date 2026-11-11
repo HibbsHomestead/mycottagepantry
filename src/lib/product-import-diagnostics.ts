@@ -4,11 +4,20 @@ export type ProductFetchHop = {
   status: number
   headers: Record<string, string>
   bodySummary: string
+  attempt?: number
+  location?: string
+  browserRedirect?: {
+    url: string
+    kind: 'error' | 'challenge' | 'product' | 'unsupported'
+  }
 }
 export type ProductImportDiagnostics = {
   requestId?: string
   requestedAt: string
   requestedUrl: string
+  normalizedUrl?: string
+  retrieval?: 'direct-https'
+  fallback?: 'none-configured'
   source: 'retailer' | 'backend' | 'network'
   stage?: 'fetch' | 'parse'
   hops: ProductFetchHop[]

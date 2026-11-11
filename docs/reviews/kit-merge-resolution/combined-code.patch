@@ -1,0 +1,2878 @@
+--- a/src/components/cost-cards.css
++++ b/src/components/cost-cards.css
+@@ -143,6 +143,21 @@
+ .product-detail-recipe .text-button {
+   white-space: normal;
+ }
++.kit-included-products {
++  min-width: 0;
++}
++.kit-included-products h3 {
++  margin: 0;
++}
++.kit-estimate-issue {
++  padding: 12px;
++  border: 1px solid var(--border);
++  border-radius: 10px;
++  font-size: 12px;
++}
++.kit-estimate-issue p {
++  margin: 0 0 8px;
++}
+ @media (max-width: 640px) {
+   .product-detail-media {
+     grid-row: 1;
+@@ -155,30 +170,3 @@
+     font-size: 22px;
+   }
+ }
+-
+-.kit-included-products h3 {
+-  margin: 0 0 10px;
+-}
+-.kit-included-products ul {
+-  list-style: none;
+-  padding: 0;
+-  margin: 0;
+-}
+-.kit-included-products li {
+-  display: grid;
+-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+-  gap: 10px;
+-  padding: 9px 0;
+-  border-bottom: 1px solid var(--border);
+-  font-size: 12px;
+-  overflow-wrap: anywhere;
+-}
+-.kit-included-products .text-button {
+-  text-align: left;
+-  white-space: normal;
+-  min-width: 0;
+-  padding: 0;
+-}
+-.kit-included-products small {
+-  display: block;
+-}
+--- /dev/null
++++ b/src/components/kit-components.css
+@@ -0,0 +1,126 @@
++/* Shared compact kit summaries; no package/content conversions occur here. */
++.kit-component-list {
++  display: block;
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  min-height: 0;
++  font-size: 12px;
++  line-height: 1.5;
++}
++.kit-component-list li {
++  display: block;
++  min-height: 0;
++  margin: 0;
++  padding: 2px 0;
++  overflow-wrap: anywhere;
++}
++.product-card .kit-component-list .text-button,
++.product-detail-media .kit-component-list .text-button,
++.kit-component-name .text-button {
++  display: inline;
++  min-height: 0;
++  margin: 0;
++  padding: 0;
++  font-size: inherit;
++  line-height: inherit;
++  white-space: normal;
++  text-align: left;
++  overflow-wrap: anywhere;
++}
++.kit-component-count {
++  white-space: nowrap;
++}
++.kit-component-list small,
++.kit-component-name small {
++  display: block;
++  font-size: 11px;
++  color: var(--muted);
++}
++.kit-editor-component {
++  min-width: 0;
++  padding: 10px 0;
++  border-bottom: 1px solid var(--border);
++  font-size: 13px;
++  line-height: 1.5;
++  overflow-wrap: anywhere;
++}
++.kit-component-row {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) 70px 100px auto;
++  align-items: center;
++  gap: 12px;
++}
++.kit-component-name,
++.kit-component-quantity,
++.kit-component-cost {
++  min-width: 0;
++}
++.kit-component-quantity.field {
++  gap: 3px;
++  margin: 0;
++}
++.kit-component-quantity > span,
++.kit-component-cost > span {
++  display: block;
++  color: var(--muted);
++  font-size: 11px;
++  font-weight: 500;
++}
++.kit-component-quantity input {
++  width: 100%;
++}
++.kit-component-cost output {
++  display: block;
++  font-variant-numeric: tabular-nums;
++  font-weight: 600;
++}
++.kit-component-remove {
++  align-self: end;
++  min-height: 40px;
++}
++.kit-editor-component .kit-component-warning {
++  margin: 6px 0 0;
++  font-size: 12px;
++}
++.kit-component-details {
++  margin-top: 6px;
++  font-size: 12px;
++}
++.kit-component-details > summary {
++  cursor: pointer;
++  color: var(--primary);
++  width: fit-content;
++  padding: 4px 0;
++}
++.kit-component-details > summary:focus-visible {
++  outline: 2px solid var(--focus-ring);
++  outline-offset: 3px;
++}
++.kit-component-explanation {
++  padding: 2px 0 4px;
++}
++.kit-component-explanation h4 {
++  font-size: 12px;
++  margin: 10px 0 3px;
++  font-weight: 600;
++}
++.kit-component-explanation p {
++  margin: 3px 0;
++}
++.kit-component-explanation ul {
++  margin: 4px 0;
++  padding-left: 18px;
++}
++.kit-component-explanation li {
++  margin: 4px 0;
++}
++@media (max-width: 640px) {
++  .kit-component-row {
++    grid-template-columns: 70px minmax(0, 1fr) auto;
++    gap: 8px 12px;
++  }
++  .kit-component-name {
++    grid-column: 1 / -1;
++  }
++}
+--- a/src/components/kit-cost-cards.test.tsx
++++ b/src/components/kit-cost-cards.test.tsx
+@@ -25,17 +25,20 @@
+   product.taxSource = 'category'
+   const cost = productCosting(product, workspace)
+   render(
+-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
++    <KitCostCards
++      product={product}
++      workspace={workspace}
++      edit={() => {}}
++      configure={() => {}}
++    />,
+   )
+   expect(screen.getByRole('status').textContent).toContain(
+-    'Review kit: Product category not configured.',
++    'Product category not configured.',
+   )
+   expect(screen.getByText(money(cost.total))).toBeTruthy()
+   expect(screen.getByText('$45.00')).toBeTruthy()
+   expect(screen.getAllByText('Unavailable')).toHaveLength(6)
+-  expect(
+-    screen.getByRole('button', { name: 'Edit kit configuration' }),
+-  ).toBeTruthy()
++  expect(screen.getByRole('button', { name: 'Edit kit' })).toBeTruthy()
+ })
+ it('uses the existing costing and pricing results without mutating the workspace', () => {
+   const { product, workspace } = fixture()
+@@ -43,7 +46,12 @@
+   const cost = productCosting(product, workspace)
+   const price = profitability(product, cost.perPackage, workspace.settings[0])
+   render(
+-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
++    <KitCostCards
++      product={product}
++      workspace={workspace}
++      edit={() => {}}
++      configure={() => {}}
++    />,
+   )
+   expect(screen.getByText(money(price.profit))).toBeTruthy()
+   expect(screen.getByText(`${price.margin.toFixed(2)}%`)).toBeTruthy()
+@@ -54,7 +62,12 @@
+   const { product, workspace } = fixture()
+   workspace.products[0].needsCostSetup = true
+   render(
+-    <KitCostCards product={product} workspace={workspace} edit={() => {}} />,
++    <KitCostCards
++      product={product}
++      workspace={workspace}
++      edit={() => {}}
++      configure={() => {}}
++    />,
+   )
+   expect(screen.getByRole('status').textContent).toContain('cost is incomplete')
+   expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(7)
+--- a/src/components/kit-cost-cards.tsx
++++ b/src/components/kit-cost-cards.tsx
+@@ -1,74 +1,53 @@
+-import {
+-  productCosting,
+-  profitability,
+-  money,
+-  type Item,
+-  type Workspace,
+-} from '@/lib/domain'
++import { money, type Item, type Workspace } from '@/lib/domain'
++import { kitEstimate } from '@/lib/kit-estimate'
+ import { CostCard, costMoney } from './cost-cards'
+ 
+ export function KitCostCards({
+   product,
+   workspace,
+   edit,
++  configure,
++  canEdit = true,
+ }: {
+   product: Item
+   workspace: Workspace
+   edit: () => void
++  configure: (section: string) => void
++  canEdit?: boolean
+ }) {
+-  let cost: ReturnType<typeof productCosting> | undefined
+-  let pricing: ReturnType<typeof profitability> | undefined
+-  let costIssue = ''
+-  let pricingIssue = ''
+-  try {
+-    cost = productCosting(product, workspace)
+-  } catch (e) {
+-    costIssue = (e as Error).message
+-  }
+-  try {
+-    pricing = profitability(
+-      product,
+-      cost?.perPackage ?? 0,
+-      workspace.settings[0],
+-    )
+-  } catch (e) {
+-    pricingIssue = (e as Error).message
+-  }
++  const {
++    cost: c,
++    tax,
++    pricing: p,
++    price,
++    costError,
++    pricingError,
++    configuration,
++    explanation,
++  } = kitEstimate(product, workspace)
+   const target = Number(product.targetMargin ?? 65)
++  const amount = (value: number | undefined) =>
++    value === undefined ? 'Unavailable' : costMoney(value)
+   const breakdown = [
+     {
+-      label: 'Included product costs',
+-      value: cost?.ingredient,
++      label: 'Included products',
++      value: c?.ingredient,
+       tone: 'lavender' as const,
+     },
+     {
+-      label: 'Additional kit packaging',
+-      value: cost?.packagingCost,
++      label: 'Additional packaging',
++      value: c?.packagingCost,
+       tone: 'blue' as const,
+     },
+-    {
+-      label: 'Additional assembly labor',
+-      value: cost?.labor,
+-      tone: 'peach' as const,
+-    },
++    { label: 'Assembly labor', value: c?.labor, tone: 'peach' as const },
+     {
+       label: 'Additional overhead',
+-      value: cost?.overhead,
++      value: c?.overhead,
+       tone: 'neutral' as const,
+     },
+   ]
+   return (
+     <div className="pricing-summary cost-summary">
+-      {(costIssue || pricingIssue) && (
+-        <div role="status" className="warning-text">
+-          Estimate incomplete: {product.name}: {costIssue || pricingIssue}{' '}
+-          {pricingIssue &&
+-            'Review this kit’s Category in Contents & details and its category tax treatment in Products → Categories.'}{' '}
+-          <button className="text-button" onClick={edit}>
+-            Edit kit configuration
+-          </button>
+-        </div>
+-      )}
+       <div
+         className="cost-card-grid cost-breakdown-grid"
+         aria-label="Cost breakdown per kit"
+@@ -77,7 +56,7 @@
+           <CostCard
+             key={row.label}
+             label={row.label}
+-            value={row.value == null ? 'Unavailable' : costMoney(row.value)}
++            value={amount(row.value)}
+             note="per kit"
+             tone={row.tone}
+           />
+@@ -86,22 +65,26 @@
+       <div className="detail-stats cost-card-grid">
+         <CostCard
+           label="Total cost per kit"
+-          value={cost ? money(cost.perPackage) : 'Unavailable'}
++          value={amount(c?.perPackage)}
+           note="one sellable kit"
+         />
+         <CostCard
+           label="Selling price"
+           value={
+-            product.price == null || product.price === ''
+-              ? 'Not configured'
+-              : money(Number(product.price))
++            Number.isFinite(price) && price >= 0 ? money(price) : 'Not set'
+           }
+-          note="per kit"
++          note={
++            tax
++              ? tax.snapshot.length
++                ? 'Saved price; see tax below'
++                : 'No applicable tax'
++              : 'Tax treatment unavailable'
++          }
+           tone="blue"
+         />
+         <CostCard
+           label="Profit per kit"
+-          value={cost && pricing ? money(pricing.profit) : 'Unavailable'}
++          value={amount(p?.profit)}
+           note="Revenue less kit cost; excludes tax"
+           tone="green"
+         />
+@@ -109,83 +92,134 @@
+       <div className="cost-card-grid">
+         <CostCard
+           label="Margin"
+-          value={
+-            cost && pricing ? `${pricing.margin.toFixed(2)}%` : 'Unavailable'
+-          }
++          value={p ? `${p.margin.toFixed(2)}%` : 'Unavailable'}
+           note={`Target margin: ${target}%`}
+-          tone="green"
++          tone={p && p.margin < target ? 'peach' : 'green'}
+         />
+         <CostCard
+           label="Suggested selling price"
+-          value={cost && pricing ? money(pricing.suggested) : 'Unavailable'}
++          value={amount(p?.suggested)}
+           note={`For ${target}% target margin`}
+         />
+         <CostCard
+           label="Tax per kit"
+-          value={pricing ? money(pricing.tax) : 'Unavailable'}
++          value={amount(tax?.tax)}
+           note="Collected for tax; separate from revenue"
+           tone="peach"
+         />
+         <CostCard
+           label="Customer price"
+-          value={pricing ? money(pricing.customerTotal) : 'Unavailable'}
+-          note="Total including tax"
++          value={amount(tax?.customerTotal)}
++          note="Total including tax; per kit"
+           tone="blue"
+         />
+         <CostCard
+           label="Revenue excluding tax"
+-          value={pricing ? money(pricing.revenue) : 'Unavailable'}
++          value={amount(tax?.revenue)}
+           note="per kit"
+           tone="neutral"
+         />
+       </div>
++      {(costError || pricingError) && (
++        <div className="kit-estimate-issue" role="status">
++          {costError && <p>Estimate incomplete: {costError}</p>}
++          {pricingError && <p>Estimate incomplete: {pricingError}</p>}
++          <p>{explanation}</p>
++          <p>
++            Dependent figures remain unavailable until their requirements are
++            met.
++          </p>
++          <button
++            type="button"
++            className="btn secondary"
++            disabled={!canEdit}
++            onClick={
++              configuration === 'kit' ? edit : () => configure(configuration)
++            }
++          >
++            {configuration === 'kit'
++              ? 'Edit kit'
++              : configuration === 'Categories'
++                ? 'Review category'
++                : 'Review tax settings'}
++          </button>
++        </div>
++      )}
+       <details className="calculation-box">
+         <summary>How this is calculated</summary>
+         <p>
+-          Included products use their configured whole selling package
+-          quantities and complete current package costs. Component production
+-          labor, overhead and packaging are already included and are not added
+-          again.
++          Each configured quantity is a whole selling package, not an individual
++          item inside that package. Included product costs already contain
++          component production labor, overhead and packaging; those costs are
++          counted once.
+         </p>
+-        {cost?.lines.map((line: Item, index: number) => (
++        {c?.lines.map((line: Item) => (
++          <p key={line.productId}>
++            {line.name}: {line.quantity} whole selling package(s) ={' '}
++            {costMoney(line.cost)} per kit.
++          </p>
++        ))}
++        {c?.packaging.map((line, index) => (
+           <p key={index}>
+-            {line.name}: {line.quantity} selling packages ={' '}
+-            {costMoney(line.cost)} per kit.
+-          </p>
+-        ))}
+-        {cost?.packaging.map((line: Item, index: number) => (
+-          <p key={index}>
+-            {line.name}: {line.quantity} {line.unit} = {costMoney(line.cost)}{' '}
+-            per kit.
+-          </p>
+-        ))}
+-        <p>
+-          Only kit-specific packaging and assembly are added. No separate kit
+-          overhead is configured by the existing costing rules.
+-        </p>
+-        {cost && (
++            {line.name}: {line.quantity}{' '}
++            {line.unit ||
++              workspace.ingredients.find((i) => i.id === line.ingredientId)
++                ?.unit}{' '}
++            = {costMoney(line.cost)} additional packaging per kit.
++          </p>
++        ))}
++        {c && (
++          <>
++            <p>
++              Additional assembly: {c.laborMinutes} minutes ÷ 60 ×{' '}
++              {money(c.laborRate)} per hour = {costMoney(c.labor)} per kit.
++            </p>
++            <p>
++              Additional overhead: {money(c.overhead)}. The existing kit
++              calculation adds no separate overhead charge.
++            </p>
++            <p>
++              Total cost per kit = included products ({costMoney(c.ingredient)})
++              + additional packaging ({costMoney(c.packagingCost)}) + assembly (
++              {costMoney(c.labor)}) = {costMoney(c.perPackage)}.
++            </p>
++          </>
++        )}
++        {p && (
++          <>
++            <p>
++              Profit per kit = revenue excluding tax ({money(p.revenue)}) −
++              total cost per kit ({money(c!.perPackage)}). Margin = profit ÷
++              revenue excluding tax.
++            </p>
++            <p>
++              Suggested selling price uses the saved {target}% target margin and
++              configured tax treatment.
++            </p>
++          </>
++        )}
++        {tax?.snapshot.map((row) => (
++          <p key={row.id}>
++            {row.name} · {row.jurisdiction}: {row.ratePercent}%{' '}
++            {row.behavior === 'inclusive'
++              ? 'included in price'
++              : 'added to price'}
++            ; tax {money(row.amount)}.
++          </p>
++        ))}
++        {tax && !tax.snapshot.length && (
+           <p>
+-            Assembly: {cost.laborMinutes} minutes ÷ 60 × {money(cost.laborRate)}{' '}
+-            per hour. Total cost per kit: {money(cost.perPackage)}.
++            {product.taxStatus === 'exempt'
++              ? 'Tax exempt.'
++              : product.taxStatus === 'zero_rated'
++                ? 'Zero-rated.'
++                : 'No applicable active tax rates.'}
+           </p>
+         )}
+         <p>
+-          Profit per kit = revenue excluding tax − total cost per kit. Margin =
+-          profit ÷ revenue excluding tax. Suggested price uses the saved target
+-          margin and configured tax treatment.
++          Viewing or editing a kit definition does not assemble products,
++          reserve stock or create stock movements.
+         </p>
+-        {pricingIssue && (
+-          <p>
+-            Tax, customer price, revenue, profit, margin and suggested price
+-            remain unavailable until pricing configuration is complete.
+-          </p>
+-        )}
+-        {pricing?.snapshot.map((row) => (
+-          <p key={row.id}>
+-            {row.name} · {row.jurisdiction}: {row.ratePercent}% {row.behavior};
+-            tax {money(row.amount)} per kit.
+-          </p>
+-        ))}
+       </details>
+     </div>
+   )
+--- /dev/null
++++ b/src/components/kit-details.test.tsx
+@@ -0,0 +1,201 @@
++import { render, screen, within } from '@testing-library/react'
++import { expect, it, vi } from 'vitest'
++import { demoData } from '@/lib/demo'
++import { money, productCosting, profitability, type Item } from '@/lib/domain'
++import { kitEstimate } from '@/lib/kit-estimate'
++import { KitCostCards } from './kit-cost-cards'
++import { KitIncludedProducts } from './kit-included-products'
++
++function fixture() {
++  const workspace = demoData()
++  const kit: Item = {
++    id: 'kit',
++    name: "Gather 'Round",
++    workflow: 'kit',
++    price: 42,
++    assemblyMinutes: 12,
++    assemblyRate: 18,
++    kitComponents: [
++      { productId: workspace.products[0].id, quantity: 2, basis: 'package' },
++    ],
++    packagingLines: [{ ingredientId: 'bags', quantity: 1, unit: 'each' }],
++  }
++  return { workspace, kit }
++}
++const card = (label: string) =>
++  within(
++    screen
++      .getByText(label, { exact: true })
++      .closest('.cost-card') as HTMLElement,
++  )
++it.each(['inclusive', 'exclusive'] as const)(
++  'uses authoritative kit costs and %s tax without adding component costs twice',
++  (behavior) => {
++    const { workspace, kit } = fixture()
++    workspace.settings[0].taxRates = [
++      {
++        id: 'tax',
++        name: 'Test tax',
++        jurisdiction: 'Test only',
++        ratePercent: 5.1,
++        behavior,
++        active: true,
++      },
++    ]
++    kit.taxRateIds = ['tax']
++    const before = JSON.stringify({ workspace, kit })
++    const cost = productCosting(kit, workspace)
++    const pricing = profitability(kit, cost.perPackage, workspace.settings[0])
++    render(
++      <KitCostCards
++        product={kit}
++        workspace={workspace}
++        edit={vi.fn()}
++        configure={vi.fn()}
++      />,
++    )
++    expect(
++      card('Included products').getByText(
++        money(productCosting(workspace.products[0], workspace).perPackage * 2),
++      ),
++    ).toBeVisible()
++    expect(
++      card('Total cost per kit').getByText(money(cost.perPackage)),
++    ).toBeVisible()
++    expect(
++      card('Profit per kit').getByText(money(pricing.profit)),
++    ).toBeVisible()
++    expect(
++      card('Revenue excluding tax').getByText(money(pricing.revenue)),
++    ).toBeVisible()
++    expect(
++      card('Customer price').getByText(money(pricing.customerTotal)),
++    ).toBeVisible()
++    expect(card('Tax per kit').getByText(money(pricing.tax))).toBeVisible()
++    expect(
++      card('Suggested selling price').getByText(money(pricing.suggested)),
++    ).toBeVisible()
++    expect(JSON.stringify({ workspace, kit })).toBe(before)
++  },
++)
++
++it.each(['missing', 'inactive', 'classification', 'mapping'])(
++  'retains costs but preserves category validation for %s',
++  (scenario) => {
++    const { workspace, kit } = fixture()
++    kit.taxSource = 'category'
++    if (scenario !== 'missing') {
++      kit.productCategoryId = 'category'
++      workspace.settings[0].productCategories = [
++        {
++          id: 'category',
++          name: 'Holiday kits',
++          active: scenario !== 'inactive',
++          classification: scenario === 'classification' ? null : 'food',
++        },
++      ]
++      workspace.settings[0].categoryTaxMappings = {}
++    }
++    const estimate = kitEstimate(kit, workspace)
++    expect(estimate.cost?.perPackage).toBe(
++      productCosting(kit, workspace).perPackage,
++    )
++    expect(estimate.tax).toBeUndefined()
++    expect(estimate.pricing).toBeUndefined()
++    expect(estimate.pricingError).toBeTruthy()
++    expect(estimate.explanation).toContain(kit.name)
++    expect(estimate.configuration).toBe(
++      scenario === 'classification'
++        ? 'Categories'
++        : scenario === 'mapping'
++          ? 'Taxes'
++          : 'kit',
++    )
++    render(
++      <KitCostCards
++        product={kit}
++        workspace={workspace}
++        edit={vi.fn()}
++        configure={vi.fn()}
++      />,
++    )
++    expect(
++      card('Total cost per kit').queryByText('Unavailable'),
++    ).not.toBeInTheDocument()
++    expect(card('Tax per kit').getByText('Unavailable')).toBeVisible()
++    expect(card('Profit per kit').getByText('Unavailable')).toBeVisible()
++    expect(screen.getByRole('status')).toHaveTextContent('Estimate incomplete:')
++  },
++)
++
++it('keeps tax/revenue available when component cost is missing, and never displays incomplete cost as zero', () => {
++  const { workspace, kit } = fixture()
++  workspace.products[0].needsCostSetup = true
++  render(
++    <KitCostCards
++      product={kit}
++      workspace={workspace}
++      edit={vi.fn()}
++      configure={vi.fn()}
++    />,
++  )
++  expect(card('Total cost per kit').getByText('Unavailable')).toBeVisible()
++  expect(card('Included products').getByText('Unavailable')).toBeVisible()
++  expect(card('Profit per kit').getByText('Unavailable')).toBeVisible()
++  expect(card('Revenue excluding tax').getByText('$42.00')).toBeVisible()
++  expect(screen.getByRole('status')).toHaveTextContent(
++    workspace.products[0].name,
++  )
++})
++
++it.each(['', null, undefined, -1, 'invalid'])(
++  'does not treat missing/invalid price %s as free',
++  (price) => {
++    const { workspace, kit } = fixture()
++    kit.price = price
++    const estimate = kitEstimate(kit, workspace)
++    expect(estimate.cost).toBeDefined()
++    expect(estimate.tax).toBeUndefined()
++    expect(estimate.pricing).toBeUndefined()
++  },
++)
++
++it('retains independent tax results when a target margin is invalid', () => {
++  const { workspace, kit } = fixture()
++  kit.targetMargin = 100
++  const estimate = kitEstimate(kit, workspace)
++  expect(estimate.cost).toBeDefined()
++  expect(estimate.tax?.revenue).toBe(42)
++  expect(estimate.pricing).toBeUndefined()
++  expect(estimate.pricingError).toContain('Target margin')
++})
++
++it('shows compact configured counts and exposes unavailable or archived references', () => {
++  const { workspace, kit } = fixture()
++  Object.assign(workspace.products[0], {
++    unitsPerPackage: 9,
++    sellingUnit: 'tray',
++    contentUnit: 'rolls',
++    archived: true,
++  })
++  kit.kitComponents.push({
++    productId: 'missing',
++    quantity: 3,
++    basis: 'content',
++  })
++  render(
++    <KitIncludedProducts
++      product={kit}
++      workspace={workspace}
++      openProduct={vi.fn()}
++    />,
++  )
++  expect(
++    screen.getByRole('button', { name: `${workspace.products[0].name} ×2` }),
++  ).toBeVisible()
++  expect(screen.queryByText('9 rolls per package')).not.toBeInTheDocument()
++  expect(screen.queryByText('Selling unit: tray')).not.toBeInTheDocument()
++  expect(screen.getByText('Archived product')).toBeVisible()
++  expect(screen.getByText('Unavailable product · missing ×3')).toBeVisible()
++  expect(screen.getByText(/Unsupported quantity basis/)).toBeVisible()
++})
+--- a/src/components/kit-editor.tsx
++++ b/src/components/kit-editor.tsx
+@@ -3,17 +3,18 @@
+ import { ProductArtworkFields } from './product-artwork-fields'
+ import {
+   productCosting,
+-  profitability,
+   packagingLines,
+   effectiveRecipeLines,
+   money,
+   type Item,
+ } from '@/lib/domain'
+ import type { ProductEditor } from './product-editor'
++import { kitEstimate } from '@/lib/kit-estimate'
++import './kit-components.css'
+ 
+ type Props = Parameters<typeof ProductEditor>[0] & {
+-  onSaved?: () => void
+   openProduct: (item: Item) => void
++  onSaved?: (id: string) => void
+ }
+ export function KitEditor({
+   item,
+@@ -62,51 +63,50 @@
+       key,
+       rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
+     )
+-  let estimate:
+-    | {
+-        cost: ReturnType<typeof productCosting>
+-        pricing: ReturnType<typeof profitability>
+-      }
+-    | undefined
+-  let estimateError = ''
+-  try {
+-    const cost = productCosting(draft, workspace)
+-    estimate = {
+-      cost,
+-      pricing: profitability(draft, cost.perPackage, workspace.settings[0]),
+-    }
+-  } catch (e) {
+-    estimateError = (e as Error).message
+-  }
+-  const summary = estimate ? (
++  const estimate = kitEstimate(draft, workspace)
++  const summary = (
+     <>
+-      <p>Included packages: {money(estimate.cost.ingredient)}</p>
+-      <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
+-      <p>Additional assembly: {money(estimate.cost.labor)}</p>
++      {estimate.cost && (
++        <>
++          <p>Included packages: {money(estimate.cost.ingredient)}</p>
++          <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
++          <p>Additional assembly: {money(estimate.cost.labor)}</p>
++          <p>
++            <strong>
++              Total / sellable kit: {money(estimate.cost.perPackage)}
++            </strong>
++          </p>
++        </>
++      )}
+       <p>
+-        <strong>Total / sellable kit: {money(estimate.cost.perPackage)}</strong>
++        Selling price:{' '}
++        {Number.isFinite(estimate.price) ? money(estimate.price) : 'Not set'}
+       </p>
+-      <p>Selling price: {money(Number(draft.price))}</p>
+-      <p>
+-        Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
+-        {estimate.pricing.margin.toFixed(1)}%
+-      </p>
++      {estimate.pricing && (
++        <p>
++          Profit excluding tax: {money(estimate.pricing.profit)} · Margin:{' '}
++          {estimate.pricing.margin.toFixed(1)}%
++        </p>
++      )}
++      {(estimate.costError || estimate.pricingError) && (
++        <div role="status">
++          {estimate.costError && (
++            <p>Estimate incomplete: {estimate.costError}</p>
++          )}
++          {estimate.pricingError && (
++            <p>Estimate incomplete: {estimate.pricingError}</p>
++          )}
++          <p>{estimate.explanation}</p>
++          <button
++            type="button"
++            className="text-button"
++            onClick={() => setTab('contents')}
++          >
++            Review contents &amp; details
++          </button>
++        </div>
++      )}
+     </>
+-  ) : (
+-    <p role="status">
+-      Estimate incomplete: {draft.name || 'This kit'}: {estimateError}
+-      {estimateError.includes('category') ||
+-      estimateError.includes('Tax treatment')
+-        ? ' Review this kit’s Category in Contents & details, then its classification and tax treatment in Products → Categories.'
+-        : ' Review the referenced component or kit packaging configuration.'}
+-      <button
+-        type="button"
+-        className="text-button"
+-        onClick={() => setTab('contents')}
+-      >
+-        Review contents &amp; details
+-      </button>
+-    </p>
+   )
+   const contents = (
+     <>
+@@ -166,13 +166,16 @@
+       </label>
+       <h3>Included products</h3>
+       <p className="form-hint">
+-        Whole selling packages include existing production labor, overhead and
+-        attached packaging. Individual unpackaged contents are unavailable
+-        because a separate unpackaged cost basis is not configured.
++        Quantities count whole selling packages. Individual unpackaged contents
++        are unavailable without a separate unpackaged cost basis.
+       </p>
+       {components.map((line, index) => {
+         const p = workspace.products.find((p) => p.id === line.productId)
+         let contribution = 'Cost unavailable'
++        let costIssue = p
++          ? ''
++          : 'Product unavailable. Remove this component or choose an available product.'
++        const sourceData = componentSources(p, workspace)
+         try {
+           if (p)
+             contribution = money(
+@@ -186,78 +189,121 @@
+                 workspace,
+               ).perPackage,
+             )
+-        } catch {
+-          /* Incomplete sources remain visible. */
++        } catch (error) {
++          costIssue = (error as Error).message
+         }
+         return (
+-          <section className="calculation-box" key={line.productId}>
+-            <button
+-              type="button"
+-              className="text-button"
+-              onClick={() => p && openProduct(p)}
+-            >
+-              {p?.name || `Unavailable product ${line.productId}`}
+-            </button>
+-            {p?.archived && <small> Archived component</small>}
+-            <p>
+-              {p?.sellingUnit || 'Selling package'}
+-              {p?.unitsPerPackage
+-                ? ` · ${p.unitsPerPackage} ${p.contentUnit || workspace.recipes.find((r) => r.id === p.recipeId)?.yieldUnit || 'contents'} per package`
+-                : ' · Contents per package not configured'}
+-            </p>
+-            <label className="field">
+-              <span>Whole selling packages</span>
+-              <input
+-                type="number"
+-                min="1"
+-                step="1"
+-                required
+-                value={line.quantity}
+-                onChange={(e) =>
+-                  updateLine(
++          <section className="kit-editor-component" key={line.productId}>
++            <div className="kit-component-row">
++              <div className="kit-component-name">
++                {p ? (
++                  <button
++                    type="button"
++                    className="text-button"
++                    onClick={() => openProduct(p)}
++                  >
++                    {p.name}
++                  </button>
++                ) : (
++                  <strong>Unavailable product {line.productId}</strong>
++                )}
++                {p?.archived && <small>Archived component</small>}
++              </div>
++              <label className="field kit-component-quantity">
++                <span>Quantity</span>
++                <input
++                  aria-label={`Whole selling packages quantity · ${p?.name || line.productId}`}
++                  type="number"
++                  min="1"
++                  step="1"
++                  required
++                  value={line.quantity}
++                  onChange={(e) =>
++                    updateLine(
++                      'kitComponents',
++                      components,
++                      index,
++                      'quantity',
++                      e.target.value,
++                    )
++                  }
++                />
++              </label>
++              <div className="kit-component-cost">
++                <span>Component cost</span>
++                <output
++                  aria-label={`Extended component cost · ${p?.name || line.productId}`}
++                >
++                  {contribution}
++                </output>
++              </div>
++              <button
++                type="button"
++                className="btn secondary kit-component-remove"
++                aria-label={`Remove ${p?.name || line.productId}`}
++                onClick={() =>
++                  change(
+                     'kitComponents',
+-                    components,
+-                    index,
+-                    'quantity',
+-                    e.target.value,
++                    components.filter((_, i) => i !== index),
+                   )
+                 }
+-              />
+-            </label>
+-            <p>{contribution} · Complete component package cost</p>
+-            <p className="form-hint">
+-              {p?.workflow === 'resale'
+-                ? 'Includes recorded received-item cost. Production labor and packaging are not added again.'
+-                : `Includes component production labor, overhead and existing packaging. Attached selling packaging: ${
+-                    p && packagingLines(p).length
+-                      ? packagingLines(p)
+-                          .map(
+-                            (l: Item) =>
+-                              `${l.quantity} ${l.unit || 'each'} ${workspace.ingredients.find((i) => i.id === l.ingredientId)?.name || 'Unavailable packaging'}`,
+-                          )
+-                          .join(', ')
+-                      : 'No separate selling packaging configured. Production packaging remains included.'
+-                  }`}
+-            </p>
+-            <ComponentSources product={p} workspace={workspace} />
+-
+-            <p className="form-hint">
+-              Ingredient/allergen information belongs to this component. Review
+-              its source statement and missing data; this is not a verified kit
+-              label.
+-            </p>
+-            <button
+-              type="button"
+-              className="btn secondary"
+-              onClick={() =>
+-                change(
+-                  'kitComponents',
+-                  components.filter((_, i) => i !== index),
+-                )
+-              }
+-            >
+-              Remove component
+-            </button>
++              >
++                Remove
++              </button>
++            </div>
++            {(costIssue || sourceData.issue) && (
++              <p className="kit-component-warning warning-text" role="status">
++                {costIssue || sourceData.issue}{' '}
++                {p && 'Open product details to review its setup.'}
++              </p>
++            )}
++            <details className="kit-component-details">
++              <summary>Display component details</summary>
++              <div className="kit-component-explanation">
++                <h4>Quantity basis</h4>
++                <p>
++                  {line.basis === 'package'
++                    ? 'Whole selling packages'
++                    : `Unsupported quantity basis (${line.basis || 'not configured'}). Individual contents require a separate unpackaged cost basis.`}
++                </p>
++                <p>
++                  {p?.sellingUnit || 'Selling package'}
++                  {p?.unitsPerPackage
++                    ? ` · ${p.unitsPerPackage} ${p.contentUnit || workspace.recipes.find((r) => r.id === p.recipeId)?.yieldUnit || 'contents'} per package`
++                    : ' · Contents per package not configured'}
++                </p>
++                <h4>Component cost basis</h4>
++                <p>
++                  {contribution} · Complete component package cost for the
++                  included quantity.
++                </p>
++                {costIssue && <p className="warning-text">{costIssue}</p>}
++                <p>
++                  {p?.workflow === 'resale'
++                    ? 'Includes recorded received-item cost. Production labor and packaging are not added again.'
++                    : 'Includes component production labor, overhead and existing packaging. These costs are not added again.'}
++                </p>
++                <h4>Attached component packaging</h4>
++                <p>
++                  {p && packagingLines(p).length
++                    ? packagingLines(p)
++                        .map(
++                          (l: Item) =>
++                            `${l.quantity} ${l.unit || 'each'} ${workspace.ingredients.find((i) => i.id === l.ingredientId)?.name || 'Unavailable packaging'}`,
++                        )
++                        .join(', ')
++                    : p?.workflow === 'resale'
++                      ? 'No attached component packaging configured.'
++                      : 'No separate selling packaging configured. Production packaging remains included.'}
++                </p>
++                <ComponentSources data={sourceData} />
++                <p>
++                  Ingredient/allergen information belongs to this component.
++                  Review its source statement and missing data; this is not a
++                  verified kit label.
++                </p>
++              </div>
++            </details>
+           </section>
+         )
+       })}
+@@ -428,7 +474,7 @@
+         try {
+           await mutate('save', 'products', draft)
+           onDirty(false)
+-          if (onSaved) onSaved()
++          if (onSaved) onSaved(draft.id)
+           else close()
+         } catch (e) {
+           setError((e as Error).message)
+@@ -440,13 +486,10 @@
+   )
+ }
+ 
+-function ComponentSources({
+-  product,
+-  workspace,
+-}: {
+-  product: Item | undefined
+-  workspace: Props['workspace']
+-}) {
++function componentSources(
++  product: Item | undefined,
++  workspace: Props['workspace'],
++) {
+   let sources: Item[] = []
+   let issue = ''
+   try {
+@@ -456,20 +499,37 @@
+         'No recipe ingredient provenance is configured for this component. Review its supplier statement separately.'
+     else
+       sources = effectiveRecipeLines(recipe, workspace.recipes).map(
+-        (line: Item) =>
+-          workspace.ingredients.find((i) => i.id === line.ingredientId) || {
+-            id: line.ingredientId,
+-            name: 'Unavailable ingredient source',
+-          },
++        (line: Item) => {
++          const ingredient = workspace.ingredients.find(
++            (i) => i.id === line.ingredientId,
++          )
++          if (!ingredient)
++            issue =
++              'Ingredient source unavailable. Open product details to review its recipe ingredients.'
++          return (
++            ingredient || {
++              id: line.ingredientId,
++              name: 'Unavailable ingredient source',
++            }
++          )
++        },
+       )
+   } catch (e) {
+     issue = (e as Error).message
+   }
++  return { sources, issue }
++}
++
++function ComponentSources({
++  data: { sources, issue },
++}: {
++  data: ReturnType<typeof componentSources>
++}) {
+   return (
+-    <details>
+-      <summary>Component ingredient / allergen sources</summary>
++    <div>
++      <h4>Ingredient &amp; allergen sources</h4>
+       <p>Source review only; this is not a verified kit label.</p>
+-      {issue && <p>{issue}</p>}
++      {issue && <p className="warning-text">{issue}</p>}
+       <ul>
+         {sources.map((i, index) => (
+           <li key={`${i.id}-${index}`}>
+@@ -482,6 +542,6 @@
+           </li>
+         ))}
+       </ul>
+-    </details>
++    </div>
+   )
+ }
+--- /dev/null
++++ b/src/components/kit-included-products.tsx
+@@ -0,0 +1,65 @@
++import { productCosting, type Item, type Workspace } from '@/lib/domain'
++import './kit-components.css'
++
++type Props = {
++  product: Item
++  workspace: Workspace
++  openProduct: (product: Item) => void
++}
++
++export function KitProductList({ product, workspace, openProduct }: Props) {
++  return (
++    <ul className="kit-component-list">
++      {(product.kitComponents || []).map((line: Item, index: number) => {
++        const component = workspace.products.find(
++          (p) => p.id === line.productId,
++        )
++        let issue = ''
++        try {
++          if (component) productCosting(component, workspace)
++        } catch (error) {
++          issue = (error as Error).message
++        }
++        return (
++          <li key={`${line.productId}-${index}`}>
++            {component ? (
++              <button
++                type="button"
++                className="text-button"
++                onClick={() => openProduct(component)}
++              >
++                {component.name}{' '}
++                <span className="kit-component-count">×{line.quantity}</span>
++              </button>
++            ) : (
++              <strong>
++                Unavailable product · {line.productId} ×{line.quantity}
++              </strong>
++            )}
++            {component?.archived && <small>Archived product</small>}
++            {line.basis !== 'package' && (
++              <small className="warning-text">
++                Unsupported quantity basis ({line.basis || 'not configured'}).
++                Edit kit to review this component.
++              </small>
++            )}
++            {issue && (
++              <small className="warning-text">
++                {issue} Open product details to review its cost setup.
++              </small>
++            )}
++          </li>
++        )
++      })}
++    </ul>
++  )
++}
++
++export function KitIncludedProducts(props: Props) {
++  return (
++    <section aria-label="Included products" className="kit-included-products">
++      <h3>Included products</h3>
++      <KitProductList {...props} />
++    </section>
++  )
++}
+--- a/src/components/product-cards.tsx
++++ b/src/components/product-cards.tsx
+@@ -19,6 +19,7 @@
+   DropdownMenuItem,
+ } from './ui/dropdown-menu'
+ import './product-cards.css'
++import { KitProductList } from './kit-included-products'
+ 
+ // Presentation guard: missing source prices must not look like a zero-cost product.
+ // All amounts still come from the existing costing and profitability functions.
+@@ -168,7 +169,7 @@
+                     </DropdownMenuItem>
+                   )}
+                   <DropdownMenuItem onSelect={() => open('product', product)}>
+-                    Edit Product
++                    {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
+                   </DropdownMenuItem>
+                 </DropdownMenuContent>
+               </DropdownMenu>
+@@ -237,28 +238,11 @@
+               </dl>
+               {reason && <p className="muted">{reason}</p>}
+               {product.workflow === 'kit' && (
+-                <ul>
+-                  {(product.kitComponents || []).map((line: Item) => {
+-                    const component = workspace.products.find(
+-                      (p) => p.id === line.productId,
+-                    )
+-                    return (
+-                      <li key={line.productId}>
+-                        {line.quantity} package(s) ·{' '}
+-                        <button
+-                          type="button"
+-                          className="text-button"
+-                          onClick={() =>
+-                            component && open('product-detail', component)
+-                          }
+-                        >
+-                          {component?.name || `Unavailable ${line.productId}`}
+-                        </button>
+-                        {component?.archived ? ' · Archived' : ''}
+-                      </li>
+-                    )
+-                  })}
+-                </ul>
++                <KitProductList
++                  product={product}
++                  workspace={workspace}
++                  openProduct={(component) => open('product-detail', component)}
++                />
+               )}
+ 
+               {recipe && (
+@@ -267,12 +251,14 @@
+                   {recipe.name}
+                 </p>
+               )}
+-              {product.workflow && (
+-                <p className="muted">
+-                  {product.workflow} {product.variant && `· ${product.variant}`}{' '}
+-                  {product.sku && `· ${product.sku}`}
+-                </p>
+-              )}
++              {(product.workflow !== 'kit' || product.variant || product.sku) &&
++                product.workflow && (
++                  <p className="muted">
++                    {product.workflow !== 'kit' && product.workflow}{' '}
++                    {product.variant && `· ${product.variant}`}{' '}
++                    {product.sku && `· ${product.sku}`}
++                  </p>
++                )}
+               {['handmade', 'resale'].includes(product.workflow) && (
+                 <p>
+                   {product.quantity || 0}{' '}
+@@ -297,7 +283,7 @@
+                 className="btn secondary"
+                 onClick={() => open('product', product)}
+               >
+-                Edit Product
++                {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
+               </button>
+             </footer>
+           </article>
+--- a/src/components/workspace-app.tsx
++++ b/src/components/workspace-app.tsx
+@@ -1,7 +1,8 @@
+ import { OpeningOven } from './opening-oven'
+ import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
++import { KitEditor } from './kit-editor'
+ import { KitCostCards } from './kit-cost-cards'
+-import { KitEditor } from './kit-editor'
++import { KitIncludedProducts } from './kit-included-products'
+ import { ProductLabelsInfo } from './product-labels'
+ import { labelsForProduct } from '@/lib/saved-labels'
+ import { RecipeComponentPicker } from './recipe-component-picker'
+@@ -278,8 +279,7 @@
+     [search, setSearch] = useState(''),
+     [modal, setModal] = useState<string | null>(null),
+     [productTab, setProductTab] = useState('details'),
+-    [selected, setSelected] = useState<Item | null>(null),
+-    [kitContext, setKitContext] = useState<string | null>(null),
++    [selectedRecord, setSelected] = useState<Item | null>(null),
+     [filter, setFilter] = useState('All items'),
+     [role, setRole] = useState('Owner'),
+     [demo, setDemo] = useState(true),
+@@ -290,6 +290,10 @@
+     [previewLabelId, setPreviewLabelId] = useState(''),
+     [financeEntry, setFinanceEntry] = useState(''),
+     [formError, setFormError] = useState('')
++  const selected =
++    modal === 'product-detail' && selectedRecord
++      ? state.products.find((p) => p.id === selectedRecord.id) || selectedRecord
++      : selectedRecord
+   const [componentPicker, setComponentPicker] = useState(false)
+   const [draft, setDraft] = useState<Record<string, any>>({}),
+     [lines, setLines] = useState<any[]>([])
+@@ -299,6 +303,8 @@
+   const deliberateUnits = useRef(new Set<string>())
+   const labelUnsaved = useRef(false)
+   const workflowDirty = useRef(false)
++  const [kitContext, setKitContext] = useState<string | null>(null)
++  const [kitEditorReturn, setKitEditorReturn] = useState<string | null>(null)
+   const [route, setRoute] = useState(() => destination('Dashboard'))
+   const routeRef = useRef(route)
+   const lastHash = useRef('')
+@@ -729,6 +735,8 @@
+     }
+   }
+   function open(kind: string, item?: Item) {
++    if (kind === 'product-detail' && modal !== 'product-detail')
++      setKitContext(null)
+     const resolution = state.settings[0]?.effectiveAccess
+     const access =
+       resolution?.manualValid ||
+@@ -855,6 +863,11 @@
+     if (kind === 'ingredient' && !item && route.tab === 'Craft Materials')
+       kind = 'trade-material'
+     if (kind === 'kit' || (item?.workflow === 'kit' && kind === 'product')) {
++      setKitEditorReturn(
++        modal === 'product-detail' && selected?.id === item?.id
++          ? item!.id
++          : null,
++      )
+       setSelected(item || null)
+       setModal('kit')
+       return
+@@ -1880,12 +1893,11 @@
+                     </div>
+                   )}
+                   <ProductCards
+-                    products={filtered(products).filter(
+-                      (p) =>
+-                        !['Food', 'Handmade', 'Resale', 'Kits'].includes(sub) ||
+-                        (sub === 'Kits'
+-                          ? p.workflow === 'kit'
+-                          : workflowOf(p) === sub.toLowerCase()),
++                    products={filtered(products).filter((p) =>
++                      sub === 'Kits'
++                        ? workflowOf(p) === 'kit'
++                        : !['Food', 'Handmade', 'Resale'].includes(sub) ||
++                          workflowOf(p) === sub.toLowerCase(),
+                     )}
+                     workspace={state}
+                     open={open}
+@@ -2673,27 +2685,28 @@
+         <KitEditor
+           key={selected?.id || 'new'}
+           kind="kit"
+-          onSaved={() => setModal('product-detail')}
+           item={selected}
+           workspace={state}
+           role={role}
+-          mutate={async (action, table, data) => {
+-            const result = await mutate(action, table, data)
+-            setSelected(
+-              result.workspace.products.find((p: Item) => p.id === data.id) ||
+-                (data as Item),
+-            )
+-            return result
++          mutate={mutate}
++          onWorkspace={setState}
++          close={() => {
++            if (kitEditorReturn) {
++              const kit = state.products.find((p) => p.id === kitEditorReturn)
++              setSelected(kit || null)
++              setModal(kit ? 'product-detail' : null)
++              setKitEditorReturn(null)
++            } else setModal(null)
+           }}
+-          onWorkspace={setState}
+-          close={() => setModal(selected ? 'product-detail' : null)}
++          onSaved={(id) => {
++            setSelected({ id, name: '', workflow: 'kit' })
++            setKitEditorReturn(null)
++            setModal('product-detail')
++          }}
+           onDirty={(dirty) => {
+             workflowDirty.current = dirty
+           }}
+-          openProduct={(p) => {
+-            setKitContext(selected?.id || null)
+-            open('product-detail', p)
+-          }}
++          openProduct={(p) => open('product-detail', p)}
+         />
+       )}
+       {modal?.startsWith('trade-') && (
+@@ -2776,8 +2789,14 @@
+         }
+         onOpenChange={(v) => {
+           if (!v) {
+-            setModal(null)
+-            setKitContext(null)
++            const kit =
++              modal === 'product-detail' && selected?.workflow !== 'kit'
++                ? state.products.find((p) => p.id === kitContext)
++                : undefined
++            if (kit) {
++              setSelected(kit)
++              setKitContext(null)
++            } else setModal(null)
+           }
+         }}
+       >
+@@ -4779,76 +4798,27 @@
+               photoDetails={
+                 selected.workflow === 'kit' ? (
+                   <>
+-                    <section
+-                      className="kit-included-products"
+-                      aria-label="Included products"
+-                    >
+-                      <h3>Included products</h3>
+-                      <ul>
+-                        {(selected.kitComponents || []).map(
+-                          (line: Item, index: number) => {
+-                            const component = state.products.find(
+-                              (p) => p.id === line.productId,
+-                            )
+-                            return (
+-                              <li key={index}>
+-                                {component ? (
+-                                  <button
+-                                    className="text-button"
+-                                    onClick={() => {
+-                                      setKitContext(selected.id)
+-                                      open('product-detail', component)
+-                                    }}
+-                                  >
+-                                    {component.name}
+-                                  </button>
+-                                ) : (
+-                                  <span>
+-                                    Unavailable product {line.productId}
+-                                  </span>
+-                                )}
+-                                <span>
+-                                  {line.quantity}{' '}
+-                                  {line.basis === 'package'
+-                                    ? 'selling packages'
+-                                    : line.basis || 'basis unavailable'}
+-                                  {component && line.basis === 'package' && (
+-                                    <small>
+-                                      {component.sellingUnit
+-                                        ? ` · ${component.sellingUnit}`
+-                                        : ''}
+-                                      {component.unitsPerPackage
+-                                        ? ` · ${component.unitsPerPackage} ${component.contentUnit || state.recipes.find((r) => r.id === component.recipeId)?.yieldUnit || 'contents'} per package`
+-                                        : ' · Contents per package not configured'}
+-                                    </small>
+-                                  )}
+-                                </span>
+-                              </li>
+-                            )
+-                          },
+-                        )}
+-                      </ul>
+-                    </section>
++                    <KitIncludedProducts
++                      product={selected}
++                      workspace={state}
++                      openProduct={(product) => {
++                        setKitContext(selected.id)
++                        open('product-detail', product)
++                      }}
++                    />
+                     <div className="button-row product-detail-actions">
+-                      <Btn onClick={() => open('kit', selected)}>Edit kit</Btn>
++                      <Btn
++                        disabled={
++                          !ready || !['Owner', 'Manager'].includes(role)
++                        }
++                        onClick={() => open('product', selected)}
++                      >
++                        Edit kit
++                      </Btn>
+                     </div>
+                   </>
+                 ) : (
+                   <>
+-                    {kitContext && (
+-                      <Btn
+-                        secondary
+-                        onClick={() => {
+-                          const kit = state.products.find(
+-                            (p) => p.id === kitContext,
+-                          )
+-                          setKitContext(null)
+-                          if (kit) open('product-detail', kit)
+-                        }}
+-                      >
+-                        Back to kit
+-                      </Btn>
+-                    )}
+                     <section
+                       aria-label="Product labels"
+                       className="product-linked-labels"
+@@ -4894,6 +4864,27 @@
+                       )}
+                     </section>
+                     <div className="button-row product-detail-actions">
++                      {kitContext &&
++                        state.products.some((p) => p.id === kitContext) && (
++                          <Btn
++                            secondary
++                            onClick={() => {
++                              open(
++                                'product-detail',
++                                state.products.find(
++                                  (p) => p.id === kitContext,
++                                )!,
++                              )
++                              setKitContext(null)
++                            }}
++                          >
++                            Back to{' '}
++                            {
++                              state.products.find((p) => p.id === kitContext)!
++                                .name
++                            }
++                          </Btn>
++                        )}
+                       <Btn onClick={() => open('product', selected)}>
+                         Edit Product
+                       </Btn>
+@@ -4936,7 +4927,15 @@
+                 <KitCostCards
+                   product={selected}
+                   workspace={state}
+-                  edit={() => open('kit', selected)}
++                  canEdit={ready && ['Owner', 'Manager'].includes(role)}
++                  edit={() => open('product', selected)}
++                  configure={(section) => {
++                    setModal(null)
++                    go(
++                      section === 'Categories' ? 'Products' : 'Settings',
++                      section,
++                    )
++                  }}
+                 />
+               ) : (
+                 <ProductCostCards
+--- /dev/null
++++ b/src/lib/kit-estimate.ts
+@@ -0,0 +1,65 @@
++import {
++  applicableTaxes,
++  calculateTax,
++  productCosting,
++  profitability,
++  type Item,
++  type Workspace,
++} from './domain'
++import { categoryTaxState } from './product-categories'
++
++/** Keep independent cost and tax results when one part of the estimate is incomplete. */
++export function kitEstimate(product: Item, workspace: Workspace) {
++  let cost: ReturnType<typeof productCosting> | undefined
++  let tax: ReturnType<typeof calculateTax> | undefined
++  let pricing: ReturnType<typeof profitability> | undefined
++  let costError = ''
++  let pricingError = ''
++  const price =
++    product.price == null || String(product.price).trim() === ''
++      ? NaN
++      : Number(product.price)
++  try {
++    cost = productCosting(product, workspace)
++  } catch (error) {
++    costError = (error as Error).message
++  }
++  try {
++    const taxes = applicableTaxes(product, workspace.settings[0])
++    if (!Number.isFinite(price) || price < 0)
++      throw new Error('Kit selling price is not configured.')
++    tax = calculateTax(price, taxes)
++    if (cost)
++      pricing = profitability(product, cost.perPackage, workspace.settings[0])
++  } catch (error) {
++    pricingError = (error as Error).message
++  }
++  const category =
++    product.taxSource === 'category'
++      ? categoryTaxState(product, workspace.settings[0])
++      : undefined
++  const configuration = category?.issue
++    ? !category.category || category.category.active === false
++      ? 'kit'
++      : !category.category.classification
++        ? 'Categories'
++        : 'Taxes'
++    : 'kit'
++  const explanation = category?.issue
++    ? configuration === 'kit'
++      ? `${product.name}: choose an active category in Edit kit → Contents & details.`
++      : configuration === 'Categories'
++        ? `${product.name}: review the classification of category “${category.category!.name}” in Products → Categories.`
++        : `${product.name}: configure the tax treatment for category “${category.category!.name}” in Settings → Taxes. Missing configuration does not mean tax exempt.`
++    : `${product.name}: review the affected product or packaging costs below, or update the saved price and pricing settings in Edit kit.`
++  return {
++    cost,
++    tax,
++    pricing,
++    price,
++    costError,
++    pricingError,
++    configuration,
++    explanation,
++  }
++}
+--- /dev/null
++++ b/tests/kit-components.spec.ts
+@@ -0,0 +1,434 @@
++import { test, expect, type Page, type Locator } from '@playwright/test'
++import { mkdir, readFile, writeFile } from 'node:fs/promises'
++import { demoData } from '../src/lib/demo'
++import {
++  money,
++  productCosting,
++  packagingLines,
++  effectiveRecipeLines,
++  type Item,
++} from '../src/lib/domain'
++import {
++  installWorkspaceFixture,
++  workspaceFixtureUrl,
++} from './workspace-fixture'
++
++const output = 'docs/reviews/kit-components'
++const before = process.env.KIT_REFINEMENT_CAPTURE === 'before'
++const phase = before ? 'before' : 'after'
++const names = [
++  'Homestyle White Bread',
++  'Classic Chocolate Chip Cookies – 3ct',
++  'Pumpkin Bread w/Streusel & Glaze',
++]
++const quantities = [1, 2, 1]
++async function setup(page: Page, issue?: 'cost' | 'basis' | 'sources') {
++  await mkdir(output, { recursive: true })
++  await installWorkspaceFixture(page)
++  const workspace = demoData()
++  workspace.products.forEach((product, index) =>
++    Object.assign(product, {
++      name: names[index],
++      sellingUnit: index === 1 ? '3ct bag' : 'loaf',
++      contentUnit: index === 1 ? 'cookies' : 'loaves',
++      unitsPerPackage: index === 1 ? 3 : 1,
++    }),
++  )
++  workspace.graphic_assets = [
++    {
++      id: 'unchanged-photo',
++      name: 'Existing artwork used by test fixture',
++      fileUrl: '/artwork/cinnamon-roll.png',
++    },
++  ]
++  const kit: Item = {
++    id: 'pass-the-bread',
++    name: 'Pass the Bread',
++    workflow: 'kit',
++    status: 'active',
++    price: 36.75,
++    imageAssetId: 'unchanged-photo',
++    assemblyMinutes: 6,
++    assemblyRate: 18,
++    kitComponents: workspace.products.map((p, index) => ({
++      productId: p.id,
++      quantity: quantities[index],
++      basis: 'package',
++    })),
++    packagingLines: [{ ingredientId: 'bags', quantity: 1, unit: 'each' }],
++  }
++  if (issue === 'cost') workspace.products[0].needsCostSetup = true
++  if (issue === 'basis') kit.kitComponents[0].basis = 'content'
++  if (issue === 'sources') workspace.products[0].recipeId = 'unavailable-recipe'
++  workspace.products.push(kit)
++  const original = JSON.stringify(workspace)
++  const writes: Item[] = []
++  await page.route('**/api/workspace*', (route) => {
++    if (route.request().method() === 'POST') {
++      const body = route.request().postDataJSON()
++      expect(body.action).toBe('save')
++      expect(body.table).toBe('products')
++      expect(body.data.id).toBe(kit.id)
++      writes.push(body)
++      workspace.products[workspace.products.findIndex((p) => p.id === kit.id)] =
++        body.data
++    }
++    return route.fulfill({ json: { workspace, role: 'Owner', demo: false } })
++  })
++  await page.goto(workspaceFixtureUrl('Products/Kits'), {
++    waitUntil: 'networkidle',
++  })
++  return { workspace, kit, writes, original }
++}
++async function settle(dialog: Locator) {
++  await dialog.evaluate((el) =>
++    Promise.all(
++      el
++        .getAnimations({ subtree: true })
++        .map((a) => a.finished.catch(() => {})),
++    ),
++  )
++}
++async function geometry(dialog: Locator) {
++  await settle(dialog)
++  return dialog.evaluate((el) => {
++    const panel = el.getBoundingClientRect()
++    const shape = (selector: string) => {
++      const node = el.querySelector(selector)!,
++        rect = node.getBoundingClientRect(),
++        css = getComputedStyle(node)
++      return {
++        x: rect.x - panel.x,
++        y: rect.y - panel.y,
++        width: rect.width,
++        height: rect.height,
++        font: css.font,
++        padding: css.padding,
++        background: css.backgroundColor,
++        radius: css.borderRadius,
++      }
++    }
++    return {
++      width: panel.width,
++      height: panel.height,
++      columns: getComputedStyle(el.querySelector('.product-detail-layout')!)
++        .gridTemplateColumns,
++      title: shape('[data-slot="dialog-title"]'),
++      photo: shape('.product-detail-photo'),
++      cards: [...el.querySelectorAll('.cost-card')].map((node) => ({
++        text: node.textContent,
++        css: getComputedStyle(node).cssText,
++        background: getComputedStyle(node).backgroundColor,
++      })),
++      firstCard: shape('.cost-card'),
++      image: el.querySelector('img')?.getAttribute('src'),
++    }
++  })
++}
++for (const width of [1440, 768, 390]) {
++  test(`Pass the Bread matching screenshots and compact components at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    const { workspace, kit, writes, original } = await setup(page)
++    const productCard = page.getByRole('article', {
++      name: kit.name,
++      exact: true,
++    })
++    await expect(productCard).toBeVisible()
++    await page.evaluate(() => document.fonts.ready)
++    await productCard.screenshot({
++      path: `${output}/${phase}-card-${width}.png`,
++      animations: 'disabled',
++    })
++    if (!before) {
++      await expect(
++        productCard.locator('p').filter({ hasText: /^kit$/ }),
++      ).toHaveCount(0)
++      await expect(productCard.locator('ul')).toContainText(`${names[1]} ×2`)
++      const rowHeights = await productCard
++        .locator('.kit-component-list li')
++        .evaluateAll((nodes) =>
++          nodes.map((n) => n.getBoundingClientRect().height),
++        )
++      expect(Math.max(...rowHeights)).toBeLessThan(50)
++    }
++    await productCard
++      .getByRole('button', { name: kit.name, exact: true })
++      .click()
++    const dialog = page.getByRole('dialog')
++    const measured = await geometry(dialog)
++    await page.screenshot({
++      path: `${output}/${phase}-details-${width}.png`,
++      animations: 'disabled',
++    })
++    if (before)
++      await writeFile(
++        `${output}/before-geometry-${width}.json`,
++        JSON.stringify(measured, null, 2),
++      )
++    else {
++      const reference = JSON.parse(
++        await readFile(`${output}/before-geometry-${width}.json`, 'utf8'),
++      )
++      // The shorter list naturally moves mobile cost cards up;
++      // photo, columns, type and card styling stay identical.
++      expect({
++        ...measured,
++        firstCard: { ...measured.firstCard, y: reference.firstCard.y },
++      }).toEqual(reference)
++      if (width >= 640) expect(measured.firstCard.y).toBe(reference.firstCard.y)
++      await writeFile(
++        `${output}/after-geometry-${width}.json`,
++        JSON.stringify(measured, null, 2),
++      )
++      const list = dialog.getByRole('region', {
++        name: 'Included products',
++        exact: true,
++      })
++      await expect(list.getByRole('listitem')).toHaveCount(3)
++      for (let i = 0; i < names.length; i++) {
++        await expect(
++          list.getByRole('button', {
++            name: `${names[i]} ×${quantities[i]}`,
++            exact: true,
++          }),
++        ).toBeVisible()
++      }
++      await expect(list).not.toContainText(/package|per loaf|per cookie/)
++    }
++    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
++    await expect(
++      dialog.getByRole('tab', { name: 'Contents & details' }),
++    ).toBeVisible()
++    const first = before
++      ? dialog.locator('section.calculation-box').first()
++      : dialog.locator('.kit-editor-component').first()
++    await first.evaluate((el) => {
++      const body = el.closest('.product-editor-body')!
++      body.scrollTop +=
++        el.getBoundingClientRect().top - body.getBoundingClientRect().top - 16
++    })
++    await settle(dialog)
++    await page.screenshot({
++      path: `${output}/${phase}-editor-${width}.png`,
++      animations: 'disabled',
++    })
++    const firstDisclosure = first.locator('summary')
++    await firstDisclosure.click()
++    await page.screenshot({
++      path: `${output}/${phase}-expanded-${width}.png`,
++      animations: 'disabled',
++    })
++    if (before) return
++    const rows = dialog.locator('.kit-editor-component')
++    await expect(rows).toHaveCount(3)
++    await expect(rows.locator('details details')).toHaveCount(0)
++    await expect(rows.nth(0).locator('details')).toHaveAttribute('open', '')
++    await expect(rows.nth(1).locator('details')).not.toHaveAttribute('open', '')
++    await expect(rows.nth(0)).toContainText('Supplier statement:')
++    await expect(rows.nth(0)).toContainText('Declared allergens:')
++    await expect(rows.nth(0)).toContainText('Bread bags')
++    await expect(rows.nth(0)).toContainText('production labor, overhead')
++    await expect(rows.nth(0)).toContainText('not a verified kit label')
++    await expect(rows.nth(0)).toContainText('per package')
++    for (let i = 0; i < 3; i++) {
++      const row = rows.nth(i)
++      if (i > 0) await row.locator('summary').click()
++      const component = workspace.products[i]
++      for (const line of packagingLines(component)) {
++        const packaging = workspace.ingredients.find(
++          (p) => p.id === line.ingredientId,
++        )!
++        await expect(row.locator('.kit-component-explanation')).toContainText(
++          `${line.quantity} ${line.unit || 'each'} ${packaging.name}`,
++        )
++      }
++      const recipe = workspace.recipes.find((r) => r.id === component.recipeId)!
++      for (const line of effectiveRecipeLines(recipe, workspace.recipes)) {
++        const ingredient = workspace.ingredients.find(
++          (p) => p.id === line.ingredientId,
++        )!
++        await expect(row.locator('.kit-component-explanation')).toContainText(
++          ingredient.name,
++        )
++        await expect(row.locator('.kit-component-explanation')).toContainText(
++          ingredient.subingredients || 'Missing',
++        )
++        for (const allergen of ingredient.allergens || [])
++          await expect(row.locator('.kit-component-explanation')).toContainText(
++            allergen,
++          )
++      }
++      if (i > 0) await row.locator('summary').click()
++    }
++    await rows.nth(0).getByRole('spinbutton').fill('3')
++    const draft = {
++      ...kit,
++      kitComponents: [
++        { ...kit.kitComponents[0], quantity: 3 },
++        ...kit.kitComponents.slice(1),
++      ],
++    }
++    const extended = productCosting(
++      {
++        ...draft,
++        kitComponents: [draft.kitComponents[0]],
++        packagingLines: [],
++        assemblyMinutes: 0,
++      },
++      workspace,
++    ).perPackage
++    await expect(rows.nth(0).locator('output')).toContainText(money(extended))
++    await rows
++      .nth(1)
++      .getByText('Display component details', { exact: true })
++      .click()
++    await expect(rows.nth(0).locator('details')).toHaveAttribute('open', '')
++    await expect(rows.nth(1).locator('details')).toHaveAttribute('open', '')
++    await firstDisclosure.click()
++    await expect(rows.nth(0).getByRole('spinbutton')).toHaveValue('3')
++    await expect(
++      rows
++        .nth(0)
++        .getByRole('button', { name: `Remove ${names[0]}`, exact: true }),
++    ).toBeVisible()
++    await dialog.getByRole('tab', { name: 'Packaging & cost' }).click()
++    await dialog.getByRole('tab', { name: 'Photo', exact: true }).click()
++    await dialog.getByRole('tab', { name: 'Contents & details' }).click()
++    await expect(rows.nth(0).getByRole('spinbutton')).toHaveValue('3')
++    await expect(rows.nth(1).locator('details')).toHaveAttribute('open', '')
++    await expect(rows.nth(0).locator('details')).not.toHaveAttribute('open', '')
++    expect(writes).toHaveLength(0)
++    expect(JSON.stringify(workspace)).toBe(original)
++    for (const row of await rows.all()) {
++      await row.getByRole('spinbutton').scrollIntoViewIfNeeded()
++      await expect(row.getByRole('spinbutton')).toBeInViewport()
++    }
++    const overflow = await dialog.evaluate((panel) => ({
++      x: panel.scrollWidth - panel.clientWidth,
++      nested: [
++        ...panel.querySelectorAll(
++          '.kit-editor-component, .kit-editor-component *',
++        ),
++      ]
++        .filter(
++          (el) =>
++            /(auto|scroll|hidden|clip)/.test(getComputedStyle(el).overflowY) &&
++            el.scrollHeight > el.clientHeight + 1,
++        )
++        .map((el) => el.className),
++    }))
++    expect(overflow).toEqual({ x: 0, nested: [] })
++    await rows
++      .nth(2)
++      .getByRole('button', { name: `Remove ${names[2]}`, exact: true })
++      .click()
++    await expect(rows).toHaveCount(2)
++    await expect(rows.nth(0).getByRole('spinbutton')).toHaveValue('3')
++    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
++    await expect(
++      dialog.getByRole('heading', { name: kit.name, exact: true }),
++    ).toBeVisible()
++    await expect(
++      dialog.getByRole('region', { name: 'Included products' }),
++    ).toContainText(`${names[0]} ×3`)
++    await expect(
++      dialog
++        .getByRole('region', { name: 'Included products' })
++        .getByRole('listitem'),
++    ).toHaveCount(2)
++    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
++    await expect(
++      dialog.locator('.kit-editor-component').first().getByRole('spinbutton'),
++    ).toHaveValue('3')
++    await expect(dialog.locator('.kit-editor-component')).toHaveCount(2)
++    expect(writes).toHaveLength(1)
++    const saved = workspace.products.find((p) => p.id === kit.id)!
++    expect(saved.kitComponents.map((line: Item) => line.basis)).toEqual([
++      'package',
++      'package',
++    ])
++    expect(saved.packagingLines).toEqual(kit.packagingLines)
++    expect(saved.imageAssetId).toBe(kit.imageAssetId)
++    expect(
++      JSON.stringify({
++        ...workspace,
++        products: workspace.products.map((p) => (p.id === kit.id ? kit : p)),
++      }),
++    ).toBe(original)
++  })
++}
++
++for (const issue of ['cost', 'basis', 'sources'] as const) {
++  test(`collapsed row preserves actionable ${issue} warnings`, async ({
++    page,
++  }) => {
++    test.skip(before, 'Before screenshots only')
++    await page.setViewportSize({ width: 390, height: 950 })
++    const { kit, writes } = await setup(page, issue)
++    await page
++      .getByRole('article', { name: kit.name })
++      .getByRole('button', { name: 'Edit kit', exact: true })
++      .click()
++    const first = page
++      .getByRole('dialog')
++      .locator('.kit-editor-component')
++      .first()
++    await expect(first.locator('details')).not.toHaveAttribute('open', '')
++    await expect(first.locator('[role="status"]')).toBeVisible()
++    await expect(first.locator('output')).toHaveText('Cost unavailable')
++    await first.getByText('Display component details', { exact: true }).click()
++    await expect(first.locator('.kit-component-details')).toContainText(
++      /incomplete|unavailable|Individual contents/,
++    )
++    expect(writes).toHaveLength(0)
++  })
++}
++
++for (const width of [768, 390]) {
++  test(`long names and expanded source information wrap at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    const { workspace, kit, writes } = await setup(page)
++    const longName =
++      'Pumpkin Bread w/Streusel & Glaze with a very long seasonal product description and SpecialOrderWithoutSpacesForWrapping'
++    workspace.products[2].name = longName
++    await page.reload({ waitUntil: 'networkidle' })
++    const card = page.getByRole('article', { name: kit.name, exact: true })
++    const link = card.getByRole('button', {
++      name: `${longName} ×1`,
++      exact: true,
++    })
++    await expect(link).toBeVisible()
++    await card.getByRole('button', { name: kit.name, exact: true }).click()
++    const dialog = page.getByRole('dialog')
++    await expect(
++      dialog.getByRole('button', { name: `${longName} ×1`, exact: true }),
++    ).toBeVisible()
++    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
++    const row = dialog.locator('.kit-editor-component').nth(2)
++    await row.locator('summary').click()
++    await row
++      .getByText(/Ingredient\/allergen information belongs/)
++      .scrollIntoViewIfNeeded()
++    await expect(
++      row.getByText(/Ingredient\/allergen information belongs/),
++    ).toBeInViewport()
++    const overflow = await dialog.evaluate((panel) => ({
++      horizontal: panel.scrollWidth - panel.clientWidth,
++      nested: [
++        ...panel.querySelectorAll(
++          '.kit-editor-component, .kit-editor-component *',
++        ),
++      ].filter(
++        (el) =>
++          /(auto|scroll|hidden|clip)/.test(getComputedStyle(el).overflowY) &&
++          el.scrollHeight > el.clientHeight + 1,
++      ).length,
++    }))
++    expect(overflow).toEqual({ horizontal: 0, nested: 0 })
++    expect(writes).toHaveLength(0)
++  })
++}
+--- a/tests/kit-details.spec.ts
++++ b/tests/kit-details.spec.ts
+@@ -1,129 +1,517 @@
+-import { test, expect } from '@playwright/test'
++import { test, expect, type Locator, type Page } from '@playwright/test'
++import { mkdir, writeFile } from 'node:fs/promises'
+ import { demoData } from '../src/lib/demo'
++import {
++  money,
++  productCosting,
++  profitability,
++  type Item,
++} from '../src/lib/domain'
+ import {
+   installWorkspaceFixture,
+   workspaceFixtureUrl,
+ } from './workspace-fixture'
+-import { mkdir } from 'node:fs/promises'
+ 
+-for (const width of [1440, 390])
+-  test(`kit details, navigation and save ${width}`, async ({ page }) => {
+-    await mkdir('docs/reviews/kit-details', { recursive: true })
++const output = 'docs/reviews/kit-details'
++// Named presentation fixtures, not copies of private customer records or photos.
++const regularName = 'Holiday Dressin’ Rolls – 9ct.'
++const kitName = "Gather 'Round"
++async function setup(
++  page: Page,
++  options: { missingCategory?: boolean; count?: number } = {},
++) {
++  await mkdir(output, { recursive: true })
++  await installWorkspaceFixture(page)
++  const workspace = demoData()
++  const regular = workspace.products[0]
++  Object.assign(regular, {
++    name: regularName,
++    workflow: 'food',
++    unitsPerPackage: 9,
++    sellingUnit: '9ct tray',
++    contentUnit: 'rolls',
++    imageAssetId: 'test-photo',
++  })
++  workspace.graphic_assets = [
++    {
++      id: 'test-photo',
++      name: 'Presentation test image',
++      fileUrl: '/kit-test-photo.svg',
++    },
++  ]
++  await page.route('**/kit-test-photo.svg', (route) =>
++    route.fulfill({
++      contentType: 'image/svg+xml',
++      body: '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480"><rect width="720" height="480" fill="#eee3cf"/><g fill="#b67d42" stroke="#9a6433" stroke-width="4"><ellipse cx="210" cy="140" rx="65" ry="42"/><ellipse cx="360" cy="140" rx="65" ry="42"/><ellipse cx="510" cy="140" rx="65" ry="42"/><ellipse cx="210" cy="240" rx="65" ry="42"/><ellipse cx="360" cy="240" rx="65" ry="42"/><ellipse cx="510" cy="240" rx="65" ry="42"/><ellipse cx="210" cy="340" rx="65" ry="42"/><ellipse cx="360" cy="340" rx="65" ry="42"/><ellipse cx="510" cy="340" rx="65" ry="42"/></g></svg>',
++    }),
++  )
++  const kit: Item = {
++    id: 'gather-round',
++    name: kitName,
++    workflow: 'kit',
++    status: 'active',
++    price: 42,
++    assemblyMinutes: 12,
++    assemblyRate: 18,
++    imageAssetId: 'test-photo',
++    kitComponents: [
++      { productId: regular.id, quantity: 2, basis: 'package' },
++      { productId: workspace.products[1].id, quantity: 1, basis: 'package' },
++    ],
++    packagingLines: [{ ingredientId: 'bags', quantity: 1, unit: 'each' }],
++  }
++  if (options.missingCategory) kit.taxSource = 'category'
++  for (let i = 2; i < (options.count || 2); i++) {
++    const component = {
++      ...regular,
++      id: 'extra-' + i,
++      name: `Additional included product ${i} with a long readable name`,
++    }
++    workspace.products.push(component)
++    kit.kitComponents.push({
++      productId: component.id,
++      quantity: 1,
++      basis: 'package',
++    })
++  }
++  workspace.products.push(kit)
++  const writes: Item[] = []
++  const stockBefore = JSON.stringify({
++    ingredients: workspace.ingredients,
++    quantities: workspace.products.map((p) => [p.id, p.quantity]),
++    ledger: workspace.ledger,
++    batches: workspace.batches,
++    sales: workspace.sales,
++  })
++  await page.route('**/api/workspace*', (route) => {
++    if (route.request().method() === 'POST') {
++      const payload = route.request().postDataJSON()
++      writes.push(payload)
++      expect(payload.action).toBe('save')
++      expect(payload.table).toBe('products')
++      expect(payload.data.workflow).toBe('kit')
++      const index = workspace.products.findIndex(
++        (p) => p.id === payload.data.id,
++      )
++      if (index < 0) workspace.products.push(payload.data)
++      else workspace.products[index] = payload.data
++    }
++    return route.fulfill({ json: { workspace, role: 'Owner', demo: false } })
++  })
++  await page.goto(workspaceFixtureUrl('Products'), { waitUntil: 'networkidle' })
++  return {
++    workspace,
++    regular,
++    kit,
++    writes,
++    assertStock() {
++      expect(
++        JSON.stringify({
++          ingredients: workspace.ingredients,
++          quantities: workspace.products
++            .filter((p) => p.id !== 'new-kit')
++            .map((p) => [p.id, p.quantity]),
++          ledger: workspace.ledger,
++          batches: workspace.batches,
++          sales: workspace.sales,
++        }),
++      ).toBe(stockBefore)
++    },
++  }
++}
++const card = (dialog: Locator, label: string) =>
++  dialog
++    .locator('.cost-card')
++    .filter({ has: dialog.page().getByText(label, { exact: true }) })
++    .locator('strong')
++async function geometry(dialog: Locator) {
++  await dialog.evaluate((el) =>
++    Promise.all(
++      el
++        .getAnimations({ subtree: true })
++        .map((a) => a.finished.catch(() => {})),
++    ),
++  )
++  return dialog.evaluate((panel) => {
++    const rect = panel.getBoundingClientRect()
++    const style = (selector: string) => {
++      const el = panel.querySelector(selector)!
++      const css = getComputedStyle(el),
++        box = el.getBoundingClientRect()
++      return {
++        x: box.x - rect.x,
++        width: box.width,
++        height: box.height,
++        top: box.top - rect.top,
++        font: css.font,
++        padding: css.padding,
++        radius: css.borderRadius,
++        background: css.backgroundColor,
++      }
++    }
++    return {
++      width: rect.width,
++      height: rect.height,
++      columns: getComputedStyle(panel.querySelector('.product-detail-layout')!)
++        .gridTemplateColumns,
++      title: style('[data-slot="dialog-title"]'),
++      photo: style('.product-detail-photo'),
++      costCard: style('.detail-stats .cost-card'),
++      button: style('.product-detail-actions .btn'),
++      overflow: panel.scrollWidth - panel.clientWidth,
++    }
++  })
++}
++for (const width of [1440, 768, 390]) {
++  test(`shared product/kit details, linked return, edit/save refresh and stock at ${width}`, async ({
++    page,
++  }) => {
+     await page.setViewportSize({ width, height: 950 })
+-    await installWorkspaceFixture(page)
+-    const workspace = demoData()
+-    // Synthetic fixtures: the requested private records are not available locally.
+-    const component = workspace.products[0]
+-    component.name = 'Holiday Dressin’ Rolls – 9ct.'
+-    component.unitsPerPackage = 9
+-    component.contentUnit = 'rolls'
+-    const kit = {
+-      id: 'kit-review',
+-      name: "Gather 'Round",
+-      workflow: 'kit',
+-      taxSource: 'category',
+-      status: 'draft',
+-      kitComponents: [
+-        { productId: component.id, quantity: 2, basis: 'package' },
+-      ],
+-      packagingLines: [],
+-      assemblyMinutes: 12,
+-      assemblyRate: 18,
+-      price: 45,
+-    }
+-    workspace.products.push(kit)
+-    const stock = JSON.stringify(workspace.ledger)
+-    let writes = 0
+-    await page.route('**/api/workspace*', (route) => {
+-      if (route.request().method() === 'POST') {
+-        writes++
+-        const body = route.request().postDataJSON()
+-        expect(body.action).toBe('save')
+-        expect(body.table).toBe('products')
+-        Object.assign(kit, body.data)
+-      }
+-      return route.fulfill({ json: { workspace, role: 'Owner', demo: false } })
+-    })
+-    await page.goto(workspaceFixtureUrl('Products/All Products'))
+-    await page
+-      .getByRole('button', { name: component.name, exact: true })
+-      .first()
++    const { workspace, kit, writes, assertStock } = await setup(page)
++    await page
++      .getByRole('article', { name: regularName, exact: true })
++      .getByRole('button', { name: 'View details', exact: true })
+       .click()
+     const dialog = page.getByRole('dialog')
+-    await expect(dialog.locator('.product-detail-photo')).toBeVisible()
+-    await page.emulateMedia({ reducedMotion: 'reduce' })
+-    await dialog.screenshot({ animations: 'disabled' })
+-    const reference = await dialog
+-      .locator('.product-detail-photo')
+-      .boundingBox()
++    await expect(
++      dialog.getByRole('heading', { name: regularName, exact: true }),
++    ).toBeVisible()
+     await page.evaluate(() => document.fonts.ready)
++    const reference = await geometry(dialog)
+     await page.screenshot({
++      path: `${output}/regular-product-${width}.png`,
+       animations: 'disabled',
+-      path: `docs/reviews/kit-details/product-${width}.png`,
+-    })
+-    await page.keyboard.press('Escape')
+-    await page.getByRole('link', { name: 'Kits', exact: true }).click()
+-    await expect(page.getByRole('article')).toHaveCount(1)
+-    await page.getByLabel('Search products').fill('missing')
+-    await expect(page.getByRole('article')).toHaveCount(0)
+-    await page.getByLabel('Search products').fill('Gather')
+-    await page.getByRole('button', { name: kit.name, exact: true }).click()
+-    await expect(
+-      dialog.getByRole('button', { name: 'Edit kit', exact: true }),
+-    ).toBeVisible()
+-    await expect(
+-      dialog.getByText('Product category not configured.', { exact: false }),
+-    ).toBeVisible()
+-    await expect(
+-      dialog.getByRole('region', { name: 'Included products' }),
+-    ).toContainText('2 selling packages')
+-    await expect(
+-      dialog.getByRole('region', { name: 'Included products' }),
+-    ).toContainText('9 rolls per package')
++    })
++    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
++    await page
++      .getByRole('article', { name: kitName, exact: true })
++      .getByRole('button', { name: kitName, exact: true })
++      .click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
++    await expect(dialog.getByRole('tab')).toHaveCount(0)
++    const actual = await geometry(dialog)
++    expect(actual.width).toBe(reference.width)
++    expect(actual.height).toBe(reference.height)
++    expect(actual.columns).toBe(reference.columns)
++    expect(actual.photo.width).toBe(reference.photo.width)
++    expect(actual.photo.height).toBe(reference.photo.height)
++    expect(actual.photo.x).toBe(reference.photo.x)
++    for (const key of ['font', 'padding', 'radius', 'background'] as const) {
++      expect(actual.costCard[key]).toBe(reference.costCard[key])
++      expect(actual.button[key]).toBe(reference.button[key])
++    }
++    expect(actual.title.font).toBe(reference.title.font)
++    expect(actual.overflow).toBeLessThanOrEqual(1)
++    expect(
++      actual.photo.top - actual.title.top - actual.title.height,
++    ).toBeCloseTo(
++      reference.photo.top - reference.title.top - reference.title.height,
++      0,
++    )
++    await expect(dialog.locator('img')).toHaveCSS('object-fit', 'contain')
++    const costing = productCosting(kit, workspace),
++      pricing = profitability(kit, costing.perPackage, workspace.settings[0])
++    await expect(card(dialog, 'Total cost per kit')).toHaveText(
++      money(costing.perPackage),
++    )
++    await expect(card(dialog, 'Profit per kit')).toHaveText(
++      money(pricing.profit),
++    )
++    await expect(card(dialog, 'Margin')).toHaveText(
++      `${pricing.margin.toFixed(2)}%`,
++    )
++    const included = dialog.getByRole('region', {
++      name: 'Included products',
++      exact: true,
++    })
++    await expect(included.getByRole('listitem')).toHaveCount(2)
++    await expect(included).toContainText(`${regularName} ×2`)
++    await expect(included).not.toContainText('per package')
+     await expect(
+       dialog.getByText('Connected recipe:', { exact: false }),
+     ).toHaveCount(0)
+-    await dialog.screenshot({ animations: 'disabled' })
+-    const photo = await dialog.locator('.product-detail-photo').boundingBox()
+-    expect(photo!.width).toBeCloseTo(reference!.width, 0)
+-    await page.evaluate(() => document.fonts.ready)
++    await expect(dialog.getByRole('button', { name: /label/i })).toHaveCount(0)
++    expect(writes).toHaveLength(0)
+     await page.screenshot({
++      path: `${output}/kit-details-${width}.png`,
+       animations: 'disabled',
+-      path: `docs/reviews/kit-details/kit-${width}.png`,
+-    })
+-    const contents = dialog.getByRole('region', { name: 'Included products' })
+-    expect(
+-      await contents.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+-    ).toBe(true)
++    })
++    if (width < 640) {
++      await dialog
++        .locator('.product-detail-information')
++        .scrollIntoViewIfNeeded()
++      await page.screenshot({
++        path: `${output}/kit-costs-${width}-scrolled.png`,
++        animations: 'disabled',
++      })
++    }
++    await writeFile(
++      `${output}/geometry-${width}.json`,
++      JSON.stringify(
++        { viewport: { width, height: 950 }, reference, kit: actual },
++        null,
++        2,
++      ),
++    )
++    await included
++      .getByRole('button', { name: `${regularName} ×2`, exact: true })
++      .click()
++    await expect(
++      dialog.getByRole('heading', { name: regularName, exact: true }),
++    ).toBeVisible()
++    await dialog
++      .getByRole('button', { name: `Back to ${kitName}`, exact: true })
++      .click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
++    await included
++      .getByRole('button', { name: `${regularName} ×2`, exact: true })
++      .click()
++    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
+     await dialog.getByText('How this is calculated', { exact: true }).click()
+-    await dialog.locator('.calculation-box').scrollIntoViewIfNeeded()
++    await expect(
++      dialog.getByText(/Additional assembly: 12 minutes/),
++    ).toBeVisible()
++    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
++    await expect(
++      page.getByRole('tab', { name: 'Contents & details', exact: true }),
++    ).toBeVisible()
++    await expect(page.getByLabel('Whole selling packages').first()).toHaveValue(
++      '2',
++    )
++    await page
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await page.getByLabel('Kit selling price').fill('48.25')
++    await page.getByLabel('Additional assembly minutes').fill('18')
++    await page.getByRole('tab', { name: 'Photo', exact: true }).click()
++    await page
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await expect(page.getByLabel('Kit selling price')).toHaveValue('48.25')
++    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
++    await expect(card(dialog, 'Selling price')).toHaveText('$48.25')
++    await expect(card(dialog, 'Total cost per kit')).toHaveText(
++      money(
++        productCosting(
++          workspace.products.find((p) => p.id === kit.id)!,
++          workspace,
++        ).perPackage,
++      ),
++    )
++    expect(writes).toHaveLength(1)
++    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
++    await page.getByLabel('Kit name', { exact: true }).fill('Unsaved name')
++    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
++    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
++    await expect(
++      page.getByRole('article', { name: kitName, exact: true }),
++    ).toContainText('$48.25 / kit')
++    assertStock()
++  })
++
++  test(`Kits tab, search, type filters, hash refresh and Create kit at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    const { writes } = await setup(page)
++    await page
++      .locator('.section-tabs')
++      .getByRole('link', { name: 'Kits', exact: true })
++      .click()
++    await expect(page).toHaveURL(/#Products\/Kits$/)
++    await expect(page.getByRole('article')).toHaveCount(1)
++    await expect(page.getByRole('article')).toContainText('Kit · active')
++    await page
++      .getByLabel('Search products', { exact: true })
++      .fill('nonmatching')
++    await expect(page.getByRole('article')).toHaveCount(0)
++    await page.getByLabel('Search products', { exact: true }).fill('gather')
++    await expect(page.getByRole('article')).toHaveCount(1)
++    await page.reload({ waitUntil: 'networkidle' })
++    await expect(
++      page.locator('.section-tabs a[aria-current="page"]'),
++    ).toHaveText('Kits')
++    await expect(
++      page.getByRole('button', { name: 'Create kit', exact: true }),
++    ).toHaveCount(1)
++    await page.getByLabel('Search products', { exact: true }).fill('')
+     await page.screenshot({
++      path: `${output}/kits-tab-${width}.png`,
+       animations: 'disabled',
+-      path: `docs/reviews/kit-details/calculation-${width}.png`,
+-    })
+-    expect(writes).toBe(0)
+-    await dialog
+-      .getByRole('button', { name: component.name, exact: true })
+-      .click()
+-    await dialog.getByRole('button', { name: 'Back to kit' }).click()
+-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+-    await page.getByRole('tab', { name: 'Packaging & cost' }).click()
+-    await page.getByLabel('Kit selling price').fill('49')
++    })
++    await page.getByRole('button', { name: 'Create kit', exact: true }).click()
++    await page
++      .getByLabel('Kit name', { exact: true })
++      .fill('Presentation test kit')
++    await page.getByLabel('Add existing product').selectOption('loaf')
++    await page
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await page.getByLabel('Kit selling price').fill('12')
+     await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+     await expect(
+-      dialog.locator('.cost-card').filter({ hasText: 'Selling price' }).first(),
+-    ).toContainText('$49.00')
+-    expect(writes).toBe(1)
+-    expect(JSON.stringify(workspace.ledger)).toBe(stock)
++      page
++        .getByRole('dialog')
++        .getByRole('heading', { name: 'Presentation test kit', exact: true }),
++    ).toBeVisible()
++    await page
++      .getByRole('dialog')
++      .getByRole('button', { name: 'Close', exact: true })
++      .click()
++    await expect(page.getByRole('article')).toHaveCount(2)
++    for (const tab of ['Food', 'Handmade', 'Resale']) {
++      await page
++        .locator('.section-tabs')
++        .getByRole('link', { name: tab, exact: true })
++        .click()
++      await expect(
++        page.getByRole('article', { name: kitName, exact: true }),
++      ).toHaveCount(0)
++    }
++    await page
++      .locator('.section-tabs')
++      .getByRole('link', { name: 'All Products', exact: true })
++      .click()
++    await expect(
++      page.getByRole('article', { name: kitName, exact: true }),
++    ).toHaveCount(1)
++    expect(writes).toHaveLength(1)
+     expect(
+       await page.evaluate(
+-        () => document.documentElement.scrollWidth <= innerWidth,
++        () => document.documentElement.scrollWidth - innerWidth,
+       ),
+-    ).toBe(true)
+-    await page.keyboard.press('Escape')
+-    await page
+-      .getByRole('button', { name: 'Create kit', exact: true })
+-      .first()
+-      .click()
+-    await expect(page.getByLabel('Kit name', { exact: true })).toBeVisible()
+-  })
++    ).toBeLessThanOrEqual(1)
++  })
++}
++
++for (const width of [1440, 390]) {
++  test(`missing category retains valid costs and gives an actionable edit at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    const { workspace, kit, writes, assertStock } = await setup(page, {
++      missingCategory: true,
++    })
++    await page
++      .getByRole('article', { name: kitName, exact: true })
++      .getByRole('button', { name: kitName, exact: true })
++      .click()
++    const dialog = page.getByRole('dialog')
++    await expect(dialog.getByRole('status')).toContainText(
++      'Estimate incomplete: Product category not configured.',
++    )
++    await expect(dialog.getByRole('status')).toContainText(
++      `${kitName}: choose an active category`,
++    )
++    await expect(card(dialog, 'Total cost per kit')).toHaveText(
++      money(productCosting(kit, workspace).perPackage),
++    )
++    await expect(card(dialog, 'Selling price')).toHaveText('$42.00')
++    for (const label of [
++      'Profit per kit',
++      'Tax per kit',
++      'Customer price',
++      'Revenue excluding tax',
++      'Suggested selling price',
++      'Margin',
++    ])
++      await expect(card(dialog, label)).toHaveText('Unavailable')
++    await page.screenshot({
++      path: `${output}/kit-incomplete-${width}.png`,
++      animations: 'disabled',
++    })
++    await dialog
++      .getByRole('status')
++      .getByRole('button', { name: 'Edit kit', exact: true })
++      .click()
++    await expect(
++      dialog.getByRole('heading', { name: `Kit · ${kitName}`, exact: true }),
++    ).toBeVisible()
++    await expect(
++      page.getByRole('combobox', { name: 'Category', exact: true }),
++    ).toHaveValue('')
++    await page
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await expect(
++      dialog
++        .getByText('Estimate incomplete: Product category not configured.', {
++          exact: true,
++        })
++        .first(),
++    ).toBeVisible()
++    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
++    await expect(
++      dialog.getByRole('heading', { name: kitName, exact: true }),
++    ).toBeVisible()
++    expect(writes).toHaveLength(0)
++    assertStock()
++  })
++
++  test(`long included lists grow below a fixed photo with one scrolling region at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    const { writes, assertStock } = await setup(page, { count: 18 })
++    await page
++      .getByRole('article', { name: kitName, exact: true })
++      .getByRole('button', { name: kitName, exact: true })
++      .click()
++    const dialog = page.getByRole('dialog')
++    await expect(
++      dialog
++        .getByRole('region', { name: 'Included products', exact: true })
++        .getByRole('listitem'),
++    ).toHaveCount(18)
++    const measurement = await dialog.evaluate((panel) => {
++      const photo = panel
++        .querySelector('.product-detail-photo')!
++        .getBoundingClientRect()
++      const list = panel
++        .querySelector('.kit-included-products')!
++        .getBoundingClientRect()
++      return {
++        photoHeight: photo.height,
++        photoWidth: photo.width,
++        gap: list.top - photo.bottom,
++        overflows: [
++          ...panel.querySelectorAll(
++            '.product-detail-media, .kit-included-products, .kit-included-products *, .product-detail-actions, .product-detail-actions *',
++          ),
++        ].filter(
++          (el) =>
++            /(auto|scroll|hidden|clip)/.test(getComputedStyle(el).overflowY) &&
++            el.scrollHeight > el.clientHeight + 1,
++        ).length,
++        horizontal: panel.scrollWidth - panel.clientWidth,
++      }
++    })
++    expect(measurement.photoHeight).toBeLessThanOrEqual(
++      width < 640 ? 280 : measurement.photoWidth,
++    )
++    expect(measurement.gap).toBeCloseTo(8, 0)
++    expect(measurement.overflows).toBe(0)
++    expect(measurement.horizontal).toBeLessThanOrEqual(1)
++    await dialog
++      .getByRole('button', { name: 'Edit kit', exact: true })
++      .scrollIntoViewIfNeeded()
++    await expect(
++      dialog.getByRole('button', { name: 'Edit kit', exact: true }),
++    ).toBeInViewport()
++    expect(writes).toHaveLength(0)
++    assertStock()
++  })
++}
+--- /dev/null
++++ b/tests/kit-merge-resolution.spec.ts
+@@ -0,0 +1,69 @@
++import { test, expect } from '@playwright/test'
++import { demoData } from '../src/lib/demo'
++import {
++  installWorkspaceFixture,
++  workspaceFixtureUrl,
++} from './workspace-fixture'
++
++for (const width of [1440, 390]) {
++  test(`incomplete kit review action preserves unsaved edits at ${width}`, async ({
++    page,
++  }) => {
++    await page.setViewportSize({ width, height: 950 })
++    await installWorkspaceFixture(page)
++    const workspace = demoData()
++    workspace.products.push({
++      id: 'merge-review-kit',
++      name: 'Merge review kit',
++      workflow: 'kit',
++      status: 'active',
++      taxSource: 'category',
++      price: 12,
++      assemblyMinutes: 0,
++      assemblyRate: 0,
++      kitComponents: [
++        { productId: workspace.products[0].id, quantity: 1, basis: 'package' },
++      ],
++      packagingLines: [],
++    })
++    const before = JSON.stringify(workspace)
++    const writes: string[] = []
++    await page.route('**/api/workspace*', (route) => {
++      if (route.request().method() !== 'GET')
++        writes.push(route.request().method())
++      return route.fulfill({ json: { workspace, role: 'Owner', demo: false } })
++    })
++    await page.goto(workspaceFixtureUrl('Products/Kits'), {
++      waitUntil: 'networkidle',
++    })
++    await page
++      .getByRole('article', { name: 'Merge review kit' })
++      .getByRole('button', { name: 'Edit kit', exact: true })
++      .click()
++    const dialog = page.getByRole('dialog')
++    await dialog.getByLabel('Whole selling packages').first().fill('2')
++    await dialog
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await dialog.getByLabel('Kit selling price').fill('19.25')
++    await dialog
++      .getByRole('button', { name: 'Review contents & details', exact: true })
++      .first()
++      .click()
++    await expect(
++      dialog.getByRole('tab', { name: 'Contents & details' }),
++    ).toHaveAttribute('aria-selected', 'true')
++    await expect(
++      dialog.getByLabel('Whole selling packages').first(),
++    ).toHaveValue('2')
++    await dialog
++      .getByRole('tab', { name: 'Packaging & cost', exact: true })
++      .click()
++    await expect(dialog.getByLabel('Kit selling price')).toHaveValue('19.25')
++    await expect(dialog.getByRole('status').first()).toContainText(
++      'Product category not configured.',
++    )
++    expect(writes).toEqual([])
++    expect(JSON.stringify(workspace)).toBe(before)
++  })
++}
+--- a/tests/kits-admin.browser.spec.ts
++++ b/tests/kits-admin.browser.spec.ts
+@@ -60,9 +60,8 @@
+     await expect(
+       page
+         .getByRole('dialog')
+-        .getByRole('button', { name: 'Edit kit', exact: true }),
+-    ).toBeVisible()
+-    await page.keyboard.press('Escape')
++        .getByRole('heading', { name: 'Holiday bake drop', exact: true }),
++    ).toBeVisible()
+     expect(saved).toBe(true)
+     expect(
+       JSON.stringify(
+@@ -71,10 +70,17 @@
+           .map((p) => [p.id, p.quantity]),
+       ),
+     ).toBe(stock)
++    await expect(
++      page.getByRole('region', { name: 'Included products', exact: true }),
++    ).toContainText('×2')
++    await page.screenshot({
++      path: `.netlify/screenshots/kit-details-${width}.png`,
++      fullPage: true,
++    })
+     await page
+-      .getByRole('button', { name: 'Holiday bake drop', exact: true })
++      .getByRole('dialog')
++      .getByRole('button', { name: 'Edit kit', exact: true })
+       .click()
+-    await page.getByRole('button', { name: 'Edit kit', exact: true }).click()
+     await expect(page.getByLabel('Whole selling packages').first()).toHaveValue(
+       '2',
+     )
+@@ -83,10 +89,6 @@
+         exact: false,
+       }),
+     ).toBeVisible()
+-    await page.screenshot({
+-      path: `.netlify/screenshots/kit-details-${width}.png`,
+-      fullPage: true,
+-    })
+     expect(
+       await page.evaluate(
+         () => document.documentElement.scrollWidth <= window.innerWidth,
+--- a/tests/opening-oven.spec.ts
++++ b/tests/opening-oven.spec.ts
+@@ -43,8 +43,8 @@
+       },
+     })
+     const recorded = await context.newPage()
++    await installWorkspaceFixture(recorded)
+     await developmentAssets(recorded)
+-    await installWorkspaceFixture(recorded)
+     let release!: () => void
+     const pending = new Promise<void>((resolve) => {
+       release = resolve
+--- a/tests/workspace-fixture.ts
++++ b/tests/workspace-fixture.ts
+@@ -3,6 +3,14 @@
+ /** Browser-only mount of the real application; no production route/auth bypass.
+  * Callers must intercept /api/workspace with synthetic records before navigating. */
+ export async function installWorkspaceFixture(page: Page) {
++  // Netlify's framework handler can consume Vite's module URLs. Keep the
++  // browser on the Netlify origin while loading development resources from Vite.
++  await page.route('http://localhost:8889/**', async (route) => {
++    const response = await route.fetch({
++      url: route.request().url().replace('localhost:8889', 'localhost:3000'),
++    })
++    await route.fulfill({ response })
++  })
+   await page.route('**/capture-fixture*', (route) =>
+     route.fulfill({
+       contentType: 'text/html',
