@@ -1058,3 +1058,155 @@ it('records a resale purchase in sellable units and rejects unknown starting cos
   expect(unknown.status).not.toBe(200)
   expect(unknown.error).toMatch(/acquisition cost/)
 })
+it('posts calculated manual receipts once, preserves printed evidence and keeps draft/failed confirmation free of effects', async () => {
+  const created = await request('receiptManual', {})
+  expect(created.status, created.error).toBe(200)
+  const r = created.workspace.receipt_extractions.at(-1)
+  const data = {
+    id: r.id,
+    arithmeticVersion: 2,
+    vendor: 'Disposable manual receipt',
+    date: '2026-11-10',
+    receivedDate: '2026-11-10',
+    taxTreatment: 'exclusive',
+    tax: 0.8,
+    receiptDiscount: 1,
+    otherCharges: 0.2,
+    printedTotal: 10,
+    lines: [
+      {
+        description: 'Paper supplies',
+        amountMode: 'quantity',
+        printedQuantity: 2,
+        unitPrice: 3,
+        decision: 'expense',
+        category: 'Supplies expense',
+      },
+      {
+        description: 'Personal',
+        amountMode: 'direct',
+        enteredAmount: 4,
+        decision: 'personal',
+      },
+    ],
+  }
+  const before = (await request()).workspace
+  const saved = await request('receiptDraft', data)
+  expect(saved.status, saved.error).toBe(200)
+  expect(saved.workspace.journals).toHaveLength(before.journals.length)
+  expect(saved.workspace.ledger).toHaveLength(before.ledger.length)
+  expect(saved.workspace.expenses).toHaveLength(before.expenses.length)
+  expect(
+    saved.workspace.receipt_extractions.find((x: Item) => x.id === r.id),
+  ).toMatchObject({ subtotal: 10, total: 10, printedTotal: 10 })
+  const failed = await request('receiptPost', { ...data, printedTotal: 11 })
+  expect(failed.status).toBe(400)
+  expect((await request()).workspace.journals).toHaveLength(
+    before.journals.length,
+  )
+  const posted = await request('receiptPost', data)
+  expect(posted.status, posted.error).toBe(200)
+  expect(posted.workspace.expenses).toHaveLength(before.expenses.length + 1)
+  expect(posted.workspace.expenses.at(-1).amount).toBe(6)
+  expect(posted.workspace.ledger).toHaveLength(before.ledger.length)
+  const retry = await request('receiptPost', data)
+  expect(retry.status, retry.error).toBe(200)
+  expect(retry.workspace.journals).toHaveLength(
+    posted.workspace.journals.length,
+  )
+  expect(retry.workspace.finance_transactions).toHaveLength(
+    posted.workspace.finance_transactions.length,
+  )
+  runtime.user = 'receipt-other'
+  expect((await request('receiptPost', data)).status).toBe(400)
+})
+it('attaches a calculated draft to an existing expense without recording expense or stock twice', async () => {
+  const created = await request('receiptManual', {})
+  const r = created.workspace.receipt_extractions.at(-1)
+  const entry = await request('financeEntry', {
+    kind: 'expense',
+    name: 'Disposable attachment test',
+    date: '2026-11-10',
+    amount: 5,
+    category: 'Supplies expense',
+  })
+  expect(entry.status, entry.error).toBe(200)
+  const tx = entry.workspace.finance_transactions.at(-1)
+  const data = {
+    id: r.id,
+    arithmeticVersion: 2,
+    vendor: 'Disposable attachment test',
+    date: '2026-11-10',
+    taxTreatment: 'inclusive',
+    tax: 0,
+    lines: [
+      {
+        description: 'Paper',
+        amountMode: 'direct',
+        enteredAmount: 5,
+        decision: 'expense',
+        category: 'Supplies expense',
+      },
+    ],
+  }
+  expect((await request('receiptDraft', data)).status).toBe(200)
+  const attached = await request('receiptMatch', {
+    id: r.id,
+    transactionId: tx.id,
+  })
+  expect(attached.status, attached.error).toBe(200)
+  expect(attached.workspace.expenses).toHaveLength(
+    entry.workspace.expenses.length,
+  )
+  expect(attached.workspace.journals).toHaveLength(
+    entry.workspace.journals.length,
+  )
+  expect(attached.workspace.ledger).toHaveLength(entry.workspace.ledger.length)
+  expect(
+    attached.workspace.receipt_extractions.find((x: Item) => x.id === r.id),
+  ).toMatchObject({ status: 'attached', matchedTransactionId: tx.id })
+  expect((await request('receiptPost', data)).status).toBe(400)
+})
+it('keeps stock, valuation, expenses and journal unchanged when a later line fails confirmation', async () => {
+  const created = await request('receiptManual', {})
+  const receipt = created.workspace.receipt_extractions.at(-1)
+  const before = created.workspace
+  const invalid = await request('receiptPost', {
+    id: receipt.id,
+    arithmeticVersion: 2,
+    vendor: 'Disposable atomic confirmation',
+    date: '2026-11-10',
+    receivedDate: '2026-11-10',
+    taxTreatment: 'exclusive',
+    tax: 0,
+    lines: [
+      {
+        description: 'Flour',
+        amountMode: 'direct',
+        enteredAmount: 1,
+        decision: 'inventory',
+        itemId: 'flour',
+        itemTable: 'ingredients',
+        quantity: 100,
+        unit: 'g',
+        stockQuantityConfirmed: true,
+      },
+      {
+        description: 'Uncategorized supplies',
+        amountMode: 'direct',
+        enteredAmount: 1,
+        decision: 'expense',
+        category: '',
+      },
+    ],
+  })
+  expect(invalid.status).toBe(400)
+  expect(invalid.error).toContain('category')
+  const after = (await request()).workspace
+  expect(after.ledger).toHaveLength(before.ledger.length)
+  expect(after.expenses).toHaveLength(before.expenses.length)
+  expect(after.journals).toHaveLength(before.journals.length)
+  expect(after.ingredients.find((i: Item) => i.id === 'flour')).toEqual(
+    before.ingredients.find((i: Item) => i.id === 'flour'),
+  )
+})

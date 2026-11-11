@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { demoData } from '../src/lib/demo'
 import {
@@ -114,27 +117,37 @@ for (const width of [1440, 390]) {
       review.getByText('Reading receipt', { exact: true }),
     ).toBeVisible()
     await expect(
-      review.getByRole('textbox', { name: 'Vendor', exact: true }),
+      review.getByRole('textbox', { name: 'Merchant', exact: true }),
     ).toBeDisabled()
     release()
     await expect(
-      review.getByRole('textbox', { name: 'Vendor', exact: true }),
+      review.getByRole('textbox', { name: 'Merchant', exact: true }),
     ).toHaveValue('Synthetic mill')
     await expect(
       review.getByText('Partially extracted — review needed', { exact: true }),
     ).toBeVisible()
-    await expect(review.getByText('Page 1 of 2', { exact: true })).toBeVisible()
-    await review.getByRole('button', { name: 'Next page', exact: true }).click()
-    await expect(review.getByText('Page 2 of 2', { exact: true })).toBeVisible()
     await review
-      .getByRole('textbox', { name: 'Vendor', exact: true })
+      .getByRole('button', { name: /Original receipt attached.*View receipt/ })
+      .click()
+    const source = page.getByRole('dialog', {
+      name: 'Original receipt',
+      exact: true,
+    })
+    await expect(source.getByText('Page 1 of 2', { exact: true })).toBeVisible()
+    await source.getByRole('button', { name: 'Next page', exact: true }).click()
+    await expect(source.getByText('Page 2 of 2', { exact: true })).toBeVisible()
+    await source.getByRole('button', { name: 'Back to editing' }).click()
+    await review.getByRole('button', { name: /Flour.*Edit/ }).click()
+    await review
+      .getByRole('textbox', { name: 'Merchant', exact: true })
       .fill('Owner corrected mill')
     await review
       .getByRole('combobox', { name: 'What is this for?', exact: true })
       .selectOption('inventory')
     await review
-      .getByRole('combobox', { name: 'Match pantry item', exact: true })
-      .selectOption(workspace.ingredients[0].id)
+      .getByRole('combobox', { name: 'Match inventory item', exact: true })
+      .selectOption('ingredients:' + workspace.ingredients[0].id)
+    await review.getByText('Printed package details', { exact: true }).click()
     await expect(
       review.getByLabel('Printed purchase count', { exact: true }),
     ).toHaveValue('2')
@@ -142,18 +155,13 @@ for (const width of [1440, 390]) {
       review.getByLabel('Actual quantity received', { exact: true }),
     ).toHaveValue('')
     await review
-      .getByRole('button', { name: 'Add ingredient', exact: true })
-      .click()
-    const item = page.getByRole('dialog').filter({
-      has: page.getByRole('textbox', {
-        name: 'Ingredient / item name',
-        exact: true,
-      }),
-    })
+      .getByRole('combobox', { name: 'Match inventory item', exact: true })
+      .selectOption('new')
+    const item = page.getByRole('dialog', { name: 'Add Item', exact: true })
     await expect(item).toBeVisible()
     await item.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(
-      review.getByRole('textbox', { name: 'Vendor', exact: true }),
+      review.getByRole('textbox', { name: 'Merchant', exact: true }),
     ).toHaveValue('Owner corrected mill')
     await review
       .getByRole('button', { name: 'Retry reading', exact: true })
@@ -162,7 +170,7 @@ for (const width of [1440, 390]) {
       review.getByText('Review replacement values', { exact: true }),
     ).toBeVisible()
     await expect(
-      review.getByRole('textbox', { name: 'Vendor', exact: true }),
+      review.getByRole('textbox', { name: 'Merchant', exact: true }),
     ).toHaveValue('Owner corrected mill')
     await review
       .getByRole('button', { name: 'Keep my edits', exact: true })
@@ -171,7 +179,7 @@ for (const width of [1440, 390]) {
       review.getByText('Review replacement values', { exact: true }),
     ).toHaveCount(0)
     await expect(
-      review.getByRole('textbox', { name: 'Vendor', exact: true }),
+      review.getByRole('textbox', { name: 'Merchant', exact: true }),
     ).toHaveValue('Owner corrected mill')
     expect(actions).toEqual([
       'receiptExtract',

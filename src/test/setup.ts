@@ -6,4 +6,6 @@ afterEach(cleanup)
 
 if (typeof window !== 'undefined') {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+  // JSDOM has no layout; receipt browser tests verify the actual scroll position.
+  window.HTMLElement.prototype.scrollIntoView = vi.fn()
 }

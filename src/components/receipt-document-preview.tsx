@@ -14,8 +14,10 @@ export function ReceiptDocumentPreview({
   localFile,
   fileEndpoint,
   documentLabel = 'receipt',
+  thumbnail = false,
 }: {
   id: string
+  thumbnail?: boolean
   fileEndpoint?: string
   documentLabel?: string
   localFile?: File | null
@@ -152,6 +154,18 @@ export function ReceiptDocumentPreview({
       setError(e instanceof Error ? e.message : 'Original could not be loaded.')
     }
   }
+  if (thumbnail)
+    return (
+      <span className="receipt-thumbnail" aria-hidden="true">
+        {document?.mime === 'application/pdf' ? (
+          <canvas ref={canvas} />
+        ) : document && document.mime !== 'image/heic' ? (
+          <img src={document.url} alt="" />
+        ) : (
+          <span>Receipt</span>
+        )}
+      </span>
+    )
   return (
     <>
       <div className="button-row">
