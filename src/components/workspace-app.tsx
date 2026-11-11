@@ -1,3 +1,5 @@
+import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
+import './workspace-mobile.css'
 import { OpeningOven } from './opening-oven'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
 import { KitEditor } from './kit-editor'
@@ -269,6 +271,7 @@ function Empty({
   )
 }
 export function WorkspaceApp() {
+  useWorkspaceViewport()
   const [page, setPage] = useState('Dashboard'),
     [sub, setSub] = useState('All items'),
     [mobile, setMobile] = useState(false),

@@ -17,7 +17,9 @@ export function BarcodeScanner({
 }) {
   const video = useRef<HTMLVideoElement>(null),
     release = useRef<() => void>(() => {}),
-    accepted = useRef(false)
+    accepted = useRef(false),
+    starting = useRef(false),
+    pending = useRef(false)
   const [manual, setManual] = useState(''),
     [error, setError] = useState(''),
     [running, setRunning] = useState(false)
@@ -51,7 +53,9 @@ export function BarcodeScanner({
     }
   }
   async function start() {
+    if (starting.current || pending.current) return
     release.current()
+    starting.current = true
     accepted.current = false
     setError('')
     setRunning(true)
@@ -61,6 +65,7 @@ export function BarcodeScanner({
       frame = 0
     release.current = () => {
       stopped = true
+      starting.current = false
       cancelAnimationFrame(frame)
       controls?.stop()
       stream?.getTracks().forEach((t) => t.stop())
@@ -71,10 +76,12 @@ export function BarcodeScanner({
         throw new Error(
           'Camera scanning needs HTTPS and an available camera. Use manual entry below.',
         )
+      pending.current = true
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       })
+      pending.current = false
       if (stopped) {
         stream.getTracks().forEach((t) => t.stop())
         return
@@ -82,10 +89,12 @@ export function BarcodeScanner({
       const element = video.current!
       element.srcObject = stream
       await element.play()
+      if (stopped) return
       const Native = (window as any).BarcodeDetector
       const supported = Native
         ? await Native.getSupportedFormats().catch(() => [])
         : []
+      if (stopped) return
       const formats = scanFormats.filter((f) => supported.includes(f))
       // Fall back when native support omits the priority retail formats.
       if (Native && scanFormats.every((f) => formats.includes(f))) {
@@ -134,12 +143,16 @@ export function BarcodeScanner({
         if (stopped) controls?.stop()
       }
     } catch (e) {
+      pending.current = false
+      if (stopped) return
       release.current()
       setRunning(false)
       setError(
         (e as any)?.name === 'NotAllowedError'
-          ? 'Camera permission was denied. Allow it in browser settings or enter the barcode below.'
-          : 'Camera unavailable. Enter the barcode or search for the item manually.',
+          ? 'Camera permission was denied. In Safari, open the page menu → Website Settings → Camera for this site. In Chrome, open site controls → Permissions → Camera. Allow Cottage Pantry, then tap Retry camera. Your browser controls how long permission lasts; private sessions or cleared site settings may ask again.'
+          : (e as any)?.name === 'NotReadableError'
+            ? 'Camera is in use or could not start. Close other camera apps or tabs, then tap Retry camera or enter the code manually.'
+            : 'Camera unavailable. Check that this device has an enabled camera, then tap Retry camera or enter the code manually.',
       )
     }
   }
@@ -153,7 +166,10 @@ export function BarcodeScanner({
         }
       }}
     >
-      <DialogContent className="inventory-tool-dialog">
+      <DialogContent
+        className="inventory-tool-dialog barcode-scanner-dialog"
+        overlayClassName="barcode-scanner-overlay"
+      >
         <DialogTitle>Scan barcode</DialogTitle>
         <DialogDescription>
           One code per scan. Camera frames stay on this device. Scanning never
@@ -168,7 +184,7 @@ export function BarcodeScanner({
         />
         {!running && (
           <button className="btn" onClick={() => void start()}>
-            Start rear camera
+            {error ? 'Retry camera' : 'Start rear camera'}
           </button>
         )}
         {error && (
