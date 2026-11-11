@@ -62,7 +62,9 @@ it('uploads, reads, populates review, and makes no posting request before confir
       'Reading receipt',
     ),
   )
-  expect(within(dialog).getByRole('textbox', { name: 'Vendor' })).toBeDisabled()
+  expect(
+    within(dialog).getByRole('textbox', { name: 'Merchant' }),
+  ).toBeDisabled()
   workspace.receipt_extractions = [
     {
       ...base,
@@ -88,17 +90,21 @@ it('uploads, reads, populates review, and makes no posting request before confir
   ]
   finish(response(workspace))
   await waitFor(() =>
-    expect(within(dialog).getByRole('textbox', { name: 'Vendor' })).toHaveValue(
-      'The mill',
-    ),
+    expect(
+      within(dialog).getByRole('textbox', { name: 'Merchant' }),
+    ).toHaveValue('The mill'),
   )
   expect(within(dialog).getByRole('status')).toHaveTextContent(
     'Partially extracted',
   )
+  await user.click(within(dialog).getByRole('button', { name: /Flour.*Edit/ }))
+  await user.click(within(dialog).getByText('Printed package details'))
   expect(within(dialog).getByLabelText('Printed purchase count')).toHaveValue(2)
-  expect(within(dialog).getByLabelText('Sales tax paid ($)')).toHaveValue(null)
+  expect(within(dialog).getByLabelText('Receipt tax ($)')).toHaveValue(null)
   expect(fetcher).toHaveBeenCalledTimes(2)
-  expect(screen.getByRole('button', { name: 'Confirm & post' })).toBeEnabled()
+  expect(
+    screen.getByRole('button', { name: 'Review confirmation' }),
+  ).toBeEnabled()
 })
 it('persists corrections before retry and keeps the editable review open when replacement values arrive', async () => {
   const user = userEvent.setup(),
@@ -135,12 +141,12 @@ it('persists corrections before retry and keeps the editable review open when re
   )
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Original/ }))
-  const vendor = screen.getByRole('textbox', { name: 'Vendor' })
+  const vendor = screen.getByRole('textbox', { name: 'Merchant' })
   await user.clear(vendor)
   await user.type(vendor, 'Owner correction')
   await user.click(screen.getByRole('button', { name: 'Retry reading' }))
   await screen.findByText('Review replacement values')
-  expect(screen.getByRole('textbox', { name: 'Vendor' })).toHaveValue(
+  expect(screen.getByRole('textbox', { name: 'Merchant' })).toHaveValue(
     'Owner correction',
   )
   expect(actions).toEqual(['receiptDraft', 'receiptExtract'])
@@ -151,7 +157,7 @@ it('persists corrections before retry and keeps the editable review open when re
     ).not.toBeInTheDocument(),
   )
   expect(screen.getByRole('dialog', { name: 'Review receipt' })).toBeVisible()
-  expect(screen.getByRole('textbox', { name: 'Vendor' })).toHaveValue(
+  expect(screen.getByRole('textbox', { name: 'Merchant' })).toHaveValue(
     'Owner correction',
   )
   expect(actions).not.toContain('receiptPost')
@@ -195,6 +201,7 @@ it('creates a receipt-line item through the shared dialog and returns with it se
   )
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Supplier/ }))
+  await user.click(screen.getByRole('button', { name: /Receipt bags.*Edit/ }))
   await user.selectOptions(screen.getByLabelText('Match inventory item'), 'new')
   const dialog = within(screen.getByRole('dialog', { name: 'Add Item' }))
   expect(dialog.getByLabelText('Item Type')).toHaveValue('')
@@ -218,4 +225,54 @@ it('creates a receipt-line item through the shared dialog and returns with it se
     table: 'ingredients',
     data: { initialStock: false, usedAs: 'packaging' },
   })
+})
+it('recovers a lost confirmation response by reading the existing posted receipt instead of repeating effects', async () => {
+  const user = userEvent.setup(),
+    workspace = demoData(),
+    calls: string[] = []
+  workspace.receipt_extractions = [
+    {
+      ...base,
+      vendor: 'Recovered purchase',
+      date: '2026-11-10',
+      tax: 0,
+      total: 10,
+      subtotal: 10,
+      arithmeticVersion: 2,
+      taxTreatment: 'exclusive',
+      lines: [
+        {
+          description: 'Supplies',
+          amount: 10,
+          decision: 'expense',
+          category: 'Supplies expense',
+        },
+      ],
+    },
+  ]
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body))
+        calls.push(body.action)
+        expect(body.action).toBe('receiptPost')
+        workspace.receipt_extractions[0].status = 'posted'
+        throw new TypeError('Connection lost after confirmation')
+      }
+      calls.push('read-status')
+      return response(structuredClone(workspace))
+    }),
+  )
+  render(<App initial={workspace} />)
+  await user.click(screen.getByRole('button', { name: /Recovered purchase/ }))
+  await user.click(screen.getByRole('button', { name: 'Review confirmation' }))
+  await user.click(screen.getByRole('button', { name: 'Confirm & post' }))
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('dialog', { name: 'Review receipt' }),
+    ).not.toBeInTheDocument(),
+  )
+  expect(calls).toEqual(['receiptPost', 'read-status'])
+  expect(screen.getByRole('status')).toHaveTextContent('Receipt is confirmed')
 })

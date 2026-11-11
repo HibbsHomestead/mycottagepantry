@@ -2118,13 +2118,21 @@ export function WorkspaceApp() {
                   open={open}
                 />
               )}
-              {['Receipt inbox', 'Money activity', 'Consignment'].includes(
-                sub,
-              ) ? (
+              {[
+                'Overview',
+                'Receipt inbox',
+                'Money activity',
+                'Consignment',
+              ].includes(sub) ? (
                 <FinanceWorkspace
                   workspace={state}
                   onWorkspace={setState}
                   section={sub}
+                  onNavigate={(section) =>
+                    section === 'Reports'
+                      ? go('Reports')
+                      : go('Finances', section)
+                  }
                   ready={ready}
                   role={role}
                   initialEntry={financeEntry}

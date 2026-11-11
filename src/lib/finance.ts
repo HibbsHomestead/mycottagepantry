@@ -2,7 +2,8 @@ import { reviewedProductMetadata } from './inventory-product'
 import { ovenToday } from './oven-dates'
 import { resaleReceivedQuantity } from './purchased-inventory'
 import { validateFabric } from './fabric'
-import { emptyReceiptValue } from './receipt-document'
+import { emptyReceiptValue, receiptReviewValues } from './receipt-document'
+import { receiptTotals, receiptAllocations } from './receipt-totals'
 import { fabricReceipt, isFabric } from './fabric'
 import {
   baseUnit,
@@ -715,6 +716,15 @@ export function planFinance(
     action === 'receiptPost'
   ) {
     const old = owned(w, 'receipt_extractions', d.id)
+    if (
+      action === 'receiptPost' &&
+      old.status === 'posted' &&
+      old.arithmeticVersion === 2
+    )
+      return {
+        writes: [],
+        description: 'Receipt already posted; no effects repeated',
+      }
     if (old.status !== 'draft')
       throw new Error(
         'This receipt is closed. Use a correction rather than editing it.',
@@ -762,17 +772,34 @@ export function planFinance(
         {
           action: action === 'receiptCancel' ? 'cancelled' : 'edited',
           at: new Date().toISOString(),
-          previousReview: {
-            vendor: old.vendor,
-            date: old.date,
-            receivedDate: old.receivedDate,
-            subtotal: old.subtotal,
-            tax: old.tax,
-            total: old.total,
-            lines: structuredClone(old.lines || []),
-          },
+          previousReview: structuredClone(receiptReviewValues(old)),
         },
       ],
+    }
+    if (!Array.isArray(receipt.lines) || receipt.lines.length > 150)
+      throw new Error('Use no more than 150 receipt lines.')
+    // Versioned arithmetic is additive; historical receipt records retain their original semantics.
+    if (d.arithmeticVersion === 2 || old.arithmeticVersion === 2) {
+      for (const key of ['taxTreatment', 'receiptDiscount', 'printedTotal'])
+        receipt[key] = Object.hasOwn(d, key) ? d[key] : old[key]
+      receipt.arithmeticVersion = 2
+      const calculated = receiptTotals(receipt)
+      receipt.subtotal = calculated.subtotal
+      receipt.total = calculated.total
+      receipt.lines = receipt.lines.map(
+        (line: Partial<Item>, index: number) => ({
+          ...line,
+          amount: calculated.lineAmounts[index],
+        }),
+      )
+      if (action === 'receiptPost') {
+        if (calculated.errors.length)
+          throw new Error(calculated.errors.join(' '))
+        if (calculated.difference !== null && calculated.difference !== 0)
+          throw new Error(
+            'Calculated total differs from the printed total. Review missing lines, discounts, tax and fees. Only explained rounding within five cents is supported.',
+          )
+      }
     }
     if (!Array.isArray(receipt.lines) || receipt.lines.length > 150)
       throw new Error('Use no more than 150 receipt lines.')
@@ -851,15 +878,23 @@ export function planFinance(
         )
       if (!receipt.vendor || !receipt.lines.length)
         throw new Error('Enter a vendor and at least one receipt line.')
-      if (duplicateReceipts(w, receipt).some((x) => x.status === 'posted'))
+      if (
+        duplicateReceipts(w, receipt).some(
+          (x) =>
+            x.status === 'posted' &&
+            (receipt.arithmeticVersion !== 2 ||
+              (receipt.fileHash && x.fileHash === receipt.fileHash)),
+        )
+      )
         throw new Error(
-          'A matching receipt is already posted. Review it before creating another transaction.',
+          'This receipt file is already posted. Review the existing purchase instead.',
         )
       if (duplicateReceipts(w, receipt).length && !d.duplicateReviewed)
         throw new Error(
           'Review the possible duplicate and confirm before posting.',
         )
       if (
+        receipt.arithmeticVersion !== 2 &&
         money(
           receipt.subtotal +
             receipt.tax +
@@ -888,15 +923,20 @@ export function planFinance(
       let allocatedTax = 0,
         allocatedCharges = 0
       const lineSnapshots: Record<string, any>[] = []
+      const allocations =
+        receipt.arithmeticVersion === 2 ? receiptAllocations(receipt) : []
       for (const [index, l] of receipt.lines.entries()) {
+        if (!text(l.description))
+          throw new Error('Enter an item name for every receipt line.')
         const taxShare =
-          index === receipt.lines.length - 1
+          allocations[index]?.taxShare ??
+          (index === receipt.lines.length - 1
             ? roundMoney(receipt.tax - allocatedTax)
             : roundMoney(
                 receipt.subtotal
                   ? (receipt.tax * l.amount) / receipt.subtotal
                   : 0,
-              )
+              ))
         allocatedTax = roundMoney(allocatedTax + taxShare)
         const otherChargesShare =
           index === receipt.lines.length - 1
@@ -913,9 +953,9 @@ export function planFinance(
                   : 0,
               )
         allocatedCharges = roundMoney(allocatedCharges + otherChargesShare)
-        const amount = roundMoney(
-          Number(l.amount) + taxShare + otherChargesShare,
-        )
+        const amount =
+          allocations[index]?.postedAmount ??
+          roundMoney(Number(l.amount) + taxShare + otherChargesShare)
         if (!['inventory', 'expense', 'personal'].includes(l.decision))
           throw new Error('Choose what to do with every receipt line.')
         if (l.decision === 'inventory') {
@@ -924,6 +964,10 @@ export function planFinance(
             l.itemTable === 'products' || (l.createNew && l.usedAs === 'resale')
               ? 'products'
               : 'ingredients'
+          if (l.createNew && receipt.arithmeticVersion === 2)
+            throw new Error(
+              'Create and approve the inventory item before confirming this receipt.',
+            )
           if (l.createNew) {
             item = receiptNewInventory(l, newId(), w.vendors).item
           } else
@@ -948,7 +992,11 @@ export function planFinance(
             throw new Error(
               'Receive purchased ingredients, not compound preps.',
             )
-          if (Object.hasOwn(l, 'printedQuantity') && !l.stockQuantityConfirmed)
+          if (
+            (receipt.arithmeticVersion === 2 ||
+              Object.hasOwn(l, 'printedQuantity')) &&
+            !l.stockQuantityConfirmed
+          )
             throw new Error(
               'Confirm the actual received quantity and unit for each inventory line; printed package counts do not establish stock contents.',
             )
@@ -1037,8 +1085,15 @@ export function planFinance(
             normalizedQuantity: q,
             priorCost,
             newCost: item.cost,
-            taxShare,
-            otherChargesShare,
+            taxShare: receipt.taxTreatment === 'inclusive' ? 0 : taxShare,
+            otherChargesShare:
+              receipt.arithmeticVersion === 2
+                ? roundMoney(
+                    amount -
+                      Number(l.amount) -
+                      (receipt.taxTreatment === 'inclusive' ? 0 : taxShare),
+                  )
+                : otherChargesShare,
             postedAmount: amount,
           })
         } else if (l.decision === 'expense') {
@@ -1066,16 +1121,30 @@ export function planFinance(
           })
           lineSnapshots.push({
             ...l,
-            taxShare,
-            otherChargesShare,
+            taxShare: receipt.taxTreatment === 'inclusive' ? 0 : taxShare,
+            otherChargesShare:
+              receipt.arithmeticVersion === 2
+                ? roundMoney(
+                    amount -
+                      Number(l.amount) -
+                      (receipt.taxTreatment === 'inclusive' ? 0 : taxShare),
+                  )
+                : otherChargesShare,
             postedAmount: amount,
           })
         } else {
           lines.push(debit('Owner draws', amount))
           lineSnapshots.push({
             ...l,
-            taxShare,
-            otherChargesShare,
+            taxShare: receipt.taxTreatment === 'inclusive' ? 0 : taxShare,
+            otherChargesShare:
+              receipt.arithmeticVersion === 2
+                ? roundMoney(
+                    amount -
+                      Number(l.amount) -
+                      (receipt.taxTreatment === 'inclusive' ? 0 : taxShare),
+                  )
+                : otherChargesShare,
             postedAmount: amount,
           })
         }

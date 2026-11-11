@@ -2914,8 +2914,11 @@ export default async (req: Request, context: Context) => {
             'The draft changed. Reopen it before applying replacement values.',
           )
         const previousReview = receiptReviewValues(receipt)
-        if (action === 'receiptApplyExtraction')
+        if (action === 'receiptApplyExtraction') {
+          if (receipt.arithmeticVersion === 2)
+            receipt.printedTotal = receipt.pendingExtraction.total
           Object.assign(receipt, receipt.pendingExtraction)
+        }
         receipt.history.push({
           action:
             action === 'receiptApplyExtraction'

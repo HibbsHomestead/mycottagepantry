@@ -89,6 +89,7 @@ it('opens a receipt draft with line decisions and leaves posting to an explicit 
     expect(
       screen.getByRole('dialog', { name: 'Review receipt' }),
     ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', {name: /Flour.*Edit/}))
     expect(
       screen.getByRole('combobox', { name: 'What is this for?' }),
     ).toHaveValue('')

@@ -87,8 +87,13 @@ export async function readReceiptResponse(response: Response) {
   return { bytes, mime }
 }
 export const receiptFields = [
+  'arithmeticVersion',
+  'taxTreatment',
+  'receiptDiscount',
+  'printedTotal',
   'vendor',
   'date',
+  'receivedDate',
   'receiptNumber',
   'currency',
   'adjustment',
