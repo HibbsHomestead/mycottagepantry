@@ -2137,6 +2137,7 @@ export function WorkspaceApp() {
                       : go('Finances', section)
                   }
                   ready={ready}
+                  loadError={error}
                   role={role}
                   initialEntry={financeEntry}
                   onEntryOpened={() => setFinanceEntry('')}

@@ -131,6 +131,7 @@ export function FinanceWorkspace({
   onWorkspace,
   section,
   ready,
+  loadError,
   role,
   initialEntry,
   onEntryOpened,
@@ -140,6 +141,7 @@ export function FinanceWorkspace({
   workspace: Workspace
   onWorkspace: (w: Workspace) => void
   section: string
+  loadError?: string
   ready: boolean
   role: string
   initialEntry?: string
@@ -481,6 +483,7 @@ export function FinanceWorkspace({
         <FinanceDashboard
           workspace={w}
           ready={ready}
+          loadError={loadError}
           canWrite={canWrite}
           onReceipt={(record) => setReceipt(structuredClone(record))}
           onReconcile={(record) =>
