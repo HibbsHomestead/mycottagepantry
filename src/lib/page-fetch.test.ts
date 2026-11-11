@@ -89,18 +89,20 @@ it('normalizes the exact ASIN, backs off on 503 and extracts only the successful
     Array(2).fill('https://www.amazon.com/dp/B0G4WLFMWV'),
   )
 })
-it('stops at three transient attempts and retains each response and browser redirect', async () => {
+it('cleans the reported search URL on every retry without parsing or following 503 error documents', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   remote.replies = Array.from({ length: 3 }, () => ({
     status: 503,
-    body: '<script>window.location.replace("https://www.amazon.com/error/500")</script>',
+    body: '<script>window.location.replace("https://www.amazon.com/error/500")</script><input id="ASIN" value="B09V45JBKH"><span id="productTitle">Error document metadata</span>',
   }))
   const check = expect(
-    fetchProductDetails('https://www.amazon.com/dp/B0G4WLFMWV'),
+    fetchProductDetails(
+      'https://www.amazon.com/dp/B09V45JBKH?refinements=example-filter&srs=example-search',
+    ),
   ).rejects.toMatchObject({
     diagnostics: {
       stage: 'fetch',
-      normalizedUrl: 'https://www.amazon.com/dp/B0G4WLFMWV',
+      normalizedUrl: 'https://www.amazon.com/dp/B09V45JBKH',
       hops: [1, 2, 3].map((attempt) =>
         expect.objectContaining({
           attempt,
@@ -116,6 +118,9 @@ it('stops at three transient attempts and retains each response and browser redi
   await vi.advanceTimersByTimeAsync(1500)
   await check
   expect(remote.requests).toHaveLength(3)
+  expect(remote.requests.map((request) => request.url)).toEqual(
+    Array(3).fill('https://www.amazon.com/dp/B09V45JBKH'),
+  )
 })
 it('honors a short Retry-After before retrying', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
