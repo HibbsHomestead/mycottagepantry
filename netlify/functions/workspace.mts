@@ -1,3 +1,4 @@
+import { rapidCountCommand } from '../../src/lib/rapid-count'
 import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
 import {
   assertSavedLabelOutput,
@@ -611,8 +612,14 @@ export default async (req: Request, context: Context) => {
       item: Item,
       stockMutation = false,
       dateApproval = false,
+      countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
+      if (table === 'ingredients' && !countPackageWrite) {
+        const previous = state.ingredients.find(i => i.id === item.id)
+        if (previous?.countPackages) item.countPackages = previous.countPackages
+        else delete item.countPackages
+      }
       const { assertPlanRecordWrite } =
         await import('../lib/plan-feature-gates')
       assertPlanRecordWrite(
@@ -937,6 +944,7 @@ export default async (req: Request, context: Context) => {
         [
           'receivedDateCorrection',
           'shelfMedia',
+          'rapidInventoryCount',
           'inventoryCountStart',
           'inventoryCountLine',
           'ingredientBarcode',
@@ -946,7 +954,7 @@ export default async (req: Request, context: Context) => {
           'templateAssignments',
           'productLabelAssignment',
           'labelPrint',
-        ].includes(body?.action)
+        ].includes(body?.action) && !(body?.action === 'rapidInventoryCount' && body?.data?.op === 'apply')
       if (body?.action === 'pantryNavigation') {
         if (
           body.table !== 'settings' ||
@@ -2229,6 +2237,7 @@ export default async (req: Request, context: Context) => {
       if (
         table === 'inventory_counts' &&
         ![
+          'rapidInventoryCount',
           'inventoryCountStart',
           'inventoryCountLine',
           'inventoryCountComplete',
@@ -2249,6 +2258,7 @@ export default async (req: Request, context: Context) => {
           'pantrySort',
           'pantryView',
           'shelfMedia',
+          'rapidInventoryCount',
           'inventoryCountStart',
           'inventoryCountLine',
           'inventoryCountComplete',
@@ -2405,6 +2415,15 @@ export default async (req: Request, context: Context) => {
           [deviceKey]: nextProfiles,
         }
         await save('settings', settings)
+      } else if (action === 'rapidInventoryCount') {
+        if (table !== 'inventory_counts') throw new Error('Use the inventory count workflow.')
+        const effects = rapidCountCommand(state, data, {
+          actor: user?.id || 'demo-owner', role, now: new Date().toISOString(),
+          businessName: state.settings[0]?.businessName || state.settings[0]?.name || business.business_name,
+          revision: item => inventoryRevision(item, state.ledger),
+        })
+        for (const effect of effects) await save(effect.table, effect.item, false, false, true)
+        if (effects.length) await audit('Inventory count: '+data.op, data.id+' · reviewed count evidence; no purchase receipt created')
       } else if (action === 'inventoryCountStart') {
         if (!/^[a-zA-Z0-9_-]{1,100}$/.test(data.id || ''))
           throw new Error('A unique count ID is required.')
@@ -2428,6 +2447,7 @@ export default async (req: Request, context: Context) => {
       ) {
         const session = state.inventory_counts.find((c) => c.id === data.id)
         if (!session) throw new Error('Count session unavailable.')
+        if (session.version === 2) throw new Error('Use the rapid inventory count review and approval workflow.')
         if (session.status === 'completed') {
           if (action !== 'inventoryCountComplete')
             throw new Error('Completed counts cannot be edited.')

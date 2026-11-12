@@ -17,6 +17,7 @@ export const sectionTabs: Record<string, string[]> = {
     'Supplies',
     'Finished Goods',
     'Movements',
+    'Counts',
   ],
   Production: [
     'Overview',
@@ -136,7 +137,9 @@ export function destination(name: string, section?: string): Destination {
   if (main === 'Inventory') {
     page = 'Pantry'
     sub =
-      tab === 'Movements'
+      tab === 'Counts'
+        ? 'Counts'
+        : tab === 'Movements'
         ? 'Inventory ledger'
         : tab === 'Finished Goods'
           ? 'Finished Goods'

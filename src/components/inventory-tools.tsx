@@ -41,7 +41,7 @@ export function InventoryTools({
   refresh: () => Promise<void>
 }) {
   const items = workspace.ingredients,
-    sessions = workspace.inventory_counts || []
+    sessions = (workspace.inventory_counts || []).filter(s => s.version !== 2)
   const [scanner, setScanner] = useState(false),
     [mode, setMode] = useState<'find' | 'receive' | 'count'>('find'),
     [code, setCode] = useState(''),
@@ -148,6 +148,7 @@ export function InventoryTools({
             <button className="btn secondary" onClick={() => scan('receive')}>
               Scan to receive
             </button>
+            <a className="btn secondary" href="#Inventory/Counts">Rapid barcode counts</a>
             <button
               className="btn secondary"
               onClick={() => {

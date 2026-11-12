@@ -38,6 +38,7 @@ export function WorkspaceDashboard({
     ).length
   return (
     <div className="dashboard-preview">
+      <a className="btn secondary" href="#Inventory/Counts">Set up opening inventory / resume physical count</a>
       <section
         className="dashboard-welcome"
         aria-label="Welcome and quick actions"

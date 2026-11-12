@@ -1,3 +1,4 @@
+import { InventoryCounts } from './inventory-counts'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
 import { OpeningOven } from './opening-oven'
@@ -1598,7 +1599,9 @@ export function WorkspaceApp() {
           )}
           {page === 'Pantry' && (
             <>
-              {sub === 'Finished Goods' ? (
+              {sub === 'Counts' ? (
+                <InventoryCounts workspace={state} onWorkspace={setState} role={role} ready={ready} open={open} refresh={load} />
+              ) : sub === 'Finished Goods' ? (
                 <FinishedInventory
                   workspace={state}
                   open={open}
@@ -2137,6 +2140,7 @@ export function WorkspaceApp() {
                       : go('Finances', section)
                   }
                   ready={ready}
+                  loadError={error}
                   role={role}
                   initialEntry={financeEntry}
                   onEntryOpened={() => setFinanceEntry('')}

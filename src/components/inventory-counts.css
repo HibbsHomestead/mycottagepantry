@@ -1,0 +1,325 @@
+.inventory-counts {
+  --count-purple: #65418c;
+  --count-teal: #187f87;
+  color: var(--text, #293040);
+  max-width: 1200px;
+  margin: auto;
+  min-width: 0;
+}
+.count-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.count-heading h2 {
+  margin: 6px 0;
+  font-size: 28px;
+}
+.count-heading h3 {
+  margin: 0;
+}
+.count-heading p,
+.count-context {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.count-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.inventory-counts .btn {
+  min-height: 42px;
+  gap: 6px;
+}
+.inventory-counts .btn:not(.secondary) {
+  background: var(--count-purple);
+  color: white;
+}
+.count-panel {
+  background: var(--surface, #fff);
+  border: 1px solid #ded8e8;
+  border-radius: 14px;
+  padding: 20px;
+  margin: 16px 0;
+  min-width: 0;
+}
+.count-panel h3 {
+  font-size: 18px;
+}
+.count-panel p {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.count-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.inventory-counts .field {
+  min-width: 0;
+}
+.inventory-counts input,
+.inventory-counts select,
+.inventory-counts textarea {
+  max-width: 100%;
+  min-width: 0;
+}
+.count-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e7e2ef;
+  font-size: 14px;
+}
+.count-scope-row span {
+  flex: 1;
+}
+.count-scope-row small {
+  color: var(--muted);
+}
+.count-running {
+  margin-top: 14px;
+  min-width: 0;
+}
+.count-feedback {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: #f0eafa;
+  color: #543278;
+  border-radius: 9px;
+  padding: 13px;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.count-feedback svg {
+  flex-shrink: 0;
+}
+.count-compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-bottom: 1px solid #e8e4ee;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.count-compact-row strong {
+  font-variant-numeric: tabular-nums;
+}
+.count-save-state {
+  color: var(--count-teal);
+  font-size: 12px;
+}
+.count-manual-barcode {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 15px;
+}
+.count-manual-barcode label {
+  flex: 1;
+}
+.count-assignment {
+  border-left: 3px solid #6f559d;
+  padding: 0 0 0 14px;
+  margin-top: 16px;
+}
+.count-history-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid #e7e2ef;
+  background: transparent;
+  color: inherit;
+}
+.count-history-row small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.count-review-head,
+.count-review-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) repeat(
+      3,
+      minmax(70px, 1fr)
+    ) minmax(100px, 1.4fr);
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+.count-review-head {
+  padding: 10px 0;
+  color: var(--muted);
+  border-bottom: 1px solid #ded8e8;
+}
+.count-review-item {
+  border-bottom: 1px solid #e8e4ee;
+  padding: 13px 0;
+}
+.count-review-item details {
+  font-size: 12px;
+  margin-top: 8px;
+  color: var(--muted);
+}
+.count-review-item summary {
+  cursor: pointer;
+}
+.count-review-item p {
+  margin: 7px 0;
+}
+.count-review-row strong {
+  font-weight: 600;
+}
+.count-review-row span,
+.count-review-row strong {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.count-confirm {
+  margin-top: 18px;
+  background: #f4f0fb;
+  border-radius: 10px;
+  padding: 16px;
+}
+.count-confirm .check-label {
+  display: flex;
+  align-items: start;
+  gap: 9px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.count-confirm input[type='checkbox'] {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.count-report .field {
+  max-width: 250px;
+}
+.barcode-scanner-dialog .count-feedback {
+  font-size: 15px;
+}
+.barcode-scanner-dialog .count-running {
+  width: 100%;
+}
+.barcode-scanner-dialog:has(.count-running) {
+  max-height: 94dvh;
+  overflow-y: auto;
+}
+.inventory-counts button:focus-visible {
+  outline: 2px solid #65418c;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .count-panel {
+    padding: 14px;
+    margin: 12px 0;
+  }
+  .count-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .count-review-head {
+    display: none;
+  }
+  .count-review-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .count-review-row > strong:first-child,
+  .count-review-row > span:last-child {
+    grid-column: 1/-1;
+  }
+  .count-review-row > [data-label]:before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10px;
+    color: var(--muted);
+    font-weight: 400;
+    margin-bottom: 4px;
+  }
+  .count-heading h2 {
+    font-size: 25px;
+  }
+  .count-heading > .count-actions {
+    width: 100%;
+  }
+  .count-heading > .count-actions .btn {
+    flex: 1;
+  }
+  .count-feedback {
+    font-size: 15px;
+  }
+  .count-manual-barcode button {
+    flex: 1;
+  }
+  .count-manual-barcode label {
+    flex-basis: 100%;
+  }
+  .count-history-row {
+    flex-wrap: wrap;
+  }
+  .count-assignment {
+    padding-left: 10px;
+  }
+  .count-review-item details {
+    overflow-wrap: anywhere;
+  }
+  .count-running > .count-actions .btn {
+    flex: 1;
+    font-size: 12px;
+  }
+}
+@media print {
+  body:has(.inventory-counts) {
+    visibility: hidden;
+  }
+  body:has(.inventory-counts) .count-report,
+  body:has(.inventory-counts) .count-report * {
+    visibility: visible;
+  }
+  .count-report {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: 0;
+    margin: 0;
+    padding: 12px;
+    background: white;
+    color: #253040;
+  }
+  .count-report .count-actions,
+  .count-report .count-no-print {
+    display: none !important;
+  }
+  .count-report details > * {
+    display: block;
+  }
+  .count-report summary {
+    display: none;
+  }
+  .count-review-item {
+    break-inside: avoid;
+  }
+  .count-report .count-review-head,
+  .count-report .count-review-row {
+    display: grid;
+    grid-template-columns: 2fr repeat(3, 1fr) 1.4fr;
+  }
+}

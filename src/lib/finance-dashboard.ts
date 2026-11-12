@@ -1,5 +1,6 @@
 import type { Item, Workspace } from './domain'
 import { receiptCents } from './receipt-totals'
+import { ovenToday } from './oven-dates'
 
 export type FinanceRecord = Item & {
   source: string
@@ -10,8 +11,22 @@ const posted = (r: Item) =>
   !['draft', 'pending', 'cancelled', 'failed'].includes(r.status)
 const numeric = (v: unknown) =>
   typeof v === 'number' && Number.isFinite(v) ? receiptCents(v) : null
-export function financeDashboard(w: Workspace, start: string, end: string) {
-  const inRange = (r: Item) => r.date >= start && r.date <= end
+export function financeDashboard(
+  w: Workspace,
+  start: string,
+  end: string,
+) {
+  const calendarDate = (value: unknown) => {
+    if (typeof value !== 'string') return ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    return Number.isFinite(Date.parse(value))
+      ? ovenToday(w.settings[0], new Date(value))
+      : ''
+  }
+  const inRange = (r: Item) => {
+    const date = calendarDate(r.date)
+    return !!date && date >= start && date <= end
+  }
   const rows: FinanceRecord[] = []
   const add = (
     r: Item,
@@ -22,14 +37,15 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
   ) =>
     rows.push({
       ...r,
+      date: calendarDate(r.date),
       id: source + ':' + r.id + ':' + metric,
-      sourceId: r.id,
+      sourceId: r.sourceId || r.id,
       source,
       metric,
       category: category || r.category,
       amount: numeric(value) == null ? null : numeric(value)! / 100,
     })
-  // Canonical sale/expense rows only. Finance transactions, payouts, bank transfers and receipt headers are never summed again.
+  // Prefer canonical sale/expense rows; linked Money Activity headers never count twice.
   for (const s of (w.sales || []).filter(posted).filter(inRange)) {
     add(s, 'sales', 'income', s.amount, 'Product sales')
     add(s, 'sales', 'tax', s.tax, 'Sales tax collected')
@@ -62,13 +78,44 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
     .filter(inRange)
     .filter((e) => !e.inventory))
     add(e, 'expenses', 'expenses', e.amount)
+  // Older manual expense/bill headers may predate the materialized expense rows.
+  // Only these established operating-expense kinds can supply missing rows.
+  for (const t of (w.finance_transactions || [])
+    .filter(posted)
+    .filter(inRange)) {
+    if (
+      !['expense', 'bill'].includes(t.kind) ||
+      t.inventory ||
+      (w.expenses || []).some(
+        (e) =>
+          e.transactionId === t.id ||
+          e.id === t.id ||
+          (t.receiptId && e.receiptId === t.receiptId),
+      )
+    )
+      continue
+    const splits =
+      Array.isArray(t.splits) && t.splits.length
+        ? t.splits
+        : [{ amount: t.amount, category: t.category }]
+    splits.forEach((split: Item, index: number) =>
+      add(
+        { ...t, id: t.id + ':' + index, sourceId: t.id },
+        'finance_transactions',
+        'expenses',
+        split.amount,
+        split.category,
+      ),
+    )
+  }
   const metric = (name: string) => {
     const records = rows.filter((r) => r.metric === name)
     return {
       records,
       value: records.some((r) => r.amount == null)
         ? null
-        : records.reduce((s, r) => s + receiptCents(r.amount)!, 0) / 100,
+        : records.reduce((s, r) => s + receiptCents(r.amount)!, 0) /
+          100,
     }
   }
   const income = metric('income'),
@@ -87,17 +134,24 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
         name,
         value: records.some((r) => r.amount == null)
           ? null
-          : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) / 100,
+          : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) /
+            100,
       }
     })
     .sort((a, b) => Math.abs(b.value || 0) - Math.abs(a.value || 0))
-  const months = [...new Set(rows.map((r) => r.date.slice(0, 7)))].sort()
+  const daily = (Date.parse(end) - Date.parse(start)) / 86400000 <= 62
+  const bucket = (date: string) => date.slice(0, daily ? 10 : 7)
+  const months = [
+    ...new Set(
+      rows.filter((r) => r.metric !== 'tax').map((r) => bucket(r.date)),
+    ),
+  ].sort()
   const trend = months.map((month) => ({
     month,
     ...Object.fromEntries(
       ['income', 'expenses'].map((key) => {
         const records = rows.filter(
-          (r) => r.date.startsWith(month) && r.metric === key,
+          (r) => bucket(r.date) === month && r.metric === key,
         )
         return [
           key,
@@ -108,7 +162,11 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
         ]
       }),
     ),
-  })) as { month: string; income: number | null; expenses: number | null }[]
+  })) as {
+    month: string
+    income: number | null
+    expenses: number | null
+  }[]
   const drafts = (w.receipt_extractions || []).filter(
     (r) => r.status === 'draft' && (inRange(r) || !r.date),
   )
@@ -122,6 +180,25 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
   )
   return {
     rows,
+    daily,
+    activity: transactions.map((t): Item & { exclusion: string } => ({
+      ...t,
+      exclusion: !posted(t)
+        ? 'Draft or pending: excluded from posted figures'
+        : ['expense', 'bill', 'receipt'].includes(t.kind)
+          ? 'Expense details or inventory assets are recorded separately; this header is not added again'
+          : t.kind === 'contribution'
+            ? 'Owner contribution: equity, not sales income'
+            : t.kind === 'draw'
+              ? 'Owner draw: equity withdrawal, not operating expense'
+              : t.kind === 'transfer'
+                ? 'Transfer between business accounts, not income or expense'
+                : t.kind === 'vendorPayment'
+                  ? 'Bill payment: expense recorded with the bill'
+                  : t.kind === 'squarePayout'
+                    ? 'Processor payout: sales recorded separately'
+                    : 'Activity record: see its underlying accounting details',
+    })),
     income,
     expenses,
     tax,
@@ -138,7 +215,8 @@ export function financeDashboard(w: Workspace, start: string, end: string) {
     ),
     difference:
       income.value != null && expenses.value != null
-        ? (receiptCents(income.value)! - receiptCents(expenses.value)!) /
+        ? (receiptCents(income.value)! -
+            receiptCents(expenses.value)!) /
           100
         : null,
   }
