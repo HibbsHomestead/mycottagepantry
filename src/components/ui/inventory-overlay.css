@@ -1,0 +1,137 @@
+/* Opt-in inventory overlays. No Tailwind centering/translate utilities: the
+   visual viewport owns all four bounds, independently of the workspace shell. */
+.inventory-tool-dialog[data-slot='dialog-content'][data-presentation='inventory'],
+.inventory-tool-dialog[data-slot='dialog-content'][data-presentation='scanner'] {
+  --inventory-gap: 12px;
+  --inventory-left: max(var(--inventory-gap), env(safe-area-inset-left, 0px));
+  --inventory-right: max(var(--inventory-gap), env(safe-area-inset-right, 0px));
+  --inventory-top: max(var(--inventory-gap), env(safe-area-inset-top, 0px));
+  --inventory-bottom: max(
+    var(--inventory-gap),
+    env(safe-area-inset-bottom, 0px)
+  );
+  box-sizing: border-box;
+  position: fixed;
+  left: calc(var(--inventory-view-left, 0px) + var(--inventory-left));
+  right: auto;
+  top: calc(var(--inventory-view-top, 0px) + var(--inventory-top));
+  bottom: auto;
+  width: calc(
+    var(--inventory-view-width, 100vw) - var(--inventory-left) -
+      var(--inventory-right)
+  );
+  max-width: 900px;
+  max-height: calc(
+    var(--inventory-view-height, 100dvh) - var(--inventory-top) -
+      var(--inventory-bottom)
+  );
+  min-width: 0;
+  transform: none;
+  translate: none;
+  animation: none;
+  transition: none;
+  display: block;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+  scroll-padding-block: 24px;
+  border-radius: 16px;
+  padding: 24px;
+}
+@media (min-width: 925px) {
+  .inventory-tool-dialog[data-slot='dialog-content'][data-presentation='inventory'],
+  .inventory-tool-dialog[data-slot='dialog-content'][data-presentation='scanner'] {
+    left: calc(
+      var(--inventory-view-left, 0px) +
+        max(
+          var(--inventory-left),
+          (var(--inventory-view-width, 100vw) - 900px) / 2
+        )
+    );
+  }
+}
+.inventory-tool-dialog[data-slot='dialog-content'][data-presentation='scanner'] {
+  display: flex;
+  flex-direction: column;
+  height: calc(
+    var(--inventory-view-height, 100dvh) - var(--inventory-top) -
+      var(--inventory-bottom)
+  );
+  padding: 0;
+  /* This shell has no overflowing content: scanner-body owns scrolling. */
+  overflow: visible;
+}
+.scanner-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.scanner-header [data-slot='dialog-title'] {
+  margin: 0;
+  padding: 0;
+}
+.scanner-body {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.scanner-body > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+.scanner-body form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.scanner-body .barcode-video {
+  height: clamp(80px, 24dvh, 240px);
+}
+.scanner-body .count-running {
+  margin-top: 0;
+}
+.scanner-body .count-running p {
+  font-size: 13px;
+}
+.scanner-body input {
+  font-size: 16px;
+}
+@media (max-width: 700px), (max-width: 1024px) and (max-height: 500px) {
+  .inventory-tool-dialog[data-slot='dialog-content'][data-presentation='scanner'] {
+    --inventory-gap: 0px;
+    left: var(--inventory-view-left, 0px);
+    top: var(--inventory-view-top, 0px);
+    width: var(--inventory-view-width, 100vw);
+    max-width: none;
+    height: var(--inventory-view-height, 100dvh);
+    max-height: var(--inventory-view-height, 100dvh);
+    border-radius: 0;
+    border: 0;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+}
+
+.inventory-tool-dialog[data-presentation='inventory']
+  > [data-slot='dialog-close'] {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  top: 12px;
+  right: 12px;
+}
+.inventory-tool-dialog[data-presentation='inventory']
+  [data-slot='dialog-title'] {
+  padding-right: 44px;
+}

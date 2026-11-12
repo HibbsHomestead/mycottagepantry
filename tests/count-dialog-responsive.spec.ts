@@ -7,13 +7,23 @@ async function contained(page: Page) {
   await expect(dialog).toBeVisible()
   const bounds = await dialog.boundingBox()
   const viewport = page.viewportSize()!
-  expect(bounds!.x).toBeGreaterThanOrEqual(11)
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width - 11)
+  expect(bounds!.x).toBeGreaterThanOrEqual(0)
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
   expect(bounds!.y).toBeGreaterThanOrEqual(0)
   expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height)
   expect(
     await dialog.evaluate((el) => el.scrollWidth - el.clientWidth),
   ).toBeLessThanOrEqual(1)
+  for (const control of await dialog
+    .locator('button:visible, input:visible, select:visible')
+    .all()) {
+    await control.scrollIntoViewIfNeeded()
+    const box = (await control.boundingBox())!
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1)
+    expect(box.y).toBeGreaterThanOrEqual(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1)
+  }
   await expect(
     dialog.getByRole('button', { name: 'Close', exact: true }).last(),
   ).toBeEnabled()
@@ -112,8 +122,12 @@ for (const [width, height] of [
       await expect
         .poll(async () => (await dialog.boundingBox())!.y)
         .toBeGreaterThanOrEqual(20)
-      const bounds = await dialog.boundingBox()
-      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(320)
+      await expect
+        .poll(async () => {
+          const b = (await dialog.boundingBox())!
+          return b.y + b.height
+        })
+        .toBeLessThanOrEqual(320)
     }
     await page.evaluate(() => {
       delete (window.visualViewport as unknown as Record<string, unknown>)

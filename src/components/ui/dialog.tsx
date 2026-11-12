@@ -3,6 +3,8 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
 import './ingredient-modal.css'
+import './inventory-overlay.css'
+import '../mobile-usability.css'
 import { XIcon } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 
@@ -58,10 +60,33 @@ function DialogContent({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
-  presentation?: 'modal' | 'detail' | 'page'
+  presentation?: 'modal' | 'detail' | 'page' | 'inventory' | 'scanner'
   ingredient?: boolean
   overlayClassName?: string
 }) {
+  const bounded = presentation !== 'page'
+  const returnFocus = React.useRef<HTMLElement | null>(null)
+  const [viewport, setViewport] = React.useState<React.CSSProperties>({})
+  React.useEffect(() => {
+    if (!bounded) return
+    const view = window.visualViewport
+    const update = () =>
+      setViewport({
+        '--inventory-view-top': `${view?.offsetTop ?? 0}px`,
+        '--inventory-view-left': `${view?.offsetLeft ?? 0}px`,
+        '--inventory-view-width': `${view?.width ?? window.innerWidth}px`,
+        '--inventory-view-height': `${view?.height ?? window.innerHeight}px`,
+      } as React.CSSProperties)
+    update()
+    view?.addEventListener('resize', update)
+    view?.addEventListener('scroll', update)
+    window.addEventListener('resize', update)
+    return () => {
+      view?.removeEventListener('resize', update)
+      view?.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [bounded])
   return (
     <DialogPortal data-slot="dialog-portal">
       {/* Page editors use document scrolling. Overlay would lock it via RemoveScroll. */}
@@ -72,6 +97,7 @@ function DialogContent({
         key="content"
         data-slot="dialog-content"
         data-presentation={presentation}
+        data-mobile-overlay={bounded ? 'true' : undefined}
         className={cn(
           presentation !== 'modal'
             ? 'fixed z-50 flex flex-col border bg-card shadow-lg outline-none'
@@ -80,6 +106,37 @@ function DialogContent({
           className,
         )}
         {...props}
+        style={bounded ? { ...viewport, ...props.style } : props.style}
+        onOpenAutoFocus={(event) => {
+          if (bounded)
+            returnFocus.current = document.activeElement as HTMLElement
+          props.onOpenAutoFocus?.(event)
+          // On touch screens, opening a dialog must not summon the keyboard.
+          if (
+            bounded &&
+            !event.defaultPrevented &&
+            window.matchMedia?.('(max-width: 1024px), (pointer: coarse)')
+              ?.matches
+          ) {
+            event.preventDefault()
+            const content = event.currentTarget as HTMLElement
+            const action = content.querySelector<HTMLElement>(
+              'button:not([disabled]), [href]',
+            )
+            ;(action || content).focus({ preventScroll: true })
+          }
+        }}
+        onCloseAutoFocus={(event) => {
+          props.onCloseAutoFocus?.(event)
+          if (
+            bounded &&
+            !event.defaultPrevented &&
+            returnFocus.current?.isConnected
+          ) {
+            event.preventDefault()
+            returnFocus.current.focus({ preventScroll: true })
+          }
+        }}
       >
         {children}
         {showCloseButton && (

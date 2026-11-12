@@ -94,7 +94,7 @@ for (const scenario of [
       }
       return route.fulfill({
         response: await route.fetch({
-          url: 'http://localhost:8889' + path + new URL(request.url()).search,
+          url: 'http://localhost:3000' + path + new URL(request.url()).search,
         }),
       })
     })
@@ -142,8 +142,8 @@ for (const scenario of [
     await expect.poll(() => workspaceReads).toBeGreaterThan(1)
     await page.getByRole('button', { name: 'Profile menu' }).click()
     await page.getByRole('menuitem', { name: 'Account & sign in' }).click()
-    await page.getByRole('button', { name: 'Sign out of your account' }).click()
-    await expect(page).toHaveURL(origin + '/login')
+    await page.getByRole('button', { name: 'Log out', exact: true }).click()
+    await expect(page).toHaveURL(origin + '/login?signedOut=1')
     // The same stale browser reference is still present; no browser-data reset.
     if (scenario.stale)
       expect(

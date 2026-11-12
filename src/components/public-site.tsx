@@ -1,3 +1,4 @@
+import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react'
 import { getSessionStatus } from '@/lib/session.functions'
@@ -7,6 +8,7 @@ import { PricingComparison } from './pricing-comparison'
 import './public-site.css'
 
 export function PublicSite({ children }: { children: ReactNode }) {
+  useWorkspaceViewport()
   const policies = useRegistrationPolicy()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)

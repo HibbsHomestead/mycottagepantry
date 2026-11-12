@@ -1,0 +1,114 @@
+diff --git a/dist/main.js b/dist/main.js
+--- a/dist/main.js
++++ b/dist/main.js
+@@ -605,6 +605,22 @@
+   const client = getClient();
+   const currentUser = client.currentUser();
+   if (currentUser) {
++    // Restore provider-persisted sessions after session cookies disappear.
++    // A forced provider refresh validates revocation before recreating cookies.
++    if (!getCookie(NF_JWT_COOKIE)) {
++      try {
++        const jwt = await currentUser.jwt(true);
++        setBrowserAuthCookies(jwt, currentUser.tokenDetails()?.refresh_token);
++      } catch (error) {
++        if ([400, 401, 403].includes(error?.status)) {
++          currentUser.clearSession();
++          deleteBrowserAuthCookies();
++          return null;
++        }
++        // Offline is not logout. Preserve the SDK's existing storage.
++        throw AuthError.from(error);
++      }
++    }
+     startTokenRefresh();
+     return toUser(currentUser);
+   }
+@@ -626,9 +642,12 @@
+       },
+       persistSession
+     );
+-  } catch {
+-    deleteBrowserAuthCookies();
+-    return null;
++  } catch (error) {
++    if ([400, 401, 403].includes(error?.status)) {
++      deleteBrowserAuthCookies();
++      return null;
++    }
++    throw AuthError.from(error);
+   }
+   const user = toUser(gotrueUser);
+   startTokenRefresh();
+@@ -728,13 +747,7 @@
+     const currentUser = client?.currentUser() ?? null;
+     if (currentUser) {
+       const jwt2 = getCookie(NF_JWT_COOKIE);
+-      if (!jwt2) {
+-        try {
+-          currentUser.clearSession();
+-        } catch {
+-        }
+-        return null;
+-      }
++      if (!jwt2) return await hydrateSession();
+       startTokenRefresh();
+       return toUser(currentUser);
+     }
+diff --git a/dist/main.cjs b/dist/main.cjs
+--- a/dist/main.cjs
++++ b/dist/main.cjs
+@@ -656,6 +656,22 @@
+   const client = getClient();
+   const currentUser = client.currentUser();
+   if (currentUser) {
++    // Restore provider-persisted sessions after session cookies disappear.
++    // A forced provider refresh validates revocation before recreating cookies.
++    if (!getCookie(NF_JWT_COOKIE)) {
++      try {
++        const jwt = await currentUser.jwt(true);
++        setBrowserAuthCookies(jwt, currentUser.tokenDetails()?.refresh_token);
++      } catch (error) {
++        if ([400, 401, 403].includes(error?.status)) {
++          currentUser.clearSession();
++          deleteBrowserAuthCookies();
++          return null;
++        }
++        // Offline is not logout. Preserve the SDK's existing storage.
++        throw AuthError.from(error);
++      }
++    }
+     startTokenRefresh();
+     return toUser(currentUser);
+   }
+@@ -677,9 +693,12 @@
+       },
+       persistSession
+     );
+-  } catch {
+-    deleteBrowserAuthCookies();
+-    return null;
++  } catch (error) {
++    if ([400, 401, 403].includes(error?.status)) {
++      deleteBrowserAuthCookies();
++      return null;
++    }
++    throw AuthError.from(error);
+   }
+   const user = toUser(gotrueUser);
+   startTokenRefresh();
+@@ -779,13 +798,7 @@
+     const currentUser = client?.currentUser() ?? null;
+     if (currentUser) {
+       const jwt2 = getCookie(NF_JWT_COOKIE);
+-      if (!jwt2) {
+-        try {
+-          currentUser.clearSession();
+-        } catch {
+-        }
+-        return null;
+-      }
++      if (!jwt2) return await hydrateSession();
+       startTokenRefresh();
+       return toUser(currentUser);
+     }

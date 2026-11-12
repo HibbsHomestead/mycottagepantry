@@ -1,3 +1,5 @@
+import { restoreIdentitySession } from './identity-session'
+import { useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 import { resumeSelectedPlan } from './signup-plan-client'
 import { signupPlan } from './signup-plan'
@@ -20,9 +22,11 @@ export function accessTraceId() {
 export async function readAccountAccess(
   traceId: string,
 ): Promise<AccountAccess> {
+  await restoreIdentitySession()
   const response = await fetch('/api/account-access', {
     credentials: 'same-origin',
     cache: 'no-store',
+    signal: AbortSignal.timeout(15000),
     headers: { 'X-Access-Trace': traceId },
   })
   if (
@@ -58,6 +62,7 @@ export function navigateAccount(
   traceId: string,
   returnTo?: string | null,
   planId?: PlanId,
+  replace = accountNavigation.replace,
 ) {
   const allowed = [
     '/oven',
@@ -84,9 +89,10 @@ export function navigateAccount(
   if (planId) url.searchParams.set('plan', signupPlan(planId))
   if (url.pathname !== '/oven' && returnTo)
     url.searchParams.set('returnTo', safeWorkspaceReturn(returnTo))
-  accountNavigation.replace(url.pathname + url.search + url.hash)
+  replace(url.pathname + url.search + url.hash)
 }
 export function useAccountAccess(page: AccountPage) {
+  const router = useRouter({ warn: false })
   const [access, setAccess] = useState<AccountAccess | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -96,16 +102,24 @@ export function useAccountAccess(page: AccountPage) {
   const retry = useCallback(() => setAttempt((old) => old + 1), [])
   useEffect(() => {
     let active = true
-    // PublicSite owns callback handoff; it must finish before any account decision.
-    if (hasIdentityCallback(location.hash)) return
+    // Callback fragments must reach the provider handler before any access decision,
+    // including routes whose loading view intentionally omits the public header.
+    if (hasIdentityCallback(location.hash)) {
+      accountNavigation.replace('/login' + location.search + location.hash)
+      return
+    }
     const reference = accessTraceId()
-    setTraceId(reference)
-    setLoading(true)
-    setError(false)
-    setErrorMessage('')
-    readAccountAccess(reference)
+    Promise.resolve()
+      .then(() => {
+        if (!active) return null
+        setTraceId(reference)
+        setLoading(true)
+        setError(false)
+        setErrorMessage('')
+        return readAccountAccess(reference)
+      })
       .then(async (value) => {
-        if (!active) return
+        if (!active || !value) return
         let selection: Awaited<ReturnType<typeof resumeSelectedPlan>>
         try {
           selection =
@@ -130,7 +144,17 @@ export function useAccountAccess(page: AccountPage) {
             : null)
         const destination = accessDestination(value, page, returnTo)
         if (destination) {
-          navigateAccount(destination, reference, returnTo, selection?.planId)
+          navigateAccount(
+            destination,
+            reference,
+            returnTo,
+            selection?.planId,
+            router
+              ? (href) => {
+                  void router.navigate({ href, replace: true })
+                }
+              : undefined,
+          )
           return
         }
         setLoading(false)
@@ -144,6 +168,6 @@ export function useAccountAccess(page: AccountPage) {
     return () => {
       active = false
     }
-  }, [page, attempt])
+  }, [page, attempt, router])
   return { access, loading, error, errorMessage, traceId, retry }
 }

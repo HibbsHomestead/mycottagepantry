@@ -5,6 +5,8 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 const sdk = vi.hoisted(() => ({
   handleAuthCallback: vi.fn(),
   getUser: vi.fn(),
+  hydrateSession: vi.fn().mockResolvedValue(null),
+  refreshSession: vi.fn().mockResolvedValue(null),
   login: vi.fn(),
   logout: vi.fn(),
   updateUser: vi.fn(),
@@ -57,9 +59,8 @@ it('waits for slow initialization without showing onboarding or permitting a com
     }),
   )
   render(<LoginPage />)
-  expect(
-    screen.getByRole('button', { name: 'Checking session…' }),
-  ).toBeDisabled()
+  expect(screen.getByRole('heading', { name: 'Opening your oven…' })).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument()
   expect(transport).not.toHaveBeenCalled()
   complete(null)
   transport.mockResolvedValue(Response.json(accessFixture('signed_out')))
@@ -201,10 +202,10 @@ it.each(['', '?plan=retired-plan', '?plan=cottage-kitchen'])(
       screen.queryByText('Choose your intended plan again'),
     ).not.toBeInTheDocument()
     expect(
-      screen.getByRole('link', {
+      screen.queryByRole('link', {
         name: 'Open your existing business with its current access',
       }),
-    ).toHaveClass('public-button')
+    ).not.toBeInTheDocument()
   },
 )
 it('does not wait for an unavailable plan service before opening an existing business', async () => {
@@ -303,7 +304,7 @@ it('does not classify membership loading as new registration on onboarding', asy
   transport.mockReturnValue(new Promise(() => {}))
   render(<OnboardingPage />)
   expect(
-    screen.getByRole('heading', { name: 'Checking account access…' }),
+    screen.getByRole('heading', { name: 'Opening your oven…' }),
   ).toBeInTheDocument()
   expect(
     screen.queryByLabelText('Business/display name'),

@@ -1,7 +1,8 @@
 import { InventoryCounts } from './inventory-counts'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
-import { OpeningOven } from './opening-oven'
+import { OvenLoading } from './oven-loading'
+import { restoreIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
 import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
@@ -591,30 +592,51 @@ export function WorkspaceApp() {
         selected.left - bounds.left - (bounds.width - selected.width) / 2
   }, [route.section, route.tab, ready])
 
-  async function load() {
+  const loadingWorkspace = useRef<Promise<void> | null>(null)
+  const hasLoadedWorkspace = useRef(false)
+  const [logoutBusy, setLogoutBusy] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  function load() {
+    loadingWorkspace.current ??= loadWorkspace().finally(() => {
+      loadingWorkspace.current = null
+    })
+    return loadingWorkspace.current
+  }
+  async function loadWorkspace() {
     setError('')
     try {
-      const res = await fetch('/api/workspace')
+      await restoreIdentitySession()
+      const res = await fetch('/api/workspace', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
       setState(json.workspace)
       setRole(json.role)
       setDemo(json.demo)
+      hasLoadedWorkspace.current = true
       setReady(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Oven could not connect.')
-      setReady(false)
+      if (!hasLoadedWorkspace.current) setReady(false)
     }
   }
   useEffect(() => {
     void load()
+    let active = true
     let unsubscribe = () => {}
     import('@netlify/identity').then((identity) => {
+      if (!active) return
       unsubscribe = identity.onAuthChange((event) => {
-        if (event === 'logout') window.location.replace('/login')
+        if (event === 'logout') window.location.replace('/login?signedOut=1')
       })
     })
-    return () => unsubscribe()
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [])
   const refreshAccessOnReturn = useEffectEvent(() => {
     if (ready && !modal && !busy) void load()
@@ -1062,6 +1084,11 @@ export function WorkspaceApp() {
   const input = (key: string, type = 'text', placeholder = '') => (
     <input
       type={type === 'number' && /quantity/i.test(key) ? 'text' : type}
+      inputMode={
+        type === 'number' ? 'decimal' : type === 'email' ? 'email' : undefined
+      }
+      enterKeyHint="next"
+      autoComplete={type === 'email' ? 'email' : undefined}
       value={draft[key] ?? ''}
       onChange={(e) => change(key, e.target.value)}
       placeholder={placeholder}
@@ -1153,10 +1180,6 @@ export function WorkspaceApp() {
           rows: draft.importRows || [],
           reason: draft.importReason,
         })
-        return
-      }
-      if (modal === 'signin') {
-        window.location.assign('/login')
         return
       }
       if (modal === 'receive' || modal === 'adjust') {
@@ -1281,20 +1304,7 @@ export function WorkspaceApp() {
     } as Record<string, string[]>
   )[page]
   const activeNavigation = page === 'Recipes' ? 'Recipes' : route.section
-  if (!ready)
-    return (
-      <main className="public-auth">
-        {!error && <OpeningOven />}
-        <h1>{error ? 'Oven unavailable' : 'Opening your oven…'}</h1>
-        <p role={error ? 'alert' : 'status'}>
-          {error || 'Loading your private business records.'}
-        </p>
-        <button type="button" onClick={() => window.location.reload()}>
-          Retry oven access
-        </button>{' '}
-        · <a href="/login">Log in again</a> · <a href="/help">Need help?</a>
-      </main>
-    )
+  if (!ready) return <OvenLoading error={error} retry={() => void load()} />
   return (
     <div className="app-shell stage-one-shell">
       <aside
@@ -1466,11 +1476,9 @@ export function WorkspaceApp() {
         </header>
         <main>
           {error && (
-            <div className="connection-note">
+            <div className="connection-note" role="alert">
               <TriangleAlert size={16} />
-              <span>
-                Preview data is visible. Your private database is connecting.
-              </span>
+              <span>{error} Your entered work is still open.</span>
               <button onClick={load}>Retry connection</button>
             </div>
           )}
@@ -1585,7 +1593,14 @@ export function WorkspaceApp() {
           {page === 'Pantry' && (
             <>
               {sub === 'Counts' ? (
-                <InventoryCounts workspace={state} onWorkspace={setState} role={role} ready={ready} open={open} refresh={load} />
+                <InventoryCounts
+                  workspace={state}
+                  onWorkspace={setState}
+                  role={role}
+                  ready={ready}
+                  open={open}
+                  refresh={load}
+                />
               ) : sub === 'Finished Goods' ? (
                 <FinishedInventory
                   workspace={state}
@@ -2773,8 +2788,46 @@ export function WorkspaceApp() {
         />
       )}
       <Dialog
+        open={modal === 'signin'}
+        onOpenChange={(value) => {
+          if (!value) setModal(null)
+        }}
+      >
+        <DialogContent className="app-dialog logout-dialog">
+          <DialogTitle>Log out of Cottage Pantry?</DialogTitle>
+          <DialogDescription>
+            Sign out on this device. You can sign in again with your saved
+            password.
+          </DialogDescription>
+          {logoutError && <p role="alert">{logoutError}</p>}
+          <div className="button-row">
+            <Btn secondary disabled={logoutBusy} onClick={() => setModal(null)}>
+              Cancel
+            </Btn>
+            <Btn
+              disabled={logoutBusy}
+              onClick={async () => {
+                if (logoutBusy) return
+                setLogoutBusy(true)
+                setLogoutError('')
+                try {
+                  const identity = await import('@netlify/identity')
+                  await identity.logout()
+                } catch {
+                  setLogoutError('Log out could not complete. Please retry.')
+                  setLogoutBusy(false)
+                }
+              }}
+            >
+              {logoutBusy ? 'Logging out…' : 'Log out'}
+            </Btn>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={
           !!modal &&
+          modal !== 'signin' &&
           !modal.startsWith('trade-') &&
           !modal.startsWith('fabric-') &&
           !['ingredient-detail', 'recipe-import', 'add-item', 'kit'].includes(
@@ -4593,30 +4646,6 @@ export function WorkspaceApp() {
                   </Field>
                 </>
               )}
-              {modal === 'signin' && (
-                <>
-                  <p>
-                    Your oven uses your verified account and active membership.
-                  </p>
-                  <a href="/login">Review account access</a>
-                  <Btn
-                    secondary
-                    onClick={async () => {
-                      try {
-                        const identity = await import('@netlify/identity')
-                        await identity.logout()
-                        setModal(null)
-                      } catch {
-                        toast.error(
-                          'Sign out could not complete. Please retry.',
-                        )
-                      }
-                    }}
-                  >
-                    Sign out of your account
-                  </Btn>
-                </>
-              )}
               {modal === 'journal' && (
                 <>
                   <Field label="Entry memo">
@@ -5105,7 +5134,6 @@ export function WorkspaceApp() {
               <div className="search-field">
                 <Search size={18} />
                 <input
-                  autoFocus
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search ingredients, recipes, products…"

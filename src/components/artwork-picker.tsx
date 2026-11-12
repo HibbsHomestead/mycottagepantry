@@ -39,7 +39,6 @@ export function ArtworkPicker({
         <label className="field">
           <span>Search artwork</span>
           <input
-            autoFocus
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

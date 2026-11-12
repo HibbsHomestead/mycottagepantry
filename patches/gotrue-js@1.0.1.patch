@@ -1,0 +1,38 @@
+diff --git a/lib/index.js b/lib/index.js
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -201,7 +201,8 @@
+       return this.token.access_token;
+     }).catch((error) => {
+       delete refreshPromises[refresh_token];
+-      this.clearSession();
++      // A transport/provider outage must not revoke a provider-persisted session.
++      if ([400, 401, 403].includes(error?.status)) this.clearSession();
+       throw error;
+     });
+     refreshPromises[refresh_token] = promise;
+diff --git a/lib/index.cjs b/lib/index.cjs
+--- a/lib/index.cjs
++++ b/lib/index.cjs
+@@ -232,7 +232,8 @@
+       return this.token.access_token;
+     }).catch((error) => {
+       delete refreshPromises[refresh_token];
+-      this.clearSession();
++      // A transport/provider outage must not revoke a provider-persisted session.
++      if ([400, 401, 403].includes(error?.status)) this.clearSession();
+       throw error;
+     });
+     refreshPromises[refresh_token] = promise;
+diff --git a/src/user.ts b/src/user.ts
+--- a/src/user.ts
++++ b/src/user.ts
+@@ -157,7 +157,7 @@
+       })
+       .catch((error) => {
+         delete refreshPromises[refresh_token];
+-        this.clearSession();
++        if ([400, 401, 403].includes((error as { status?: number }).status ?? 0)) this.clearSession();
+         throw error;
+       });
+ 

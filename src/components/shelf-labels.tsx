@@ -213,7 +213,7 @@ export function ShelfLabels({
   }
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="inventory-tool-dialog">
+      <DialogContent presentation="inventory" className="inventory-tool-dialog">
         <DialogTitle>Shelf / bin / location labels</DialogTitle>
         <DialogDescription>
           Separate from product/package labels. Exporting does not change stock

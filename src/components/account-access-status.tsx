@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { AccountAccess } from '@/lib/access-state'
-import { PublicSite } from './public-site'
+import { OvenLoading } from './oven-loading'
 
 export function SignOutAccountButton() {
   const [error, setError] = useState('')
@@ -11,7 +11,7 @@ export function SignOutAccountButton() {
     try {
       const identity = await import('@netlify/identity')
       await identity.logout()
-      window.location.replace('/login')
+      window.location.replace('/login?signedOut=1')
     } catch {
       setError('Sign out could not complete. Please retry.')
       setBusy(false)
@@ -43,8 +43,9 @@ export function AccessDiagnostics({
 }) {
   if (!traceId) return null
   return (
-    <details>
-      <summary>Access diagnostic reference: {traceId}</summary>
+    <details className="access-technical">
+      <summary>Technical details</summary>
+      <p>Support reference: {traceId}</p>
       <p>This reference contains no credentials or account details.</p>
       <pre>
         {JSON.stringify(
@@ -74,40 +75,19 @@ export function AccountAccessStatus({
   retry: () => void
   errorMessage?: string
 }) {
+  if (loading) return <OvenLoading />
   const denied = access?.status === 'access_denied'
   return (
-    <PublicSite>
-      <section className="public-auth">
-        <h1>
-          {loading
-            ? 'Checking account access…'
-            : denied
-              ? 'Oven access denied'
-              : 'Account access unavailable'}
-        </h1>
-        <p role={loading ? 'status' : 'alert'}>
-          {loading
-            ? 'Waiting for your session and oven membership.'
-            : denied
-              ? 'Your oven membership is inactive. Contact your oven owner. No new oven was created.'
-              : errorMessage ||
-                'Your session or oven membership could not be checked. Retry without creating a new business.'}
-        </p>
-        {!loading &&
-          ['workspace', 'workspace_selection'].includes(
-            access?.status || '',
-          ) && (
-            <p>
-              <a className="public-button" href="/oven">
-                Open your existing business with its current access
-              </a>
-            </p>
-          )}
-        {!loading && (
-          <button className="public-button" type="button" onClick={retry}>
-            Retry access check
-          </button>
-        )}
+    <OvenLoading
+      error={
+        denied
+          ? 'Your oven membership is inactive. Contact your oven owner.'
+          : errorMessage ||
+            'Your account or business could not be loaded. Your session has not been cleared.'
+      }
+      retry={retry}
+    >
+      <section>
         {!loading && <SignOutAccountButton />}
         {!loading && errorMessage && access?.status === 'no_workspace' && (
           <p>
@@ -117,6 +97,6 @@ export function AccountAccessStatus({
         <a href="/help">Need help?</a>
         <AccessDiagnostics access={access} traceId={traceId} />
       </section>
-    </PublicSite>
+    </OvenLoading>
   )
 }

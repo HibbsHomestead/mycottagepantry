@@ -1,3 +1,6 @@
+import { useRouter } from '@tanstack/react-router'
+import { OvenLoading } from './oven-loading'
+import { restoreIdentitySession } from '@/lib/identity-session'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { CallbackResult } from '@netlify/identity'
 import { PublicSite } from './public-site'
@@ -6,11 +9,18 @@ import {
   accessTraceId,
   navigateAccount,
 } from '@/lib/account-access-client'
-import { accessDestination, type AccountAccess } from '@/lib/access-state'
+import {
+  accessDestination,
+  hasIdentityCallback,
+  type AccountAccess,
+} from '@/lib/access-state'
 import { AccessDiagnostics } from './account-access-status'
 import { resumeSelectedPlan } from '@/lib/signup-plan-client'
 
 export function LoginPage() {
+  const router = useRouter({ warn: false })
+  const submitting = useRef(false)
+  const [opening, setOpening] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -39,6 +49,7 @@ export function LoginPage() {
   const openWorkspace = useCallback(
     async (expectSession = sessionReported.current) => {
       sessionReported.current = expectSession
+      setOpening(true)
       setAccessError(false)
       setError('')
       record('access_request', 'loading')
@@ -67,8 +78,14 @@ export function LoginPage() {
             reference.current,
             returnTo,
             selection?.planId,
+            router
+              ? (href) => {
+                  void router.navigate({ href, replace: true })
+                }
+              : undefined,
           )
         } else if (value.status === 'signed_out') {
+          setOpening(false)
           record(
             'browser_session',
             expectSession ? 'backend_session_missing' : 'signed_out_visit',
@@ -97,7 +114,7 @@ export function LoginPage() {
         )
       }
     },
-    [record],
+    [record, router],
   )
   useEffect(() => {
     let active = true
@@ -113,13 +130,16 @@ export function LoginPage() {
         record('callback_completed', result?.type || 'none')
         if (result?.type === 'recovery') {
           setRecovery(true)
+          setOpening(false)
           setMessage('Choose a new password to finish recovering your account.')
         } else if (result?.type === 'invite') {
+          setOpening(false)
           setError(
             'Oven invitation acceptance is not available yet. Contact the owner; no oven access has been granted.',
           )
         } else {
           // SDK hydration starts refresh handling, but its cache is not an access decision.
+          await restoreIdentitySession()
           const browserUser = result?.user || (await identity.getUser())
           if (!active) return
           record('browser_session', browserUser ? 'ready' : 'absent')
@@ -131,6 +151,14 @@ export function LoginPage() {
           history.replaceState(null, '', location.pathname + location.search)
         if (active) {
           setTraceId(reference.current)
+          setOpening(false)
+          if (!hasIdentityCallback(originalHash)) {
+            setAccessError(true)
+            setError(
+              'Your session could not be restored right now. Retry without signing out.',
+            )
+            return
+          }
           setError(
             'This sign-in link is invalid, expired, already used, or unavailable. Try logging in or review account recovery.',
           )
@@ -146,7 +174,8 @@ export function LoginPage() {
   }, [openWorkspace, record])
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy || !ready) return
+    if (submitting.current || busy || !ready) return
+    submitting.current = true
     const form = event.currentTarget
     const fields = new FormData(form)
     setBusy(true)
@@ -169,6 +198,7 @@ export function LoginPage() {
           String(fields.get('email')),
           String(fields.get('password')),
         )
+      setOpening(true)
       record('provider_result', 'success')
       record('browser_session', 'ready')
       await openWorkspace(true)
@@ -186,9 +216,25 @@ export function LoginPage() {
           : 'We couldn’t sign you in. Check your email and password, or try again later.',
       )
     } finally {
+      submitting.current = false
       setBusy(false)
     }
   }
+  if (opening || !ready || accessError)
+    return (
+      <OvenLoading
+        error={accessError ? error : undefined}
+        retry={() => void openWorkspace()}
+      >
+        {accessError && (
+          <AccessDiagnostics
+            access={access}
+            traceId={traceId}
+            events={events}
+          />
+        )}
+      </OvenLoading>
+    )
   return (
     <PublicSite>
       <section className="public-auth">
@@ -200,33 +246,11 @@ export function LoginPage() {
             : 'Log in to your existing Cottage Pantry account.'}
         </p>
         {error && <p role="alert">{error}</p>}
-        {access &&
-          ['workspace', 'workspace_selection'].includes(access.status) && (
-            <p>
-              <a className="public-button" href="/oven">
-                Open your existing business with its current access
-              </a>
-            </p>
-          )}
-        {accessError && (
-          <button
-            className="public-button"
-            type="button"
-            onClick={() => void openWorkspace()}
-          >
-            Retry oven access
-          </button>
-        )}
-        {accessError && access && access.status === 'no_workspace' && (
-          <p>
-            <a href="/pricing">Choose your intended plan again</a>
-          </p>
-        )}
-        <p className="public-fine">
-          Log in on the domain where you want to work. Preview and published
-          sites have separate browser sessions.
-        </p>
         {message && <p role="status">{message}</p>}
+        {typeof location !== 'undefined' &&
+          new URLSearchParams(location.search).has('signedOut') && (
+            <p role="status">You’re signed out.</p>
+          )}
         {recoveryComplete && (
           <p>
             <a
@@ -237,7 +261,13 @@ export function LoginPage() {
             </a>
           </p>
         )}
-        <AccessDiagnostics access={access} traceId={traceId} events={events} />
+        {error && (
+          <AccessDiagnostics
+            access={access}
+            traceId={traceId}
+            events={events}
+          />
+        )}
         <form onSubmit={submit}>
           <fieldset disabled={busy || !ready}>
             <legend className="sr-only">
@@ -249,7 +279,11 @@ export function LoginPage() {
                 <input
                   type="email"
                   name="email"
-                  autoComplete="email"
+                  autoComplete="username"
+                  inputMode="email"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  enterKeyHint="next"
                   required
                 />
               </label>
@@ -258,6 +292,7 @@ export function LoginPage() {
               {recovery ? 'New password' : 'Password'}
               <input
                 name="password"
+                enterKeyHint="done"
                 type={showPassword ? 'text' : 'password'}
                 minLength={recovery ? 8 : undefined}
                 autoComplete={recovery ? 'new-password' : 'current-password'}

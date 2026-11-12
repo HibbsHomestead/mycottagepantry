@@ -35,7 +35,6 @@ export function RecipeComponentPicker({
         <label className="field">
           <span>Search recipes</span>
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
