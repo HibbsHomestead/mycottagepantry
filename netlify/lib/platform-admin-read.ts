@@ -36,7 +36,7 @@ const accountsCTE = `WITH account_memberships AS (
 const billingProjection = `w.business_id,w.plan_id,w.source,w.status,w.paid_from,w.paid_through,w.updated_at,w.environment,w.entitlement_policy,w.last_reconciled_at,
   CASE WHEN w.subscription_id IS NOT NULL THEN '••••' || RIGHT(w.subscription_id,4) ELSE NULL END AS subscription_reference`
 const billingNotice =
-  'Square synchronization uses signed webhook references and canonical provider reads. Production checkout and policy-dependent access changes remain release-gated. Record update time alone is not proof of successful synchronization.'
+  'Billing provider identity remains explicit. Reconciliation uses verified provider state; timestamps alone do not prove successful payment. Existing Square billing remains release-gated and Stripe checkout controls are independent.'
 export const diagnosticCoverage = [
   {
     area: 'Receipt PDF extraction',
@@ -241,7 +241,7 @@ export async function readAdministration(
         note: 'This list includes accounts attached to completed customer businesses. Registrations awaiting business setup are excluded; absence here does not mean authentication signup failed. Search by stable Identity ID. Provider names and emails are not synchronized.',
       }
     }
-    const where = `${customerWhere} AND (b.business_name ILIKE $1 OR b.id::text ILIKE $1 OR b.identity_owner ILIKE $1)`
+    const where = `${customerWhere} AND (b.business_name ILIKE $1 OR b.id::text ILIKE $1 OR b.identity_owner ILIKE $1 OR EXISTS (SELECT 1 FROM workspace_billing filter_billing WHERE filter_billing.business_id=b.id AND (filter_billing.plan_id ILIKE $1 OR filter_billing.source ILIKE $1 OR filter_billing.status ILIKE $1)))`
     const total = (
       await c.query(
         `SELECT count(*)::int AS count FROM businesses b WHERE ${where}`,

@@ -1025,3 +1025,56 @@ export const registrationPolicies = pgTable('registration_policies', {
     .defaultNow()
     .notNull(),
 }).enableRLS()
+
+// Stripe platform subscriptions: credentials are encrypted before insertion.
+export const stripeProviderSettings = pgTable('stripe_provider_settings', {
+  environment: text().primaryKey(),
+  ciphertext: text(),
+  fingerprint: text(),
+  accountId: text('account_id'),
+  accountName: text('account_name'),
+  validatedAt: timestamp('validated_at', { withTimezone: true }),
+  webhookVerifiedAt: timestamp('webhook_verified_at', { withTimezone: true }),
+  lastTestAt: timestamp('last_test_at', { withTimezone: true }),
+  checkoutEnabled: boolean('checkout_enabled').notNull().default(false),
+  configuration: jsonb().$type<Record<string, any>>().notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+export const stripeCheckouts = pgTable('stripe_checkouts', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid('business_id')
+    .notNull()
+    .references(() => businesses.id),
+  identityId: text('identity_id').notNull(),
+  environment: text().notNull(),
+  planId: text('plan_id').notNull(),
+  priceId: text('price_id').notNull(),
+  sessionId: text('session_id').unique(),
+  customerId: text('customer_id'),
+  subscriptionId: text('subscription_id').unique(),
+  status: text().notNull().default('creating'),
+  checkoutUrl: text('checkout_url'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  reconciledAt: timestamp('reconciled_at', { withTimezone: true }),
+  portalLaunchedAt: timestamp('portal_launched_at', { withTimezone: true }),
+  accessVerifiedAt: timestamp('access_verified_at', { withTimezone: true }),
+  errorCode: text('error_code'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+export const stripeEvents = pgTable('stripe_events', {
+  id: text().primaryKey(),
+  environment: text().notNull(),
+  kind: text().notNull(),
+  objectId: text('object_id'),
+  status: text().notNull().default('pending'),
+  attempts: integer().notNull().default(0),
+  errorCode: text('error_code'),
+  receivedAt: timestamp('received_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+})

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { StripeOwnerBilling } from './stripe-owner-billing'
 import { PublicSite } from './public-site'
 import { registrationRequest } from '@/lib/registration-client'
 import { subscriptionConsent } from '@/lib/registration'
@@ -63,7 +64,7 @@ const statusText: Record<string, string> = {
   checkout_pending: 'Waiting for checkout',
   payment_processing: 'Payment pending confirmation',
   paid_active: 'Paid — active',
-  past_due: 'Payment failed — grace period',
+  past_due: 'Payment failed — review paid-through coverage',
   payment_failed: 'Payment failed',
   cancelled: 'Cancelled — access until the end of the paid period',
   expired: 'Paid period ended — Free limits apply',
@@ -133,6 +134,7 @@ export function BillingPage() {
         <div className="registration-paper">
           <p className="public-eyebrow">Settings</p>
           <h1>Subscription & Billing</h1>
+          <StripeOwnerBilling />
           {error && <p role="alert">{error}</p>}
           {!data && !error && (
             <p role="status">Checking your billing status…</p>

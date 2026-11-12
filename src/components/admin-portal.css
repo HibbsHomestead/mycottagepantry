@@ -944,3 +944,85 @@
   outline: 2px solid var(--admin-purple);
   outline-offset: 2px;
 }
+
+.stripe-settings {
+  min-width: 0;
+}
+.stripe-settings label {
+  display: block;
+  margin: 12px 0;
+  font-weight: 600;
+}
+.stripe-settings input:not([type="checkbox"]),
+.stripe-settings select,
+.stripe-settings textarea {
+  display: block;
+  width: 100%;
+  max-width: 620px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #d8cfe5;
+  border-radius: 8px;
+  background: #fff;
+  color: #30233e;
+}
+.stripe-settings details {
+  border-top: 1px solid #e5ddec;
+  padding: 14px 0;
+}
+.stripe-settings summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #663f87;
+}
+.stripe-settings button {
+  border: 1px solid #d5c7e5;
+  border-radius: 8px;
+  background: #f5effb;
+  color: #542a79;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.stripe-settings button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.stripe-settings p,
+.stripe-settings code,
+.stripe-event {
+  overflow-wrap: anywhere;
+}
+.stripe-checklist {
+  margin: 12px 0;
+}
+.stripe-checklist div {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  border-bottom: 1px solid #eee8f4;
+  padding: 8px 0;
+}
+.stripe-checklist dd {
+  margin: 0;
+  color: #665572;
+  text-align: right;
+}
+.stripe-event {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5ddec;
+}
+.stripe-tier-list p {
+  border-bottom: 1px solid #eee8f4;
+  padding-bottom: 10px;
+}
+@media (max-width: 600px) {
+  .stripe-settings .button-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .stripe-checklist div {
+    gap: 8px;
+  }
+}

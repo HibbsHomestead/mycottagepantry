@@ -118,36 +118,38 @@ export function SignupPage() {
             <form className="registration-form" onSubmit={submit}>
               <fieldset className="signup-plan-choice">
                 <legend>Choose your intended plan</legend>
-                {launchPricing.plans.map((p) => (
-                  <label key={p.id} className="check-label">
-                    <input
-                      type="radio"
-                      name="plan-choice"
-                      value={p.id}
-                      checked={plan === p.id}
-                      disabled={busy}
-                      onChange={() => {
-                        setPlan(p.id)
-                        setError('')
-                        history.replaceState(null, '', signupPlanHref(p.id))
-                      }}
-                    />
-                    <span>
-                      {p.name} — ${p.monthlyUsd} USD/month per business
-                      {p.id !== 'free'
-                        ? ' (not yet available for purchase)'
-                        : ''}
-                      <span className="signup-plan-scope">
-                        {planUserLabel(p.id)}.{' '}
-                        {p.id === 'cottage-kitchen'
-                          ? 'All intended program features except resale and consignment. Invitations and member administration Coming soon.'
-                          : p.id === 'cottage-mercantile'
-                            ? 'Full intended program, including resale and consignment. Invitations Coming soon; new team member setup awaits a confirmed user limit.'
-                            : ''}
+                {launchPricing.plans
+                  .filter((p) => String(p.publication) !== 'unpublished_draft')
+                  .map((p) => (
+                    <label key={p.id} className="check-label">
+                      <input
+                        type="radio"
+                        name="plan-choice"
+                        value={p.id}
+                        checked={plan === p.id}
+                        disabled={busy}
+                        onChange={() => {
+                          setPlan(p.id)
+                          setError('')
+                          history.replaceState(null, '', signupPlanHref(p.id))
+                        }}
+                      />
+                      <span>
+                        {p.name} — ${p.monthlyUsd} USD/month per business
+                        {p.id !== 'free'
+                          ? ' (not yet available for purchase)'
+                          : ''}
+                        <span className="signup-plan-scope">
+                          {planUserLabel(p.id)}.{' '}
+                          {p.id === 'cottage-kitchen'
+                            ? 'All intended program features except resale and consignment. Invitations and member administration Coming soon.'
+                            : p.id === 'cottage-mercantile'
+                              ? 'Full intended program, including resale and consignment. Invitations Coming soon; new team member setup awaits a confirmed user limit.'
+                              : ''}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  ))}
                 <p role="status">
                   {plan === 'free'
                     ? 'Free setup requires email verification and valid business details. Proposed record and feature limits are not active.'

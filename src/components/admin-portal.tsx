@@ -23,6 +23,9 @@ import { systemLabelTemplates } from '@/lib/label-studio'
 import { LabelCanvas } from './label-studio'
 import type { AdminMetadata } from '@/lib/platform-admin-types'
 import { AdminPasswordReset } from './admin-password-reset'
+import { AdminReconcileControl } from './admin-reconcile-control'
+import { AdminMemberControl } from './admin-member-control'
+import { AdminStripeSettings } from './admin-stripe-settings'
 import { AdminSquareConnection } from './admin-square-connection'
 import './admin-portal.css'
 
@@ -698,7 +701,7 @@ function AdminView({
               placeholder={
                 kind === 'accounts'
                   ? 'Stable Identity ID'
-                  : 'Oven name, Oven ID, or owner ID'
+                  : 'Business, owner ID, tier, provider or billing status'
               }
               maxLength={120}
             />
@@ -753,7 +756,7 @@ function AdminView({
                   {
                     title: 'Assigned tier',
                     cell: (r) =>
-                      (r.manualGrant?.operation === 'grant'
+                      (r.effective?.manualValid
                         ? r.manualGrant.plan_id
                         : null) ||
                       r.plan_id ||
@@ -776,7 +779,14 @@ function AdminView({
                   },
                   {
                     title: 'Billing status',
-                    cell: (r) => r.billing_status || 'No billing subscription',
+                    cell: (r) => (
+                      <>
+                        {r.source || 'No provider'}
+                        <small>
+                          {r.billing_status || 'No billing subscription'}
+                        </small>
+                      </>
+                    ),
                   },
                   {
                     title: 'Manage',
@@ -884,7 +894,11 @@ function AdminView({
     return (
       <>
         <Notice>{data.notice}</Notice>
-        <BillingConnection data={data} />
+        <AdminStripeSettings data={data.stripe || {}} request={adminRequest} />
+        <details>
+          <summary>Existing Square app billing</summary>
+          <BillingConnection data={data} />
+        </details>
         <section className="admin-panel">
           <h2>Platform billing records</h2>
           <p>
@@ -1081,10 +1095,12 @@ function OvenDetail({ data }: { data: AdminMetadata }) {
         {tab === 'members' && (
           <section className="admin-panel">
             <h2>Members and roles</h2>
+            <AdminMemberControl data={data} request={adminRequest} />
             <p>
               Existing members remain after a downgrade. New additions follow
               the effective tier’s configured limit. Invitations and member
-              administration are not available in this release.
+              invitation acceptance remain unavailable; existing roles can be
+              managed below.
             </p>
             <DataTable
               rows={data.memberships}
@@ -1128,6 +1144,7 @@ function OvenDetail({ data }: { data: AdminMetadata }) {
                 <dd>{date(data.billing?.last_reconciled_at)}</dd>
               </div>
             </dl>
+            <AdminReconcileControl businessId={o.id} request={adminRequest} />
             <p>{data.billingNotice}</p>
             <p>
               Business-specific billing sync errors are unavailable: stored

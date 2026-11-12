@@ -14,7 +14,7 @@ import {
   type InventoryEntry,
 } from '@/lib/inventory-browse'
 import { PantryPhoto } from './pantry-photo'
-import './inventory-preview.css'
+import './inventory-barcode-review.css'
 
 export function inventoryBarcodeMatches(
   w: Workspace,

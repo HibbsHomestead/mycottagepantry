@@ -1,3 +1,5 @@
+import { adminMembership, adminIdentityStatus } from '../lib/admin-memberships'
+import { stripeAdminAction, stripeAdminView } from '../lib/stripe-provider'
 import { handleAdminAccess } from '../lib/admin-access'
 import { handleAdminCatalog } from '../lib/catalog-admin'
 import { handleRegistrationPolicies } from '../lib/registration-policies'
@@ -193,6 +195,12 @@ export default async (request: Request, context: Context) => {
         async (c) => (await requireAdmin(c, request)).identity_id,
       )
       await requireRate(identity, 'totp-account', 10)
+    }
+    if (action === 'stripe' && request.method === 'POST') {
+      const identity = await adminTransaction(
+        async (c) => (await requireAdmin(c, request)).identity_id,
+      )
+      await requireRate(identity, 'stripe-settings', 30, 60)
     }
     const result = await adminTransaction(async (c) => {
       const session = await requireAdmin(c, request)
@@ -633,14 +641,14 @@ export default async (request: Request, context: Context) => {
           const outcome =
             action === 'billing-verify'
               ? await withSquareConnections(c, () =>
-                  billing.recordConnectionCheck(c as any, environment),
+                  billing.recordConnectionCheck(c, environment),
                 )
               : action === 'billing-verify-mappings'
                 ? await withSquareConnections(c, () =>
-                    billing.verifyPlanMappings(c as any, environment),
+                    billing.verifyPlanMappings(c, environment),
                   )
                 : await withSquareConnections(c, () =>
-                    billing.syncPlanMappings(c as any, environment),
+                    billing.syncPlanMappings(c, environment),
                   )
           await audit(c, actor, action, environment, 'success', reference)
           return outcome
@@ -659,6 +667,74 @@ export default async (request: Request, context: Context) => {
           )
         }
       }
+      if (action === 'business-reconcile' && request.method === 'POST') {
+        if (!session.mfa_at)
+          throw new AdminError(
+            403,
+            'MFA_REQUIRED',
+            'Verify administrator authentication first.',
+          )
+        const { businessId } = z
+          .object({ businessId: z.uuid() })
+          .strict()
+          .parse(JSON.parse((await limitedBody(request, 300)).toString()))
+        await requireRate(session.identity_id, 'admin-reconciliation', 15, 60)
+        await c.query("SELECT set_config('app.billing_worker','true',true)")
+        const billing = (
+          await c.query(
+            'SELECT source FROM workspace_billing WHERE business_id=$1',
+            [businessId],
+          )
+        ).rows[0]
+        const attempts = (
+          await c.query(
+            "SELECT * FROM stripe_checkouts WHERE business_id=$1 AND session_id IS NOT NULL AND status IN ('open','complete')",
+            [businessId],
+          )
+        ).rows
+        if (billing?.source?.startsWith('stripe_') || attempts.length) {
+          const { reconcileStripeCheckout } =
+            await import('../lib/stripe-subscriptions')
+          for (const attempt of attempts)
+            await reconcileStripeCheckout(c, attempt)
+        } else if (billing?.source?.startsWith('square_')) {
+          const { reconcileBusiness } = await import('../lib/billing-service')
+          await withSquareConnections(c, () => reconcileBusiness(c, businessId))
+        } else
+          throw new AdminError(
+            409,
+            'NO_PROVIDER_LINK',
+            'No trusted provider billing relationship exists for this business.',
+          )
+        await audit(
+          c,
+          actor,
+          'billing:reconcile',
+          businessId,
+          'success',
+          reference,
+        )
+        return { reconciled: true }
+      }
+      if (action === 'membership')
+        return adminMembership(c, request, session, reference)
+      if (action === 'identity-status' && request.method === 'GET') {
+        if (!session.mfa_at)
+          throw new AdminError(
+            403,
+            'ADMIN_REQUIRED',
+            'Verified admin access is required.',
+          )
+        await c.query("SELECT set_config('app.platform_read','true',true)")
+        const identityId = z
+          .string()
+          .min(1)
+          .max(100)
+          .parse(url.searchParams.get('identity'))
+        return adminIdentityStatus(c, identityId)
+      }
+      if (action === 'stripe')
+        return stripeAdminAction(c, request, session, reference)
       if (action === 'business-access')
         return handleAdminAccess(c, request, session, reference)
       if (action === 'catalog')
@@ -682,6 +758,7 @@ export default async (request: Request, context: Context) => {
           ? await withSquareConnections(c, async () => ({
               ...(await readAdministration(c, url.searchParams)),
               oauth: await squareOAuthAdminStatus(c, session),
+              stripe: await stripeAdminView(c),
             }))
           : await readAdministration(c, url.searchParams)
       await audit(
