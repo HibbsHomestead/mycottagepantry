@@ -107,11 +107,10 @@ export function InventoryTools({
   function choose(match: BarcodeMatch) {
     setResultOpen(false)
     if (mode === 'find')
-      open('inventory-preview-item', {
-        ...match.item,
-        inventoryTable:
-          match.item.workflow === 'resale' ? 'products' : 'ingredients',
-      })
+      open(
+        match.item.workflow === 'resale' ? 'product-detail' : 'ingredient-detail',
+        match.item,
+      )
     else if (mode === 'receive') {
       const source = match.offer || match.item
       // Scanning fills a draft only. Unknown package contents are never converted to stock.

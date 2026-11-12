@@ -22,7 +22,7 @@ async function fixture(page: Page) {
   })
   Object.assign(
     w.ingredients.find((i) => i.id === 'eggs')!,
-    { imageAssetId: 'fixture-eggs', expires: '2026-11-08' },
+    { imageAssetId: 'fixture-eggs', expires: '2026-11-08', threshold: 50 },
   )
   w.ingredients.push({
     id: 'preview-fabric',
@@ -65,7 +65,7 @@ async function fixture(page: Page) {
     name: 'Sample imported egg photo · Unsplash',
     fileUrl: '/fixture-eggs.jpg',
   })
-  const writes: unknown[] = []
+  const writes: { action: string }[] = []
   await page.route('**/fixture-eggs.jpg', (r) =>
     r.fulfill({
       path: fileURLToPath(
@@ -75,73 +75,149 @@ async function fixture(page: Page) {
     }),
   )
   await page.route('**/api/workspace*', (r) => {
-    if (r.request().method() === 'POST') writes.push(r.request().postDataJSON())
+    if (r.request().method() === 'POST') {
+      const body = r.request().postDataJSON()
+      writes.push(body)
+      if (body.action === 'pantryView')
+        w.settings[0].currentPantryView = body.data.view
+    }
     return r.fulfill({ json: { workspace: w, role: 'Owner', demo: false } })
   })
   return { writes, w }
 }
 for (const [name, engine] of Object.entries({ chromium, firefox })) {
   for (const width of [390, 820, 1440])
-    test(`${name} photo grid, detail and edit entry ${width}`, async () => {
+    test(`${name} integrated inventory cards and table ${width}`, async () => {
       const browser = await engine.launch(),
         page = await browser.newPage({ viewport: { width, height: 980 } })
       page.setDefaultTimeout(10000)
       try {
-        const { writes } = await fixture(page)
+        const { writes, w } = await fixture(page)
+        const originalInventory = JSON.stringify({
+          ingredients: w.ingredients,
+          ledger: w.ledger,
+        })
         const errors: string[] = []
         page.on('pageerror', (e) => errors.push(e.message))
         await page.goto(workspaceFixtureUrl('Pantry'))
-        await page
-          .getByRole('button', { name: 'Preview photo inventory' })
-          .click()
-        const d = page.getByRole('dialog')
-        await expect(d.getByAltText('Photo of Large eggs')).toBeVisible()
+        await expect(
+          page.getByRole('button', { name: 'Preview photo inventory' }),
+        ).toHaveCount(0)
+        await expect(page.getByText('MY OVEN · DESIGN PREVIEW')).toHaveCount(0)
+        const inventory = page.locator('.pantry-v2')
+        await expect(
+          inventory.getByRole('button', { name: 'Cards', exact: true }),
+        ).toHaveAttribute('aria-pressed', 'true')
+        await expect(
+          inventory.getByAltText('Photo of Large eggs'),
+        ).toBeVisible()
         expect(
-          await d
+          await inventory
             .getByAltText('Photo of Large eggs')
             .evaluate(
               (el: HTMLImageElement) => el.complete && el.naturalWidth > 0,
             ),
         ).toBe(true)
-        await d.getByText('Filters & sort', { exact: false }).click()
-        await d.getByLabel('Sort', { exact: true }).selectOption('expiry')
-        await d.getByText('Filters & sort', { exact: false }).click()
-        if (name === 'chromium')
-          await page.screenshot({
-            path: `docs/previews/inventory-grid-${width}.webp`,
-          })
-        await d.getByText('Filters & sort', { exact: false }).click()
-        await d
-          .getByLabel('Storage location', { exact: true })
-          .selectOption('Pantry · Bin 2')
-        await expect(d.locator('.inventory-photo-card')).toHaveCount(1)
-        await expect(d.getByText('7.5 lb remaining')).toBeVisible()
-        await d.getByRole('button', { name: 'Table', exact: true }).click()
-        await expect(d.getByRole('row')).toHaveCount(2)
-        await d.getByRole('button', { name: 'View Bread flour' }).click()
-        await expect(
-          d.getByText('Package size: 5 lb / purchase package'),
-        ).toBeVisible()
-        await d.getByText('Stock History', { exact: true }).click()
-        await d.getByRole('button', { name: 'All items' }).click()
-        await d.getByText('Filters & sort', { exact: false }).click()
-        await d.getByLabel('Storage location', { exact: true }).selectOption('')
-        await d.getByRole('button', { name: 'Cards', exact: true }).click()
-        await d.getByRole('button', { name: 'View Large eggs' }).click()
-        await expect(d.getByText('42 each', { exact: true })).toBeVisible()
         expect(
-          await d.evaluate((el) => el.scrollWidth - el.clientWidth),
-        ).toBeLessThanOrEqual(1)
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+          ),
+        ).toBe(true)
+        if (width === 390) {
+          const cards = inventory.locator('.pantry-card')
+          const first = await cards.nth(0).boundingBox(),
+            second = await cards.nth(1).boundingBox()
+          expect(second!.y).toBeGreaterThan(first!.y + first!.height - 1)
+          expect(first!.width).toBeGreaterThan(300)
+        }
+        if (name === 'chromium') {
+          if (width === 390)
+            await inventory
+              .getByRole('article', { name: 'Large eggs', exact: true })
+              .scrollIntoViewIfNeeded()
+          await page.screenshot({
+            path: `docs/previews/inventory-main-cards-${width}.png`,
+            fullPage: width !== 390,
+          })
+        }
+        await inventory.getByRole('button', { name: /^Low stock/ }).click()
+        await inventory
+          .getByRole('textbox', { name: 'Search pantry' })
+          .fill('Large eggs')
+        await expect(inventory.locator('.pantry-card')).toHaveCount(1)
+        await inventory
+          .getByRole('button', { name: 'Table', exact: true })
+          .click()
+        await expect(inventory.locator('tbody tr')).toHaveCount(1)
+        await expect(inventory.locator('tbody tr').first()).toContainText(
+          'Large eggs',
+        )
+        await expect(
+          inventory.getByRole('button', { name: /^Low stock/ }),
+        ).toHaveAttribute('aria-pressed', 'true')
+        await expect(
+          inventory.getByRole('textbox', { name: 'Search pantry' }),
+        ).toHaveValue('Large eggs')
+        await inventory
+          .getByRole('button', { name: 'Actions for Large eggs' })
+          .click()
+        for (const action of [
+          'Receive stock',
+          'Adjust / record waste',
+          'Print shelf/bin label',
+        ]) {
+          await expect(
+            page.getByRole('menuitem', { name: action, exact: true }),
+          ).toBeVisible()
+        }
+        await page.keyboard.press('Escape')
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+          ),
+        ).toBe(true)
         if (name === 'chromium')
           await page.screenshot({
-            path: `docs/previews/inventory-detail-${width}.webp`,
+            path: `docs/previews/inventory-main-table-${width}.png`,
           })
-        expect(writes).toHaveLength(0)
-        await d.getByRole('button', { name: 'Edit item' }).click()
+        await page.reload()
         await expect(
-          page.getByRole('button', { name: 'Save changes', exact: true }),
+          page
+            .locator('.pantry-v2')
+            .getByRole('button', { name: 'Table', exact: true }),
+        ).toHaveAttribute('aria-pressed', 'true')
+        await page
+          .locator('.pantry-v2')
+          .getByRole('button', { name: 'Cards', exact: true })
+          .click()
+        await page
+          .locator('.pantry-v2')
+          .getByRole('button', { name: 'View details', exact: true })
+          .first()
+          .click()
+        await expect(page.getByRole('dialog')).toBeVisible()
+        await page
+          .getByRole('dialog')
+          .getByRole('button', { name: /^Close (ingredient|packaging) details$/ })
+          .first()
+          .click()
+        await page
+          .getByRole('button', { name: 'Scan barcode', exact: true })
+          .click()
+        await page.getByRole('dialog').getByRole('textbox').fill('001234')
+        await page.getByRole('button', { name: 'Use entered code' }).click()
+        await page
+          .getByRole('button', { name: /Bread flour .*Item barcode/ })
+          .click()
+        await expect(
+          page
+            .getByRole('dialog')
+            .getByRole('heading', { name: 'Bread flour', exact: true }),
         ).toBeVisible()
-        expect(writes).toHaveLength(0)
+        expect(writes.every((body) => body.action === 'pantryView')).toBe(true)
+        expect(
+          JSON.stringify({ ingredients: w.ingredients, ledger: w.ledger }),
+        ).toBe(originalInventory)
         expect(errors).toEqual([])
       } finally {
         await browser.close()

@@ -17,7 +17,6 @@ import { NetWeightField } from './net-weight-field'
 import { RecipeLineCost } from './recipe-line-cost'
 import { ProductCostCards } from './product-cost-cards'
 import { AddItemDialog } from './add-item-dialog'
-import { InventoryPreview } from './inventory-preview'
 import { stockReceiptPreview } from '@/lib/inventory-browse'
 import { IngredientStockAdjustment } from './ingredient-stock-adjustment'
 import {
@@ -331,9 +330,6 @@ export function WorkspaceApp() {
   const [ingredientImportBusy, setIngredientImportBusy] = useState(false)
   const [shelfItem, setShelfItem] = useState<Item | null>(null)
   const [barcodeEntryOpen, setBarcodeEntryOpen] = useState(false)
-  const [inventoryPreview, setInventoryPreview] = useState<{
-    key: string | null
-  } | null>(null)
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
@@ -795,12 +791,6 @@ export function WorkspaceApp() {
     if (['label-preview', 'label-print'].includes(kind) && item) {
       setPreviewLabelId('')
       setPreviewProduct(item)
-      return
-    }
-    if (kind === 'inventory-preview' || kind === 'inventory-preview-item') {
-      setInventoryPreview({
-        key: item ? `${item.inventoryTable || 'ingredients'}:${item.id}` : null,
-      })
       return
     }
     if (
@@ -1523,11 +1513,6 @@ export function WorkspaceApp() {
               </p>
             </div>
             <div className="heading-actions">
-              {route.section === 'Inventory' && (
-                <Btn secondary onClick={() => open('inventory-preview')}>
-                  Preview photo inventory
-                </Btn>
-              )}
               {route.section === 'Inventory' &&
                 ['Owner', 'Manager'].includes(role) && (
                   <Btn secondary onClick={() => open('add-item')}>
@@ -2676,7 +2661,10 @@ export function WorkspaceApp() {
           }}
           onView={(item, table) => {
             setModal(null)
-            open('inventory-preview-item', { ...item, inventoryTable: table })
+            open(
+              table === 'products' ? 'product-detail' : 'ingredient-detail',
+              item,
+            )
           }}
           save={(table, data) => mutate('save', table, data)}
         />
@@ -2768,15 +2756,6 @@ export function WorkspaceApp() {
             setBarcodeEntryOpen(false)
           }}
           onClose={() => setBarcodeEntryOpen(false)}
-        />
-      )}
-      {inventoryPreview && (
-        <InventoryPreview
-          workspace={state}
-          role={role}
-          initialKey={inventoryPreview.key}
-          close={() => setInventoryPreview(null)}
-          open={open}
         />
       )}
       {modal === 'ingredient-detail' && selected && (

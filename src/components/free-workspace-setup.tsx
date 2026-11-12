@@ -71,7 +71,9 @@ export function FreeWorkspaceSetup({
           ? { consent: { accepted: true, revision: policy.revision } }
           : {}),
       })
-      onCreated()
+      if (selection && selection.planId !== 'free')
+        window.location.assign('/oven/billing')
+      else onCreated()
     } catch (failure) {
       setError((failure as Error).message)
       const detail = failure as {
@@ -110,7 +112,7 @@ export function FreeWorkspaceSetup({
               Selected plan: {selection.name} — ${selection.monthlyUsd} USD per
               business, monthly.
               {selection.planId !== 'free' &&
-                ' Your choice is saved. Paid activation is not yet available; no paid subscription exists.'}{' '}
+                ' Your choice is saved. Continue to billing after business setup to check approved subscription availability; no paid access is granted by this form.'}{' '}
               Current access: verified account only; no business is created yet.
             </p>
           )}
@@ -118,9 +120,10 @@ export function FreeWorkspaceSetup({
             Your email is verified. Business setup uses the currently
             implemented Free access rules; it does not activate a paid plan.
             Review <a href="/pricing">View Plans</a> for monthly pricing and
-            proposed features. Paid checkout is not yet available. Business oven
-            setup requires a verified email and valid business details. Proposed
-            Free count limits and feature restrictions are not active.
+            proposed features. Subscription checkout depends on administrator
+            approval and verified billing. Business oven setup requires a
+            verified email and valid business details. Proposed Free count
+            limits and feature restrictions are not active.
           </p>
           {policies.loading && (
             <p role="status">Checking published Terms and Privacy…</p>

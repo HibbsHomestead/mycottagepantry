@@ -2,7 +2,6 @@
 import { randomUUID } from 'node:crypto'
 import { markSquareReconnect } from './square-credentials'
 import { z } from 'zod'
-import { squareBilledAccess, isSquareBilled } from './billing-entitlements'
 import {
   launchPricing,
   billablePlanIds,
@@ -103,20 +102,33 @@ export async function billingOverview(
     ])
   ).rows[0]
   const settings = await businessSettings(client, member.id)
-  const source = accessSource(billing, settings)
-  const complimentary = ['legacy_complimentary', 'complimentary'].includes(
-    source,
+  const { effectiveAccess, latestManualGrant } = await import('./manual-access')
+  const business = (
+    await client.query('SELECT identity_owner FROM businesses WHERE id=$1', [
+      member.id,
+    ])
+  ).rows[0]
+  const resolved = effectiveAccess(
+    billing,
+    await latestManualGrant(client, member.id),
+    business?.identity_owner || '',
   )
-  const verifiedAccess = isSquareBilled(billing)
-    ? squareBilledAccess(billing)
-    : null
+  const source = resolved.access
+    ? resolved.source
+    : accessSource(billing, settings)
+  const complimentary =
+    ['legacy_complimentary', 'complimentary'].includes(source) &&
+    !resolved.manualValid
+  const verifiedAccess = resolved.access
   const currentAccess = {
     planId: complimentary ? null : verifiedAccess?.plan || 'free',
-    kind: complimentary
-      ? 'complimentary'
-      : verifiedAccess?.plan && verifiedAccess.plan !== 'free'
-        ? 'verified_paid'
-        : 'implemented_free',
+    kind: resolved.manualValid
+      ? 'manual'
+      : complimentary
+        ? 'complimentary'
+        : verifiedAccess?.plan && verifiedAccess.plan !== 'free'
+          ? 'verified_paid'
+          : 'implemented_free',
   }
   const attempts = (
     await client.query(
@@ -198,7 +210,10 @@ export async function billingOverview(
           .map((p) => p.id)
       : [],
     cancelAvailable:
-      !!live && billing.status !== 'cancelled' && owner === actor.id,
+      !!live &&
+      !billing.source.startsWith('stripe_') &&
+      billing.status !== 'cancelled' &&
+      owner === actor.id,
     consentVersion: subscriptionConsent.version,
     policies: billingPolicyProposal,
     sandboxPolicy: environment === 'sandbox' ? sandboxBillingPolicy : null,
@@ -434,7 +449,12 @@ export async function reconcileBusiness(
         [businessId],
       )
     ).rows[0]
-    if (!billing || billing.source === 'complimentary') return { skipped: true }
+    if (
+      !billing ||
+      billing.source === 'complimentary' ||
+      billing.source.startsWith('stripe_')
+    )
+      return { skipped: true }
     const attempts = (
       await client.query(
         "SELECT * FROM billing_attempts WHERE business_id=$1 AND status IN ('checkout_pending','payment_processing','unknown','needs_review') FOR UPDATE",
@@ -920,7 +940,16 @@ export async function refreshOwnBilling(
 ) {
   const member = await ownerMembership(client, actor)
   try {
-    await reconcileBusiness(client, member.id, transport)
+    const linked = (
+      await client.query(
+        'SELECT source FROM workspace_billing WHERE business_id=$1',
+        [member.id],
+      )
+    ).rows[0]
+    if (linked?.source?.startsWith('stripe_')) {
+      const { stripeRefresh } = await import('./stripe-subscriptions')
+      await stripeRefresh(client, actor)
+    } else await reconcileBusiness(client, member.id, transport)
   } catch (error) {
     if (!(error instanceof RegistrationError)) throw error
     // Status remains as last verified; nothing is granted on failure.
@@ -945,6 +974,12 @@ export async function cancelAtPeriodEnd(
       [member.id],
     )
   ).rows[0]
+  if (billing?.source?.startsWith('stripe_'))
+    throw new RegistrationError(
+      409,
+      'STRIPE_POLICY_REQUIRED',
+      'Manage this subscription through the reviewed Stripe billing portal. Cancellation requires separate policy approval.',
+    )
   if (!billing?.subscription_id)
     throw new RegistrationError(
       409,

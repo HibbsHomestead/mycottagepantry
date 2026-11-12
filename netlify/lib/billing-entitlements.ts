@@ -17,7 +17,7 @@ type Row = {
   entitlement_policy?: EntitlementPolicy
 }
 export type BillingPolicyRow = Row
-/** Server-side access for an oven billed through Square. Paid features apply only
+/** Server-side access for an oven billed through a verified provider. Paid features apply only
  * while a verified paid period (plus Sandbox test grace) covers `now`; otherwise the
  * oven keeps Free-scope access and every record. Never derived from client input. */
 export function squareBilledAccess(row: Row, now = Date.now()): AccessResult {
@@ -47,7 +47,13 @@ export function squareBilledAccess(row: Row, now = Date.now()): AccessResult {
       }
 }
 export const isSquareBilled = (row: Row | undefined | null) =>
-  !!row && ['square_sandbox', 'square_production'].includes(row.source)
+  !!row &&
+  [
+    'square_sandbox',
+    'square_production',
+    'stripe_test',
+    'stripe_live',
+  ].includes(row.source)
 
 const lookupTables = new Set(['ingredients', 'products', 'recipes', 'batches'])
 /** Throws when a write uses a workflow outside the oven's current paid access.

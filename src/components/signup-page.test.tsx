@@ -90,7 +90,7 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
   expect(screen.getByRole('radio', { name: /Cottage Kitchen/ })).toBeEnabled()
   expect(
     screen.queryByRole('radio', { name: /Cottage Mercantile/ }),
-  ).toBeEnabled()
+  ).not.toBeInTheDocument()
   expect(
     screen.getByText(/Creating an account does not activate a paid plan/),
   ).toBeInTheDocument()
@@ -107,12 +107,12 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
     await screen.findByRole('link', { name: 'Continue to login' }),
   ).toHaveAttribute('href', '/login?plan=mixing-bowl')
 })
-it('keeps the approved $40 plan selected and offers sign-in continuation', () => {
+it('preserves an existing $40 preference for sign-in without advertising it as a signup choice', () => {
   history.replaceState({}, '', '/signup?plan=cottage-mercantile')
   render(<SignupPage />)
   expect(
-    screen.getByRole('radio', { name: /Cottage Mercantile/ }),
-  ).toBeChecked()
+    screen.queryByRole('radio', { name: /Cottage Mercantile/ }),
+  ).not.toBeInTheDocument()
   expect(
     screen.getByRole('link', { name: 'Already have an account? Log in.' }),
   ).toHaveAttribute('href', '/login?plan=cottage-mercantile')

@@ -1,3 +1,4 @@
+import { useStripeAvailability } from '@/lib/stripe-availability'
 import {
   launchFeatures,
   launchPricing,
@@ -7,6 +8,10 @@ import {
   type PlanId,
 } from '@/lib/launch-plans'
 import { signupPlanHref } from '@/lib/signup-plan'
+
+const publicPlans = launchPricing.plans.filter(
+  (p) => String(p.publication) !== 'unpublished_draft',
+)
 
 const copy: Record<
   PlanId,
@@ -102,6 +107,8 @@ function scope(plan: PlanId, feature: FeatureId) {
 }
 
 export function PricingComparison() {
+  const available = useStripeAvailability()
+
   return (
     <section
       className="public-width plan-comparison"
@@ -118,13 +125,14 @@ export function PricingComparison() {
         </p>
       </div>
       <p className="registration-notice plan-launch-notice">
-        You can create your account now. Paid activation is not yet available.
-        Your chosen plan is saved; registration collects no payment. Business
-        setup requires email verification and valid business details. Free’s
-        proposed limits are not active. Existing customer access is preserved.
+        You can create your account now. Paid activation depends on approved
+        checkout availability below. Your chosen plan is saved; registration
+        collects no payment. Business setup requires email verification and
+        valid business details. Free’s proposed limits are not active. Existing
+        customer access is preserved.
       </p>
       <div className="plan-comparison-grid">
-        {launchPricing.plans.map((plan) => {
+        {publicPlans.map((plan) => {
           const text = copy[plan.id]
           return (
             <article
@@ -198,13 +206,23 @@ export function PricingComparison() {
               </div>
               <footer className="plan-card-footer">
                 <p className="plan-status">
-                  {plan.id === 'free'
-                    ? 'Account registration only'
-                    : plan.id === 'cottage-mercantile'
-                      ? 'In development — not available for purchase'
-                      : 'Not yet available for purchase'}
+                  {available.includes(plan.id)
+                    ? 'Approved monthly subscription'
+                    : plan.id === 'free'
+                      ? 'Account registration only'
+                      : plan.id === 'cottage-mercantile'
+                        ? 'In development — not available for purchase'
+                        : 'Not yet available for purchase'}
                 </p>
-                <a className="public-button" href={signupPlanHref(plan.id)}>
+                <a
+                  className="public-button"
+                  href={
+                    signupPlanHref(plan.id) +
+                    (available.includes(plan.id)
+                      ? '&returnTo=%2Foven%2Fbilling'
+                      : '')
+                  }
+                >
                   {plan.id === 'free'
                     ? 'Get Started Free'
                     : `Choose ${plan.name}`}
@@ -240,7 +258,7 @@ export function PricingComparison() {
           <thead>
             <tr>
               <th scope="col">Feature or limit</th>
-              {launchPricing.plans.map((plan) => (
+              {publicPlans.map((plan) => (
                 <th scope="col" key={plan.id}>
                   {plan.name}
                   <span>${plan.monthlyUsd} USD/month per business</span>
@@ -251,7 +269,7 @@ export function PricingComparison() {
           <tbody>
             <tr>
               <th scope="row">Total business users</th>
-              {launchPricing.plans.map((p) => (
+              {publicPlans.map((p) => (
                 <td key={p.id}>{planUserLabel(p.id)}</td>
               ))}
             </tr>
@@ -259,7 +277,7 @@ export function PricingComparison() {
               (kind, i) => (
                 <tr key={kind}>
                   <th scope="row">Active {kind}</th>
-                  {launchPricing.plans.map((p) => (
+                  {publicPlans.map((p) => (
                     <td key={p.id}>
                       {p.id === 'free'
                         ? `${[5, 5, 10][i]} proposed; not active`
@@ -271,7 +289,7 @@ export function PricingComparison() {
             )}
             <tr>
               <th scope="row">Recipe imports per business</th>
-              {launchPricing.plans.map((p) => (
+              {publicPlans.map((p) => (
                 <td key={p.id}>
                   {p.id === 'free' ? '—' : '20/hour; 100 active drafts'}
                 </td>
@@ -279,7 +297,7 @@ export function PricingComparison() {
             </tr>
             <tr>
               <th scope="row">Handmade design size</th>
-              {launchPricing.plans.map((p) => (
+              {publicPlans.map((p) => (
                 <td key={p.id}>
                   {['cottage-kitchen', 'cottage-mercantile'].includes(p.id)
                     ? '1–100 material lines'
@@ -289,7 +307,7 @@ export function PricingComparison() {
             </tr>
             <tr>
               <th scope="row">Individual logins and shared business</th>
-              {launchPricing.plans.map((p) => (
+              {publicPlans.map((p) => (
                 <td key={p.id}>
                   {p.id === 'cottage-kitchen'
                     ? 'Two total users; invitations Coming soon'
@@ -308,7 +326,7 @@ export function PricingComparison() {
                       ? 'Full resale variant management'
                       : f.label}
                   </th>
-                  {launchPricing.plans.map((p) => (
+                  {publicPlans.map((p) => (
                     <td key={p.id}>{scope(p.id, f.id)}</td>
                   ))}
                 </tr>
