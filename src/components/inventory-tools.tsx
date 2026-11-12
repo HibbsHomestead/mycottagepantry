@@ -1,4 +1,13 @@
 import { useRef, useState } from 'react'
+import {
+  ScanBarcode,
+  PackagePlus,
+  ListOrdered,
+  ClipboardCheck,
+  Printer,
+  MapPin,
+  Barcode,
+} from 'lucide-react'
 import type { Item, Workspace } from '@/lib/domain'
 import {
   barcodeMatches,
@@ -136,48 +145,108 @@ export function InventoryTools({
   return (
     <>
       <div
-        className="inventory-tool-actions"
+        className="inventory-tool-actions inventory-primary-actions"
         aria-label="Inventory scanning and labels"
       >
-        <button className="btn secondary" onClick={() => scan('find')}>
-          Scan barcode
+        <button
+          className="btn secondary"
+          aria-label="Scan barcode"
+          onClick={() => scan('find')}
+        >
+          <ScanBarcode className="inventory-action-icon" aria-hidden="true" />
+          <span className="inventory-action-full">Scan barcode</span>
+          <span className="inventory-action-short" aria-hidden="true">
+            Scan
+          </span>
         </button>
         {canStock && (
           <>
-            <button className="btn secondary" onClick={() => scan('receive')}>
-              Scan to receive
-            </button>
-            <a className="btn secondary" href="#Inventory/Counts">Rapid barcode counts</a>
             <button
               className="btn secondary"
+              aria-label="Scan to receive"
+              onClick={() => scan('receive')}
+            >
+              <PackagePlus
+                className="inventory-action-icon"
+                aria-hidden="true"
+              />
+              <span className="inventory-action-full">Scan to receive</span>
+              <span className="inventory-action-short" aria-hidden="true">
+                Receive
+              </span>
+            </button>
+            <a
+              className="btn secondary"
+              aria-label="Rapid barcode counts"
+              href="#Inventory/Counts"
+            >
+              <span
+                className="inventory-action-icon inventory-action-composite"
+                aria-hidden="true"
+              >
+                <Barcode />
+                <ListOrdered />
+              </span>
+              <span className="inventory-action-full">
+                Rapid barcode counts
+              </span>
+              <span className="inventory-action-short" aria-hidden="true">
+                Rapid count
+              </span>
+            </a>
+            <button
+              className="btn secondary"
+              aria-label="Inventory count sessions"
               onClick={() => {
                 setCountOpen(true)
                 setError('')
               }}
             >
-              Inventory count sessions
+              <ClipboardCheck
+                className="inventory-action-icon"
+                aria-hidden="true"
+              />
+              <span className="inventory-action-full">
+                Inventory count sessions
+              </span>
+              <span className="inventory-action-short" aria-hidden="true">
+                Count sessions
+              </span>
             </button>
           </>
         )}
         <button
           className="btn secondary"
+          aria-label={`Print shelf/bin labels (${selected.length})`}
           onClick={() => (
             setLocationLabels(false),
             setLabelItems(items.filter((i) => selected.includes(i.id)))
           )}
           disabled={!selected.length}
         >
-          Print shelf/bin labels ({selected.length})
+          <Printer className="inventory-action-icon" aria-hidden="true" />
+          <span className="inventory-action-full">
+            Print shelf/bin labels ({selected.length})
+          </span>
+          <span className="inventory-action-short" aria-hidden="true">
+            Shelf labels{' '}
+            <span className="inventory-action-badge">{selected.length}</span>
+          </span>
         </button>
         {items.some((i) => i.storageLocation) && (
           <button
             className="btn secondary"
+            aria-label="Location labels"
             onClick={() => {
               setLocationLabels(true)
               setLabelItems(items)
             }}
           >
-            Location labels
+            <MapPin className="inventory-action-icon" aria-hidden="true" />
+            <span className="inventory-action-full">Location labels</span>
+            <span className="inventory-action-short" aria-hidden="true">
+              Locations
+            </span>
           </button>
         )}
       </div>
