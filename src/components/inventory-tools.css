@@ -139,3 +139,73 @@
     align-items: stretch;
   }
 }
+
+.inventory-primary-actions .inventory-action-icon,
+.inventory-action-short {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .inventory-primary-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 1fr;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .inventory-primary-actions > .btn {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    min-height: 80px;
+    height: auto;
+    padding: 10px 6px;
+    border-radius: 12px;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .inventory-primary-actions .inventory-action-full {
+    display: none;
+  }
+  .inventory-primary-actions .inventory-action-short {
+    display: block;
+  }
+  .inventory-primary-actions .inventory-action-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    color: var(--primary);
+  }
+  .inventory-action-composite {
+    position: relative;
+  }
+  .inventory-action-composite > svg:first-child {
+    width: 21px;
+    height: 21px;
+  }
+  .inventory-action-composite > svg:last-child {
+    position: absolute;
+    right: -4px;
+    bottom: -2px;
+    width: 13px;
+    height: 13px;
+    background: var(--card);
+  }
+  .inventory-action-badge {
+    display: inline-block;
+    min-width: 1.5em;
+    padding: 1px 4px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: var(--primary-ink);
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+  }
+}
