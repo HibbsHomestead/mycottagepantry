@@ -11,6 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { NotFoundPage } from '@/components/error-pages'
 
 import '../styles.css'
+import '../components/mobile-usability.css'
 import '../workspace.css'
 import '../surface-layout.css'
 

@@ -1,0 +1,115 @@
+/* Editable text must not trigger Safari's sub-16px focus zoom. This applies to
+   public/account pages, portals, and component-specific compact controls. */
+@media (max-width: 1024px), (pointer: coarse) {
+  html
+    body
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
+      [type='color']
+    ),
+  html body textarea,
+  html body select,
+  html body [contenteditable='true'],
+  html body [role='combobox'],
+  html body [data-slot='select-trigger'] {
+    font-size: 16px !important;
+    min-width: 0;
+    max-width: 100%;
+    scroll-margin-block: 24px;
+  }
+}
+@media (max-width: 1024px) {
+  [data-slot='dialog-content'][data-mobile-overlay='true']:not(
+      [data-presentation='inventory']
+    ):not([data-presentation='scanner']) {
+    --mobile-left: max(12px, env(safe-area-inset-left, 0px));
+    --mobile-right: max(12px, env(safe-area-inset-right, 0px));
+    --mobile-top: max(12px, env(safe-area-inset-top, 0px));
+    --mobile-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    position: fixed;
+    left: calc(var(--inventory-view-left, 0px) + var(--mobile-left)) !important;
+    top: calc(var(--inventory-view-top, 0px) + var(--mobile-top)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc(
+      var(--inventory-view-width, 100vw) - var(--mobile-left) -
+        var(--mobile-right)
+    ) !important;
+    max-width: calc(
+      var(--inventory-view-width, 100vw) - var(--mobile-left) -
+        var(--mobile-right)
+    ) !important;
+    max-height: calc(
+      var(--inventory-view-height, 100dvh) - var(--mobile-top) -
+        var(--mobile-bottom)
+    ) !important;
+    min-width: 0;
+    box-sizing: border-box;
+    transform: none !important;
+    translate: none !important;
+    animation: none !important;
+    transition: none !important;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-wrap: anywhere;
+    overscroll-behavior: contain;
+    scroll-padding-block: 24px;
+  }
+  [data-mobile-overlay='true'][data-presentation='modal']:not(
+      .item-editor-dialog
+    ) {
+    overflow-y: auto;
+  }
+  [data-mobile-overlay='true'] > * {
+    min-width: 0;
+  }
+  [data-mobile-overlay='true'] button {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  [data-mobile-overlay='true'] [data-slot='dialog-title'] {
+    padding-right: 40px;
+  }
+  [data-mobile-overlay='true'] > [data-slot='dialog-close'] {
+    min-width: 44px;
+    min-height: 44px;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+  }
+  [data-mobile-overlay='true'] .button-row {
+    flex-wrap: wrap;
+  }
+}
+.public-auth {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.public-auth fieldset {
+  min-inline-size: 0;
+}
+.access-technical {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  margin-block: 16px;
+}
+.access-technical pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.oven-loading {
+  max-width: 580px;
+  margin: 8vh auto;
+  padding: 24px;
+  text-align: center;
+}
+.oven-loading .opening-oven {
+  margin-inline: auto;
+}
+.oven-loading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+}

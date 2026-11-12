@@ -190,7 +190,6 @@ function CategoryForm({
       <label className="field">
         <span>Category name</span>
         <input
-          autoFocus
           maxLength={100}
           value={name}
           onChange={(e) => setName(e.target.value)}

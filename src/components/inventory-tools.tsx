@@ -229,7 +229,7 @@ export function InventoryTools({
         />
       )}
       <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-        <DialogContent className="inventory-tool-dialog">
+        <DialogContent presentation="inventory" className="inventory-tool-dialog">
           <DialogTitle>
             {matches.length ? 'Review barcode match' : 'Unknown barcode'}
           </DialogTitle>
@@ -355,7 +355,7 @@ export function InventoryTools({
         </DialogContent>
       </Dialog>
       <Dialog open={countOpen} onOpenChange={setCountOpen}>
-        <DialogContent className="inventory-tool-dialog">
+        <DialogContent presentation="inventory" className="inventory-tool-dialog">
           <DialogTitle>Inventory count session</DialogTitle>
           <DialogDescription>
             Count actual stock on hand, including partial packages. Saving count

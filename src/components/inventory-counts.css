@@ -218,10 +218,6 @@
 .barcode-scanner-dialog .count-running {
   width: 100%;
 }
-.barcode-scanner-dialog:has(.count-running) {
-  max-height: 94dvh;
-  overflow-y: auto;
-}
 .inventory-counts button:focus-visible {
   outline: 2px solid #65418c;
   outline-offset: 3px;

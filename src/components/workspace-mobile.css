@@ -15,19 +15,6 @@ body:has(.stage-one-shell) [data-slot='dialog-content'].barcode-scanner-dialog {
   z-index: 110;
 }
 @media (max-width: 1024px) {
-  body:has(.stage-one-shell) [data-slot='dialog-content'] {
-    top: calc(var(--workspace-view-top, 0px) + 12px);
-    left: 50%;
-    bottom: auto;
-    right: auto;
-    transform: translateX(-50%);
-    translate: none;
-    max-height: calc(var(--workspace-view-height, 100dvh) - 24px);
-    max-width: calc(100vw - 24px) !important;
-    overscroll-behavior: contain;
-    scroll-padding-block: 24px;
-    animation: none;
-  }
   body:has(.stage-one-shell) [data-slot='dialog-overlay'] {
     position: fixed;
     inset: 0;
@@ -54,10 +41,13 @@ body:has(.stage-one-shell) [data-slot='dialog-content'].barcode-scanner-dialog {
 }
 @media (max-width: 700px) {
   .stage-one-shell main {
-    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(
+      var(--mobile-nav-height, 80px) + var(--workspace-toolbar-bottom, 0px) +
+        24px
+    );
   }
   .stage-one-shell .mobile-bottom-nav {
-    bottom: var(--workspace-view-bottom, 0px);
+    bottom: var(--workspace-toolbar-bottom, 0px);
     padding-left: max(8px, env(safe-area-inset-left));
     padding-right: max(8px, env(safe-area-inset-right));
   }

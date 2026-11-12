@@ -109,7 +109,7 @@ for (const width of [390, 768, 1440])
     await expect(
       page.getByRole('heading', { name: 'Money made clear.' }),
     ).toBeVisible()
-    await page.getByLabel('Date range').selectOption('All recorded')
+    await page.getByLabel('Date range').selectOption('All time')
     await expect(page.locator('.finance-summary-card')).toHaveCount(4)
     await page.getByRole('button', { name: /receipts awaiting review/ }).click()
     await expect(

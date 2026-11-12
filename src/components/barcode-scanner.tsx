@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   DialogDescription,
+  DialogClose,
 } from './ui/dialog'
 import { barcodeText, normalizedBarcode, scanFormats } from '@/lib/barcodes'
 import './inventory-tools.css'
@@ -152,26 +153,22 @@ export function BarcodeScanner({
           delayBetweenScanAttempts: 250,
           delayBetweenScanSuccess: continuous ? 250 : 1000,
         })
-        controls = await reader.decodeFromStream(
-          stream,
-          element,
-          (result) => {
-            if (!stopped && result)
-              accept(
-                result.getText(),
-                (
-                  {
-                    15: 'upc_e',
-                    14: 'upc_a',
-                    7: 'ean_13',
-                    6: 'ean_8',
-                    4: 'code_128',
-                    11: 'qr_code',
-                  } as Record<number, string>
-                )[result.getBarcodeFormat()],
-              )
-          },
-        )
+        controls = await reader.decodeFromStream(stream, element, (result) => {
+          if (!stopped && result)
+            accept(
+              result.getText(),
+              (
+                {
+                  15: 'upc_e',
+                  14: 'upc_a',
+                  7: 'ean_13',
+                  6: 'ean_8',
+                  4: 'code_128',
+                  11: 'qr_code',
+                } as Record<number, string>
+              )[result.getBarcodeFormat()],
+            )
+        })
         if (stopped) controls?.stop()
       }
     } catch (e) {
@@ -183,9 +180,8 @@ export function BarcodeScanner({
         (e instanceof Error ? e.name : (e as { name?: string })?.name) ===
           'NotAllowedError'
           ? 'Camera permission was denied. In Safari, open the page menu → Website Settings → Camera for this site. In Chrome, open site controls → Permissions → Camera. Allow Cottage Pantry, then tap Retry camera. Your browser controls how long permission lasts; private sessions or cleared site settings may ask again.'
-          : (e instanceof Error
-                ? e.name
-                : (e as { name?: string })?.name) === 'NotReadableError'
+          : (e instanceof Error ? e.name : (e as { name?: string })?.name) ===
+              'NotReadableError'
             ? 'Camera is in use or could not start. Close other camera apps or tabs, then tap Retry camera or enter the code manually.'
             : 'Camera unavailable. Check that this device has an enabled camera, then tap Retry camera or enter the code manually.',
       )
@@ -202,89 +198,103 @@ export function BarcodeScanner({
       }}
     >
       <DialogContent
+        presentation="scanner"
+        showCloseButton={false}
         className="inventory-tool-dialog barcode-scanner-dialog"
         overlayClassName="barcode-scanner-overlay"
       >
-        <DialogTitle>Scan barcode</DialogTitle>
-        <DialogDescription>
-          {continuous
-            ? 'Continuous count: identical codes stay latched until you select Count another. Scans save draft evidence only.'
-            : 'One code per scan. Scanning never posts stock or payments.'}{' '}
-          Camera frames stay on this device.
-        </DialogDescription>
-        <video
-          ref={video}
-          muted
-          playsInline
-          aria-label="Barcode camera preview"
-          className="barcode-video"
-        />
-        {!running && (
-          <button className="btn" onClick={() => void start()}>
-            {error ? 'Retry camera' : 'Start rear camera'}
-          </button>
-        )}
-        {error && (
-          <p role="alert" className="warning-text">
-            {error}
-          </p>
-        )}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (!manual.trim()) return
-            if (continuous) {
-              lastCode.current = ''
-              accepted.current = false
-            }
-            accept(manual)
-            if (continuous) setManual('')
-          }}
-        >
-          <label className="field">
-            Barcode or internal QR text
-            <input
-              autoComplete="off"
-              value={manual}
-              onChange={(e) => setManual(e.target.value)}
-            />
-          </label>
-          <button className="btn secondary" disabled={!manual.trim()}>
-            Use entered code
-          </button>
-        </form>
-        {continuous && (
-          <>
-            <button
-              className="btn secondary"
-              onClick={() => {
+        <header className="scanner-header">
+          <DialogTitle>
+            {continuous ? 'Rapid scanner' : 'Scan barcode'}
+          </DialogTitle>
+          <DialogClose
+            className="btn secondary"
+            onClick={() => release.current()}
+          >
+            Close
+          </DialogClose>
+        </header>
+        <div className="scanner-body">
+          <DialogDescription>
+            {continuous
+              ? 'Continuous count: identical codes stay latched until you select Count another. Scans save draft evidence only.'
+              : 'One code per scan. Scanning never posts stock or payments.'}{' '}
+            Camera frames stay on this device.
+          </DialogDescription>
+          <video
+            ref={video}
+            muted
+            playsInline
+            aria-label="Barcode camera preview"
+            className="barcode-video"
+          />
+          {!running && (
+            <button className="btn" onClick={() => void start()}>
+              {error ? 'Retry camera' : 'Start rear camera'}
+            </button>
+          )}
+          {error && (
+            <p role="alert" className="warning-text">
+              {error}
+            </p>
+          )}
+          {continuous && children}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!manual.trim()) return
+              if (continuous) {
                 lastCode.current = ''
                 accepted.current = false
-              }}
-            >
-              Count another identical package
+              }
+              accept(manual)
+              if (continuous) setManual('')
+            }}
+          >
+            <label className="field">
+              Barcode or internal QR text
+              <input
+                autoComplete="off"
+                value={manual}
+                onChange={(e) => setManual(e.target.value)}
+              />
+            </label>
+            <button className="btn secondary" disabled={!manual.trim()}>
+              Use entered code
             </button>
-            <button
-              className="btn secondary"
-              onClick={() => {
-                release.current()
-                setRunning(false)
-              }}
-            >
-              Pause camera
-            </button>
-            {children}
-          </>
-        )}
-        <button
-          className="btn secondary"
-          onClick={() => {
-            release.current()
-            onClose()
-          }}
-        >
-          {continuous ? 'Pause / return to count' : 'Cancel'}
-        </button>
+          </form>
+          {continuous && (
+            <>
+              <button
+                className="btn secondary"
+                onClick={() => {
+                  lastCode.current = ''
+                  accepted.current = false
+                }}
+              >
+                Count another identical package
+              </button>
+              <button
+                className="btn secondary"
+                onClick={() => {
+                  release.current()
+                  setRunning(false)
+                }}
+              >
+                Pause camera
+              </button>
+            </>
+          )}
+          <button
+            className="btn secondary"
+            onClick={() => {
+              release.current()
+              onClose()
+            }}
+          >
+            {continuous ? 'Pause / return to count' : 'Cancel'}
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   )

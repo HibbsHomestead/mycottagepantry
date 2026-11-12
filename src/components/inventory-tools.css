@@ -133,30 +133,6 @@
   }
 }
 
-/* These portals share the count, barcode assignment and scanner shell. Use
-   viewport insets rather than centering translations on smaller screens. */
-@media (max-width: 1024px) {
-  body:has(.stage-one-shell) [data-slot='dialog-content'].inventory-tool-dialog {
-    --count-left: max(12px, env(safe-area-inset-left, 0px));
-    --count-right: max(12px, env(safe-area-inset-right, 0px));
-    --count-top: max(12px, env(safe-area-inset-top, 0px));
-    --count-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-    left: var(--count-left);
-    right: auto;
-    top: calc(var(--workspace-view-top, 0px) + var(--count-top));
-    width: calc(100% - var(--count-left) - var(--count-right));
-    max-width: calc(100% - var(--count-left) - var(--count-right)) !important;
-    max-height: calc(
-      var(--workspace-view-height, 100dvh) - var(--count-top) -
-        var(--count-bottom)
-    );
-    transform: none;
-    translate: none;
-    animation: none;
-    transition: none;
-    scroll-padding-block: 24px;
-  }
-}
 @media (max-width: 430px) {
   .inventory-tool-dialog .inventory-tool-actions {
     flex-direction: column;
