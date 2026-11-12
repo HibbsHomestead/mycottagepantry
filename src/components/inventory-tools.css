@@ -2,10 +2,25 @@
   width: min(900px, calc(100vw - 24px));
   max-width: min(900px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   overflow-y: auto;
+  overflow-wrap: anywhere;
   background: var(--card);
   color: var(--foreground);
   overscroll-behavior: contain;
+}
+.inventory-tool-dialog > * {
+  min-width: 0;
+}
+.inventory-tool-dialog [data-slot='dialog-title'] {
+  padding-right: 24px;
+}
+.inventory-tool-dialog .btn {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  height: auto;
 }
 .inventory-tool-dialog input,
 .inventory-tool-dialog select,
@@ -99,7 +114,6 @@
     min-height: 44px;
   }
   .app-dialog,
-  [data-slot='dialog-content'].inventory-tool-dialog,
   [data-slot='dialog-content'].ingredient-modal-shell {
     max-height: calc(var(--app-visual-height, 100dvh) - 24px);
     top: calc(
@@ -116,5 +130,36 @@
   .app-shell .check-label {
     min-height: 44px;
     align-items: center;
+  }
+}
+
+/* These portals share the count, barcode assignment and scanner shell. Use
+   viewport insets rather than centering translations on smaller screens. */
+@media (max-width: 1024px) {
+  body:has(.stage-one-shell) [data-slot='dialog-content'].inventory-tool-dialog {
+    --count-left: max(12px, env(safe-area-inset-left, 0px));
+    --count-right: max(12px, env(safe-area-inset-right, 0px));
+    --count-top: max(12px, env(safe-area-inset-top, 0px));
+    --count-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    left: var(--count-left);
+    right: auto;
+    top: calc(var(--workspace-view-top, 0px) + var(--count-top));
+    width: calc(100% - var(--count-left) - var(--count-right));
+    max-width: calc(100% - var(--count-left) - var(--count-right)) !important;
+    max-height: calc(
+      var(--workspace-view-height, 100dvh) - var(--count-top) -
+        var(--count-bottom)
+    );
+    transform: none;
+    translate: none;
+    animation: none;
+    transition: none;
+    scroll-padding-block: 24px;
+  }
+}
+@media (max-width: 430px) {
+  .inventory-tool-dialog .inventory-tool-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
