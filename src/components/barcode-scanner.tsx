@@ -1,20 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from './ui/dialog'
-import { barcodeText, scanFormats } from '@/lib/barcodes'
+import { barcodeText, normalizedBarcode, scanFormats } from '@/lib/barcodes'
 import './inventory-tools.css'
 
 export function BarcodeScanner({
   onCode,
   onClose,
+  continuous = false,
+  children,
 }: {
   onCode: (raw: string, format?: string) => void
   onClose: () => void
+  continuous?: boolean
+  children?: ReactNode
 }) {
+  const callbacks = useRef({ onCode, onClose })
+  useLayoutEffect(() => {
+    callbacks.current = { onCode, onClose }
+  }, [onCode, onClose])
+  const lastCode = useRef('')
   const video = useRef<HTMLVideoElement>(null),
     release = useRef<() => void>(() => {}),
     accepted = useRef(false),
@@ -42,10 +57,12 @@ export function BarcodeScanner({
   function accept(raw: string, format?: string) {
     try {
       const code = barcodeText(raw)
-      if (accepted.current) return
+      const key = normalizedBarcode(code, format)
+      if (continuous ? lastCode.current === key : accepted.current) return
       accepted.current = true
-      release.current()
-      onCode(code, format)
+      lastCode.current = key
+      if (!continuous) release.current()
+      callbacks.current.onCode(code, format)
     } catch (e) {
       release.current()
       setRunning(false)
@@ -90,7 +107,18 @@ export function BarcodeScanner({
       element.srcObject = stream
       await element.play()
       if (stopped) return
-      const Native = (window as any).BarcodeDetector
+      const Native = (
+        window as unknown as {
+          BarcodeDetector?: {
+            new (options: { formats: string[] }): {
+              detect: (
+                video: HTMLVideoElement,
+              ) => Promise<{ rawValue: string; format?: string }[]>
+            }
+            getSupportedFormats: () => Promise<string[]>
+          }
+        }
+      ).BarcodeDetector
       const supported = Native
         ? await Native.getSupportedFormats().catch(() => [])
         : []
@@ -108,7 +136,7 @@ export function BarcodeScanner({
               const results = await detector.detect(element)
               if (!stopped && results[0]?.rawValue) {
                 accept(results[0].rawValue, results[0].format)
-                return
+                if (!continuous) return
               }
             } catch {
               /* A transient unreadable frame is not a new request. */
@@ -122,24 +150,28 @@ export function BarcodeScanner({
         if (stopped) return
         const reader = new BrowserMultiFormatReader(undefined, {
           delayBetweenScanAttempts: 250,
-          delayBetweenScanSuccess: 1000,
+          delayBetweenScanSuccess: continuous ? 250 : 1000,
         })
-        controls = await reader.decodeFromStream(stream, element, (result) => {
-          if (!stopped && result)
-            accept(
-              result.getText(),
-              (
-                {
-                  15: 'upc_e',
-                  14: 'upc_a',
-                  7: 'ean_13',
-                  6: 'ean_8',
-                  4: 'code_128',
-                  11: 'qr_code',
-                } as Record<number, string>
-              )[result.getBarcodeFormat()],
-            )
-        })
+        controls = await reader.decodeFromStream(
+          stream,
+          element,
+          (result) => {
+            if (!stopped && result)
+              accept(
+                result.getText(),
+                (
+                  {
+                    15: 'upc_e',
+                    14: 'upc_a',
+                    7: 'ean_13',
+                    6: 'ean_8',
+                    4: 'code_128',
+                    11: 'qr_code',
+                  } as Record<number, string>
+                )[result.getBarcodeFormat()],
+              )
+          },
+        )
         if (stopped) controls?.stop()
       }
     } catch (e) {
@@ -148,9 +180,12 @@ export function BarcodeScanner({
       release.current()
       setRunning(false)
       setError(
-        (e as any)?.name === 'NotAllowedError'
+        (e instanceof Error ? e.name : (e as { name?: string })?.name) ===
+          'NotAllowedError'
           ? 'Camera permission was denied. In Safari, open the page menu → Website Settings → Camera for this site. In Chrome, open site controls → Permissions → Camera. Allow Cottage Pantry, then tap Retry camera. Your browser controls how long permission lasts; private sessions or cleared site settings may ask again.'
-          : (e as any)?.name === 'NotReadableError'
+          : (e instanceof Error
+                ? e.name
+                : (e as { name?: string })?.name) === 'NotReadableError'
             ? 'Camera is in use or could not start. Close other camera apps or tabs, then tap Retry camera or enter the code manually.'
             : 'Camera unavailable. Check that this device has an enabled camera, then tap Retry camera or enter the code manually.',
       )
@@ -172,8 +207,10 @@ export function BarcodeScanner({
       >
         <DialogTitle>Scan barcode</DialogTitle>
         <DialogDescription>
-          One code per scan. Camera frames stay on this device. Scanning never
-          posts stock or payments.
+          {continuous
+            ? 'Continuous count: identical codes stay latched until you select Count another. Scans save draft evidence only.'
+            : 'One code per scan. Scanning never posts stock or payments.'}{' '}
+          Camera frames stay on this device.
         </DialogDescription>
         <video
           ref={video}
@@ -195,7 +232,13 @@ export function BarcodeScanner({
         <form
           onSubmit={(e) => {
             e.preventDefault()
+            if (!manual.trim()) return
+            if (continuous) {
+              lastCode.current = ''
+              accepted.current = false
+            }
             accept(manual)
+            if (continuous) setManual('')
           }}
         >
           <label className="field">
@@ -210,6 +253,29 @@ export function BarcodeScanner({
             Use entered code
           </button>
         </form>
+        {continuous && (
+          <>
+            <button
+              className="btn secondary"
+              onClick={() => {
+                lastCode.current = ''
+                accepted.current = false
+              }}
+            >
+              Count another identical package
+            </button>
+            <button
+              className="btn secondary"
+              onClick={() => {
+                release.current()
+                setRunning(false)
+              }}
+            >
+              Pause camera
+            </button>
+            {children}
+          </>
+        )}
         <button
           className="btn secondary"
           onClick={() => {
@@ -217,7 +283,7 @@ export function BarcodeScanner({
             onClose()
           }}
         >
-          Cancel
+          {continuous ? 'Pause / return to count' : 'Cancel'}
         </button>
       </DialogContent>
     </Dialog>
