@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import './ingredient-modal.css'
 import './inventory-overlay.css'
 import '../mobile-usability.css'
+import './dialog-position.css'
 import { XIcon } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 
@@ -99,14 +100,12 @@ function DialogContent({
         key="content"
         data-slot="dialog-content"
         data-presentation={presentation}
+        data-positioning={positioning}
         data-mobile-overlay={bounded ? 'true' : undefined}
         className={cn(
           presentation !== 'modal'
             ? 'fixed z-50 flex flex-col border bg-card shadow-lg outline-none'
             : 'fixed z-50 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-card p-6 shadow-lg outline-none sm:max-w-lg',
-          presentation === 'modal' &&
-            positioning === 'center' &&
-            'top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           ingredient && 'ingredient-modal-shell',
           className,
         )}
