@@ -44,6 +44,53 @@ function start(initialType = '') {
   )
   return { save, close, onCreated, onExisting, user: userEvent.setup() }
 }
+it('uses a one-yard reference when creating fabric from a receipt without receiving stock early', async () => {
+  const save = vi.fn(async () => {})
+  const user = userEvent.setup()
+  render(
+    <AddItemDialog
+      workspace={demoData()}
+      initialType="material"
+      initialName="Receipt cotton"
+      receiptLine
+      onWorkspace={vi.fn()}
+      save={save}
+      close={vi.fn()}
+    />,
+  )
+  await user.selectOptions(screen.getByLabelText('Material Subtype'), 'fabric')
+  await user.click(screen.getByRole('tab', { name: 'Fabric' }))
+  fireEvent.change(screen.getByLabelText('Fabric width'), {
+    target: { value: '44' },
+  })
+  await user.click(
+    screen.getByRole('tab', { name: 'Purchase & Stock' }),
+  )
+  await user.selectOptions(screen.getByLabelText('Purchase unit'), 'yd')
+  fireEvent.change(screen.getByLabelText('Cost per yd'), {
+    target: { value: '2.99' },
+  })
+  expect(screen.getByText('Purchase quantity: 1 yd.')).toBeVisible()
+  expect(
+    screen.queryByLabelText('Amount in each package'),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Opening count')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Expiry (optional)')).not.toBeInTheDocument()
+  await user.click(
+    screen.getByRole('button', { name: 'Save item' }),
+  )
+  expect(save).toHaveBeenCalledWith(
+    'ingredients',
+    expect.objectContaining({
+      inventoryPackageSetup: true,
+      initialStock: false,
+      amountPerPackage: 1,
+      purchaseUnit: 'yd',
+      packagePrice: '2.99',
+    }),
+  )
+})
+
 it.each(itemTypes)(
   'creates %s without a receipt and keeps Item Type as the first field',
   async (type) => {

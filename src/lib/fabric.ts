@@ -2,6 +2,8 @@ import { convert, number, type Item } from './domain'
 
 export const lengthUnits = ['yd', 'ft', 'in', 'm', 'cm'] as const
 export const isFabric = (item?: Item | null) => item?.materialType === 'fabric'
+/** Historical fabric dates remain stored, but never drive expiry controls or alerts. */
+export const supportsExpiry = (item?: Item | null) => !isFabric(item)
 export const fabricUnitOptions = (tracking: string) =>
   tracking === 'precut' ? ['each'] : [...lengthUnits]
 export function lengthUnit(unit: string) {

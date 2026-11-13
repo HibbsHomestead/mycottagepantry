@@ -256,7 +256,15 @@ export async function handleAddItem(
   item.currency = ctx.state.settings[0]?.currency || 'USD'
   item.threshold = number(item.threshold || 0, 'Reorder threshold')
   const fabric = type === 'material' && data.materialType === 'fabric'
-  if (fabric) validateFabric(item)
+  if (fabric) {
+    validateFabric(item)
+    // New fabric never acquires an expiry date; existing historical records are untouched.
+    delete item.expires
+  }
+  delete item.purchasePriceReviewRequired
+  delete item.purchasePriceReviewNote
+  delete item.purchasePriceReviewed
+  delete item.fabricPurchaseBasisConflict
   item.storageUnit = item.unit
   if (!fabric && type !== 'resale')
     item.unit = baseUnit(item.unit, item.conversions)
@@ -479,7 +487,7 @@ export async function handleAddItem(
           }
         : {}),
       lot: data.lot,
-      expires: data.expires,
+      expires: fabric ? undefined : data.expires,
     })
     if (roundMoney(amount) > 0)
       await ctx.save('journals', {

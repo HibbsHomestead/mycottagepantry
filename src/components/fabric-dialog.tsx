@@ -20,6 +20,14 @@ import { fabricUnitOptions } from '@/lib/fabric'
 import { convert, money, type Item, type Workspace } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
 import { stockReceiptPreview } from '@/lib/inventory-browse'
+import { InventoryPackageFields } from './inventory-package-fields'
+import {
+  fabricPurchaseDraft,
+  fabricByYard,
+  fabricYardContents,
+  inventoryPackagePreview,
+  inventoryPackagePlan,
+} from '@/lib/inventory-package'
 export function FabricDialog({
   kind,
   item,
@@ -44,7 +52,7 @@ export function FabricDialog({
   onDirty: (v: boolean) => void
 }) {
   const [draft, setDraft] = useState<Item>(() => ({
-    ...item,
+    ...(kind === 'fabric-edit' ? fabricPurchaseDraft(item) : item),
     operationId: crypto.randomUUID(),
     expectedUpdatedAt: item.updatedAt,
     ...(kind === 'fabric-receive' ||
@@ -60,6 +68,16 @@ export function FabricDialog({
           pieceId: '',
           usableLengthUnit: item.storageUnit || 'yd',
           lengthConfirmed: false,
+          ...(kind === 'fabric-receive'
+            ? {
+                lot: '',
+                priceMode:
+                  (item.storageUnit || item.unit) === 'yd'
+                    ? 'per_unit'
+                    : 'total',
+                purchaseUnitPrice: '',
+              }
+            : {}),
         }
       : {}),
   }))
@@ -73,6 +91,10 @@ export function FabricDialog({
     remnant = kind === 'fabric-remnant',
     edit = kind === 'fabric-edit'
   const manager = ['Owner', 'Manager'].includes(role)
+  const purchaseReview =
+    edit &&
+    !!inventoryPackagePreview({ ...draft, purchasePriceReviewRequired: false })
+      .error
   const canWrite = manager || (role === 'Production Staff' && !edit && !remnant)
   useEffect(() => {
     onDirty(dirty)
@@ -239,6 +261,8 @@ export function FabricDialog({
               setBusy(true)
               setError('')
               try {
+                if (edit && draft.fabricPurchaseChanged)
+                  inventoryPackagePlan(draft)
                 await mutate(
                   edit
                     ? 'fabricUpdate'
@@ -310,6 +334,7 @@ export function FabricDialog({
                     false,
                     'date',
                   )}
+                  {field('lot', 'Lot (optional)')}
                 </div>
               )}
               {edit ? (
@@ -346,13 +371,76 @@ export function FabricDialog({
                     className="item-photo-control"
                     previewClassName="pantry-edit-photo"
                   />
+                  {purchaseReview && (
+                    <div className="calculation-box" role="status">
+                      <p>
+                        Review this saved purchase basis. Its quantities and
+                        price remain unchanged until you confirm new purchase
+                        details.
+                      </p>
+                      {!draft.fabricPurchaseChanged && (
+                        <p>
+                          Saved reference: {item.purchaseQuantity ?? 'Not set'}{' '}
+                          {item.purchaseUnit || 'purchase unit'} for{' '}
+                          {item.packagePrice == null
+                            ? 'an unknown price'
+                            : money(item.packagePrice)}
+                          .
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setDirty(true)
+                          setDraft((d) => ({
+                            ...d,
+                            amountPerPackage: fabricByYard(d)
+                              ? fabricYardContents(d)
+                              : '',
+                            packagePrice: '',
+                            fabricPurchaseChanged: true,
+                            fabricPurchaseBasisConflict: false,
+                            purchasePriceReviewRequired: true,
+                            purchasePriceReviewNote: `Enter and review the cost per ${d.purchaseUnit || 'purchase unit'}. Saved stock and historical prices stay unchanged.`,
+                          }))
+                        }}
+                      >
+                        Review purchase details
+                      </button>
+                    </div>
+                  )}
+                  {(!purchaseReview || draft.fabricPurchaseChanged) && (
+                    <InventoryPackageFields
+                      value={draft}
+                      workspace={workspace}
+                      openingStock={false}
+                      fixedStockUnit
+                      showSupplier={false}
+                      change={(key, value) => {
+                        setDirty(true)
+                        setDraft((d) => ({
+                          ...d,
+                          [key]: value,
+                          ...(key !== 'vendorId'
+                            ? { fabricPurchaseChanged: true }
+                            : {}),
+                        }))
+                      }}
+                    />
+                  )}
+                  <p className="form-hint">
+                    Purchase details set the current reference price. Saving
+                    them does not change stock quantities, inventory valuation,
+                    or historical purchases.
+                  </p>
                 </>
               ) : (
                 <>
                   {field(
                     'quantity',
                     receive
-                      ? 'Purchase quantity (decimals or fractions)'
+                      ? 'Quantity received (decimals or fractions)'
                       : remnant
                         ? 'Usable remnant length'
                         : 'Signed quantity adjustment',
@@ -361,11 +449,26 @@ export function FabricDialog({
                   <label className="field">
                     <span>Unit</span>
                     <select
+                      aria-label="Unit"
                       value={draft.unit}
                       onChange={(e) => {
-                        change('unit', e.target.value)
-                        change('purchaseUnit', e.target.value)
-                        change('lengthConfirmed', false)
+                        const unit = e.target.value
+                        setDirty(true)
+                        setDraft((d) => ({
+                          ...d,
+                          unit,
+                          purchaseUnit: unit,
+                          lengthConfirmed: false,
+                          ...(receive
+                            ? {
+                                priceMode: unit === 'yd' ? 'per_unit' : 'total',
+                                price: '',
+                                purchaseUnitPrice: '',
+                                purchasePriceReviewNote:
+                                  'Purchase unit changed. Review the price for this receipt; the previous price has not been carried over.',
+                              }
+                            : {}),
+                        }))
                       }}
                     >
                       {[
@@ -381,6 +484,17 @@ export function FabricDialog({
                   {receive && (
                     <>
                       <FabricPriceFields value={draft} change={change} />
+                      {draft.unit === 'yd' && (
+                        <p className="form-hint">
+                          Purchase quantity: 1 yd. Enter the total yards
+                          received above.
+                        </p>
+                      )}
+                      {draft.purchasePriceReviewNote && (
+                        <p className="form-hint" role="status">
+                          {draft.purchasePriceReviewNote}
+                        </p>
+                      )}
                       <FabricPurchaseFields
                         value={{ ...draft, purchaseUnit: draft.unit }}
                         change={change}
@@ -396,8 +510,11 @@ export function FabricDialog({
                       </p>
                       <p className="form-hint">
                         Total cost follows the existing inventory asset / cash
-                        posting and weighted average policy. Enter the total
-                        paid; a bolt or roll needs confirmed usable length.
+                        posting and weighted average policy.{' '}
+                        {draft.priceMode === 'per_unit'
+                          ? `Total acquisition cost is the quantity received × cost per ${draft.unit}.`
+                          : 'Enter the total paid for this receipt.'}{' '}
+                        A bolt or roll needs confirmed usable length.
                       </p>
                     </>
                   )}

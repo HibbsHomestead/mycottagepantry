@@ -18,7 +18,7 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { convert, money, type Item } from '@/lib/domain'
-import { isFabric } from '@/lib/fabric'
+import { isFabric, supportsExpiry } from '@/lib/fabric'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -100,7 +100,11 @@ export function PantryInventory({
       (i) => i.trackInventory !== false && i.quantity <= i.threshold,
     ),
     expiring = ingredients.filter(
-      (i) => i.expires && i.expires >= today && i.expires <= next,
+      (i) =>
+        supportsExpiry(i) &&
+        i.expires &&
+        i.expires >= today &&
+        i.expires <= next,
     )
   let exactBarcodeItems = new Set<string>()
   if (search.trim()) {
@@ -140,7 +144,7 @@ export function PantryInventory({
         : filter === 'Expiring soon'
           ? expiring.includes(i)
           : filter === 'Expired'
-            ? i.expires && i.expires < today
+            ? supportsExpiry(i) && i.expires && i.expires < today
             : filter === 'Craft materials'
               ? i.usedAs === 'material'
               : filter === 'Ingredients'

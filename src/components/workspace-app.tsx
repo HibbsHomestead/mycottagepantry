@@ -30,7 +30,7 @@ import { InventoryProductFields } from './inventory-product-fields'
 import { foodProduct } from '@/lib/inventory-product'
 import { ProductWorkflowDialog } from './product-workflow-dialog'
 import { FabricDialog } from './fabric-dialog'
-import { isFabric } from '@/lib/fabric'
+import { isFabric, supportsExpiry } from '@/lib/fabric'
 import {
   FinishedInventory,
   HandmadeProduction,
@@ -462,7 +462,9 @@ export function WorkspaceApp() {
     if (source) openLinkedRecipe(source)
   }, [ready, recipes])
   const low = ingredients.filter((i) => i.quantity <= i.threshold),
-    expiring = ingredients.filter((i) => i.expires && i.expires <= '2026-11-04')
+    expiring = ingredients.filter(
+      (i) => supportsExpiry(i) && i.expires && i.expires <= '2026-11-04',
+    )
   const commissionIncome = (state.consignment_sales || []).reduce(
       (s, i) => s + i.commission + i.deductions,
       0,
@@ -3495,9 +3497,11 @@ export function WorkspaceApp() {
                   </Field>
                   <div className="form-grid">
                     <Field label="Lot code (optional)">{input('lot')}</Field>
-                    <Field label="Expiration (optional)">
-                      {input('expires', 'date')}
-                    </Field>
+                    {supportsExpiry(selected) && (
+                      <Field label="Expiration (optional)">
+                        {input('expires', 'date')}
+                      </Field>
+                    )}
                   </div>
                   <Field label="Note / receipt reference">
                     {input(
