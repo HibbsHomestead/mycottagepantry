@@ -14,7 +14,7 @@ import {
   FabricPurchaseFields,
   FabricPriceFields,
 } from './fabric-fields'
-import { ProductArtworkFields } from './product-artwork-fields'
+import { ItemPhotoField } from './item-photo-field'
 import { PantryPhoto } from './pantry-photo'
 import { fabricUnitOptions } from '@/lib/fabric'
 import { convert, money, type Item, type Workspace } from '@/lib/domain'
@@ -335,23 +335,16 @@ export function FabricDialog({
                       ))}
                     </select>
                   </label>
-                  <PantryPhoto
-                    className="pantry-edit-photo"
-                    item={{
-                      ...draft,
-                      id: draft.id,
-                      name: draft.name || item.name,
-                    }}
+                  <ItemPhotoField
+                    value={draft as Item}
                     assets={workspace.graphic_assets || []}
-                  />
-                  <ProductArtworkFields
-                    purpose="material"
-                    assets={workspace.graphic_assets || []}
-                    value={draft}
                     onChange={change}
                     onWorkspace={onWorkspace}
                     canUpload={manager}
+                    disabled={busy}
                     onBusy={setBusy}
+                    className="item-photo-control"
+                    previewClassName="pantry-edit-photo"
                   />
                 </>
               ) : (

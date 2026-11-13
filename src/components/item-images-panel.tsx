@@ -2,7 +2,9 @@ import { ArtworkPicker } from './artwork-picker'
 import { libraryArtwork } from '@/lib/artwork-library'
 import { useId, useState, type ReactNode } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
-import { PantryPhoto } from './pantry-photo'
+import { ItemPhotoField } from './item-photo-field'
+import { imageDisplayName } from '@/lib/image-display-name'
+export { imageDisplayName } from '@/lib/image-display-name'
 
 async function uploadAsset(file: File, category: string) {
   const body = new FormData()
@@ -19,26 +21,6 @@ async function uploadAsset(file: File, category: string) {
       result.error || 'Upload failed. Your other changes are preserved.',
     )
   return result as { asset: Item; workspace: Workspace }
-}
-
-/** Readable image name: never show an internal ID or a generated file hash. */
-export function imageDisplayName(asset: Item | undefined, index = 0) {
-  if (!asset) return ''
-  const raw = String(asset.name || '').trim(),
-    base = raw.replace(/\.(png|jpe?g|webp|gif)$/i, '').trim()
-  const looksGenerated =
-    !base ||
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      base,
-    ) ||
-    (!!asset.id && base.includes(String(asset.id))) ||
-    /^[0-9a-f]{16,}$/i.test(base) ||
-    /^(image|img|file|upload|blob)?[-_ ]?[0-9a-f-]{20,}$/i.test(base)
-  if (!looksGenerated) return raw
-  const kind = /photo/i.test(String(asset.category || ''))
-    ? 'Uploaded photo'
-    : 'Uploaded image'
-  return index > 0 ? `${kind} ${index}` : kind
 }
 
 function UploadButton({
@@ -108,7 +90,6 @@ export function ItemImagesPanel({
   const [uploading, setUploading] = useState(''),
     [error, setError] = useState(''),
     [status, setStatus] = useState('')
-  const photoSelect = useId()
   const locked = disabled || !!uploading
   const photo = assets.find((a) => a.id === value.imageAssetId)
   const graphicId =
@@ -121,23 +102,17 @@ export function ItemImagesPanel({
     onChange('graphicAssetId', id)
   }
 
-  async function upload(file: File, role: 'photo' | 'graphic') {
+  async function upload(file: File, role: 'graphic') {
     if (!canUpload) return
     setUploading(role)
     onBusy(true)
     setError('')
-    setStatus(role === 'photo' ? 'Uploading photo…' : 'Uploading artwork…')
+    setStatus('Uploading artwork…')
     try {
-      const result = await uploadAsset(
-        file,
-        role === 'photo' ? 'product photo' : 'illustration',
-      )
+      const result = await uploadAsset(file, 'illustration')
       onWorkspace(result.workspace)
-      if (role === 'photo') onChange('imageAssetId', result.asset.id)
-      else setGraphic(result.asset.id)
-      setStatus(
-        `${role === 'photo' ? 'Photo' : 'Label artwork'} uploaded. Select Save to keep it on this item.`,
-      )
+      setGraphic(result.asset.id)
+      setStatus('Label artwork uploaded. Select Save to keep it on this item.')
     } catch (e) {
       setError(
         e instanceof Error && e.message
@@ -165,11 +140,17 @@ export function ItemImagesPanel({
         />
       )}
       <section className="item-images-photo" aria-label={photoLabel}>
-        <PantryPhoto
-          item={{ ...value, name: value.name || 'New item' }}
+        <ItemPhotoField
+          value={value}
           assets={assets}
-          kind="product"
-          className="item-images-preview"
+          canUpload={canUpload}
+          disabled={locked}
+          onChange={onChange}
+          onWorkspace={onWorkspace}
+          onBusy={onBusy}
+          className="item-photo-control"
+          previewClassName="item-images-preview"
+          collection="Product artwork"
         />
         <div className="item-images-controls">
           <h3>{photoLabel}</h3>
@@ -178,41 +159,6 @@ export function ItemImagesPanel({
               ? `${imageDisplayName(photo, assets.indexOf(photo) + 1)} · shown on inventory and product cards and in View Details.`
               : 'No photo yet. Cards show a generic icon until you add one.'}
           </p>
-          <div className="item-images-actions">
-            {canUpload && (
-              <UploadButton
-                label={photo ? 'Replace photo' : 'Upload photo'}
-                disabled={locked}
-                onFile={(file) => void upload(file, 'photo')}
-              />
-            )}
-            {photo && (
-              <button
-                type="button"
-                className="btn secondary"
-                disabled={locked}
-                onClick={() => onChange('imageAssetId', '')}
-              >
-                Remove photo
-              </button>
-            )}
-          </div>
-          <label className="field" htmlFor={photoSelect}>
-            <span>Or choose from your oven’s images</span>
-            <select
-              id={photoSelect}
-              value={value.imageAssetId || ''}
-              disabled={locked}
-              onChange={(e) => onChange('imageAssetId', e.target.value)}
-            >
-              <option value="">No photo</option>
-              {assets.map((a, i) => (
-                <option key={a.id} value={a.id}>
-                  {imageDisplayName(a, i + 1)}
-                </option>
-              ))}
-            </select>
-          </label>
           <small className="form-hint">PNG, JPEG, or WebP · up to 5 MB.</small>
         </div>
       </section>
