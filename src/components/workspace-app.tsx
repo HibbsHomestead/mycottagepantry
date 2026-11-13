@@ -1,4 +1,8 @@
 import { InventoryCounts } from './inventory-counts'
+import {
+  fetchWorkspaceWithDiagnostics,
+  readWorkspaceJsonWithDiagnostics,
+} from '@/lib/inventory-error-details'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
 import { OvenLoading } from './oven-loading'
@@ -609,12 +613,12 @@ export function WorkspaceApp() {
     setError('')
     try {
       await restoreIdentitySession()
-      const res = await fetch('/api/workspace', {
+      const res = await fetchWorkspaceWithDiagnostics({
         credentials: 'same-origin',
         cache: 'no-store',
         signal: AbortSignal.timeout(20000),
       })
-      const json = await res.json()
+      const json = await readWorkspaceJsonWithDiagnostics(res)
       if (!res.ok) throw new Error(json.error)
       setState(json.workspace)
       setRole(json.role)
@@ -670,7 +674,7 @@ export function WorkspaceApp() {
     try {
       const ingredientTrace =
         action === 'save' && table === 'ingredients' ? crypto.randomUUID() : ''
-      const res = await fetch('/api/workspace', {
+      const res = await fetchWorkspaceWithDiagnostics({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -688,7 +692,7 @@ export function WorkspaceApp() {
       })
       let result
       try {
-        result = await res.json()
+        result = await readWorkspaceJsonWithDiagnostics(res)
       } catch {
         throw new Error(
           `The oven returned an unreadable response (HTTP ${res.status}${ingredientTrace ? '; reference ' + ingredientTrace : ''}). Your draft is still here. Check the connection and retry.`,

@@ -1,5 +1,6 @@
 import { createRouter } from '@tanstack/react-router'
 import { RouteErrorPage } from '@/components/error-pages'
+import { captureInventoryError } from '@/lib/inventory-error-details'
 
 // Import the generated route tree
 import { routeTree } from './routeTree.gen'
@@ -9,6 +10,7 @@ export const getRouter = () => {
   const router = createRouter({
     routeTree,
     defaultErrorComponent: RouteErrorPage,
+    defaultOnCatch: captureInventoryError,
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
   })

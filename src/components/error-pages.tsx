@@ -4,6 +4,7 @@ import {
   type ErrorComponentProps,
 } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
+import { InventoryErrorDetails } from './inventory-error-details'
 
 export function NotFoundPage() {
   return (
@@ -24,7 +25,7 @@ export function NotFoundPage() {
   )
 }
 
-export function RouteErrorPage({ reset }: ErrorComponentProps) {
+export function RouteErrorPage({ error, reset }: ErrorComponentProps) {
   const router = useRouter()
 
   return (
@@ -49,6 +50,7 @@ export function RouteErrorPage({ reset }: ErrorComponentProps) {
             <a href="/">Go home</a>
           </Button>
         </div>
+        <InventoryErrorDetails error={error} />
       </div>
     </main>
   )
