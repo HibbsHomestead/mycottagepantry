@@ -24,6 +24,12 @@ describe('Inventory error privacy boundary', () => {
         hash: '#Inventory/Overview?filter=private',
       }),
     ).toBe('/oven')
+    expect(
+      inventoryErrorLocation({
+        pathname: '/oven',
+        hash: '#Inventory/Ingredients',
+      }),
+    ).toBe('/oven')
     for (const location of [
       { pathname: '/login', hash: '#Inventory/Overview' },
       { pathname: '/oven/private-id', hash: '#Inventory' },

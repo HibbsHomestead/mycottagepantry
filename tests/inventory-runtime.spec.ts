@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { demoData } from '../src/lib/demo'
 import { accessFixture } from './account-access-fixture'
+import { money } from '../src/lib/domain'
 
 // Use deployed JavaScript and the real /oven route, with synthetic API records.
 // This never reads or writes a customer's workspace or bypasses server auth.
@@ -19,6 +20,18 @@ for (const width of [390, 1440])
         direction: 'desc',
       }
       workspace.ingredients[0].storageLocation = 'Fixture shelf'
+      workspace.ingredients.push({
+        id: 'missing-conversion-fixture',
+        name: 'Fixture canned ingredient',
+        usedAs: 'ingredient',
+        unit: 'each',
+        storageUnit: 'can',
+        quantity: 7,
+        cost: 1.25,
+        currentCost: 1.5,
+        threshold: 2,
+        conversions: [],
+      })
       workspace.ingredients.push({
         id: 'fabric-fixture',
         name: 'Fixture fabric',
@@ -123,6 +136,48 @@ for (const width of [390, 1440])
         await expect(
           page.getByText('This page couldn’t load', { exact: true }),
         ).toHaveCount(0)
+        if (['Overview', 'Ingredients'].includes(tab)) {
+          // The canonical direct links must survive a full reload too.
+          await expect(page).toHaveURL(new RegExp('#Inventory/' + tab + '$'))
+          await page.reload()
+          await expect(
+            page.getByRole('heading', { name: 'Inventory', exact: true }),
+          ).toBeVisible()
+          const item =
+            view === 'cards'
+              ? page.getByRole('article', { name: 'Fixture canned ingredient' })
+              : page.getByRole('row').filter({
+                  has: page.getByText('Fixture canned ingredient', {
+                    exact: true,
+                  }),
+                })
+          await expect(item).toContainText(
+            'A verified unit conversion from can to each is required.',
+          )
+          await expect(item).toContainText(
+            'Showing saved quantities and costs in each.',
+          )
+          await expect(item).toContainText('7 each')
+          await expect(item).toContainText('$1.5')
+          await expect(item).toContainText('$8.75')
+          await expect(item).toContainText('2 each')
+          const category =
+            tab === 'Overview'
+              ? workspace.ingredients
+              : workspace.ingredients.filter(
+                  (i) =>
+                    !['material', 'packaging', 'supply'].includes(i.usedAs),
+                )
+          await expect(page.locator('.pantry-summary')).toContainText(
+            money(category.reduce((sum, i) => sum + i.quantity * i.cost, 0)),
+          )
+          await item
+            .getByText('Fixture canned ingredient', { exact: true })
+            .click()
+          await expect(page.getByRole('dialog')).toBeVisible()
+          await page.keyboard.press('Escape')
+          await expect(page.getByRole('dialog')).toHaveCount(0)
+        }
       }
       await page
         .getByRole('button', { name: 'Add Item', exact: true })

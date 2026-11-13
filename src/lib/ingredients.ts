@@ -64,6 +64,27 @@ export const precise = (n: number) =>
   Number.isFinite(n)
     ? n.toLocaleString('en-US', { maximumFractionDigits: 8 })
     : 'Unavailable'
+/** A shelf preference cannot relabel saved stock without a verified conversion. */
+export function pantryDisplayUnit(i: Item) {
+  const unit = i.storageUnit || i.unit
+  try {
+    convert(1, unit, i.unit, i.conversions)
+    return { unit, warning: '' }
+  } catch (error) {
+    // Only a missing shelf relationship has a valid saved-unit presentation.
+    // Invalid units, conflicting conversions and other errors still propagate.
+    if (
+      !(error instanceof Error) ||
+      error.message !==
+        `A verified unit conversion from ${unit} to ${i.unit} is required.`
+    )
+      throw error
+    return {
+      unit: i.unit,
+      warning: `${error.message} Showing saved quantities and costs in ${i.unit}.`,
+    }
+  }
+}
 export function stockStatus(i: Item) {
   const today = new Date().toISOString().slice(0, 10)
   const expires = supportsExpiry(i) && i.expires

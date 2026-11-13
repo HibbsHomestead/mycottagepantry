@@ -7,6 +7,7 @@ import {
   validateOffer,
   duplicateBarcodes,
   affectedRecipes,
+  pantryDisplayUnit,
 } from './ingredients'
 import { convert, recipeCost, type Item } from './domain'
 const flour = (): Item => ({
@@ -34,6 +35,71 @@ const edit = (i: Item) => ({
   purchaseOffers: undefined,
   threshold: convert(i.threshold, i.unit, i.storageUnit),
   reorderQuantity: convert(i.reorderQuantity, i.unit, i.storageUnit),
+})
+it('uses saved units for a missing shelf conversion without inventing package contents', () => {
+  const item = {
+    ...flour(),
+    unit: 'each',
+    storageUnit: 'can',
+    conversions: [],
+  }
+  const snapshot = structuredClone(item)
+  expect(pantryDisplayUnit(item)).toEqual({
+    unit: 'each',
+    warning:
+      'A verified unit conversion from can to each is required. Showing saved quantities and costs in each.',
+  })
+  expect(() => convert(1, 'can', 'each', item.conversions)).toThrow(
+    'verified unit conversion',
+  )
+  expect(item).toEqual(snapshot)
+  expect(
+    pantryDisplayUnit({
+      ...item,
+      conversions: [
+        { from: 'can', to: 'each', amountFrom: 1, amountTo: 3, verified: true },
+      ],
+    }),
+  ).toEqual({ unit: 'can', warning: '' })
+  expect(
+    pantryDisplayUnit({
+      ...item,
+      conversions: [
+        {
+          from: 'can',
+          to: 'each',
+          amountFrom: 1,
+          amountTo: 3,
+          verified: false,
+        },
+      ],
+    }).unit,
+  ).toBe('each')
+  expect(pantryDisplayUnit(flour())).toEqual({ unit: 'oz', warning: '' })
+})
+it('does not conceal invalid units, malformed conversions, or conflicting measurements', () => {
+  expect(() =>
+    pantryDisplayUnit({ ...flour(), storageUnit: 'unknown' }),
+  ).toThrow('supported unit')
+  expect(() =>
+    pantryDisplayUnit({
+      ...flour(),
+      storageUnit: 'can',
+      conversions: [
+        { from: 'can', to: 'g', amountFrom: 0, amountTo: 1, verified: true },
+      ],
+    }),
+  ).toThrow('Conversion from quantity')
+  expect(() =>
+    pantryDisplayUnit({
+      ...flour(),
+      storageUnit: 'can',
+      conversions: [
+        { from: 'can', to: 'oz', amountFrom: 1, amountTo: 8, verified: true },
+        { from: 'can', to: 'lb', amountFrom: 1, amountTo: 1, verified: true },
+      ],
+    }),
+  ).toThrow('Conflicting verified conversions')
 })
 it('normalizes total package price to storage cost with full precision', () => {
   const c = packageCost(flour())
