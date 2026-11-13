@@ -93,7 +93,6 @@ export function AddItemDialog({
   onReceive?: (item: Item) => void
 }) {
   const [type, setType] = useState(defaultItemType(initialType) || initialType)
-  const packageSetup = !receiptLine && itemTypes.some(([key]) => key === type)
   const [shared, setShared] = useState<Record<string, Item[string]>>(() => ({
     id: crypto.randomUUID(),
     creationRequestId: crypto.randomUUID(),
@@ -145,6 +144,9 @@ export function AddItemDialog({
   const scanned = useRef(false)
   useEffect(() => () => returnFocus.current?.focus({ preventScroll: true }), [])
   const subtype = drafts.material?.materialType || 'other'
+  const packageSetup =
+    itemTypes.some(([key]) => key === type) &&
+    (!receiptLine || (type === 'material' && subtype === 'fabric'))
   const draftKey = type === 'material' ? `material:${subtype}` : type
   const defaults = {
     unit:
@@ -806,6 +808,7 @@ export function AddItemDialog({
                           value={value}
                           change={change}
                           workspace={workspace}
+                          openingStock={!receiptLine}
                         />
                       ) : (
                         <>

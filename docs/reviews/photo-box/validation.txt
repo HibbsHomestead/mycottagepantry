@@ -1,0 +1,50 @@
+Final photo and catalog browser run
+Running 15 tests using 1 worker
+
+(node:7085) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/15] tests/catalog-photo.spec.ts:8:3 › catalog and separate package photo review preserve one draft 1440
+[2/15] tests/catalog-photo.spec.ts:8:3 › catalog and separate package photo review preserve one draft 390
+[3/15] tests/photo-box.spec.ts:75:3 › rendered photo evidence 390
+[4/15] tests/photo-box.spec.ts:75:3 › rendered photo evidence 768
+[5/15] tests/photo-box.spec.ts:75:3 › rendered photo evidence 1440
+[6/15] tests/photo-box.spec.ts:123:3 › all Add Item types retain photo drafts, remove, cancel, and save 390
+[7/15] tests/photo-box.spec.ts:123:3 › all Add Item types retain photo drafts, remove, cancel, and save 768
+[8/15] tests/photo-box.spec.ts:123:3 › all Add Item types retain photo drafts, remove, cancel, and save 1440
+[9/15] tests/photo-box.spec.ts:245:1 › keyboard focus, saved-photo menu, and native picker remain independent
+[10/15] tests/photo-box.spec.ts:283:3 › ingredient edit keeps saved photo on cancel and commits removal only on save 390
+[11/15] tests/photo-box.spec.ts:283:3 › ingredient edit keeps saved photo on cancel and commits removal only on save 1440
+[12/15] tests/photo-box.spec.ts:358:3 › food, handmade, resale, and kit photo controls keep their form drafts 390
+[13/15] tests/photo-box.spec.ts:358:3 › food, handmade, resale, and kit photo controls keep their form drafts 1440
+[14/15] tests/photo-box.spec.ts:469:1 › fabric edit reuses the full photo box without changing stock
+[15/15] tests/photo-box.spec.ts:517:3 › phone touch › tapping the box changes the draft and tapping Remove never opens the picker
+  15 passed (48.9s)
+
+Additional read-only layout run (also included catalog tests)
+[3/4] tests/ingredient-popup-workflow.spec.ts:319:3 › ingredient and existing product details share layout at 1440
+[4/4] tests/ingredient-popup-workflow.spec.ts:319:3 › ingredient and existing product details share layout at 390
+  4 passed (15.5s)
+
+Final focused unit run
+RUN  v5.0.5 /opt/build/repo
+
+
+ Test Files  10 passed (10)
+      Tests  116 passed | 1 skipped (117)
+   Start at  02:05:19
+   Duration  17.10s (tests 67%, environment 18%, import 10%, setup 3%, transform 2%)
+
+    Isolate  10 workers spawned · ~701ms startup each (spawn + environment, per file)
+             at least ~2.80s faster with isolate: false — reuses workers across files instead of one per file
+
+TypeScript
+> typecheck
+> tsc --noEmit
+
+Focused lint
+Passed with no diagnostic output.
+
+Whitespace check
+git diff --check passed with no diagnostic output.

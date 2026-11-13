@@ -4,7 +4,7 @@ import { resaleReceivedQuantity } from './purchased-inventory'
 import { validateFabric } from './fabric'
 import { emptyReceiptValue, receiptReviewValues } from './receipt-document'
 import { receiptTotals, receiptAllocations } from './receipt-totals'
-import { fabricReceipt, isFabric } from './fabric'
+import { fabricReceipt, isFabric, supportsExpiry } from './fabric'
 import {
   baseUnit,
   convert,
@@ -1054,16 +1054,19 @@ export function planFinance(
             purchaseQuantity: l.quantity,
             purchaseUnit: l.unit,
             lot: text(l.lot),
-            expires: text(l.expires),
+            expires: supportsExpiry(item) ? text(l.expires) : '',
           })
-          if (itemTable === 'ingredients' && (l.lot || l.expires))
+          if (
+            itemTable === 'ingredients' &&
+            (l.lot || (supportsExpiry(item) && l.expires))
+          )
             put('lots', {
               id: newId(),
               name: text(l.lot) || item.name,
               ingredientId: item.id,
               quantity: q,
               unit: item.unit,
-              expires: text(l.expires),
+              expires: supportsExpiry(item) ? text(l.expires) : '',
               receiptId: old.id,
               date: receipt.date,
             })

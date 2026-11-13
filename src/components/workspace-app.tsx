@@ -30,7 +30,7 @@ import { InventoryProductFields } from './inventory-product-fields'
 import { foodProduct } from '@/lib/inventory-product'
 import { ProductWorkflowDialog } from './product-workflow-dialog'
 import { FabricDialog } from './fabric-dialog'
-import { isFabric } from '@/lib/fabric'
+import { isFabric, supportsExpiry } from '@/lib/fabric'
 import {
   FinishedInventory,
   HandmadeProduction,
@@ -63,6 +63,7 @@ import { RecipeImport } from '@/components/recipe-import'
 import { duplicateBarcodes } from '@/lib/ingredients'
 import { FinanceWorkspace } from '@/components/finance-workspace'
 import { ItemImagesPanel } from '@/components/item-images-panel'
+import { ItemPhotoField } from '@/components/item-photo-field'
 import * as Tabs from '@radix-ui/react-tabs'
 import '@/components/product-editor.css'
 import { ProductCards } from '@/components/product-cards'
@@ -461,7 +462,9 @@ export function WorkspaceApp() {
     if (source) openLinkedRecipe(source)
   }, [ready, recipes])
   const low = ingredients.filter((i) => i.quantity <= i.threshold),
-    expiring = ingredients.filter((i) => i.expires && i.expires <= '2026-11-04')
+    expiring = ingredients.filter(
+      (i) => supportsExpiry(i) && i.expires && i.expires <= '2026-11-04',
+    )
   const commissionIncome = (state.consignment_sales || []).reduce(
       (s, i) => s + i.commission + i.deductions,
       0,
@@ -3097,71 +3100,17 @@ export function WorkspaceApp() {
                           . Confirm the package identity.
                         </p>
                       )}
-                      <PantryPhoto
-                        className="pantry-edit-photo"
-                        item={{
-                          ...draft,
-                          id: draft.id,
-                          name:
-                            draft.name ||
-                            (packagingDraft
-                              ? 'New packaging'
-                              : 'New ingredient'),
-                        }}
-                        assets={state.graphic_assets}
+                      <ItemPhotoField
+                        value={draft as Item}
+                        assets={state.graphic_assets || []}
+                        disabled={busy || ingredientImportBusy}
+                        canUpload={ready && ['Owner', 'Manager'].includes(role)}
+                        onChange={change}
+                        onWorkspace={setState}
+                        onBusy={setBusy}
+                        className="item-photo-control"
+                        previewClassName="pantry-edit-photo"
                       />
-                      <Field label="Product photo">
-                        <select
-                          value={draft.imageAssetId || ''}
-                          onChange={(e) =>
-                            change('imageAssetId', e.target.value)
-                          }
-                        >
-                          <option value="">No photo</option>
-                          {(state.graphic_assets || []).map((asset) => (
-                            <option key={asset.id} value={asset.id}>
-                              {asset.name}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field
-                        label="Upload product photo"
-                        hint={`Optional. Choose a PNG, JPEG, or WebP you have permission to use, up to 5 MB. Save ${packagingDraft ? 'packaging' : 'ingredient'} to attach it.`}
-                      >
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          disabled={busy || ingredientImportBusy}
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            setBusy(true)
-                            try {
-                              const body = new FormData()
-                              body.set('file', file)
-                              body.set('category', 'product photo')
-                              const response = await fetch(
-                                '/api/workspace?upload=1',
-                                { method: 'POST', body },
-                              )
-                              const result = await response.json()
-                              if (!response.ok || !result.asset?.id)
-                                throw new Error(
-                                  'Photo upload failed. Save without a photo or try another file. Your draft is preserved.',
-                                )
-                              setState(result.workspace)
-                              change('imageAssetId', result.asset.id)
-                            } catch {
-                              setFormError(
-                                'Photo upload failed. Save without a photo or try another file. Your draft is preserved.',
-                              )
-                            } finally {
-                              setBusy(false)
-                            }
-                          }}
-                        />
-                      </Field>
                       <div className="form-grid">
                         <Field label="Item type">
                           {select('usedAs', [
@@ -3548,9 +3497,11 @@ export function WorkspaceApp() {
                   </Field>
                   <div className="form-grid">
                     <Field label="Lot code (optional)">{input('lot')}</Field>
-                    <Field label="Expiration (optional)">
-                      {input('expires', 'date')}
-                    </Field>
+                    {supportsExpiry(selected) && (
+                      <Field label="Expiration (optional)">
+                        {input('expires', 'date')}
+                      </Field>
+                    )}
                   </div>
                   <Field label="Note / receipt reference">
                     {input(

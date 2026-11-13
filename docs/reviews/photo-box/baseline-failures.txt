@@ -1,0 +1,22 @@
+Unchanged HEAD source was copied into an isolated temporary directory and both older suites were run with their original tests.
+
+ FAIL  src/components/food-product-form.test.tsx > keeps one draft across food product tabs with the summary outside them
+TestingLibraryElementError: Unable to find role="button" and name `/Create food product/`
+ FAIL  src/components/food-product-form.test.tsx > opens the tab holding an invalid field when saving from another tab
+TestingLibraryElementError: Unable to find role="button" and name `/Create food product/`
+ FAIL  src/components/packaging-workflow.test.tsx > creates packaging through Add Item with optional initial stock and reopens the saved item
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Add Item"
+ FAIL  src/components/packaging-workflow.test.tsx > keeps shared edits and food drafts when changing Item Type without requiring hidden fields
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Add Item"
+ FAIL  src/components/packaging-workflow.test.tsx > reviews URL imports before applying values to the selected type
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Add Item"
+ FAIL  src/components/packaging-workflow.test.tsx > preserves an existing box and its costs when saving and reopening
+TestingLibraryElementError: Unable to find a label with the text of: Purchase unit
+ FAIL  src/components/packaging-workflow.test.tsx > preserves an existing case and its costs when saving and reopening
+TestingLibraryElementError: Unable to find a label with the text of: Purchase unit
+ FAIL  src/components/packaging-workflow.test.tsx > preserves an existing roll and its costs when saving and reopening
+TestingLibraryElementError: Unable to find a label with the text of: Purchase unit
+ Test Files  2 failed (2)
+      Tests  8 failed (8)
+
+Five failures used an Identity mock without hydrateSession; three expected the old Purchase unit label. The same eight failures occurred in the working-source run.

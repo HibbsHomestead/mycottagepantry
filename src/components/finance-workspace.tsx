@@ -16,7 +16,7 @@ import { ProductLinkImport } from './product-link-import'
 import { InventoryProductFields } from './inventory-product-fields'
 import { FabricFields } from './fabric-fields'
 import { ReceiptDocumentPreview } from './receipt-document-preview'
-import { fabricUnitOptions, isFabric } from '@/lib/fabric'
+import { fabricUnitOptions, isFabric, supportsExpiry } from '@/lib/fabric'
 import { receiptReadingLabel } from '../lib/receipt-document'
 import { CardDisclosure } from './ui/card'
 import { useState, useEffect, useRef, type ReactNode } from 'react'
@@ -3184,6 +3184,7 @@ function ReceiptReview({
                               </Field>
                               <Field label="Match inventory item">
                                 <select
+                                  aria-label="Match inventory item"
                                   disabled={
                                     closed || busy || r.id === 'uploading'
                                   }
@@ -3631,18 +3632,22 @@ function ReceiptReview({
                                   }
                                 />
                               </Field>
-                              <Field label="Expiration (optional)">
-                                <input
-                                  type="date"
-                                  value={l.expires || ''}
-                                  disabled={
-                                    closed || busy || r.id === 'uploading'
-                                  }
-                                  onChange={(e) =>
-                                    line(i, 'expires', e.target.value)
-                                  }
-                                />
-                              </Field>
+                              {supportsExpiry(
+                                l.createNew ? l : matchedItem(l),
+                              ) && (
+                                <Field label="Expiration (optional)">
+                                  <input
+                                    type="date"
+                                    value={l.expires || ''}
+                                    disabled={
+                                      closed || busy || r.id === 'uploading'
+                                    }
+                                    onChange={(e) =>
+                                      line(i, 'expires', e.target.value)
+                                    }
+                                  />
+                                </Field>
+                              )}
                               <label className="finance-full">
                                 <input
                                   type="checkbox"

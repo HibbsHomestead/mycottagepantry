@@ -3,6 +3,11 @@ import {
   reviewedProductMetadata,
 } from '../../src/lib/inventory-product'
 import { validateDate } from '../../src/lib/domain'
+import {
+  fabricByYard,
+  fabricPurchaseDraft,
+  inventoryPackagePlan,
+} from '../../src/lib/inventory-package'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   number,
@@ -103,6 +108,7 @@ export async function handleFabric(
         reviewed: false,
       }
     : { ...existing! }
+  if (create) delete item.expires
   if (create || action === 'fabricUpdate') {
     if (!create && data.expectedUpdatedAt !== existing!.updatedAt)
       throw new Error('This fabric changed elsewhere. Reopen before saving.')
@@ -153,6 +159,50 @@ export async function handleFabric(
     item.threshold = number(item.threshold || 0, 'Reorder threshold')
     item.storageUnit = item.unit
     if (!create) {
+      if (data.fabricPurchaseChanged === true) {
+        const yardBasisChanged =
+          fabricByYard(data) &&
+          (fabricPurchaseDraft(existing!).fabricPurchaseBasisConflict ||
+            Number(fabricPurchaseDraft(existing!).amountPerPackage) !==
+              Number(data.amountPerPackage))
+        if (
+          (data.purchaseUnit !== existing!.purchaseUnit || yardBasisChanged) &&
+          existing!.packagePrice != null &&
+          existing!.packagePrice !== '' &&
+          data.purchasePriceReviewed !== true
+        )
+          throw new Error(
+            'Review and enter the price for the selected purchase unit before saving.',
+          )
+        const plan = inventoryPackagePlan({
+          ...data,
+          usedAs: 'material',
+          materialType: 'fabric',
+          unit: item.unit,
+          initialStock: false,
+        })
+        if (plan.packageCost == null)
+          throw new Error(
+            'Enter and review the cost for the selected purchase unit.',
+          )
+        item.costReferenceHistory = [
+          ...(item.costReferenceHistory || []),
+          {
+            date: new Date().toISOString(),
+            purchaseQuantity: item.purchaseQuantity,
+            purchaseUnit: item.purchaseUnit,
+            amountPerPackage: item.amountPerPackage,
+            packagePrice: item.packagePrice,
+            reason:
+              'Fabric purchase reference reviewed; stock valuation unchanged',
+          },
+        ]
+        item.purchaseUnit = plan.purchaseUnit
+        item.purchaseQuantity = 1
+        item.amountPerPackage = plan.amountPerPackage
+        item.packagePrice = plan.packageCost
+        item.currentCost = plan.baseUnitCost
+      }
       await save('ingredients', item)
       await ctx.audit('Fabric details updated', item.name)
       return true
@@ -261,17 +311,24 @@ export async function handleFabric(
     item.cost =
       (item.quantity * item.cost + amount) / (item.quantity + quantity)
     item.currentCost = item.cost
-    item.purchaseQuantity = number(
-      receipt.quantity,
-      'Purchase quantity',
-      0.000001,
-    )
-    item.purchaseUnit = receipt.unit
-    item.packagePrice =
-      create && data.productCheckedAt
-        ? amount /
-          number(data.receivedPackages, 'Packages actually received', 0.000001)
-        : amount
+    // A receipt's total quantity and price do not redefine a saved package/yard reference.
+    if (item.amountPerPackage == null) {
+      item.purchaseQuantity = number(
+        receipt.quantity,
+        'Purchase quantity',
+        0.000001,
+      )
+      item.purchaseUnit = receipt.unit
+      item.packagePrice =
+        create && data.productCheckedAt
+          ? amount /
+            number(
+              data.receivedPackages,
+              'Packages actually received',
+              0.000001,
+            )
+          : amount
+    }
     item.priceMode = data.priceMode || 'total'
     item.purchaseUnitPrice =
       data.priceMode === 'per_unit'
@@ -314,8 +371,18 @@ export async function handleFabric(
     purchaseDate: data.purchaseDate || '',
     actor,
     occurredAt: new Date().toISOString(),
-    purchaseQuantity: receiving ? item.purchaseQuantity : undefined,
-    purchaseUnit: receiving ? item.purchaseUnit : undefined,
+    purchaseQuantity: receiving
+      ? number(
+          create ? data.purchaseQuantity : data.quantity,
+          'Purchase quantity',
+          0.000001,
+        )
+      : undefined,
+    purchaseUnit: receiving
+      ? create
+        ? data.purchaseUnit
+        : data.unit
+      : undefined,
     enteredQuantity: create ? data.purchaseQuantity : data.quantity,
     enteredUnit: create ? data.purchaseUnit : data.unit,
     usableLength: data.usableLength,
@@ -324,6 +391,7 @@ export async function handleFabric(
     priceMode: data.priceMode || 'total',
     purchaseUnitPrice: data.purchaseUnitPrice,
     vendor: item.vendor,
+    lot: String(data.lot || '').trim(),
   })
   const value = roundMoney(Math.abs(amount))
   if (value > 0)

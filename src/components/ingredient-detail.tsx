@@ -55,6 +55,7 @@ import {
 } from '@/lib/ingredients'
 import './ingredient-detail.css'
 import { PantryPhoto } from './pantry-photo'
+import { ItemPhotoField } from './item-photo-field'
 import { editActionLabel } from '@/lib/item-actions'
 import { inventoryMovementView } from '@/lib/inventory-adjustment'
 import {
@@ -390,27 +391,6 @@ export function IngredientDetail({
     i.id,
     offerEdit?.id,
   )
-  async function upload(file: File) {
-    setBusy(true)
-    setError('')
-    try {
-      const body = new FormData()
-      body.set('file', file)
-      body.set('category', 'product photo')
-      const res = await fetch('/api/workspace?upload=1', {
-        method: 'POST',
-        body,
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Photo upload failed.')
-      onWorkspace(result.workspace)
-      change('imageAssetId', result.asset.id)
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
   const emptyReference =
     editing &&
     !hasPurchasePackage(i) &&
@@ -912,43 +892,17 @@ export function IngredientDetail({
                         )}
                       </div>
                       <div className="ingredient-edit-identity-photo">
-                        {(packaging || draft.imageAssetId) && (
-                          <PantryPhoto
-                            item={{
-                              ...i,
-                              ...draft,
-                              imageAssetId: draft.imageAssetId,
-                            }}
-                            assets={w.graphic_assets}
-                            className="pantry-edit-photo"
-                          />
-                        )}
-                        <Field label="Product photo">
-                          <select
-                            value={draft.imageAssetId || ''}
-                            onChange={(e) =>
-                              change('imageAssetId', e.target.value)
-                            }
-                          >
-                            <option value="">No photo</option>
-                            {(w.graphic_assets || []).map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.name}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        <Field label="Upload product photo">
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            disabled={busy}
-                            onChange={(e) => {
-                              if (e.target.files?.[0])
-                                void upload(e.target.files[0])
-                            }}
-                          />
-                        </Field>
+                        <ItemPhotoField
+                          value={{ ...i, ...draft }}
+                          assets={w.graphic_assets || []}
+                          disabled={busy}
+                          canUpload={canEdit}
+                          onChange={change}
+                          onWorkspace={onWorkspace}
+                          onBusy={setBusy}
+                          className="item-photo-control"
+                          previewClassName="pantry-edit-photo"
+                        />
                       </div>
                     </div>
                     {packaging && (

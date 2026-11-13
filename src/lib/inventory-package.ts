@@ -7,10 +7,10 @@ import {
   type Item,
 } from './domain'
 import { itemUnitOptions } from './add-item'
-import { fabricConvert, fabricUnitOptions } from './fabric'
+import { fabricConvert, fabricUnitOptions, isFabric } from './fabric'
 import { resalePurchaseUnits, resaleStockPlan } from './resale-stock'
 
-/** New item setup only. Historical received quantities keep their existing meaning. */
+/** Purchase reference setup. Historical received quantities keep their existing meaning. */
 const packageUnits = [
   'bag',
   'bottle',
@@ -42,6 +42,86 @@ export function inventoryUnitOptions(data: Record<string, unknown>) {
   return { stock, purchase }
 }
 const present = (value: unknown) => value != null && String(value).trim() !== ''
+export const fabricByYard = (data: Record<string, unknown>) =>
+  data.materialType === 'fabric' &&
+  data.fabricTracking === 'length' &&
+  data.purchaseUnit === 'yd'
+
+/** One purchase yard expressed in the stock unit, independently of on-hand stock. */
+export function fabricYardContents(data: Record<string, unknown>) {
+  return fabricConvert(1, 'yd', String(data.unit), data as Item)
+}
+
+/** Legacy receipt quantities describe the whole purchase. Expose them for review, never rewrite them on load. */
+export function fabricPurchaseDraft(item: Item): Item {
+  let amount = item.amountPerPackage
+  if (amount == null && item.purchaseUnit) {
+    try {
+      amount = ['bolt', 'roll'].includes(item.purchaseUnit)
+        ? item.lengthConfirmed === true
+          ? fabricConvert(
+              item.usableLength,
+              item.usableLengthUnit,
+              item.unit,
+              item,
+            )
+          : ''
+        : fabricConvert(
+            item.purchaseQuantity,
+            item.purchaseUnit,
+            item.unit,
+            item,
+          )
+    } catch {
+      amount = ''
+    }
+  }
+  return {
+    ...item,
+    amountPerPackage: amount ?? '',
+    initialStock: false,
+    fabricPurchaseChanged: false,
+    fabricPurchaseBasisConflict:
+      fabricByYard(item) &&
+      present(item.purchaseQuantity) &&
+      Number(item.purchaseQuantity) !== 1,
+  }
+}
+
+/** Changing a fabric price basis requires a newly entered price, never a carried package price. */
+export function inventoryPackageChange(
+  data: Item,
+  key: string,
+  value: Item[string],
+): Partial<Item> {
+  const patch: Partial<Item> = { [key]: value }
+  if (!isFabric(data)) return patch
+  const next = { ...data, ...patch }
+  if (key === 'purchaseUnit' && value !== data.purchaseUnit) {
+    if (present(data.packagePrice) || data.purchasePriceReviewRequired) {
+      patch.packagePrice = ''
+      patch.purchasePriceReviewRequired = true
+      patch.purchasePriceReviewNote = `Purchase unit changed from ${data.purchaseUnit || 'package'} to ${value || 'unset'}. Enter and review the cost per ${value || 'purchase unit'}; the previous price has not been carried over.`
+    }
+    patch.amountPerPackage = fabricByYard(next) ? fabricYardContents(next) : ''
+    // A count entered in the former package unit cannot keep its old meaning.
+    if (
+      data.openingCountUnit === data.purchaseUnit &&
+      data.purchaseUnit !== data.unit
+    ) {
+      patch.openingCount = ''
+      patch.openingCountUnit = data.unit
+    }
+  }
+  if (key === 'unit' && fabricByYard(next))
+    patch.amountPerPackage = fabricYardContents(next)
+  if (key === 'packagePrice' && present(value))
+    Object.assign(patch, {
+      purchasePriceReviewRequired: false,
+      purchasePriceReviewed: true,
+    })
+  return patch
+}
 function positive(value: unknown, label: string) {
   if (!present(value)) throw new Error(`Enter ${label}.`)
   const result = number(value, label)
@@ -51,6 +131,14 @@ function positive(value: unknown, label: string) {
 
 /** Shared preview and server validation; no stock, accounting or persistence side effects. */
 export function inventoryPackagePlan(data: Record<string, unknown>) {
+  if (fabricByYard(data) && data.fabricPurchaseBasisConflict === true)
+    throw new Error(
+      'Review this fabric purchase basis: the saved purchase quantity and per-yard reference disagree. Confirm the cost per yd; saved values have not been changed.',
+    )
+  if (data.purchasePriceReviewRequired === true)
+    throw new Error(
+      'Review and enter the price for the selected purchase unit before saving.',
+    )
   const type = String(data.usedAs || 'ingredient')
   const fabric = type === 'material' && data.materialType === 'fabric'
   const options = inventoryUnitOptions(data)
@@ -76,10 +164,26 @@ export function inventoryPackagePlan(data: Record<string, unknown>) {
   if (packageEntered) {
     if (!options.purchase.includes(purchaseUnit))
       throw new Error('Choose a purchase unit for the package.')
-    amountPerPackage = positive(
-      data.amountPerPackage,
-      'the amount in each package',
-    )
+    if (fabricByYard(data)) {
+      const expected = fabricYardContents(data)
+      if (
+        present(data.amountPerPackage) &&
+        Math.abs(
+          positive(data.amountPerPackage, 'the purchase quantity basis') -
+            expected,
+        ) >
+          1e-9 * Math.max(1, expected)
+      )
+        throw new Error(
+          'Review this fabric purchase basis: yd means 1 yd. Confirm a cost per yd; saved quantities and prices have not been changed.',
+        )
+      amountPerPackage = expected
+    } else {
+      amountPerPackage = positive(
+        data.amountPerPackage,
+        'the amount in each package',
+      )
+    }
     if (type === 'resale' && !Number.isSafeInteger(amountPerPackage))
       throw new Error(
         'The amount in each package must be a whole number of sellable items.',

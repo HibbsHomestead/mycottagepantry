@@ -19,8 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from './ui/dialog'
-import { PantryPhoto } from './pantry-photo'
-import { ProductArtworkFields } from './product-artwork-fields'
+import { ItemPhotoField } from './item-photo-field'
 import {
   costBreakdown,
   money,
@@ -431,24 +430,16 @@ function WorkflowDialog({
             )}
             {isMaterial && (
               <>
-                <PantryPhoto
-                  className="pantry-edit-photo"
-                  item={{
-                    ...draft,
-                    id: draft.id,
-                    name: draft.name || 'New item',
-                  }}
+                <ItemPhotoField
+                  value={draft as Item}
                   assets={workspace.graphic_assets || []}
-                  kind="pantry"
-                />
-                <ProductArtworkFields
-                  purpose="material"
-                  assets={workspace.graphic_assets || []}
-                  value={draft}
                   onChange={change}
                   onWorkspace={onWorkspace}
                   canUpload={canManage}
+                  disabled={busy}
                   onBusy={setBusy}
+                  className="item-photo-control"
+                  previewClassName="pantry-edit-photo"
                 />
                 <div className="form-grid">
                   <Field label="SKU">{input('sku')}</Field>
