@@ -87,7 +87,7 @@ for (const [width, height] of [
         : workspaceFixtureUrl('Dashboard'),
     )
     for (const name of [
-      'Start batch run',
+      'Start production',
       'Receive stock',
       'Create recipe',
       'Create product',
@@ -106,12 +106,15 @@ for (const [width, height] of [
           .click()
         await page.getByRole('menuitem', { name, exact: true }).click()
         const dialog = await bounds(page)
-        if (name === 'Start batch run') {
+        if (name === 'Start production') {
           await dialog
-            .getByRole('button', { name: 'Save batch', exact: true })
+            .getByRole('button', { name: 'Review requirements', exact: true })
             .scrollIntoViewIfNeeded()
           await expect(
-            dialog.getByRole('button', { name: 'Save batch', exact: true }),
+            dialog.getByRole('button', {
+              name: 'Review requirements',
+              exact: true,
+            }),
           ).toBeVisible()
         }
         const field = dialog

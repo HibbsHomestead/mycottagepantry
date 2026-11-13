@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "batch_usage_org_id" ON "batch_usage" ("business_id","id");

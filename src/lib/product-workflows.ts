@@ -8,4 +8,6 @@ export function workflowOf(product: Item) {
   return product.workflow || (product.recipeId ? 'food' : 'unclassified')
 }
 export const tracksFinishedStock = (product: Item) =>
-  ['handmade', 'resale'].includes(product.workflow)
+  ['handmade', 'resale'].includes(product.workflow) ||
+  product.foodStockEnabled === true ||
+  (product.workflow === 'kit' && product.stockCostKnown === true)
