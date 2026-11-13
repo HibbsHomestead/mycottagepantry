@@ -1,6 +1,6 @@
 import { barcodeMatches } from '@/lib/barcodes'
 import { PantryPhoto } from './pantry-photo'
-import { precise, stockStatus } from '@/lib/ingredients'
+import { pantryDisplayUnit, precise, stockStatus } from '@/lib/ingredients'
 import { useState, useEffect } from 'react'
 import {
   sortIngredients,
@@ -285,7 +285,7 @@ export function PantryInventory({
       {view === 'cards' ? (
         <div className="pantry-card-grid" aria-label="Pantry cards">
           {rows.map((i) => {
-            const unit = i.storageUnit || i.unit
+            const { unit, warning } = pantryDisplayUnit(i)
             const converted = (n: number) =>
               precise(convert(n, i.unit, unit, i.conversions))
             const cost =
@@ -359,6 +359,7 @@ export function PantryInventory({
                   <p className="muted">
                     {[i.brand, i.category].filter(Boolean).join(' · ')}
                   </p>
+                  {warning && <p className="warning-text">{warning}</p>}
                   <dl>
                     <dt>On hand</dt>
                     <dd>
@@ -490,8 +491,13 @@ export function PantryInventory({
               </thead>
               <tbody>
                 {rows.map((i) => {
-                  const unit = i.storageUnit || i.unit,
-                    quantity = convert(i.quantity, i.unit, unit, i.conversions),
+                  const { unit, warning } = pantryDisplayUnit(i)
+                  const quantity = convert(
+                      i.quantity,
+                      i.unit,
+                      unit,
+                      i.conversions,
+                    ),
                     threshold =
                       i.threshold == null
                         ? null
@@ -514,6 +520,7 @@ export function PantryInventory({
                             <small>{i.category}</small>
                           </span>
                         </button>
+                        {warning && <p className="warning-text">{warning}</p>}
                       </td>
                       <td data-label="Category">{i.category || '—'}</td>
                       <td data-label="On hand">
