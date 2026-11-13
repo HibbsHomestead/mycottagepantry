@@ -1,0 +1,12 @@
+/* Generic modal centering has one owner. Production CSS lowers the mobile
+   transform/translate resets to transform: translate(0, 0), leaving Tailwind's
+   individual translate utilities active. Do not mix those utilities or
+   transform/zoom keyframes with the viewport anchor. Other presentations own
+   their positioning (editor, inventory, scanner, and page). */
+@media (min-width: 1025px) {
+  [data-slot='dialog-content'][data-presentation='modal'][data-positioning='center'] {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
