@@ -231,6 +231,18 @@ export function convert(
     `A verified unit conversion from ${from} to ${to} is required.`,
   )
 }
+/** Only a missing relationship permits a display fallback; malformed data still throws. */
+export function isMissingUnitConversion(
+  error: unknown,
+  from: string,
+  to: string,
+) {
+  return (
+    error instanceof Error &&
+    error.message ===
+      `A verified unit conversion from ${from} to ${to} is required.`
+  )
+}
 export const baseUnit = (unit: string, conversions: any[] = []) => {
   const registry = ingredientUnits(conversions)
   if (!registry[unit]) throw new Error('Choose a supported unit.')

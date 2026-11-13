@@ -49,6 +49,7 @@ import {
   compareOffer,
   duplicateBarcodes,
   packageCost,
+  pantryDisplayUnit,
   hasPurchasePackage,
   precise,
   stockStatus,
@@ -141,6 +142,7 @@ export function IngredientDetail({
   onWorkspace: (w: Workspace) => void
 }) {
   const [editTab, setEditTab] = useState('details')
+  const [reorderUnit, setReorderUnit] = useState(i.unit)
   const [scanning, setScanning] = useState(false)
   const [editing, setEditing] = useState(false),
     [offerEdit, setOfferEdit] = useState<any>(null),
@@ -196,6 +198,7 @@ export function IngredientDetail({
   const material = i.usedAs === 'material'
   const packaging = isPackaging(editing ? draft : i)
   const storage = i.storageUnit || i.unit
+  const display = pantryDisplayUnit(i)
   const usage = affectedRecipes(i.id, w.ingredients, w.recipes)
   const offers = i.purchaseOffers || []
   const history = w.ledger.filter((l) => l.ingredientId === i.id)
@@ -245,6 +248,7 @@ export function IngredientDetail({
   function edit() {
     editRevision.current = i.updatedAt
     setEditTab('details')
+    setReorderUnit(display.unit)
     setDraft({
       ...i,
       openingStock: undefined,
@@ -256,11 +260,11 @@ export function IngredientDetail({
       recipeUnit: i.recipeUnit || storage,
       storageUnit: storage,
       currency: i.currency || 'USD',
-      threshold: convert(i.threshold || 0, i.unit, storage, i.conversions),
+      threshold: convert(i.threshold ?? 0, i.unit, display.unit, i.conversions),
       reorderQuantity: convert(
-        i.reorderQuantity || 0,
+        i.reorderQuantity ?? 0,
         i.unit,
-        storage,
+        display.unit,
         i.conversions,
       ),
     })
@@ -491,6 +495,7 @@ export function IngredientDetail({
       )}
       <DialogContent
         ingredient={editing || !!offerEdit}
+        positioning="css"
         className={`app-dialog ${editing || offerEdit ? 'ingredient-detail' : 'wide-dialog item-detail-dialog ingredient-detail-view'}`}
         showCloseButton={false}
         presentation={editing || offerEdit ? 'detail' : 'modal'}
@@ -569,6 +574,12 @@ export function IngredientDetail({
               {error}
             </p>
           )}
+          {display.warning && (
+            <p className="form-hint warning-text" role="status">
+              Conversion required. {display.warning} Reorder amounts remain in
+              their labeled units until a verified relationship is supplied.
+            </p>
+          )}
           {discard && (
             <div
               className="calculation-box"
@@ -619,6 +630,7 @@ export function IngredientDetail({
                   if (contentRef.current) contentRef.current.scrollTop = 0
                   return
                 }
+                let submitted = draft
                 if (editing) {
                   try {
                     const basis = prepareStockUnitBasis(
@@ -627,6 +639,25 @@ export function IngredientDetail({
                       hasStockHistory,
                     )
                     applyPurchaseSetup(i, basis.input)
+                    if (draft.threshold === '' || draft.reorderQuantity === '')
+                      throw new Error(
+                        'Re-enter reorder threshold and quantity in their labeled unit.',
+                      )
+                    submitted = {
+                      ...draft,
+                      threshold: convert(
+                        draft.threshold,
+                        reorderUnit,
+                        draft.storageUnit,
+                        draft.conversions,
+                      ),
+                      reorderQuantity: convert(
+                        draft.reorderQuantity,
+                        reorderUnit,
+                        draft.storageUnit,
+                        draft.conversions,
+                      ),
+                    }
                   } catch (e) {
                     setError((e as Error).message)
                     setEditTab('details')
@@ -635,7 +666,7 @@ export function IngredientDetail({
                 }
                 void run(
                   editing ? 'ingredientUpdate' : 'ingredientOffer',
-                  editing ? draft : { operation: 'save', offer: draft },
+                  editing ? submitted : { operation: 'save', offer: draft },
                 )
               }}
             >
@@ -919,10 +950,22 @@ export function IngredientDetail({
                           change={change}
                           conversions={() => setEditTab('conversions')}
                           changeStorage={(u) => {
-                            setDraft((current: Item) => ({
-                              ...current,
-                              ...changeStockShelfUnit(current, u),
-                            }))
+                            setDraft((current: Item) => {
+                              const amounts = changeStockShelfUnit(
+                                { ...current, storageUnit: reorderUnit },
+                                u,
+                              )
+                              return {
+                                ...current,
+                                ...changeStockShelfUnit(current, u),
+                                threshold:
+                                  amounts.threshold ?? current.threshold,
+                                reorderQuantity:
+                                  amounts.reorderQuantity ??
+                                  current.reorderQuantity,
+                              }
+                            })
+                            setReorderUnit(u)
                             setDirty(true)
                             setError('')
                           }}
@@ -1041,9 +1084,14 @@ export function IngredientDetail({
                         <p className="form-hint">
                           Current balance:{' '}
                           {precise(
-                            convert(i.quantity, i.unit, storage, i.conversions),
+                            convert(
+                              i.quantity,
+                              i.unit,
+                              display.unit,
+                              i.conversions,
+                            ),
                           )}{' '}
-                          {unitLabel(storage)}.{' '}
+                          {unitLabel(display.unit)}.{' '}
                           {history.some((l) => l.type === 'opening_balance') ||
                           i.openingStockRecorded
                             ? 'Opening stock has been recorded.'
@@ -1168,14 +1216,10 @@ export function IngredientDetail({
                           Stock balances change only through Receive stock or a
                           reason-backed adjustment.
                         </p>
-                        <Field
-                          label={`Reorder threshold (${draft.storageUnit})`}
-                        >
+                        <Field label={`Reorder threshold (${reorderUnit})`}>
                           {input('threshold', 'number')}
                         </Field>
-                        <Field
-                          label={`Reorder quantity (${draft.storageUnit})`}
-                        >
+                        <Field label={`Reorder quantity (${reorderUnit})`}>
                           {input('reorderQuantity', 'number')}
                         </Field>
                         <Field label="Storage location">
@@ -1643,7 +1687,7 @@ export function IngredientDetail({
                             {() =>
                               i.threshold == null
                                 ? 'Not set'
-                                : `${precise(convert(i.threshold, i.unit, storage, i.conversions))} ${storage}`
+                                : `${precise(convert(i.threshold, i.unit, display.unit, i.conversions))} ${display.unit}`
                             }
                           </Measure>
                         </strong>
@@ -1655,7 +1699,7 @@ export function IngredientDetail({
                             {() =>
                               i.reorderQuantity == null
                                 ? 'Not set'
-                                : `${precise(convert(i.reorderQuantity, i.unit, storage, i.conversions))} ${storage}`
+                                : `${precise(convert(i.reorderQuantity, i.unit, display.unit, i.conversions))} ${display.unit}`
                             }
                           </Measure>
                         </strong>
