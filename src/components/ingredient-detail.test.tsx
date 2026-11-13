@@ -433,3 +433,76 @@ it('adds a measured prep conversion in its dedicated tab without inventing a pur
     }),
   )
 })
+
+const pumpkinFixture = () => ({
+  id: 'pumpkin-regression',
+  name: 'Pumpkin fixture',
+  unit: 'each',
+  storageUnit: 'can',
+  recipeUnit: 'can',
+  quantity: 7,
+  cost: 1.25,
+  currentCost: 1.5,
+  threshold: 2,
+  reorderQuantity: 3,
+  conversions: [],
+})
+it('opens Edit Item with incomplete units, preserves saved fields and cancels without writes', async () => {
+  const p = props(),
+    user = userEvent.setup(),
+    ingredient = pumpkinFixture()
+  const original = JSON.stringify(ingredient)
+  render(<IngredientDetail ingredient={ingredient} {...p} />)
+  await user.click(
+    screen.getByRole('button', { name: 'Edit Ingredient' }),
+  )
+  expect(screen.getByLabelText('Name', { exact: true })).toHaveValue(
+    'Pumpkin fixture',
+  )
+  expect(screen.getByText(/Conversion required\./)).toBeVisible()
+  await user.click(
+    screen.getByRole('button', { name: 'Stock & Other Details' }),
+  )
+  expect(screen.getByLabelText('Reorder threshold (each)')).toHaveValue(2)
+  expect(screen.getByLabelText('Reorder quantity (each)')).toHaveValue('3')
+  expect(screen.getByText(/Current balance: 7 each/)).toBeVisible()
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(p.save).not.toHaveBeenCalled()
+  expect(screen.getByRole('alert')).toHaveTextContent(/verified conversion/)
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(p.save).not.toHaveBeenCalled()
+  expect(JSON.stringify(ingredient)).toBe(original)
+})
+it('saves an explicitly verified fixture correction while preserving saved stock and reorder amounts', async () => {
+  const p = props(),
+    user = userEvent.setup(),
+    ingredient = pumpkinFixture()
+  render(<IngredientDetail ingredient={ingredient} {...p} />)
+  await user.click(
+    screen.getByRole('button', { name: 'Edit Ingredient' }),
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Unit Conversions' }),
+  )
+  await user.selectOptions(screen.getByLabelText('From unit'), 'can')
+  await user.selectOptions(screen.getByLabelText('To unit'), 'each')
+  await user.clear(screen.getByLabelText('From quantity'))
+  await user.type(screen.getByLabelText('From quantity'), '1')
+  await user.type(screen.getByLabelText('To quantity'), '2')
+  await user.click(screen.getByRole('checkbox', { name: /verified/i }))
+  await user.click(
+    screen.getByRole('button', { name: /Save ingredient conversion/i }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Save changes' }))
+  expect(p.save).toHaveBeenCalledOnce()
+  const input = p.save.mock.calls[0][1]
+  expect(input).toMatchObject({ threshold: 1, reorderQuantity: 1.5 })
+  const result = updateIngredient(ingredient, input, { hasStockHistory: true })
+  expect(result).toMatchObject({
+    quantity: 7,
+    cost: 1.25,
+    threshold: 2,
+    reorderQuantity: 3,
+  })
+  expect(ingredient.conversions).toEqual([])
+})

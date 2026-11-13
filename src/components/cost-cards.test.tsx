@@ -43,7 +43,7 @@ it('preserves the saved cross-category conversion and distinguishes package pric
   expect(JSON.stringify(ingredient)).toBe(original)
 })
 
-it('shows Conversion needed for unverified weight-to-volume conversions and keeps missing purchase cost distinct from zero', () => {
+it('shows Conversion required for unverified weight-to-volume conversions and keeps missing purchase cost distinct from zero', () => {
   const { rerender } = render(
     <IngredientCostCards
       ingredient={{
@@ -64,7 +64,7 @@ it('shows Conversion needed for unverified weight-to-volume conversions and keep
       }}
     />,
   )
-  expect(screen.getByText('Conversion needed')).toBeVisible()
+  expect(screen.getByText('Conversion required')).toBeVisible()
   expect(screen.getAllByText('Not set')).toHaveLength(3)
   expect(screen.queryByText('$0.00')).not.toBeInTheDocument()
   rerender(
@@ -79,7 +79,7 @@ it('shows Conversion needed for unverified weight-to-volume conversions and keep
       }}
     />,
   )
-  expect(screen.getByText('Conversion needed')).toBeVisible()
+  expect(screen.getByText('Conversion required')).toBeVisible()
   expect(screen.getByText('Cost needs setup')).toBeVisible()
 })
 
@@ -129,3 +129,21 @@ it.each(['inclusive', 'exclusive'] as const)(
     expect(JSON.stringify({ product, workspace })).toBe(original)
   },
 )
+
+
+it('keeps known package and saved costs readable while the inventory relationship is missing', () => {
+  render(<IngredientCostCards ingredient={{
+    id: 'pumpkin', name: 'Pumpkin', unit: 'each', storageUnit: 'can', recipeUnit: 'can',
+    quantity: 7, cost: 1.25, currentCost: 1.5, purchaseQuantity: 1,
+    purchaseUnit: 'can', packagePrice: 3, conversions: [],
+  }} />)
+  expect(screen.getByText('7 each')).toBeVisible()
+  expect(screen.getByText('$1.50 / each')).toBeVisible()
+  expect(screen.getByText('$3.00 / can')).toBeVisible()
+  expect(screen.getByText('Conversion required')).toBeVisible()
+})
+it('propagates unsupported-unit errors instead of labeling them a missing relationship', () => {
+  expect(() => render(<IngredientCostCards ingredient={{
+    id: 'invalid', name: 'Invalid fixture', unit: 'unsupported', storageUnit: 'can', conversions: [],
+  }} />)).toThrow('Choose a supported unit')
+})

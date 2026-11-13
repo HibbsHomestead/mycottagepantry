@@ -665,3 +665,14 @@
     grid-row: auto;
   }
 }
+
+/* The read-only popup uses the shared visual-viewport bounds on phones.
+   Keep centering out of Tailwind translate utilities: their production-layer
+   precedence can leave a half-size offset after top/left become 12px. */
+@media (min-width: 1025px) {
+  [data-slot='dialog-content'].ingredient-detail-view {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+}
