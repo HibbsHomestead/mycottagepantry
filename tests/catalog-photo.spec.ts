@@ -11,6 +11,8 @@ for (const width of [1440, 390])
     await page.setViewportSize({ width, height: 1000 })
     await installWorkspaceFixture(page)
     const workspace = demoData()
+    workspace.settings[0].packagePhotoExtractionAllowed = true
+    workspace.settings[0].packagePhotoProcessingReady = true
     let saves = 0,
       lookups = 0,
       failed = true,
@@ -142,7 +144,7 @@ for (const width of [1440, 390])
     const name = modal.getByLabel('Item name', { exact: true })
     await name.fill('Keep my manual flour')
     await page.screenshot({
-      path: `docs/previews/catalog-controls-${width}.png`,
+      path: `docs/reviews/photo-box/catalog-controls-${width}.png`,
     })
     const barcode = modal.getByLabel('Scan or enter barcode')
     await barcode.fill('4006381333931')
@@ -175,13 +177,13 @@ for (const width of [1440, 390])
       .click()
     await review.getByRole('button', { name: 'Show less', exact: true }).click()
     await review.scrollIntoViewIfNeeded()
-    await page.screenshot({ path: `docs/previews/catalog-review-${width}.png` })
+    await page.screenshot({
+      path: `docs/reviews/photo-box/catalog-review-${width}.png`,
+    })
     await review.getByRole('button', { name: 'Apply selected values' }).click()
     await expect(name).toHaveValue('Keep my manual flour')
     expect(saves).toBe(0)
-    await modal
-      .getByText('Read package photos (optional)', { exact: true })
-      .click()
+    await modal.getByText(/^Read package photos(?: \(optional\))?$/).click()
     await modal
       .getByLabel('Back / label photo', { exact: true })
       .setInputFiles('src/test/fixtures/package-label.png')
@@ -200,7 +202,7 @@ for (const width of [1440, 390])
       modal.getByRole('checkbox', { name: /Brand: Uncertain/ }),
     ).not.toBeChecked()
     await page.screenshot({
-      path: `docs/previews/package-photo-review-${width}.png`,
+      path: `docs/reviews/photo-box/package-photo-review-${width}.png`,
     })
     await expect(name).toHaveValue('Keep my manual flour')
     expect(photos).toBe(1)

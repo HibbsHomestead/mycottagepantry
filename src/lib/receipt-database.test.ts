@@ -527,6 +527,68 @@ async function addInventory(data: Record<string, any>) {
   )
   return { status: response.status, ...(await response.json()) }
 }
+it.each([
+  [4, 11.96],
+  [0.25, 0.7475],
+])(
+  'persists %s fabric yards at $2.99 per yard without expiry and reopens the same basis',
+  async (openingCount, value) => {
+    const data = {
+      id: crypto.randomUUID(),
+      creationRequestId: crypto.randomUUID(),
+      name: 'Per-yard cotton',
+      usedAs: 'material',
+      materialType: 'fabric',
+      fabricTracking: 'length',
+      fabricWidth: 44,
+      widthUnit: 'in',
+      pieceMode: 'aggregate',
+      inventoryPackageSetup: true,
+      unit: 'yd',
+      purchaseUnit: 'yd',
+      packagePrice: 2.99,
+      initialStock: true,
+      openingCount,
+      openingCountUnit: 'yd',
+      receivedDate: '2026-11-13',
+      lot: 'COTTON-LOT',
+      expires: '2026-01-01',
+    }
+    const saved = await addInventory(data)
+    expect(saved.status, saved.error).toBe(200)
+    expect((await addInventory(data)).status).toBe(200)
+    const reopened = (await request()).workspace
+    const item = reopened.ingredients.find((i: Item) => i.id === data.id)
+    expect(item).toMatchObject({
+      purchaseUnit: 'yd',
+      amountPerPackage: 1,
+      purchaseQuantity: 1,
+      packagePrice: 2.99,
+      unit: 'yd',
+      quantity: openingCount,
+      cost: 2.99,
+    })
+    expect(item.expires).toBeUndefined()
+    expect(item.quantity * item.cost).toBeCloseTo(value)
+    const ledger = reopened.ledger.filter(
+      (l: Item) => l.ingredientId === item.id,
+    )
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0]).toMatchObject({
+      openingCount,
+      openingCountUnit: 'yd',
+      amountPerPackage: 1,
+      lot: 'COTTON-LOT',
+      amount: value,
+      receivedDate: '2026-11-13',
+    })
+    expect(ledger[0].expires).toBeUndefined()
+    expect(
+      reopened.journals.filter((j: Item) => j.sourceId === item.id),
+    ).toHaveLength(1)
+  },
+)
+
 it.each(inventoryPackageExamples)(
   'saves $name package costing and independent opening counts with safe retries',
   async (example) => {

@@ -168,6 +168,7 @@ export function FabricPriceFields({
   totalKey?: string
 }) {
   const perUnit = value.priceMode === 'per_unit'
+  const byYard = (value.purchaseUnit || value.unit) === 'yd'
   return (
     <>
       <Field label="Purchase price entry">
@@ -180,7 +181,13 @@ export function FabricPriceFields({
         </select>
       </Field>
       <Field
-        label={perUnit ? 'Price per purchase unit' : 'Total acquisition cost'}
+        label={
+          perUnit
+            ? byYard
+              ? 'Cost per yd'
+              : 'Price per purchase unit'
+            : 'Total acquisition cost'
+        }
       >
         <input
           type="number"

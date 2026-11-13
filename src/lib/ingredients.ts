@@ -1,4 +1,5 @@
 import { applyPurchaseSetup, validateConversions } from './purchase-setup'
+import { supportsExpiry } from './fabric'
 import { inventoryProductKeys } from './inventory-product'
 import { isPackaging, selectPantryCategory } from './pantry-category'
 import { prepareStockUnitBasis } from './ingredient-stock-unit'
@@ -65,7 +66,8 @@ export const precise = (n: number) =>
     : 'Unavailable'
 export function stockStatus(i: Item) {
   const today = new Date().toISOString().slice(0, 10)
-  return i.expires && i.expires < today
+  const expires = supportsExpiry(i) && i.expires
+  return expires && expires < today
     ? 'Expired'
     : i.trackInventory === false
       ? 'Not tracked'
@@ -73,8 +75,8 @@ export function stockStatus(i: Item) {
         ? 'Out of stock'
         : i.quantity <= i.threshold
           ? 'Low stock'
-          : i.expires &&
-              i.expires <=
+          : expires &&
+              expires <=
                 new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
             ? 'Expiring soon'
             : 'In stock'

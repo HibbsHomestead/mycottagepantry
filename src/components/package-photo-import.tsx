@@ -9,6 +9,7 @@ import {
 } from '@/lib/package-photo'
 import type { Item } from '@/lib/domain'
 import { DraftFieldReview } from './draft-field-review'
+import { PhotoBox } from './photo-box'
 import './catalog-lookup.css'
 type Photo = { file: File; blob: Blob; url: string; turns: number }
 export function PackagePhotoImport({
@@ -87,23 +88,30 @@ export function PackagePhotoImport({
   function photoInput(id: (typeof photoSides)[number]) {
     return (
       <div key={id}>
-        <label className="field">
-          <span>{photoLabels[id]}</span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              e.target.value = ''
-              if (file) void choose(id, file)
-            }}
-          />
-        </label>
+        <span className="form-hint">{photoLabels[id]}</span>
+        <PhotoBox
+          className="package-photo-preview"
+          src={photos[id]?.url}
+          alt={photoLabels[id] + ' preview'}
+          inputLabel={photoLabels[id]}
+          accept="image/jpeg,image/png,image/webp"
+          disabled={busy}
+          onFile={(file) => void choose(id, file)}
+          removeLabel={`Remove ${photoLabels[id]}`}
+          removeDisabled={false}
+          onRemove={() => {
+            cancel()
+            URL.revokeObjectURL(photos[id].url)
+            setPhotos((p) =>
+              Object.fromEntries(
+                Object.entries(p).filter(([key]) => key !== id),
+              ),
+            )
+          }}
+        />
         {photos[id] && (
           <>
             <small>Selected: {photos[id].file.name}</small>
-            <img src={photos[id].url} alt={photoLabels[id] + ' preview'} />
             <button
               type="button"
               className="text-button"
@@ -113,21 +121,6 @@ export function PackagePhotoImport({
               }
             >
               Rotate {photoLabels[id]}
-            </button>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => {
-                cancel()
-                URL.revokeObjectURL(photos[id].url)
-                setPhotos((p) =>
-                  Object.fromEntries(
-                    Object.entries(p).filter(([key]) => key !== id),
-                  ),
-                )
-              }}
-            >
-              Remove {photoLabels[id]}
             </button>
           </>
         )}

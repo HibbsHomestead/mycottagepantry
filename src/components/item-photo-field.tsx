@@ -1,16 +1,12 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
-import { PantryPhoto } from './pantry-photo'
+import { imageDisplayName } from '@/lib/image-display-name'
+import { PhotoBox } from './photo-box'
 
-/**
- * Shared photo section for Add Item and Edit Product: preview, choose an
- * existing oven photo, or upload one. Uploading stores the asset only; the
- * item keeps the link when the surrounding form is saved.
- */
+/** Upload stores an asset; only the surrounding form's Save attaches it. */
 export function ItemPhotoField({
   value,
   assets,
-  kind,
   disabled = false,
   canUpload = true,
   onChange,
@@ -20,10 +16,13 @@ export function ItemPhotoField({
   children,
   uploadLabel = 'Upload photo',
   showPhotoPicker = true,
+  className = 'add-item-photo',
+  previewClassName = 'add-item-photo-preview',
+  collection,
 }: {
   value: Item
   assets: Item[]
-  kind: 'pantry' | 'product'
+  kind?: 'pantry' | 'product'
   disabled?: boolean
   canUpload?: boolean
   onChange: (key: string, value: string) => void
@@ -33,90 +32,101 @@ export function ItemPhotoField({
   children?: ReactNode
   uploadLabel?: string
   showPhotoPicker?: boolean
+  className?: string
+  previewClassName?: string
+  collection?: string
 }) {
-  const [uploading, setUploading] = useState(false),
-    [localError, setLocalError] = useState('')
-  const photoId = useId(),
-    uploadId = useId()
+  const errorId = useId()
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const [preview, setPreview] = useState('')
+  const [uploaded, setUploaded] = useState<Item | null>(null)
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview)
+    },
+    [preview],
+  )
   const report = (message: string) => {
-    setLocalError(onError ? '' : message)
+    setError(message)
     onError?.(message)
   }
+  const photo =
+    assets.find((a) => a.id === value.imageAssetId) ||
+    (uploaded?.id === value.imageAssetId ? uploaded : null)
+  async function upload(file: File) {
+    if (disabled || uploading || !canUpload) return
+    report('')
+    if (!file.size || file.size > 5000000) {
+      report('Choose a PNG, JPEG, or WebP image smaller than 5 MB.')
+      return
+    }
+    setPreview(URL.createObjectURL(file))
+    setUploading(true)
+    onBusy?.(true)
+    try {
+      const body = new FormData()
+      body.set('file', file)
+      body.set('category', 'product photo')
+      if (collection) body.set('collection', collection)
+      const response = await fetch('/api/workspace?upload=1', {
+        method: 'POST',
+        body,
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.asset?.id)
+        throw new Error(
+          result.error ||
+            'Photo upload failed. Your other changes are preserved.',
+        )
+      setUploaded(result.asset)
+      onWorkspace(result.workspace)
+      onChange('imageAssetId', result.asset.id)
+    } catch (e) {
+      report(
+        e instanceof Error
+          ? e.message
+          : 'Photo upload failed. Your other changes are preserved.',
+      )
+    } finally {
+      setPreview('')
+      setUploading(false)
+      onBusy?.(false)
+    }
+  }
   return (
-    <div className="add-item-photo">
-      <PantryPhoto
-        item={{ ...value, name: value.name || 'New item' }}
-        assets={assets}
-        kind={kind}
-        className="add-item-photo-preview"
+    <div className={className}>
+      <PhotoBox
+        className={previewClassName}
+        src={preview || photo?.fileUrl}
+        alt={`Photo of ${value.name || 'New item'}`}
+        selected={value.imageAssetId || ''}
+        disabled={disabled}
+        busy={uploading}
+        canUpload={canUpload}
+        inputLabel={uploadLabel}
+        errorId={error ? errorId : undefined}
+        onFile={(file) => void upload(file)}
+        onRemove={() => {
+          report('')
+          onChange('imageAssetId', '')
+        }}
+        choices={
+          showPhotoPicker
+            ? assets.map((a, i) => ({
+                id: a.id,
+                name: imageDisplayName(a, i + 1),
+              }))
+            : []
+        }
+        onSelect={(id) => {
+          report('')
+          onChange('imageAssetId', id)
+        }}
       />
-      {showPhotoPicker && (
-        <label className="field" htmlFor={photoId}>
-          <span>Photo</span>
-          <select
-            id={photoId}
-            value={value.imageAssetId || ''}
-            disabled={disabled || uploading}
-            onChange={(e) => onChange('imageAssetId', e.target.value)}
-          >
-            <option value="">No photo</option>
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {canUpload && (
-        <label className="field" htmlFor={uploadId}>
-          <span>{uploadLabel}</span>
-          <input
-            id={uploadId}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={disabled || uploading}
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              setUploading(true)
-              onBusy?.(true)
-              report('')
-              try {
-                const body = new FormData()
-                body.set('file', file)
-                body.set('category', 'product photo')
-                const response = await fetch('/api/workspace?upload=1', {
-                  method: 'POST',
-                  body,
-                })
-                const result = await response.json().catch(() => ({}))
-                if (!response.ok || !result.asset?.id)
-                  throw new Error(
-                    result.error ||
-                      'Photo upload failed. Your other changes are preserved.',
-                  )
-                onWorkspace(result.workspace)
-                onChange('imageAssetId', result.asset.id)
-              } catch (error) {
-                report(
-                  error instanceof Error
-                    ? error.message
-                    : 'Photo upload failed. Your other changes are preserved.',
-                )
-              } finally {
-                setUploading(false)
-                onBusy?.(false)
-                e.target.value = ''
-              }
-            }}
-          />
-        </label>
-      )}
-      {uploading && <p role="status">Uploading photo…</p>}
-      {localError && (
-        <p role="alert" className="form-error">
-          {localError}
+      {error && (
+        <p id={errorId} role="alert" className="form-error">
+          {error}
         </p>
       )}
       {children}
