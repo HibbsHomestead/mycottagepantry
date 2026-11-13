@@ -154,16 +154,52 @@ export const batchPlans = orgTable('batch_plans')
 export const batchPlanLines = orgTable('batch_plan_lines')
 export const batches = pgTable(
   'batches',
-  { ...base(), recipeId: text('recipe_id').notNull() },
+  { ...base(), recipeId: text('recipe_id'), productId: text('product_id') },
   (t) => [
     uniqueIndex('batches_org_id').on(t.businessId, t.id),
+    foreignKey({
+      columns: [t.businessId, t.productId],
+      foreignColumns: [products.businessId, products.id],
+    }),
+    check(
+      'product_run_has_target',
+      sql`(${t.data}->>'productionVersion') IS NULL OR ${t.productId} IS NOT NULL`,
+    ),
     foreignKey({
       columns: [t.businessId, t.recipeId],
       foreignColumns: [recipes.businessId, recipes.id],
     }),
   ],
 )
-export const batchUsage = orgTable('batch_usage')
+export const batchUsage = pgTable(
+  'batch_usage',
+  {
+    ...base(),
+    batchId: text('batch_id'),
+    ingredientId: text('ingredient_id'),
+    productId: text('product_id'),
+    quantity: numeric({ precision: 20, scale: 8 }),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.businessId, t.batchId],
+      foreignColumns: [batches.businessId, batches.id],
+    }),
+    foreignKey({
+      columns: [t.businessId, t.ingredientId],
+      foreignColumns: [ingredients.businessId, ingredients.id],
+    }),
+    foreignKey({
+      columns: [t.businessId, t.productId],
+      foreignColumns: [products.businessId, products.id],
+    }),
+    uniqueIndex('batch_usage_org_id').on(t.businessId, t.id),
+    check(
+      'production_usage_reference',
+      sql`${t.batchId} IS NULL OR ((${t.ingredientId} IS NULL) <> (${t.productId} IS NULL) AND ${t.quantity} >= 0)`,
+    ),
+  ],
+)
 export const lots = orgTable('lots')
 export const ledger = pgTable(
   'ledger',

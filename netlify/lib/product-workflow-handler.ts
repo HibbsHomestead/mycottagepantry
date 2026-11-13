@@ -110,7 +110,7 @@ async function journal(
     ],
   })
 }
-async function finishedMovement(
+export async function finishedMovement(
   ctx: Context,
   product: Item,
   id: string,

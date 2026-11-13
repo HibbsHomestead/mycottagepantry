@@ -1,3 +1,4 @@
+import { ProductionRun } from './production-run'
 import { InventoryCounts } from './inventory-counts'
 import {
   fetchWorkspaceWithDiagnostics,
@@ -41,7 +42,7 @@ import {
   PurchaseStockReceipts,
 } from './finished-inventory'
 import { ProductCategoryManager } from './product-categories'
-import { workflowOf, tracksFinishedStock } from '@/lib/product-workflows'
+import { workflowOf } from '@/lib/product-workflows'
 import {
   destination,
   destinationHash,
@@ -103,7 +104,6 @@ import {
   Menu,
   X,
   Download,
-  CalendarDays,
   Clock3,
   CircleCheck,
   TriangleAlert,
@@ -184,7 +184,7 @@ const quickActions = [
   ['Create recipe', 'recipe'],
   ['Import recipe', 'recipe-import'],
   ['Create product', 'product'],
-  ['Start batch run', 'batch'],
+  ['Start production', 'batch'],
   ['Record a sale', 'sale'],
   ['Record an expense', 'expense'],
   ['Create purchase order', 'order'],
@@ -726,6 +726,16 @@ export function WorkspaceApp() {
             'The save response did not confirm this product. Your changes are still here; select Save again. No duplicate is created by retrying.',
           )
       }
+      const keepProductionOpen =
+        action === 'productionSave' && data.status === 'scheduled'
+      const savedProduction = action.startsWith('production')
+        ? result.workspace?.batches?.find((run: Item) => run.id === data.id)
+        : undefined
+      if (action.startsWith('production') && !savedProduction)
+        throw new Error(
+          'The response did not confirm this run. Retry this form; its stable ID prevents duplicate posting.',
+        )
+      if (keepProductionOpen) setSelected(savedProduction)
       setState(result.workspace)
       setFormDirty(false)
       if (
@@ -743,12 +753,13 @@ export function WorkspaceApp() {
           'ingredientUpdate',
           'ingredientOffer',
           'productRecipeLink',
-        ].includes(action)
+        ].includes(action) &&
+        !keepProductionOpen
       )
         setModal(null)
       toast.success(
-        action === 'complete'
-          ? 'Batch completed. Inventory and historical costs updated.'
+        action === 'complete' || action === 'productionComplete'
+          ? 'Production completed. Inventory and historical costs updated.'
           : table === 'ingredients' &&
               ['save', 'ingredientUpdate'].includes(action)
             ? `${isPackaging(data) ? 'Packaging' : 'Ingredient'} saved.`
@@ -816,6 +827,32 @@ export function WorkspaceApp() {
         return
       }
     }
+
+    if (
+      kind === 'batch' ||
+      kind === 'trade-run' ||
+      kind === 'production' ||
+      (['complete', 'trade-complete', 'batch-detail'].includes(kind) &&
+        item?.productionVersion)
+    ) {
+      const product =
+        state.products.find((p) => p.id === item?.id) ||
+        state.products.find((p) => p.id === item?.productId)
+      setSelected(item?.productionVersion ? item : null)
+      setDraft({
+        productId: product?.id || '',
+        legacyRunId:
+          item &&
+          !item.productionVersion &&
+          state.batches.some((b) => b.id === item.id)
+            ? item.id
+            : undefined,
+      })
+      setFormError('')
+      setModal('production')
+      return
+    }
+    if (kind === 'prep-batch') kind = 'batch'
 
     if (['label-preview', 'label-print'].includes(kind) && item) {
       setPreviewLabelId('')
@@ -900,7 +937,11 @@ export function WorkspaceApp() {
       setModal(kind)
       return
     }
-    if (kind === 'product' && item && tracksFinishedStock(item)) {
+    if (
+      kind === 'product' &&
+      item &&
+      ['handmade', 'resale'].includes(item.workflow)
+    ) {
       setSelected(item)
       setModal('trade-product')
       return
@@ -1018,8 +1059,15 @@ export function WorkspaceApp() {
             wholesale: demo ? 6 : '',
             unitsPerPackage: 1,
             targetMargin: business.targetMargin ?? (demo ? 65 : 0),
-            recipeId: recipes[0]?.id,
-            productId: products[0]?.id,
+            recipeId:
+              kind === 'batch'
+                ? recipes.find(
+                    (r) =>
+                      r.compound ||
+                      ingredients.some((i) => i.compoundRecipeId === r.id),
+                  )?.id || ''
+                : recipes[0]?.id,
+            productId: kind === 'batch' ? '' : products[0]?.id,
             yield: demo ? 4 : 1,
             yieldUnit: demo ? 'loaves' : 'each',
             laborMinutes: demo ? 25 : 0,
@@ -1303,7 +1351,7 @@ export function WorkspaceApp() {
               ? 'trade-product-resale'
               : 'product',
       ],
-      Production: ['Plan a batch', 'batch'],
+      Production: ['Start production', 'batch'],
       Finances: ['Record a transaction', 'transaction'],
       Labels: ['Print label', 'print'],
       Reports: ['Export report', 'export'],
@@ -1965,7 +2013,9 @@ export function WorkspaceApp() {
                           </h2>
                           <p>Plan thoughtfully. Bake confidently.</p>
                         </div>
-                        <CalendarDays size={19} />
+                        <Btn secondary small onClick={() => open('prep-batch')}>
+                          Plan compound prep
+                        </Btn>
                       </div>
                       {batches
                         .filter(
@@ -1976,7 +2026,7 @@ export function WorkspaceApp() {
                         .filter((b) =>
                           sub === 'Batch runs'
                             ? true
-                            : b.status !== 'completed',
+                            : !['completed', 'canceled'].includes(b.status),
                         )
                         .map((b) => (
                           <div className="batch-row" key={b.id}>
@@ -1993,11 +2043,12 @@ export function WorkspaceApp() {
                             <div className="batch-info">
                               <h3>{b.name}</h3>
                               <p>
-                                {b.count} batches · {b.actualYield || b.yield}{' '}
-                                {
+                                {b.productionVersion
+                                  ? `${b.actualYield || b.quantity} selling packages`
+                                  : `${b.count} batches · ${b.actualYield || b.yield}`}{' '}
+                                {!b.productionVersion &&
                                   recipes.find((r) => r.id === b.recipeId)
-                                    ?.yieldUnit
-                                }
+                                    ?.yieldUnit}
                               </p>
                               <small>
                                 {b.note ||
@@ -2017,16 +2068,22 @@ export function WorkspaceApp() {
                               small
                               onClick={() =>
                                 open(
-                                  b.status === 'completed'
+                                  ['completed', 'canceled'].includes(b.status)
                                     ? 'batch-detail'
                                     : 'complete',
                                   b,
                                 )
                               }
                             >
-                              {b.status === 'completed'
+                              {['completed', 'canceled'].includes(b.status)
                                 ? 'View run'
-                                : 'Complete batch'}
+                                : b.productionVersion
+                                  ? b.status === 'draft'
+                                    ? 'Review draft'
+                                    : b.kind === 'assembly'
+                                      ? 'Assemble'
+                                      : 'Produce'
+                                  : 'Complete batch'}
                               <ChevronRight size={14} />
                             </Btn>
                           </div>
@@ -2040,10 +2097,35 @@ export function WorkspaceApp() {
                         </div>
                         <Package size={19} />
                       </div>
+                      {batches
+                        .filter(
+                          (b) =>
+                            b.productionVersion && b.status === 'scheduled',
+                        )
+                        .map((b) => (
+                          <div className="shortage-row" key={b.id}>
+                            <span>
+                              <strong>{b.name}</strong>
+                              <small>
+                                {b.quantity} selling packages · requirements
+                                pinned
+                              </small>
+                            </span>
+                            <Btn
+                              small
+                              secondary
+                              onClick={() => open('production', b)}
+                            >
+                              Review stock
+                            </Btn>
+                          </div>
+                        ))}
                       {(() => {
                         const requirements = new Map<string, number>()
                         for (const b of batches.filter(
-                          (b) => b.status !== 'completed',
+                          (b) =>
+                            !b.productionVersion &&
+                            !['completed', 'canceled'].includes(b.status),
                         )) {
                           const r = recipes.find((r) => r.id === b.recipeId)
                           for (const l of r?.lines || []) {
@@ -2880,7 +2962,10 @@ export function WorkspaceApp() {
                     product: products.some((p) => p.id === draft.id)
                       ? 'Edit Product'
                       : 'Create Product',
-                    batch: 'Plan your next batch',
+                    production: selected?.productionVersion
+                      ? selected.name
+                      : 'Start production',
+                    batch: 'Plan compound prep',
                     complete: 'Finish this batch',
                     sale: 'Record a sale',
                     expense: 'Record an expense',
@@ -4020,7 +4105,7 @@ export function WorkspaceApp() {
                         })()}
                       </p>
                       <p className="form-hint">
-                        Food products are made through the batch workflow in
+                        Food products are made through product production in
                         Production. Saving this form never adds stock, posts
                         inventory or changes historical batch costs.
                       </p>
@@ -4053,7 +4138,13 @@ export function WorkspaceApp() {
                     {select(
                       'recipeId',
                       recipes
-                        .filter((r) => r.workflow !== 'handmade')
+                        .filter(
+                          (r) =>
+                            r.compound ||
+                            ingredients.some(
+                              (i) => i.compoundRecipeId === r.id,
+                            ),
+                        )
                         .map((r) => ({ value: r.id, label: r.name })),
                     )}
                   </Field>
@@ -4110,6 +4201,16 @@ export function WorkspaceApp() {
               )}
               {modal === 'complete' && (
                 <>
+                  {selected && (
+                    <Btn secondary onClick={() => open('production', selected)}>
+                      Review as product run
+                    </Btn>
+                  )}
+                  <p>
+                    Legacy recipe plan: completion keeps its original posting
+                    policy. Reviewing as a product run replaces this uncompleted
+                    plan only when you confirm the new plan.
+                  </p>
                   <Field label="Sellable product">
                     {select('productId', [
                       {
@@ -4684,6 +4785,23 @@ export function WorkspaceApp() {
               </div>
             </form>
           ) : null}
+          {modal === 'production' && (
+            <ProductionRun
+              key={selected?.id || draft.productId || 'new'}
+              state={state}
+              run={selected || undefined}
+              productId={draft.productId}
+              legacyRunId={draft.legacyRunId}
+              busy={busy}
+              mutate={mutate}
+              edit={open}
+              startComponent={(productId) => {
+                setSelected(null)
+                setDraft({ productId })
+                setModal('production')
+              }}
+            />
+          )}
           {modal === 'sale-detail' && selected && (
             <>
               <h3>{selected.name}</h3>
@@ -4901,6 +5019,16 @@ export function WorkspaceApp() {
                 )
               }
             >
+              {selected.workflow !== 'resale' && (
+                <div className="button-row">
+                  <Btn
+                    disabled={!ready}
+                    onClick={() => open('batch', selected)}
+                  >
+                    {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
+                  </Btn>
+                </div>
+              )}
               {selected.workflow === 'kit' ? (
                 <KitCostCards
                   product={selected}
@@ -5006,7 +5134,7 @@ export function WorkspaceApp() {
                   <RefreshCw size={16} />
                   Make again
                 </Btn>
-                {selected.status !== 'completed' && (
+                {!['completed', 'canceled'].includes(selected.status) && (
                   <Btn secondary onClick={() => open('complete', selected)}>
                     Complete batch
                   </Btn>

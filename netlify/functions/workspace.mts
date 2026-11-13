@@ -1,3 +1,4 @@
+import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
 import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
 import {
@@ -193,6 +194,7 @@ const tables = [
   'recipes',
   'products',
   'batches',
+  'batch_usage',
   'sales',
   'expenses',
   'vendors',
@@ -616,7 +618,7 @@ export default async (req: Request, context: Context) => {
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
       if (table === 'ingredients' && !countPackageWrite) {
-        const previous = state.ingredients.find(i => i.id === item.id)
+        const previous = state.ingredients.find((i) => i.id === item.id)
         if (previous?.countPackages) item.countPackages = previous.countPackages
         else delete item.countPackages
       }
@@ -665,7 +667,20 @@ export default async (req: Request, context: Context) => {
         )
           throw new Error('Choose a supported product workflow.')
         const previous = state.products.find((p) => p.id === item.id)
+        item.foodStockEnabled = stockMutation
+          ? previous?.foodStockEnabled === true ||
+            item.foodStockEnabled === true
+          : previous?.foodStockEnabled
         if (!stockMutation) {
+          if (
+            previous?.foodStockEnabled &&
+            Number(previous.quantity) > 0 &&
+            item.unitsPerPackage != null &&
+            Number(item.unitsPerPackage) !== Number(previous.unitsPerPackage)
+          )
+            throw new Error(
+              'Package size cannot change while finished stock remains. Use a separate product.',
+            )
           normalizeProductNetWeight(item, previous)
           if (!previous && tracksFinishedStock(item))
             throw new Error(
@@ -676,6 +691,8 @@ export default async (req: Request, context: Context) => {
           item.quantity = previous?.quantity || 0
           item.cost = previous?.cost || 0
           item.stockCostKnown = previous?.stockCostKnown
+          item.stockOutputBasis = previous?.stockOutputBasis
+          item.foodStockEnabled = previous?.foodStockEnabled
         }
         if (previous && item.productCategoryId === undefined)
           item.productCategoryId = previous.productCategoryId
@@ -797,6 +814,19 @@ export default async (req: Request, context: Context) => {
             item.productId || null,
           ],
         )
+      } else if (table === 'batch_usage') {
+        await client.query(
+          'INSERT INTO batch_usage(id,business_id,data,batch_id,ingredient_id,product_id,quantity) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [
+            item.id,
+            org,
+            JSON.stringify(item),
+            item.batchId,
+            item.ingredientId || null,
+            item.productId || null,
+            item.quantity,
+          ],
+        )
       } else if (['batches', 'sales'].includes(table)) {
         const column =
           table === 'ledger'
@@ -811,8 +841,14 @@ export default async (req: Request, context: Context) => {
               ? item.productId
               : item.recipeId
         await client.query(
-          `INSERT INTO ${table}(id,business_id,data,${column}) VALUES($1,$2,$3,$4) ON CONFLICT(business_id,id) DO UPDATE SET data=$3,${column}=$4,updated_at=NOW()`,
-          [item.id, org, JSON.stringify(item), value || null],
+          `INSERT INTO ${table}(id,business_id,data,${column}${table === 'batches' ? ',product_id' : ''}) VALUES($1,$2,$3,$4${table === 'batches' ? ',$5' : ''}) ON CONFLICT(business_id,id) DO UPDATE SET data=$3,${column}=$4${table === 'batches' ? ',product_id=$5' : ''},updated_at=NOW()`,
+          [
+            item.id,
+            org,
+            JSON.stringify(item),
+            value || null,
+            ...(table === 'batches' ? [item.productId || null] : []),
+          ],
         )
       } else
         await client.query(
@@ -941,7 +977,7 @@ export default async (req: Request, context: Context) => {
       metadataOnly =
         requestUrl.searchParams.has('labelPdf') ||
         requestUrl.searchParams.has('productImport') ||
-        [
+        ([
           'receivedDateCorrection',
           'shelfMedia',
           'rapidInventoryCount',
@@ -954,7 +990,10 @@ export default async (req: Request, context: Context) => {
           'templateAssignments',
           'productLabelAssignment',
           'labelPrint',
-        ].includes(body?.action) && !(body?.action === 'rapidInventoryCount' && body?.data?.op === 'apply')
+        ].includes(body?.action) &&
+          !(
+            body?.action === 'rapidInventoryCount' && body?.data?.op === 'apply'
+          ))
       if (body?.action === 'pantryNavigation') {
         if (
           body.table !== 'settings' ||
@@ -2170,6 +2209,7 @@ export default async (req: Request, context: Context) => {
         throw new Error('Choose a completed batch for this product.')
       if (
         batch &&
+        !batch.productionVersion &&
         batch.costSnapshot.unitsPerPackage !== Number(p.unitsPerPackage)
       )
         throw new Error(
@@ -2234,6 +2274,15 @@ export default async (req: Request, context: Context) => {
     }
     if (req.method === 'POST') {
       const { action, table, data } = await req.json()
+      if (table === 'batch_usage')
+        throw new Error('Production usage is written only by completion.')
+      if (
+        ['save', 'complete', 'import'].includes(action) &&
+        table === 'batches' &&
+        (data.productionVersion ||
+          state.batches.some((b) => b.id === data.id && b.productionVersion))
+      )
+        throw new Error('Use the product production workflow for this run.')
       if (
         table === 'inventory_counts' &&
         ![
@@ -2253,6 +2302,7 @@ export default async (req: Request, context: Context) => {
         role === 'Production Staff' &&
         ![
           'complete',
+          'productionComplete',
           'receive',
           'adjust',
           'pantrySort',
@@ -2307,13 +2357,20 @@ export default async (req: Request, context: Context) => {
       )
       if (
         kitTarget?.workflow === 'kit' &&
-        !['save', 'archive'].includes(action)
+        ![
+          'save',
+          'archive',
+          'productionSave',
+          'productionComplete',
+          'productionCancel',
+        ].includes(action)
       )
         throw new Error(
           'Kit stock, production and fulfillment actions are unavailable. Definitions do not move stock.',
         )
       if (
         table === 'batches' &&
+        !action.startsWith('production') &&
         state.products.some(
           (p) => p.id === data.productId && p.workflow === 'kit',
         )
@@ -2362,6 +2419,13 @@ export default async (req: Request, context: Context) => {
             `${record.id}: ${correction.previousDate} → ${correction.receivedDate}. ${correction.reason}`,
           )
         }
+      } else if (
+        await handleProduction(action, table, data, {
+          ...stockContext(),
+          audit,
+        })
+      ) {
+        // Product production and assembly post atomically under the workspace lock.
       } else if (
         await handleAddItem(action, table, data, {
           ...stockContext(),
@@ -2416,14 +2480,25 @@ export default async (req: Request, context: Context) => {
         }
         await save('settings', settings)
       } else if (action === 'rapidInventoryCount') {
-        if (table !== 'inventory_counts') throw new Error('Use the inventory count workflow.')
+        if (table !== 'inventory_counts')
+          throw new Error('Use the inventory count workflow.')
         const effects = rapidCountCommand(state, data, {
-          actor: user?.id || 'demo-owner', role, now: new Date().toISOString(),
-          businessName: state.settings[0]?.businessName || state.settings[0]?.name || business.business_name,
-          revision: item => inventoryRevision(item, state.ledger),
+          actor: user?.id || 'demo-owner',
+          role,
+          now: new Date().toISOString(),
+          businessName:
+            state.settings[0]?.businessName ||
+            state.settings[0]?.name ||
+            business.business_name,
+          revision: (item) => inventoryRevision(item, state.ledger),
         })
-        for (const effect of effects) await save(effect.table, effect.item, false, false, true)
-        if (effects.length) await audit('Inventory count: '+data.op, data.id+' · reviewed count evidence; no purchase receipt created')
+        for (const effect of effects)
+          await save(effect.table, effect.item, false, false, true)
+        if (effects.length)
+          await audit(
+            'Inventory count: ' + data.op,
+            data.id + ' · reviewed count evidence; no purchase receipt created',
+          )
       } else if (action === 'inventoryCountStart') {
         if (!/^[a-zA-Z0-9_-]{1,100}$/.test(data.id || ''))
           throw new Error('A unique count ID is required.')
@@ -2447,7 +2522,10 @@ export default async (req: Request, context: Context) => {
       ) {
         const session = state.inventory_counts.find((c) => c.id === data.id)
         if (!session) throw new Error('Count session unavailable.')
-        if (session.version === 2) throw new Error('Use the rapid inventory count review and approval workflow.')
+        if (session.version === 2)
+          throw new Error(
+            'Use the rapid inventory count review and approval workflow.',
+          )
         if (session.status === 'completed') {
           if (action !== 'inventoryCountComplete')
             throw new Error('Completed counts cannot be edited.')
@@ -3731,6 +3809,7 @@ export default async (req: Request, context: Context) => {
         }
         if (table === 'products') {
           const previous = state.products.find((p) => p.id === item.id)
+          item.foodStockEnabled = previous?.foodStockEnabled
           item.quantity = previous?.quantity || 0
           item.cost = previous?.cost || 0
           delete item.stockCostKnown
@@ -4547,6 +4626,10 @@ export default async (req: Request, context: Context) => {
           ) || (candidates.length === 1 ? candidates[0] : undefined)
         if (candidates.length && !product)
           throw new Error('Choose the sellable product for this run.')
+        if (product?.foodStockEnabled)
+          throw new Error(
+            'This product now uses finished stock. Cancel/review this legacy plan and create a product-based run; legacy completion cannot mix accounting policies.',
+          )
         if (product && product.recipeId !== r.id)
           throw new Error('Product must use this recipe.')
         b.productId = product?.id

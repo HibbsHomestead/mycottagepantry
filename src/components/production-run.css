@@ -1,0 +1,54 @@
+.production-run {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.production-run label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 500;
+}
+.production-run label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: start;
+}
+.production-run input[type='checkbox'] {
+  width: auto;
+  margin-top: 0.2rem;
+}
+.production-run .pantry-photo {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+}
+.production-run .selected-item small {
+  display: block;
+}
+.production-run fieldset {
+  padding: 0.75rem;
+  border: 1px solid var(--border, #d7d6c8);
+  border-radius: 0.5rem;
+  min-width: 0;
+}
+.production-run .table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.production-run table {
+  width: 100%;
+  text-align: left;
+}
+.production-run th,
+.production-run td {
+  padding: 0.5rem 0.35rem;
+  vertical-align: top;
+}
+.production-run .button-row {
+  flex-wrap: wrap;
+}
+.production-run details {
+  padding: 0.5rem 0;
+}
+.production-run p {
+  margin: 0.25rem 0;
+}

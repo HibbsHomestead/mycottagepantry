@@ -336,8 +336,9 @@ export function KitEditor({
       </label>
       <p className="form-hint">
         Definition only: saving, activating and previewing do not move or
-        reserve stock. Kit fulfillment, preassembly and sales are unavailable;
-        produce components separately.
+        reserve stock. Use Assemble to consume stocked components and create
+        finished kits. Produce missing components separately. Kit sales remain
+        unavailable.
       </p>
     </>
   )

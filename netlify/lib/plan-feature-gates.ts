@@ -120,6 +120,9 @@ export function requestFeatures({
         out.add('fabricInventory')
       else out.add('inventory')
       break
+    case 'productionSave':
+    case 'productionComplete':
+    case 'productionCancel':
     case 'complete':
       out.add(wf === 'handmade' ? 'handmadeProduction' : 'production')
       break

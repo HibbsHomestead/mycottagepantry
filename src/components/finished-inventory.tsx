@@ -37,9 +37,8 @@ export function FinishedInventory({
   return (
     <>
       <p className="form-hint">
-        Sellable items from handmade production and resale purchases. Legacy
-        food products retain their existing batch workflow; no opening balances
-        are inferred.
+        Finished selling packages from product production, kit assembly, and
+        resale receipts. Legacy food runs create no inferred opening balances.
       </p>
       {suspicious.length > 0 && (
         <details className="panel resale-count-review">
@@ -155,6 +154,11 @@ export function FinishedInventory({
             <footer>
               {canMove && (
                 <>
+                  {p.workflow !== 'resale' && (
+                    <button className="btn" onClick={() => open('batch', p)}>
+                      {p.workflow === 'kit' ? 'Assemble' : 'Produce'}
+                    </button>
+                  )}
                   {p.workflow === 'resale' && (
                     <button
                       className="btn"
@@ -165,6 +169,7 @@ export function FinishedInventory({
                   )}
                   <button
                     className="btn secondary"
+                    hidden={p.workflow === 'kit'}
                     onClick={() => open('trade-adjust', p)}
                   >
                     Adjust stock
@@ -226,7 +231,7 @@ export function HandmadeProduction({
                 : `${b.yield} planned`}
             </p>
           </div>
-          {b.status !== 'completed' &&
+          {!['completed', 'canceled'].includes(b.status) &&
             ['Owner', 'Manager', 'Production Staff'].includes(role) && (
               <button
                 className="btn secondary"
@@ -235,7 +240,15 @@ export function HandmadeProduction({
                 Complete production
               </button>
             )}
-          {b.status === 'completed' && (
+          {b.productionVersion && (
+            <button
+              className="btn secondary"
+              onClick={() => open('production', b)}
+            >
+              View run
+            </button>
+          )}
+          {b.status === 'completed' && !b.productionVersion && (
             <details className="calculation-box">
               <summary>Locked production costs</summary>
               <p>
