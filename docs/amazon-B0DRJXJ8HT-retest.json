@@ -1,0 +1,18 @@
+{
+  "requestedAt": "2026-11-14T03:40:47.930Z",
+  "url": "https://www.amazon.com/dp/B0DRJXJ8HT?th=1",
+  "outcome": "retrieved",
+  "products": [
+    {
+      "retailerSku": "B0DRJXJ8HT",
+      "fields": [
+        "name",
+        "packageSize",
+        "vendor",
+        "retailerSku",
+        "purchaseQuantity",
+        "purchaseUnit"
+      ]
+    }
+  ]
+}

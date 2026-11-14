@@ -17,10 +17,10 @@ export function normalizeProductUrl(value: string) {
   url.hash = ''
   for (const key of [...url.searchParams.keys()]) {
     // Keep offerListingID, smid/m (seller), th/psc, quantity, condition, and
-    // unknown options. Discard known search filters and referral attribution;
-    // refinements and srs describe search results, not the selected ASIN/offer.
+    // unknown options. Discard known search filters and referral attribution:
+    // search, category, and sponsored-placement context do not select an offer.
     if (
-      /^(?:ref_?|tag|linkCode|camp|creative|creativeASIN|ascsubtag|qid|sr|refinements|srs|keywords|sprefix|crid|dib|dib_tag|pd_rd_.*|pf_rd_.*|utm_.*|content-id)$/i.test(
+      /^(?:ref_?|tag|linkCode|camp|creative|creativeASIN|ascsubtag|qid|sr|refinements|srs|keywords|sprefix|crid|dib|dib_tag|c|cv_ct_cx|s|sbo|ts_id|aref|sp_csd|pd_rd_.*|pf_rd_.*|utm_.*|content-id)$/i.test(
         key,
       )
     )
