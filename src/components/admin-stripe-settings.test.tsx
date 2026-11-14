@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AdminStripeSettings } from './admin-stripe-settings'
 import { launchPricing } from '@/lib/launch-plans'
@@ -330,4 +330,187 @@ it('explains encrypted storage gating without enabling setup', () => {
   expect(setup).toHaveAccessibleDescription(
     /blocked until encrypted storage is ready/,
   )
+})
+
+const activationData = {
+  encryptionReady: true,
+  rows: [
+    {
+      environment: 'test',
+      fingerprint: 'sha256:fixture',
+      validated_at: '2026-11-14T08:00:00Z',
+      webhook_verified_at: '2026-11-14T08:01:00Z',
+      checkout_enabled: false,
+      configuration: {
+        policy: { portal: 'bpc_testfixture' },
+        mappings: {
+          'cottage-kitchen': { price: 'price_fixture', purchase: true },
+        },
+      },
+    },
+  ],
+}
+
+it('activates TEST checkout using its nearby confirmation and saved policy without a live review', async () => {
+  const enabled = {
+    ...activationData,
+    rows: [{ ...activationData.rows[0], checkout_enabled: true }],
+  }
+  const request = vi.fn().mockResolvedValue(enabled)
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={activationData} request={request} />)
+  await user.click(screen.getByText('Required policies and activation review'))
+  expect(
+    screen.getByLabelText('Reviewed Stripe portal configuration ID'),
+  ).toHaveValue('bpc_testfixture')
+  expect(
+    screen.queryByLabelText(
+      'Existing subscriber review and activation decision',
+    ),
+  ).not.toBeInTheDocument()
+  await user.type(
+    screen.getByLabelText('Action confirmation'),
+    'ENABLE TEST CHECKOUT',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Confirm checkout activation' }),
+  )
+  const section = screen.getByText(
+    'Required policies and activation review',
+  ).parentElement!
+  expect(within(section).getByRole('alert')).toHaveTextContent(
+    'in TEST checkout confirmation',
+  )
+  expect(request).not.toHaveBeenCalled()
+  await user.type(
+    screen.getByLabelText('TEST checkout confirmation'),
+    ' ENABLE TEST CHECKOUT ',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Confirm checkout activation' }),
+  )
+  expect(request).toHaveBeenCalledExactlyOnceWith('action=stripe', {
+    environment: 'test',
+    operation: 'enable',
+    confirmation: 'ENABLE TEST CHECKOUT',
+  })
+  await waitFor(() =>
+    expect(screen.getByText(/New checkout:/)).toHaveTextContent('Enabled'),
+  )
+  expect(
+    within(section).getByText(/TEST checkout is enabled/),
+  ).toBeInTheDocument()
+  expect(screen.getByLabelText('TEST checkout confirmation')).toHaveValue('')
+})
+
+it('keeps a portal ID separate from policy approval and rejects an approval phrase entered as the ID', async () => {
+  const request = vi.fn().mockResolvedValue(activationData)
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={activationData} request={request} />)
+  await user.click(screen.getByText('Required policies and activation review'))
+  const portal = screen.getByLabelText(
+    'Reviewed Stripe portal configuration ID',
+  )
+  await user.clear(portal)
+  await user.type(portal, 'APPROVE POLICIES')
+  await user.type(
+    screen.getByLabelText('Policy approval confirmation'),
+    'APPROVE POLICIES',
+  )
+  await user.click(screen.getByRole('button', { name: 'Approve policies' }))
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'configuration ID beginning with bpc_',
+  )
+  expect(request).not.toHaveBeenCalled()
+  await user.clear(portal)
+  await user.type(portal, 'bpc_testfixture')
+  await user.click(screen.getByRole('button', { name: 'Approve policies' }))
+  expect(request).toHaveBeenCalledExactlyOnceWith('action=stripe', {
+    environment: 'test',
+    operation: 'policy',
+    portalConfiguration: 'bpc_testfixture',
+    confirmation: 'APPROVE POLICIES',
+  })
+  await waitFor(() =>
+    expect(screen.getByLabelText('Policy approval confirmation')).toHaveValue(
+      '',
+    ),
+  )
+  expect(screen.getByText(/Policies approved for TEST/)).toBeInTheDocument()
+  expect(screen.getByText(/New checkout:/)).toHaveTextContent('Disabled')
+})
+
+it('shows server activation errors next to activation and retains confirmation for a retry', async () => {
+  const request = vi
+    .fn()
+    .mockRejectedValue(
+      new Error('Verified platform administrator access is required.'),
+    )
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={activationData} request={request} />)
+  await user.click(screen.getByText('Required policies and activation review'))
+  await user.type(
+    screen.getByLabelText('TEST checkout confirmation'),
+    'ENABLE TEST CHECKOUT',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Confirm checkout activation' }),
+  )
+  const section = screen.getByText(
+    'Required policies and activation review',
+  ).parentElement!
+  expect(await within(section).findByRole('alert')).toHaveTextContent(
+    'administrator access is required',
+  )
+  expect(screen.getByText(/New checkout:/)).toHaveTextContent('Disabled')
+  expect(screen.getByLabelText('TEST checkout confirmation')).toHaveValue(
+    'ENABLE TEST CHECKOUT',
+  )
+})
+
+it('clears confirmations and restores the correct saved portal when switching environments', async () => {
+  const request = vi.fn()
+  const data = {
+    ...activationData,
+    rows: [
+      ...activationData.rows,
+      {
+        environment: 'live',
+        configuration: { policy: { portal: 'bpc_livefixture' } },
+      },
+    ],
+  }
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={data} request={request} />)
+  await user.click(screen.getByText('Required policies and activation review'))
+  await user.type(
+    screen.getByLabelText('TEST checkout confirmation'),
+    'ENABLE TEST CHECKOUT',
+  )
+  await user.type(
+    screen.getByLabelText('Policy approval confirmation'),
+    'APPROVE POLICIES',
+  )
+  await user.selectOptions(screen.getByLabelText('Environment'), 'live')
+  expect(screen.getByLabelText('LIVE checkout confirmation')).toHaveValue('')
+  expect(screen.getByLabelText('Policy approval confirmation')).toHaveValue('')
+  expect(
+    screen.getByLabelText('Reviewed Stripe portal configuration ID'),
+  ).toHaveValue('bpc_livefixture')
+  await user.type(
+    screen.getByLabelText('Existing subscriber review and activation decision'),
+    'ENABLE LIVE CHECKOUT',
+  )
+  await user.click(
+    screen.getByRole('button', { name: 'Confirm checkout activation' }),
+  )
+  expect(request).not.toHaveBeenCalled()
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'in LIVE checkout confirmation',
+  )
+  await user.selectOptions(screen.getByLabelText('Environment'), 'test')
+  expect(
+    screen.getByLabelText('Reviewed Stripe portal configuration ID'),
+  ).toHaveValue('bpc_testfixture')
+  expect(screen.getByLabelText('TEST checkout confirmation')).toHaveValue('')
 })

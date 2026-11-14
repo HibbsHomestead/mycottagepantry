@@ -22,6 +22,7 @@ import {
   stripePortal,
 } from '../../netlify/lib/stripe-subscriptions'
 import { launchPricing } from './launch-plans'
+import type { AdminMetadata } from './platform-admin-types'
 const testKey = 'sk_test_' + randomBytes(20).toString('hex')
 const root = randomBytes(32).toString('hex')
 beforeEach(() =>
@@ -287,6 +288,179 @@ it('denies provider actions without platform MFA, even with a business Owner rol
     ),
   ).rejects.toThrow('administrator')
   expect(c.query).not.toHaveBeenCalled()
+})
+
+function activationFixture(environment: 'test' | 'live' = 'test') {
+  const row: AdminMetadata = {
+    environment,
+    ciphertext: 'encrypted-fixture',
+    validated_at: '2026-11-14T08:00:00Z',
+    webhook_verified_at: '2026-11-14T08:01:00Z',
+    checkout_enabled: false,
+    configuration: {
+      policy: { portal: 'bpc_fixture' },
+      mappings: {
+        'cottage-kitchen': { price: 'price_fixture', purchase: true },
+      },
+    },
+  }
+  const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+    if (sql.startsWith('SELECT * FROM stripe_provider_settings'))
+      return { rows: params[0] === environment ? [row] : [] }
+    if (
+      sql.startsWith(
+        'UPDATE stripe_provider_settings SET checkout_enabled=true',
+      )
+    ) {
+      expect(params[0]).toBe(environment)
+      row.checkout_enabled = true
+      row.configuration = params[1]
+    }
+    if (sql.startsWith('SELECT environment,fingerprint')) {
+      const safe = { ...row }
+      delete safe.ciphertext
+      return { rows: [safe] }
+    }
+    if (sql.startsWith('SELECT count(*) FILTER'))
+      return { rows: [{ checkout: false, access: false, portal: false }] }
+    return { rows: [] }
+  })
+  const client = { query, release: vi.fn() }
+  const activate = (input: AdminMetadata = {}, session: AdminMetadata = {}) =>
+    stripeAdminAction(
+      client,
+      new Request('https://admin.mycottagepantry.com/api/admin?action=stripe', {
+        method: 'POST',
+        body: JSON.stringify({
+          environment,
+          operation: 'enable',
+          confirmation: `ENABLE ${environment.toUpperCase()} CHECKOUT`,
+          ...input,
+        }),
+      }),
+      {
+        role: 'owner',
+        verified_at: new Date().toISOString(),
+        verification_method: 'totp',
+        mfa_at: new Date().toISOString(),
+        ...session,
+      },
+      'fixture',
+    )
+  return { row, query, activate }
+}
+
+it('requires activation confirmation even if its phrase appears in the subscriber review', async () => {
+  const { row, query, activate } = activationFixture()
+  await expect(
+    activate({ confirmation: '', subscriberReview: 'ENABLE TEST CHECKOUT' }),
+  ).rejects.toMatchObject({
+    code: 'CONFIRMATION_REQUIRED',
+    message: expect.stringContaining('in TEST checkout confirmation'),
+  })
+  expect(row.checkout_enabled).toBe(false)
+  expect(
+    query.mock.calls.some(([sql]) =>
+      sql.startsWith('UPDATE stripe_provider_settings'),
+    ),
+  ).toBe(false)
+})
+
+it('enables only TEST after verified setup without requiring payment evidence or a live subscriber review', async () => {
+  const { row, query, activate } = activationFixture()
+  const transport = vi.fn()
+  vi.stubGlobal('fetch', transport)
+  const result = await activate()
+  expect(row.checkout_enabled).toBe(true)
+  expect(result.rows[0].checkout_enabled).toBe(true)
+  expect(row.configuration.liveCheckoutApprovedAt).toBeUndefined()
+  expect(
+    query.mock.calls.filter(([sql]) =>
+      sql.startsWith('UPDATE stripe_provider_settings'),
+    ),
+  ).toEqual([
+    [
+      expect.stringContaining('SET checkout_enabled=true'),
+      ['test', row.configuration],
+    ],
+  ])
+  expect(transport).not.toHaveBeenCalled()
+})
+
+it.each([
+  [
+    'API connection',
+    (row: AdminMetadata) => {
+      row.validated_at = null
+    },
+    'successful API connection test',
+  ],
+  [
+    'failed API test',
+    (row: AdminMetadata) => {
+      row.configuration.apiError = 'CONNECTION_TEST_FAILED'
+    },
+    'successful API connection test',
+  ],
+  [
+    'webhook delivery',
+    (row: AdminMetadata) => {
+      row.webhook_verified_at = null
+    },
+    'verified signed webhook delivery',
+  ],
+  [
+    'policy',
+    (row: AdminMetadata) => {
+      delete row.configuration.policy
+    },
+    'approved billing policies',
+  ],
+  [
+    'purchase availability',
+    (row: AdminMetadata) => {
+      row.configuration.mappings['cottage-kitchen'].purchase = false
+    },
+    'purchase availability enabled',
+  ],
+] as const)(
+  'reports the missing %s requirement and keeps checkout disabled',
+  async (_name, change, message) => {
+    const { row, query, activate } = activationFixture()
+    change(row)
+    await expect(activate()).rejects.toMatchObject({
+      code: 'SETUP_INCOMPLETE',
+      message: expect.stringContaining(message),
+    })
+    expect(row.checkout_enabled).toBe(false)
+    expect(
+      query.mock.calls.some(([sql]) =>
+        sql.startsWith('UPDATE stripe_provider_settings'),
+      ),
+    ).toBe(false)
+  },
+)
+
+it('keeps LIVE blocked without TEST payment, access and portal evidence even with explicit activation confirmation', async () => {
+  const { row, activate } = activationFixture('live')
+  await expect(
+    activate({
+      subscriberReview:
+        'Existing subscriber records reviewed; approve live activation.',
+    }),
+  ).rejects.toMatchObject({ code: 'CUTOVER_REVIEW_REQUIRED' })
+  expect(row.checkout_enabled).toBe(false)
+  expect(row.configuration.liveCheckoutApprovedAt).toBeUndefined()
+})
+
+it('keeps TEST activation blocked when administrator verification has expired', async () => {
+  const { row, query, activate } = activationFixture()
+  const expired = new Date(Date.now() - 11 * 60 * 1000).toISOString()
+  await expect(
+    activate({}, { verified_at: expired, mfa_at: expired }),
+  ).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' })
+  expect(row.checkout_enabled).toBe(false)
+  expect(query).not.toHaveBeenCalled()
 })
 it('denies checkout to non-owner business members before looking up credentials', async () => {
   const c = {

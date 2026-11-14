@@ -652,21 +652,28 @@ export async function stripeAdminAction(
       [e, config],
     )
   } else if (input.operation === 'enable') {
-    if (
-      input.confirmation !== `ENABLE ${e.toUpperCase()} CHECKOUT` ||
-      !row.validated_at ||
-      config.apiError ||
-      !row.webhook_verified_at ||
-      !stripeEndpoint(e) ||
-      !config.policy ||
+    if (input.confirmation !== `ENABLE ${e.toUpperCase()} CHECKOUT`)
+      throw new AdminError(
+        409,
+        'CONFIRMATION_REQUIRED',
+        `Type ENABLE ${e.toUpperCase()} CHECKOUT in ${e.toUpperCase()} checkout confirmation, then select Confirm checkout activation.`,
+      )
+    const missing = [
+      (!row.validated_at || config.apiError) &&
+        'a successful API connection test',
+      !row.webhook_verified_at && 'verified signed webhook delivery',
+      !stripeEndpoint(e) && 'a supported deployed webhook endpoint',
+      !config.policy && 'approved billing policies',
       !Object.values(config.mappings || {}).some(
         (m) => !!(m as AdminMetadata)?.purchase,
-      )
-    )
+      ) &&
+        'an approved recurring Price mapping with purchase availability enabled',
+    ].filter(Boolean)
+    if (missing.length)
       throw new AdminError(
         409,
         'SETUP_INCOMPLETE',
-        'API, verified webhook, policies, approved price mappings and explicit confirmation are required.',
+        `${e.toUpperCase()} checkout remains disabled. Complete: ${missing.join('; ')}.`,
       )
     if (e === 'live') {
       const test = (
