@@ -12,6 +12,8 @@ import {
 } from './label-studio'
 import {
   elementCenter,
+  elementAngle,
+  setElementAngle,
   normalizeAngle,
   pointerAngle,
   resizeCursor,
@@ -34,6 +36,69 @@ const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
 }
 
 describe('label element transforms', () => {
+  it('straightens the existing 180 × 2 divider without rounding, replacing or restyling it', () => {
+    const original = {
+      ...newElement('line'),
+      id: 'existing-divider',
+      x: 18,
+      y: 171,
+      width: 180,
+      height: 2,
+      color: '#6a374c',
+      opacity: 0.75,
+      groupId: 'existing-group',
+    }
+    expect(original.rotation).toBe(0)
+    expect(elementAngle(original)).toBeCloseTo(0.6365935759634865, 12)
+    for (const rotation of [0, 39, -135, 180]) {
+      const e = { ...original, rotation }
+      const next = { ...e, ...setElementAngle(e, 0) }
+      const start = corner(next, 0, 0),
+        end = corner(next, next.width, next.height)
+      expect(end.y).toBeCloseTo(start.y, 12)
+      expect(elementCenter(next).x).toBeCloseTo(elementCenter(e).x, 12)
+      expect(elementCenter(next).y).toBeCloseTo(elementCenter(e).y, 12)
+      expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeCloseTo(
+        Math.hypot(180, 2),
+        12,
+      )
+      expect(next).toMatchObject({
+        id: e.id,
+        width: e.width,
+        height: e.height,
+        color: e.color,
+        opacity: e.opacity,
+        groupId: e.groupId,
+      })
+      expect(elementAngle(next)).toBe(0)
+      expect(setElementAngle(next, 0)).toEqual(setElementAngle(e, 0))
+      expect(
+        validateLabelDocument({ ...blankLabel(), elements: [next] })
+          .elements[0],
+      ).toEqual(next)
+    }
+  })
+  it('reports the endpoint slope after resizing and sets the requested visible line angle', () => {
+    const e = { ...newElement('line'), width: 180, height: 2, rotation: 0 }
+    const resized = { ...e, ...resizeElement(e, 'se', corner(e, 180, 20)) }
+    expect(resized.rotation).toBe(0)
+    expect(elementAngle(resized)).toBeGreaterThan(elementAngle(e))
+    for (const angle of [-180, -45, 0, 45, 90, 180]) {
+      const next = { ...resized, ...setElementAngle(resized, angle) }
+      expect(elementAngle(next)).toBeCloseTo(angle, 12)
+      const start = corner(next, 0, 0),
+        end = corner(next, next.width, next.height)
+      const length = Math.hypot(resized.width, resized.height)
+      expect(end.x - start.x).toBeCloseTo(
+        length * Math.cos((angle * Math.PI) / 180),
+        10,
+      )
+      expect(end.y - start.y).toBeCloseTo(
+        length * Math.sin((angle * Math.PI) / 180),
+        10,
+      )
+    }
+  })
   it('rotates around the center, including upside down', () => {
     const e = { ...newElement('text'), x: 20, y: 30, width: 100, height: 40 }
     const before = elementCenter(e)

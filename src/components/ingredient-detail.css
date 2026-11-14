@@ -318,6 +318,18 @@
   min-width: 0;
   align-content: start;
 }
+.ingredient-purchase-notice {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.ingredient-purchase-notice p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
 /* Editor groups flow within each column; no grid row waits for its neighbor.
    These rules deliberately exclude the approved read-only Details layout. */
 .ingredient-edit-columns,

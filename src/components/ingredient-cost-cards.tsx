@@ -127,10 +127,6 @@ export function IngredientCostCards({ ingredient: i }: { ingredient: Item }) {
           note={recipeNote}
         />
       </div>
-      <p className="cost-relationship">
-        Package price ÷ package amount = package unit cost. Inventory value is
-        shown in Inventory.
-      </p>
     </div>
   )
 }
