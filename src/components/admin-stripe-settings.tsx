@@ -40,12 +40,22 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     config = row.configuration || {},
     evidence =
       data?.evidence?.find((r: AdminMetadata) => r.environment === 'test') || {}
+  const enteredCredentials = !!(key.trim() || signing.trim())
+  const credentialsAvailable = !!(
+    row.fingerprint ||
+    row.validated_at ||
+    key.trim()
+  )
   async function act(operation: string, extra: AdminMetadata = {}) {
-    if (operation === 'save' || operation === 'rotate') {
-      const expected = `${operation === 'save' ? 'SAVE' : 'ROTATE'} ${environment.toUpperCase()}`
+    const saveBeforeAction =
+      ['setup', 'test'].includes(operation) && enteredCredentials
+    if (operation === 'save' || operation === 'rotate' || saveBeforeAction) {
+      const expected = `${operation === 'rotate' ? 'ROTATE' : 'SAVE'} ${environment.toUpperCase()}`
       if (confirmation.trim() !== expected) {
         setMessage(
-          `Type ${expected} in Action confirmation, then select ${operation === 'save' ? 'Save' : 'Rotate'} credentials.`,
+          saveBeforeAction
+            ? `Type ${expected} in Action confirmation, then select ${operation === 'setup' ? `Set up ${environment.toUpperCase()} billing` : 'Test connection'} again. Your entered credentials must be saved first.`
+            : `Type ${expected} in Action confirmation, then select ${operation === 'save' ? 'Save' : 'Rotate'} credentials.`,
         )
         return
       }
@@ -53,6 +63,19 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     setBusy(true)
     setMessage('')
     try {
+      if (saveBeforeAction) {
+        const saved = await request('action=stripe', {
+          environment,
+          operation: 'save',
+          key: key.trim(),
+          signing: signing.trim(),
+          confirmation: confirmation.trim(),
+        })
+        setUpdate({ initial, data: saved })
+        setKey('')
+        setSigning('')
+        setConfirmation('')
+      }
       const result = await request('action=stripe', {
         environment,
         operation,
@@ -70,9 +93,13 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           : operation === 'test'
             ? 'API read permissions validated. Checkout and portal write permissions still require real test flows.'
             : operation === 'save' || operation === 'rotate'
-              ? `Credentials saved securely for ${environment.toUpperCase()}. Next: Test connection, then Set up ${environment.toUpperCase()} billing.`
+              ? `Credentials saved securely for ${environment.toUpperCase()}. Next: Set up ${environment.toUpperCase()} billing to validate the account and create resources.`
               : operation === 'setup'
-                ? 'Billing resources saved. Next: refresh connection status after Stripe delivers the signed webhook; check New checkout below.'
+                ? result.rows?.find(
+                    (r: AdminMetadata) => r.environment === environment,
+                  )?.configuration?.webhookDeliveryCheck === 'manual'
+                  ? 'Billing resources saved. Send a test event from the matching Stripe webhook destination, then refresh connection status to verify signed delivery.'
+                  : 'Billing resources saved. Next: refresh connection status after Stripe delivers the signed webhook; check New checkout below.'
                 : 'Saved. Review setup evidence below.',
       )
       if (operation === 'save' || operation === 'rotate') {
@@ -211,23 +238,19 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
             (sk_live_, rk_live_, sk_test_ or rk_test_), type{' '}
             <code>SAVE {environment.toUpperCase()}</code> in Action
             confirmation, then select Save credentials. A publishable key (pk_)
-            cannot connect billing. Leave the webhook secret blank for automatic
-            setup.
+            cannot connect billing. For a new connection, leave the webhook
+            secret blank for automatic setup.
           </li>
           <li>
-            <strong>Test connection.</strong> Select Test connection after
-            saving. Wait for the account name and verified API status. If it
-            fails, check the selected environment, key and Stripe permissions. A
-            restricted key must allow the billing resources used here; automatic
-            setup also needs product, price, portal configuration and webhook
-            write access.
-          </li>
-          <li>
-            <strong>Create billing resources.</strong> Select Set up{' '}
-            {environment.toUpperCase()} billing. This creates or reuses monthly
-            prices and the billing portal, creates a webhook when no signing
-            secret is saved, and stores its secret securely. LIVE setup runs on
-            the production site. No customer is charged by setup.
+            <strong>Run setup.</strong> Select Set up{' '}
+            {environment.toUpperCase()} billing. With the SAVE confirmation,
+            setup saves entered credentials, validates the account, then creates
+            or reuses monthly prices, the portal and webhook. A separate
+            connection test is not required. If validation fails, check the
+            selected environment, key and Stripe permissions. Restricted keys
+            need billing-resource read access and product, price, portal
+            configuration and webhook write access. LIVE setup runs on the
+            production site. No customer is charged by setup.
           </li>
           <li>
             <strong>Verify webhook delivery.</strong> Refresh connection status
@@ -308,16 +331,26 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       <p>
         Credentials configured securely in hosting are connected and set up
         automatically on the trusted deployed site. Set up billing creates the
-        approved monthly prices, billing portal and webhook. Hosted LIVE billing
-        enables new subscriptions after account readiness and signed webhook
-        delivery are verified. Setup never charges a customer.
+        approved monthly prices, billing portal and webhook. LIVE checkout
+        requires separate explicit activation after test evidence and signed
+        webhook delivery are verified. Setup never charges a customer.
       </p>
       <button
-        disabled={busy || !data?.encryptionReady || !row.validated_at}
+        disabled={busy || !data?.encryptionReady || !credentialsAvailable}
         onClick={() => act('setup')}
+        aria-describedby="stripe-setup-next-step"
       >
         Set up {environment.toUpperCase()} billing
       </button>
+      <p id="stripe-setup-next-step">
+        {!data?.encryptionReady
+          ? 'Setup is blocked until encrypted storage is ready. Refresh connection status after hosting setup is corrected.'
+          : !credentialsAvailable
+            ? `Enter a ${environment.toUpperCase()} secret API key in Credentials to start setup. A webhook secret alone cannot connect the account.`
+            : enteredCredentials
+              ? `Use SAVE ${environment.toUpperCase()} in Action confirmation. Setup saves your entered credentials, validates the account, then creates billing resources.`
+              : `Setup validates your saved ${environment.toUpperCase()} credentials and creates billing resources. A separate connection test is not required.`}
+      </p>
       <p>
         API: {dt(row.validated_at)} · Webhook: {dt(row.webhook_verified_at)} ·
         New checkout:{' '}
@@ -444,7 +477,10 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         >
           Rotate credentials
         </button>
-        <button disabled={busy || !row.fingerprint} onClick={() => act('test')}>
+        <button
+          disabled={busy || !data?.encryptionReady || !credentialsAvailable}
+          onClick={() => act('test')}
+        >
           Test connection
         </button>
         <button disabled={busy} onClick={() => act('disable')}>

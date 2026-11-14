@@ -387,6 +387,60 @@ export async function stripeAdminView(c: AdminClient) {
     tiers: launchPricing.plans,
   }
 }
+
+async function validateStripeConnection(
+  c: AdminClient,
+  row: AdminMetadata,
+  e: StripeEnvironment,
+) {
+  if (!row.ciphertext)
+    throw new AdminError(
+      409,
+      'CREDENTIALS_REQUIRED',
+      `Save a ${e.toUpperCase()} secret API key before setting up billing.`,
+    )
+  const { key } = openStripe(row.ciphertext, e)
+  if (!keyMatches(key, e))
+    throw new AdminError(
+      400,
+      'KEY_ENVIRONMENT',
+      'The saved credential does not match this environment.',
+    )
+  const account = await stripeRequest(key, '/account')
+  if (row.account_id && row.account_id !== account.id)
+    throw new AdminError(
+      409,
+      'ACCOUNT_CHANGED',
+      'Account changes require a reviewed disconnection first. Existing subscriptions remain linked to the original account.',
+    )
+  // Read access is separate from the resource writes exercised by setup.
+  for (const path of [
+    '/prices?limit=1',
+    '/subscriptions?limit=1',
+    '/checkout/sessions?limit=1',
+    '/invoices?limit=1',
+    '/billing_portal/configurations?limit=1',
+  ])
+    await stripeRequest(key, path)
+  const configuration = { ...row.configuration }
+  delete configuration.apiError
+  const name =
+    account.business_profile?.name ||
+    account.settings?.dashboard?.display_name ||
+    account.id
+  await c.query(
+    'UPDATE stripe_provider_settings SET account_id=$2,account_name=$3,validated_at=NOW(),configuration=$4 WHERE environment=$1',
+    [e, account.id, name, configuration],
+  )
+  return {
+    ...row,
+    account_id: account.id,
+    account_name: name,
+    validated_at: new Date().toISOString(),
+    configuration,
+  }
+}
+
 export async function stripeAdminAction(
   c: AdminClient,
   request: Request,
@@ -451,7 +505,9 @@ export async function stripeAdminAction(
     config = row.configuration || {}
   if (input.operation === 'setup') {
     const { setupStripeBilling } = await import('./stripe-setup')
-    await setupStripeBilling(c, row, e)
+    // A newly saved key deliberately clears validation. Setup validates it here
+    // rather than requiring a separate UI action to unlock setup.
+    await setupStripeBilling(c, await validateStripeConnection(c, row, e), e)
   } else if (input.operation === 'save' || input.operation === 'rotate') {
     if (new URL(request.url).protocol !== 'https:')
       throw new AdminError(
@@ -516,36 +572,8 @@ export async function stripeAdminAction(
       [e],
     )
     try {
-      const { key } = openStripe(row.ciphertext || '', e)
-      const account = await stripeRequest(key, '/account')
-      // Read scopes used by checkout/reconciliation and the hosted portal. Write permissions
-      // are only proven by actual test checkout/portal; API validation is not setup completion.
-      for (const path of [
-        '/prices?limit=1',
-        '/subscriptions?limit=1',
-        '/checkout/sessions?limit=1',
-        '/invoices?limit=1',
-        '/billing_portal/configurations?limit=1',
-      ])
-        await stripeRequest(key, path)
-      if (row.account_id && row.account_id !== account.id)
-        throw new AdminError(
-          409,
-          'ACCOUNT_CHANGED',
-          'Account changes require a reviewed disconnection first. Existing subscriptions remain linked to the original account.',
-        )
+      await validateStripeConnection(c, row, e)
       delete config.apiError
-      await c.query(
-        'UPDATE stripe_provider_settings SET account_id=$2,account_name=$3,validated_at=NOW(),configuration=$4 WHERE environment=$1',
-        [
-          e,
-          account.id,
-          account.business_profile?.name ||
-            account.settings?.dashboard?.display_name ||
-            account.id,
-          config,
-        ],
-      )
     } catch {
       config.apiError = 'CONNECTION_TEST_FAILED'
       await c.query(
