@@ -1,3 +1,5 @@
+> Historical investigation. The supported access and transition steps are in [Administrator access](admin-portal.md). The device-credential requirements below no longer apply.
+
 # Administrator USB passkey prompt investigation — November 5, 2026
 
 **Latest acceptance:** phone administrator login succeeded according to the owner. Desktop protected-dashboard access remains **NOT VERIFIED**. The approved TOTP implementation and current test results are recorded at the end of this report; earlier sections preserve the investigation history.

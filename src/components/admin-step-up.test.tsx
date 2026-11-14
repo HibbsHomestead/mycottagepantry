@@ -1,65 +1,42 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { AdminStepUp } from './admin-step-up'
-import { startAuthentication } from '@simplewebauthn/browser'
-vi.mock('@simplewebauthn/browser', () => ({ startAuthentication: vi.fn() }))
-it('reuses enrolled methods without automatically opening a passkey or enrolling a new factor', async () => {
+
+it('offers password confirmation for an account without an authenticator and clears rejected passwords', async () => {
   const request = vi
     .fn()
-    .mockResolvedValueOnce({
-      credentials: [{ id: 'fixture' }],
-      totpEnabled: false,
-      smsEnabled: false,
-    })
-    .mockResolvedValueOnce({
-      options: { challenge: 'fixture' },
-      expiresAt: new Date(Date.now() + 120000).toISOString(),
-    })
+    .mockResolvedValueOnce({ totpEnabled: false, totpAvailable: false })
+    .mockRejectedValueOnce(new Error('Password verification failed.'))
   render(<AdminStepUp request={request} />)
   expect(request).not.toHaveBeenCalled()
-  expect(startAuthentication).not.toHaveBeenCalled()
   fireEvent.click(
     screen.getByText(
       'Verify existing admin authentication for sensitive actions',
     ),
   )
   fireEvent.click(
-    screen.getByRole('button', { name: 'Check enrolled verification methods' }),
+    screen.getByRole('button', { name: 'Check verification methods' }),
   )
-  fireEvent.click(
-    await screen.findByRole('button', {
-      name: 'Prepare phone passkey verification',
-    }),
+  const password = await screen.findByLabelText(
+    'Current administrator password',
   )
-  expect(request).toHaveBeenNthCalledWith(1, 'action=session')
-  expect(request).toHaveBeenNthCalledWith(2, 'action=mfa-options', {
-    kind: 'authentication',
-    method: 'phone',
+  expect(password).toHaveAttribute('type', 'password')
+  fireEvent.change(password, { target: { value: 'fixture-wrong-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Verify password' }))
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'Password verification failed.',
+  )
+  expect(password).toHaveValue('')
+  expect(request).toHaveBeenLastCalledWith('action=password-verify', {
+    password: 'fixture-wrong-password',
   })
-  expect(startAuthentication).not.toHaveBeenCalled()
-  expect(
-    await screen.findByRole('button', {
-      name: 'Use existing phone or tablet passkey',
-    }),
-  ).toBeEnabled()
+  expect(screen.queryByText(/security.key|passkey/i)).not.toBeInTheDocument()
 })
 
-it('keeps enrolled code methods usable after the phone passkey chooser is cancelled', async () => {
+it('offers enrolled authenticator and recovery codes without a password fallback', async () => {
   const request = vi
     .fn()
-    .mockResolvedValueOnce({
-      credentials: [{ id: 'fixture' }],
-      totpEnabled: true,
-      totpAvailable: true,
-      smsEnabled: false,
-    })
-    .mockResolvedValueOnce({
-      options: { challenge: 'fixture' },
-      expiresAt: new Date(Date.now() + 120000).toISOString(),
-    })
-  vi.mocked(startAuthentication).mockRejectedValueOnce(
-    new Error('Passkey chooser cancelled'),
-  )
+    .mockResolvedValue({ totpEnabled: true, totpAvailable: true })
   render(<AdminStepUp request={request} />)
   fireEvent.click(
     screen.getByText(
@@ -67,32 +44,13 @@ it('keeps enrolled code methods usable after the phone passkey chooser is cancel
     ),
   )
   fireEvent.click(
-    screen.getByRole('button', { name: 'Check enrolled verification methods' }),
+    screen.getByRole('button', { name: 'Check verification methods' }),
   )
-  fireEvent.click(
-    await screen.findByRole('button', {
-      name: 'Prepare phone passkey verification',
-    }),
-  )
-  await waitFor(() =>
-    expect(
-      screen.getByRole('button', {
-        name: 'Use existing phone or tablet passkey',
-      }),
-    ).toBeEnabled(),
-  )
-  fireEvent.click(
-    screen.getByRole('button', {
-      name: 'Use existing phone or tablet passkey',
-    }),
-  )
-  expect(await screen.findByRole('status')).toHaveTextContent(
-    'No verification completed',
-  )
+  expect(await screen.findByLabelText('Authenticator code')).toBeVisible()
   expect(
-    screen.getByRole('button', { name: 'Verify authenticator code' }),
-  ).toBeEnabled()
+    screen.queryByLabelText('Current administrator password'),
+  ).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Use a recovery code' }))
-  expect(screen.getByLabelText('Single-use recovery code')).toBeEnabled()
-  expect(request).toHaveBeenCalledTimes(2)
+  expect(screen.getByLabelText('Single-use recovery code')).toBeVisible()
+  expect(request).toHaveBeenCalledTimes(1)
 })

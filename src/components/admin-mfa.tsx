@@ -1,8 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import {
-  startAuthentication,
-  type PublicKeyCredentialRequestOptionsJSON,
-} from '@simplewebauthn/browser'
 import QRCode from 'qrcode'
 
 type Request = (query: string, body?: unknown) => Promise<any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -41,8 +37,7 @@ export function AdminCodeSignIn({
       <h2>Sign in with password + authenticator code</h2>
       <p>
         Your password is verified. Enter the code from the authenticator app
-        enrolled through your phone admin session. No USB key is needed for this
-        method.
+        enrolled for your administrator account.
       </p>
       <form onSubmit={submit}>
         <label>
@@ -81,19 +76,14 @@ export function AdminCodeSignIn({
         </button>
       </form>
       <p>
-        Recovery codes work once with your password. They do not remove or
-        replace your phone passkey.
+        Recovery codes work once with your password. Using a code does not
+        remove your authenticator.
       </p>
     </section>
   )
 }
 
 type Purpose = 'totp-enroll' | 'totp-remove' | 'totp-recovery'
-type Prepared = {
-  options: PublicKeyCredentialRequestOptionsJSON
-  expiresAt: string
-  purpose: Purpose
-}
 export function AdminMfaSettings({
   enabled,
   available,
@@ -107,13 +97,13 @@ export function AdminMfaSettings({
 }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [prepared, setPrepared] = useState<Prepared | null>(null)
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(
     null,
   )
   const [qr, setQr] = useState('')
   const [code, setCode] = useState('')
   const [codes, setCodes] = useState<string[]>([])
+  const [pendingPurpose, setPendingPurpose] = useState<Purpose | null>(null)
   useEffect(() => {
     let active = true
     if (setup)
@@ -135,35 +125,8 @@ export function AdminMfaSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
-    setPrepared(null)
     try {
-      const result = await request('action=mfa-options', {
-        kind: 'authentication',
-        method: 'device',
-        purpose,
-      })
-      setPrepared({ ...result, purpose })
-    } catch (e) {
-      setMessage((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-  async function verify() {
-    if (busy || !prepared) return
-    if (Date.parse(prepared.expiresAt) <= Date.now()) {
-      setPrepared(null)
-      setMessage('Verification expired. Prepare a fresh passkey request.')
-      return
-    }
-    setBusy(true)
-    setMessage('')
-    try {
-      // Direct gesture: no network await before the existing-passkey ceremony.
-      const assertion = await startAuthentication({
-        optionsJSON: prepared.options,
-      })
-      const result = await request('action=mfa-verify', assertion)
+      const result = await request('action=' + purpose, {})
       if (result.stage === 'totp_setup') {
         setSetup({ secret: result.secret, uri: result.uri })
         setQr('')
@@ -171,17 +134,15 @@ export function AdminMfaSettings({
         setCodes(result.recoveryCodes)
       else if (result.stage === 'totp_removed') {
         setMessage(
-          'Authenticator codes removed. Your phone passkey is preserved. Other admin sessions were signed out.',
+          'Authenticator and recovery codes removed. Other administrator sessions were signed out.',
         )
         onChange()
-      } else throw new Error('Fresh passkey verification did not complete.')
-    } catch {
-      setMessage(
-        'Passkey verification was canceled or failed. The pending request cleared. Prepare verification again; your existing methods remain unchanged.',
-      )
+      }
+      setPendingPurpose(null)
+    } catch (e) {
+      setMessage((e as Error).message)
     } finally {
       setBusy(false)
-      setPrepared(null)
     }
   }
   async function confirm(event: FormEvent) {
@@ -190,7 +151,9 @@ export function AdminMfaSettings({
     setBusy(true)
     setMessage('')
     try {
-      const result = await request('action=totp-confirm', { code: code.trim() })
+      const result = await request('action=totp-confirm', {
+        code: code.trim(),
+      })
       setSetup(null)
       setQr('')
       setCode('')
@@ -211,7 +174,6 @@ export function AdminMfaSettings({
       setSetup(null)
       setQr('')
       setCode('')
-      setPrepared(null)
       setMessage('Setup canceled. Existing methods are unchanged.')
     } catch (e) {
       setMessage((e as Error).message)
@@ -222,15 +184,11 @@ export function AdminMfaSettings({
   return (
     <details className="admin-mfa-settings">
       <summary>Admin sign-in security</summary>
+      <p>Authenticator codes: {enabled ? 'enabled' : 'not enrolled'}.</p>
       <p>
-        Phone passkey: preserved. Authenticator codes:{' '}
-        {enabled ? 'enabled' : 'not enrolled'}.
-      </p>
-      <p>
-        Authenticator codes are not phishing-resistant like passkeys. Set up
-        this alternative here on your authenticated phone using a fresh
-        verification with your existing phone passkey. No enrollment reset is
-        needed.
+        First confirm your administrator authentication above. Setting up an
+        authenticator requires a code from the new app before it becomes active.
+        No paid service is required.
       </p>
       {message && <p role="status">{message}</p>}
       {codes.length > 0 ? (
@@ -253,7 +211,7 @@ export function AdminMfaSettings({
             onClick={() => {
               setCodes([])
               setMessage(
-                'Recovery codes hidden. To generate replacements, verify your phone passkey again.',
+                'Recovery codes hidden. Verify administrator authentication before generating replacements.',
               )
             }}
           >
@@ -297,19 +255,19 @@ export function AdminMfaSettings({
             Cancel setup
           </button>
         </form>
-      ) : prepared ? (
+      ) : pendingPurpose ? (
         <div>
           <p>
-            {prepared.purpose === 'totp-remove'
-              ? 'Remove authenticator codes and their recovery codes; keep the phone passkey. Other admin sessions will be signed out.'
-              : prepared.purpose === 'totp-recovery'
-                ? 'Generate new recovery codes; previous recovery codes will stop working.'
-                : 'Authorize authenticator enrollment using your existing phone passkey.'}
+            {pendingPurpose === 'totp-remove'
+              ? 'Removing the authenticator also deletes its recovery codes and signs out other administrator sessions.'
+              : 'Replacing recovery codes immediately invalidates the previous set.'}
           </p>
-          <button disabled={busy} onClick={verify}>
-            {busy ? 'Verifying…' : 'Verify existing phone passkey'}
+          <button disabled={busy} onClick={() => prepare(pendingPurpose)}>
+            {pendingPurpose === 'totp-remove'
+              ? 'Confirm authenticator removal'
+              : 'Confirm recovery code replacement'}
           </button>
-          <button disabled={busy} onClick={() => setPrepared(null)}>
+          <button disabled={busy} onClick={() => setPendingPurpose(null)}>
             Cancel
           </button>
         </div>
@@ -318,7 +276,8 @@ export function AdminMfaSettings({
           {!available && (
             <p>
               Authenticator setup is unavailable until server encryption is
-              configured. Your existing phone passkey still works.
+              configured. Password confirmation remains available for accounts
+              without an enrolled authenticator.
             </p>
           )}
           {!enabled ? (
@@ -330,10 +289,16 @@ export function AdminMfaSettings({
             </button>
           ) : (
             <>
-              <button disabled={busy} onClick={() => prepare('totp-recovery')}>
+              <button
+                disabled={busy}
+                onClick={() => setPendingPurpose('totp-recovery')}
+              >
                 Prepare recovery code replacement
               </button>
-              <button disabled={busy} onClick={() => prepare('totp-remove')}>
+              <button
+                disabled={busy}
+                onClick={() => setPendingPurpose('totp-remove')}
+              >
                 Prepare authenticator removal
               </button>
             </>

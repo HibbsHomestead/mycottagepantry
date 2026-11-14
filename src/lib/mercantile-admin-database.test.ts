@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { stripeTierPurchasable } from '../../netlify/lib/stripe-provider'
 import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
 import { expect, it } from 'vitest'
@@ -22,6 +23,8 @@ it('previews, applies and reloads a disposable Mercantile assignment with six se
   const session = {
     identity_id: 'authorized-admin',
     role: 'owner',
+    verified_at: new Date().toISOString(),
+    verification_method: 'totp',
     mfa_at: new Date().toISOString(),
   }
   const input = {
@@ -74,7 +77,7 @@ it('previews, applies and reloads a disposable Mercantile assignment with six se
       handleAdminAccess(
         c,
         request(input),
-        { ...session, mfa_at: null },
+        { ...session, verified_at: null },
         'denied',
       ),
     ).rejects.toThrow(/Verified platform administrator/)
@@ -141,7 +144,8 @@ it('previews, applies and reloads a disposable Mercantile assignment with six se
       false,
     )
     expect(launchPricing.checkoutEnabled).toBe(false)
-    expect(selectedPlan('cottage-mercantile')).toBe('free')
+    expect(selectedPlan('cottage-mercantile')).toBe('cottage-mercantile')
+    expect(stripeTierPurchasable('cottage-mercantile', 'live')).toBe(false)
   } finally {
     await db.close()
   }

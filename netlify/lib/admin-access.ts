@@ -1,7 +1,12 @@
 import type { BillingPolicyRow } from './billing-entitlements'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import { limitedBody } from './support-core'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 import {
@@ -17,7 +22,10 @@ export async function handleAdminAccess(
   session: AdminMetadata,
   reference: string,
 ) {
-  if (!session.mfa_at || !['owner', 'admin'].includes(session.role))
+  if (
+    !hasRecentAdminVerification(session) ||
+    !['owner', 'admin'].includes(session.role)
+  )
     throw new AdminError(
       403,
       'ADMIN_REQUIRED',

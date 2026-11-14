@@ -355,7 +355,13 @@ it('saves replacement credentials even when hosting import fails and returns onl
   const result = await stripeAdminAction(
     c,
     request,
-    { role: 'owner', mfa_at: new Date().toISOString(), identity_id: 'admin' },
+    {
+      role: 'owner',
+      verified_at: new Date().toISOString(),
+      verification_method: 'totp',
+      mfa_at: new Date().toISOString(),
+      identity_id: 'admin',
+    },
     'fixture',
   )
   expect(JSON.stringify(result)).not.toContain(testKey)
@@ -393,7 +399,12 @@ it('preserves account validation and mappings when saving only a webhook secret'
         confirmation: 'SAVE TEST',
       }),
     }),
-    { role: 'owner', mfa_at: new Date().toISOString() },
+    {
+      role: 'owner',
+      verified_at: new Date().toISOString(),
+      verification_method: 'totp',
+      mfa_at: new Date().toISOString(),
+    },
     'fixture',
   )
   const update = query.mock.calls.find(([sql]) =>
@@ -453,7 +464,12 @@ it('approves the $40 six-user tier in test mode without enabling live purchase',
     stripeAdminAction(
       c,
       request,
-      { role: 'owner', mfa_at: new Date().toISOString() },
+      {
+        role: 'owner',
+        verified_at: new Date().toISOString(),
+        verification_method: 'totp',
+        mfa_at: new Date().toISOString(),
+      },
       'fixture',
     ),
   ).resolves.toBeDefined()
@@ -478,7 +494,12 @@ it('approves the $40 six-user tier in test mode without enabling live purchase',
           purchase: true,
         }),
       }),
-      { role: 'owner', mfa_at: new Date().toISOString() },
+      {
+        role: 'owner',
+        verified_at: new Date().toISOString(),
+        verification_method: 'totp',
+        mfa_at: new Date().toISOString(),
+      },
       'fixture',
     ),
   ).rejects.toMatchObject({ code: 'TIER_INCOMPLETE' })

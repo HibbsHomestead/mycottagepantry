@@ -3,7 +3,12 @@ import { effectiveAccess, latestManualGrant } from './manual-access'
 import { launchPricing } from '../../src/lib/launch-plans'
 import { z } from 'zod'
 import { admin } from '@netlify/identity'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 import { limitedBody } from './support-core'
 export async function adminMembership(
@@ -12,7 +17,10 @@ export async function adminMembership(
   session: AdminMetadata,
   reference: string,
 ) {
-  if (!session.mfa_at || !['owner', 'admin'].includes(session.role))
+  if (
+    !hasRecentAdminVerification(session) ||
+    !['owner', 'admin'].includes(session.role)
+  )
     throw new AdminError(
       403,
       'ADMIN_REQUIRED',

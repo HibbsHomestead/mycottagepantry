@@ -62,27 +62,6 @@
   outline: 3px solid #bda8e5;
   outline-offset: 3px;
 }
-.admin-passkey-methods {
-  border: 1px solid var(--admin-line);
-  border-radius: 8px;
-  padding: 12px;
-  margin: 16px 0;
-  min-width: 0;
-}
-.admin-passkey-methods legend {
-  font-weight: 650;
-  padding: 0 4px;
-}
-.admin-passkey-methods label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-}
-.admin-passkey-methods input {
-  width: auto;
-  margin: 0;
-}
 .cp-admin small {
   display: block;
   color: var(--admin-muted);

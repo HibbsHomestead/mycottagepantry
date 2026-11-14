@@ -95,7 +95,7 @@ async function main() {
     )
     if (existing.rows.length) fail()
     await client.query(
-      "INSERT INTO platform_admins(identity_id,role,enrollment_until,granted_by,reason) VALUES($1,'owner',NOW()+INTERVAL '24 hours',$2,$3)",
+      "INSERT INTO platform_admins(identity_id,role,granted_by,reason) VALUES($1,'owner',$2,$3)",
       [
         id,
         operator.id,
@@ -109,13 +109,13 @@ async function main() {
         id,
         'Controlled owner bootstrap',
         JSON.stringify({ platformAccess: false }),
-        JSON.stringify({ role: 'owner', enrollmentHours: 24 }),
+        JSON.stringify({ role: 'owner', sensitiveVerificationRequired: true }),
         randomUUID(),
       ],
     )
     await client.query('COMMIT')
     console.log(
-      'Initial platform owner provisioned on the explicitly confirmed database branch. Complete password sign-in and security-key enrollment within 24 hours. No customer, billing or subscription records were changed.',
+      'Initial platform owner provisioned on the explicitly confirmed database branch. Complete password sign-in, then verify your password or an enrolled authenticator before sensitive actions. No customer, billing or subscription records were changed.',
     )
   } catch {
     await client.query('ROLLBACK')

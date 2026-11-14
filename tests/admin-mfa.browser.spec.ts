@@ -1,11 +1,37 @@
 import { expect, test } from '@playwright/test'
 
+// Fail any attempted public-key ceremony, even if its button is not visible.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window as unknown as { credentialPrompts: number }
+    state.credentialPrompts = 0
+    for (const operation of ['get', 'create']) {
+      Object.defineProperty(navigator.credentials, operation, {
+        configurable: true,
+        value: () => {
+          state.credentialPrompts++
+          throw new Error('Device credential prompt is forbidden')
+        },
+      })
+    }
+  })
+})
+test.afterEach(async ({ page }) => {
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { credentialPrompts: number }).credentialPrompts,
+    ),
+  ).toBe(0)
+})
+
 // UI compatibility only. All API responses are fixtures; this does not test a
 // production password or claim owner acceptance.
 test.describe('admin password sign-in UI', () => {
   for (const viewport of [
     { width: 1440, height: 1000 },
     { width: 390, height: 844 },
+    { width: 820, height: 1180 },
   ]) {
     test(`password retry, dashboard and logout at ${viewport.width}px`, async ({
       page,
@@ -109,3 +135,91 @@ test.describe('admin password sign-in UI', () => {
     })
   }
 })
+
+// These responses exercise the UI only. The database suite checks real authorization.
+for (const width of [390, 820, 1440]) {
+  test(`password reverification rejects and retries without a device prompt at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    let verified = false,
+      attempts = 0
+    await page.route('**/api/admin*', async (route) => {
+      const action = new URL(route.request().url()).searchParams.get('action')
+      if (action === 'session')
+        return route.fulfill({
+          json: {
+            stage: 'authenticated',
+            role: 'owner',
+            identityId: 'fixture-admin',
+            expiresAt: '2027-01-01',
+            totpEnabled: false,
+            totpAvailable: false,
+            verificationCurrent: verified,
+            verificationMethod: verified ? 'password' : null,
+          },
+        })
+      if (action === 'password-verify') {
+        attempts++
+        if (attempts === 1)
+          return route.fulfill({
+            status: 401,
+            json: { error: 'Password verification failed.' },
+          })
+        verified = true
+        return route.fulfill({ json: { stage: 'authenticated' } })
+      }
+      if (action) throw new Error('Unexpected authentication action: ' + action)
+      return route.fulfill({
+        json: {
+          totals: { customer_accounts: 0, ovens: 0, recent_accounts: 0 },
+          definitions: {},
+          subscriptions: [],
+          recent: [],
+          activity: [],
+          asOf: '2026-11-14',
+        },
+      })
+    })
+    await page.goto('/admin')
+    await page
+      .getByText('Verify existing admin authentication for sensitive actions', {
+        exact: true,
+      })
+      .click()
+    await page
+      .getByRole('button', { name: 'Check verification methods' })
+      .click()
+    const password = page.getByLabel('Current administrator password')
+    await password.fill('fixture-wrong-password')
+    await page
+      .getByRole('button', { name: 'Verify password', exact: true })
+      .click()
+    await expect(page.getByRole('status')).toHaveText(
+      'Password verification failed.',
+    )
+    await expect(password).toHaveValue('')
+    await password.fill('fixture-password')
+    await Promise.all([
+      page.waitForEvent('load'),
+      page
+        .getByRole('button', { name: 'Verify password', exact: true })
+        .click(),
+    ])
+    expect(verified).toBe(true)
+    await page
+      .getByText('Verify existing admin authentication for sensitive actions', {
+        exact: true,
+      })
+      .click()
+    await page
+      .getByRole('button', { name: 'Check verification methods' })
+      .click()
+    await expect(
+      page.getByText('Current verification: password', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: /passkey|security.key/i }),
+    ).toHaveCount(0)
+  })
+}

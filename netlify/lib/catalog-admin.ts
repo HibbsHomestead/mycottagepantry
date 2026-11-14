@@ -2,7 +2,12 @@ import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { catalogSnapshotSchema, externalGTIN } from '../../src/lib/catalog'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import { limitedBody } from './support-core'
 
 export async function handleAdminCatalog(
@@ -11,7 +16,7 @@ export async function handleAdminCatalog(
   session: AdminMetadata,
   reference: string,
 ) {
-  if (!session.mfa_at)
+  if (!hasRecentAdminVerification(session))
     throw new AdminError(
       403,
       'MFA_REQUIRED',
