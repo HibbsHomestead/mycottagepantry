@@ -6,8 +6,9 @@ The approved test scope includes all four paid tiers. No trial, additional faile
 
 In Stripe, select the account that sells Cottage Pantry subscriptions and switch to its test environment. Keep all Products, Prices, API credentials, webhook destinations, and portal configuration in that same account and test environment. Hosted Checkout does not need Stripe Connect or a publishable key.
 
-In the deployed preview, open Platform Admin → Billing → Provider settings → Stripe, select **TEST**, and authenticate with the existing administrator MFA. Protected preview encryption setup was attempted, but hosting persistence could not be independently confirmed. The deployed screen must report encryption storage ready before credentials can be saved; if it does not, setup remains blocked at that step. No production credential or live-checkout configuration was intentionally changed.
+Hosting credentials are imported into encrypted TEST/LIVE settings when no saved connection exists. On the trusted deployed site, initial import also provisions prices, portal and webhook automatically under the same database lock. Existing saved connections and explicit disconnections are preserved. A legacy Stripe credential in the encryption setting is recovered using a domain-separated encryption derivation; preserve that setting because changing it would invalidate stored ciphertext.
 
+In Platform Admin → Billing → Provider settings → Stripe, select the environment and use **Set up TEST billing** or **Set up LIVE billing** after administrator authentication. Setup creates or reuses the approved monthly prices and billing portal, saves the webhook secret encrypted, and requests a real signed delivery. LIVE setup requires the production deployment. Setup does not enable checkout: the existing signed webhook, test checkout/access/portal evidence and live subscriber review checks still apply. The manual procedure below remains available.
 Use the stable preview webhook URL displayed by the admin screen. Do not substitute a local URL, an arbitrary deploy URL, or the live endpoint. Keep preview webhooks and credentials associated with that preview's database. Automatic schedules run only on published deployments; previews use webhooks and owner/admin refresh for reconciliation.
 
 ## 2. Create four Products and Prices
@@ -72,6 +73,6 @@ The production schedule, when deployed there with protected test configuration, 
 
 ## Remaining account setup and live rollout
 
-The four test Price IDs, portal configuration ID, protected test API credential, and webhook signing secret cannot be derived from repository code. They must come from the Stripe account setup above. Real provider-flow verification remains pending those settings and a hosted deployment.
+Automatic setup supplies Price mappings, portal configuration and a protected webhook secret using the configured Stripe credential. Real test checkout, access and portal evidence still require verification in the deployed application.
 
 Do not enable LIVE checkout during this test phase. A later rollout must separately verify live account settings and tax/customer-facing terms, review existing production Square subscribers, preserve their subscriptions and reconciliation, and approve live activation after test evidence. Never recreate existing subscribers automatically. Disabling new checkout is the rollback; keep credential encryption, webhooks, subscription history, and reconciliation available for already-linked customers.

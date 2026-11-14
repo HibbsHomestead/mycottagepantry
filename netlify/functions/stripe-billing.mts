@@ -1,3 +1,4 @@
+import { deploymentRuntime } from '../lib/runtime-environment'
 import { adminTransaction } from '../lib/platform-admin-core'
 import { launchPricing } from '../../src/lib/launch-plans'
 import { stripeSettings, stripeTierPurchasable } from '../lib/stripe-provider'
@@ -31,7 +32,7 @@ export default async (request: Request) => {
       const plans = await adminTransaction(async (c) => {
         const settings = await stripeSettings(c, 'live')
         if (
-          globalThis.Netlify?.env?.get('CONTEXT') !== 'production' ||
+          deploymentRuntime().context !== 'production' ||
           !settings?.checkout_enabled ||
           !settings.validated_at ||
           settings.configuration?.apiError ||

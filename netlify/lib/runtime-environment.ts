@@ -24,7 +24,7 @@ export function deploymentRuntime() {
     : serverEnvironment('DEPLOY_PRIME_URL')
   const previewOrigin =
     context === 'deploy-preview' &&
-    /^https:\/\/deploy-preview-[0-9]+--mycottagepantry\.netlify\.app$/.test(
+    /^https:\/\/(?:deploy-preview-[0-9]+|agent-[a-f0-9]{24})--mycottagepantry\.netlify\.app$/.test(
       configuredPreview,
     )
       ? configuredPreview
@@ -32,10 +32,16 @@ export function deploymentRuntime() {
   return { context, runtime, previewOrigin }
 }
 
+export function stripeCredentialRoot(value: string) {
+  return /^(sk|rk)_(test|live)_[A-Za-z0-9]{20,}$/.test(value)
+}
+
 function rootState(value: string | undefined) {
   if (value === undefined) return 'missing'
   if (value === '') return 'empty'
-  return /^[a-f\d]{64}$/i.test(value) ? 'valid' : 'invalid_format'
+  return /^[a-f\d]{64}$/i.test(value) || stripeCredentialRoot(value)
+    ? 'valid'
+    : 'invalid_format'
 }
 
 /** Fixed statuses only: no root, fragments, fingerprints, or raw errors. */

@@ -1,3 +1,4 @@
+import { deploymentRuntime } from './runtime-environment'
 /* eslint-disable @typescript-eslint/no-explicit-any -- provider JSON is validated before access changes */
 import { randomUUID } from 'node:crypto'
 import type { AdminClient } from './platform-admin-core'
@@ -80,7 +81,7 @@ export async function stripeOwnerView(
     (r) =>
       r.checkout_enabled &&
       ((r.environment === 'live' &&
-        globalThis.Netlify?.env?.get('CONTEXT') === 'production') ||
+        deploymentRuntime().context === 'production') ||
         (r.environment === 'test' && testAllowed)),
   )
   const { currentSignupSelection } = await import('./signup-plan-intent')
@@ -148,8 +149,7 @@ export async function stripeCheckout(
   }
   if (
     !input.confirmed ||
-    (e === 'live' &&
-      globalThis.Netlify?.env?.get('CONTEXT') !== 'production') ||
+    (e === 'live' && deploymentRuntime().context !== 'production') ||
     !row?.checkout_enabled ||
     !row.validated_at ||
     row.configuration?.apiError ||
@@ -273,7 +273,7 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
   ])
   if (
     attempt.environment === 'live' &&
-    globalThis.Netlify?.env?.get('CONTEXT') !== 'production'
+    deploymentRuntime().context !== 'production'
   )
     throw new RegistrationError(
       409,
@@ -485,7 +485,7 @@ export async function stripePortal(
     )
   if (
     attempt.environment === 'live' &&
-    globalThis.Netlify?.env?.get('CONTEXT') !== 'production'
+    deploymentRuntime().context !== 'production'
   )
     throw new RegistrationError(
       409,

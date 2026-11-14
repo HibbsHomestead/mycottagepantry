@@ -173,6 +173,18 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         {row.fingerprint || 'No saved credential'}
       </p>
       <p>
+        Credentials configured securely in hosting are connected and set up
+        automatically on the trusted deployed site. Set up billing creates the
+        approved monthly prices, billing portal and webhook. It does not charge
+        customers or enable checkout.
+      </p>
+      <button
+        disabled={busy || !data?.encryptionReady || !row.validated_at}
+        onClick={() => act('setup')}
+      >
+        Set up {environment.toUpperCase()} billing
+      </button>
+      <p>
         API: {dt(row.validated_at)} · Webhook: {dt(row.webhook_verified_at)} ·
         New checkout: {row.checkout_enabled ? 'Enabled' : 'Disabled'}
       </p>

@@ -55,7 +55,7 @@ export function requireAdminOrigin(
         /^https:\/\/[a-z0-9-]+--mycottagepantry\.netlify\.app$/.test(preview) &&
         url.origin === preview) ||
         (!!stablePreview &&
-          /^https:\/\/deploy-preview-[0-9]+--mycottagepantry\.netlify\.app$/.test(
+          /^https:\/\/(?:deploy-preview-[0-9]+|agent-[a-f0-9]{24})--mycottagepantry\.netlify\.app$/.test(
             stablePreview,
           ) &&
           url.origin === stablePreview))) ||

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, timingSafeEqual, hkdfSync } from 'node:crypto'
 import { getDatabase } from '@netlify/database'
 import type { AdminClient } from './platform-admin-core'
 import {
@@ -7,12 +7,26 @@ import {
 } from './stripe-subscriptions'
 import { stripeEncryptionReady, stripeSettings } from './stripe-provider'
 
-const env = (name: string) => globalThis.Netlify?.env?.get(name) || ''
+import {
+  serverEnvironment as env,
+  deploymentRuntime,
+  stripeCredentialRoot,
+} from './runtime-environment'
 const path = '/.netlify/functions/stripe-test-reconcile-background'
 function signature(origin: string, timestamp: string) {
   return createHmac(
     'sha256',
-    Buffer.from(env('STRIPE_BILLING_ENCRYPTION_KEY'), 'hex'),
+    stripeCredentialRoot(env('STRIPE_BILLING_ENCRYPTION_KEY'))
+      ? Buffer.from(
+          hkdfSync(
+            'sha256',
+            env('STRIPE_BILLING_ENCRYPTION_KEY'),
+            '',
+            'cottage-stripe:reconcile-dispatch:v1',
+            32,
+          ),
+        )
+      : Buffer.from(env('STRIPE_BILLING_ENCRYPTION_KEY'), 'hex'),
   )
     .update(`stripe-test-reconcile:v1:${origin}:${timestamp}`)
     .digest('hex')
@@ -35,7 +49,7 @@ export function verifyStripeDispatch(request: Request, timestamp: string) {
   )
 }
 export async function dispatchStripeTestReconciliation(transport = fetch) {
-  if (!stripeEncryptionReady() || env('CONTEXT') !== 'production')
+  if (!stripeEncryptionReady() || deploymentRuntime().context !== 'production')
     return new Response(null, { status: 204 })
   const origin = 'https://mycottagepantry.com'
   const timestamp = String(Date.now())
