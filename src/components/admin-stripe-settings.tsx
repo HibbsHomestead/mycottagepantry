@@ -165,7 +165,9 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           historical; new checkout is disabled.
         </p>
       )}
-      {!data?.encryptionReady && (
+      {data?.encryptionReady ? (
+        <p role="status">Encrypted credential storage: Ready.</p>
+      ) : (
         <p role="alert">
           Hosting encryption setup is required before credentials can be saved.
           No plaintext fallback is available.

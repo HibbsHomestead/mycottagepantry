@@ -12,8 +12,12 @@ const runtime = vi.hoisted(() => ({
   recoveryStatus: 0,
   identities: {} as Record<string, any>,
   env: {} as Record<string, string>,
+  functionContext: undefined as Context | undefined,
   queries: [] as string[],
   recoveryFails: false,
+}))
+vi.mock('@netlify/functions', () => ({
+  getContext: () => runtime.functionContext,
 }))
 vi.mock('@netlify/database', () => ({
   getDatabase: () => ({ pool: runtime.pool }),
@@ -222,6 +226,7 @@ beforeEach(async () => {
   runtime.recoveryStatus = 0
   runtime.loginId = 'platform-owner'
   runtime.env = { CONTEXT: 'production' }
+  runtime.functionContext = undefined
   runtime.queries = []
   vi.stubGlobal('Netlify', { env: { get: (key: string) => runtime.env[key] } })
   cookies.delete.mockClear()
@@ -723,6 +728,138 @@ it('does not permit production administration through a preview hostname and acc
         origin: preview.replace('123', '124'),
       }),
     ),
+  ).toThrow()
+})
+it('accepts only its runtime preview permalink when build metadata is absent', () => {
+  const id = '6af7efbf2a028d658a6274f7'
+  const preview = `https://${id}--mycottagepantry.netlify.app`
+  runtime.env = {}
+  runtime.functionContext = {
+    deploy: { id, context: 'deploy-preview', published: false },
+    site: { id: '299e7942-6246-467a-bef5-fa3f6817b210' },
+  } as Context
+  expect(
+    requireAdminOrigin(
+      request('', undefined, { host: preview, origin: preview }),
+    ),
+  ).toBe(preview)
+  for (const host of [
+    'https://6af7efbf2a028d658a6274f8--mycottagepantry.netlify.app',
+    'https://deploy-preview-124--mycottagepantry.netlify.app',
+  ])
+    expect(() =>
+      requireAdminOrigin(request('', undefined, { host, origin: host })),
+    ).toThrow()
+  expect(() =>
+    requireAdminOrigin(request('', {}, { host: preview, origin })),
+  ).toThrow()
+  expect(() =>
+    requireAdminOrigin(
+      request('', undefined, {
+        host: preview,
+        origin: preview,
+        headers: { 'x-cp-admin': '' },
+      }),
+    ),
+  ).toThrow()
+})
+it.each(['production', 'branch-deploy'])(
+  'rejects preview administration in runtime %s despite stale build metadata',
+  (context) => {
+    const preview =
+      'https://6af7efbf2a028d658a6274f7--mycottagepantry.netlify.app'
+    runtime.env = { CONTEXT: 'deploy-preview', DEPLOY_URL: preview }
+    runtime.functionContext = {
+      deploy: { id: '6af7efbf2a028d658a6274f7', context, published: false },
+      site: { id: '299e7942-6246-467a-bef5-fa3f6817b210' },
+    } as Context
+    expect(() =>
+      requireAdminOrigin(
+        request('', undefined, { host: preview, origin: preview }),
+      ),
+    ).toThrow()
+  },
+)
+it('rejects a runtime permalink from a different site', () => {
+  const preview =
+    'https://6af7efbf2a028d658a6274f7--mycottagepantry.netlify.app'
+  runtime.env = {}
+  runtime.functionContext = {
+    deploy: {
+      id: '6af7efbf2a028d658a6274f7',
+      context: 'deploy-preview',
+      published: false,
+    },
+    site: { id: 'another-site' },
+  } as Context
+  expect(() =>
+    requireAdminOrigin(
+      request('', undefined, { host: preview, origin: preview }),
+    ),
+  ).toThrow()
+})
+it('accepts its exact stable preview alias alongside the deployment permalink', () => {
+  const stable = 'https://deploy-preview-123--mycottagepantry.netlify.app'
+  const permalink = 'https://a1b2c3d4--mycottagepantry.netlify.app'
+  runtime.env = {
+    CONTEXT: 'deploy-preview',
+    DEPLOY_URL: permalink,
+    DEPLOY_PRIME_URL: stable,
+  }
+  for (const host of [stable, permalink]) {
+    expect(
+      requireAdminOrigin(request('', undefined, { host, origin: host })),
+    ).toBe(host)
+    expect(requireAdminOrigin(request('', {}, { host, origin: host }))).toBe(
+      host,
+    )
+  }
+  const foreign = stable.replace('123', '124')
+  expect(() =>
+    requireAdminOrigin(
+      request('', undefined, {
+        host: foreign,
+        origin: foreign,
+        headers: { 'x-forwarded-host': new URL(stable).host },
+      }),
+    ),
+  ).toThrow()
+  expect(() =>
+    requireAdminOrigin(request('', {}, { host: stable, origin: permalink })),
+  ).toThrow()
+  expect(() =>
+    requireAdminOrigin(
+      request('', undefined, {
+        host: stable,
+        origin: stable,
+        headers: { 'sec-fetch-site': 'same-site' },
+      }),
+    ),
+  ).toThrow()
+})
+it.each(['production', 'branch-deploy', 'dev', ''])(
+  'rejects stable preview administration in %s context',
+  (context) => {
+    const stable = 'https://deploy-preview-123--mycottagepantry.netlify.app'
+    runtime.env = { CONTEXT: context, DEPLOY_PRIME_URL: stable }
+    expect(() =>
+      requireAdminOrigin(
+        request('', undefined, { host: stable, origin: stable }),
+      ),
+    ).toThrow()
+  },
+)
+it.each([
+  'https://deploy-preview-123--mycottagepantry.netlify.app.attacker.invalid',
+  'http://deploy-preview-123--mycottagepantry.netlify.app',
+  'https://agent-other--mycottagepantry.netlify.app',
+  '',
+])('rejects an invalid stable preview configuration: %s', (stable) => {
+  const host =
+    stable || 'https://deploy-preview-123--mycottagepantry.netlify.app'
+  runtime.env = { CONTEXT: 'deploy-preview', DEPLOY_PRIME_URL: stable }
+  expect(() =>
+    requireAdminOrigin(request('', undefined, { host, origin: host })),
   ).toThrow()
 })
 it('provides searchable paginated metadata without querying or mutating business content', async () => {

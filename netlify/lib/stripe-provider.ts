@@ -62,7 +62,10 @@ export function stripeEndpoint(e: StripeEnvironment) {
   }
   return `https://mycottagepantry.com/api/stripe/${e}/webhook`
 }
-const env = (name: string) => globalThis.Netlify?.env?.get(name) || ''
+// Node Functions receive configured secrets through process.env. Keep support
+// for Netlify.env without treating an explicitly empty value as a usable key.
+const env = (name: string) =>
+  globalThis.Netlify?.env?.get(name) ?? process.env[name] ?? ''
 export function stripeEncryptionReady() {
   return /^[a-f\d]{64}$/i.test(env('STRIPE_BILLING_ENCRYPTION_KEY'))
 }
