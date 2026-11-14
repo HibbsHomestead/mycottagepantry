@@ -164,6 +164,8 @@ for (const width of [390, 820, 1440]) {
           json: url.searchParams.has('ai')
             ? {
                 policy,
+                conversations: [],
+                actions: [],
                 usage: [
                   {
                     day: ticket.createdAt,
@@ -244,6 +246,9 @@ for (const width of [390, 820, 1440]) {
       .selectOption('waiting_on_customer')
     await page.getByText('AI usage & limits', { exact: true }).click()
     await page.getByLabel('Per person / 24 hours', { exact: true }).fill('5')
+    await page
+      .getByLabel('I reviewed the usage, spending limits and retention change.')
+      .check()
     await page.getByRole('button', { name: 'Save AI limits' }).click()
     await expect(page.getByRole('status')).toContainText('AI limits saved')
     await page.reload()

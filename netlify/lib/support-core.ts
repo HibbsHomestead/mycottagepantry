@@ -1,3 +1,9 @@
+import {
+  adminTransaction,
+  requireAdmin,
+  requireAdminOrigin,
+  sessionToken,
+} from './platform-admin-core'
 import { getUser, admin } from '@netlify/identity'
 import { getDatabase } from '@netlify/database'
 import { createHash } from 'node:crypto'
@@ -7,6 +13,7 @@ export type SupportActor = {
   email: string
   staff: boolean
   admin: boolean
+  portal?: true
 }
 export type SupportClient = {
   query: (
@@ -23,6 +30,46 @@ export class SupportError extends Error {
     super(message)
   }
 }
+/** The admin portal's host-only session is independent from the customer Identity cookie. */
+export async function supportAdminActor(req: Request): Promise<SupportActor> {
+  requireAdminOrigin(req, {
+    allowUpload: new URL(req.url).searchParams.get('upload') === '1',
+  })
+  if (!sessionToken(req)) {
+    const identity = await getUser()
+    if (identity) {
+      // A customer Identity session never becomes an admin session. Distinguish a
+      // verified non-admin account from a signed-out administrator for presentation.
+      const current = await supportActor()
+      const grant = await adminTransaction(
+        async (c) =>
+          (
+            await c.query(
+              'SELECT role FROM platform_admins WHERE identity_id=$1 AND enabled=true',
+              [current.id],
+            )
+          ).rows[0],
+      )
+      if (!grant)
+        throw new SupportError(
+          403,
+          'Access denied. This account does not have platform support permission.',
+        )
+    }
+  }
+  return adminTransaction(async (c) => {
+    const session = await requireAdmin(c, req)
+    if (!['owner', 'admin'].includes(session.role))
+      throw new SupportError(403, 'Platform support access denied.')
+    return {
+      id: session.identity_id,
+      email: session.identity_email.toLowerCase(),
+      staff: true,
+      admin: true,
+      portal: true as const,
+    }
+  })
+}
 export async function supportActor(): Promise<SupportActor> {
   const session = await getUser()
   if (!session)
@@ -38,6 +85,7 @@ export async function supportActor(): Promise<SupportActor> {
     )
   }
   if (
+    current.id !== session.id ||
     !current.email ||
     !current.confirmedAt ||
     !Number.isFinite(Date.parse(current.confirmedAt))
@@ -66,8 +114,8 @@ export async function supportTransaction<T>(
       "SELECT set_config('app.identity_id',$1,true),set_config('app.support_staff',$2,true),set_config('app.support_admin',$3,true),set_config('app.support_worker',$4,true)",
       [
         actor?.id || '',
-        String(!!actor?.staff),
-        String(!!actor?.admin),
+        String(!!actor?.staff && !!actor.portal),
+        String(!!actor?.admin && !!actor.portal),
         String(!actor),
       ],
     )
@@ -82,11 +130,11 @@ export async function supportTransaction<T>(
   }
 }
 export function requireSupportStaff(actor: SupportActor) {
-  if (!actor.staff)
+  if (!actor.staff || !actor.portal)
     throw new SupportError(403, 'Platform support permission is required.')
 }
 export function requireSupportAdmin(actor: SupportActor) {
-  if (!actor.admin)
+  if (!actor.admin || !actor.portal)
     throw new SupportError(
       403,
       'Platform administrator permission is required.',

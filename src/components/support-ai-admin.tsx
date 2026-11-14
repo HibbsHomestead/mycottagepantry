@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supportAiRequest } from '@/lib/support-client'
-import { supportAiPolicySchema, type supportAiDefaults } from '@/lib/support-ai'
+import {
+  supportAiPolicySchema,
+  supportTokenEstimate,
+  type supportAiDefaults,
+} from '@/lib/support-ai'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import './support-helper.css'
 
@@ -14,6 +18,7 @@ export function SupportAiSuggestion({
   consent: boolean
   onDraft: (text: string) => void
 }) {
+  const [sources, setSources] = useState<string[]>([])
   const [suggestion, setSuggestion] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('')
@@ -45,6 +50,7 @@ export function SupportAiSuggestion({
               ticketId,
             })
             setSuggestion(v.suggestion)
+            setSources(v.articles || [])
           } catch (e) {
             setError((e as Error).message)
           } finally {
@@ -59,11 +65,13 @@ export function SupportAiSuggestion({
         <div className="ai-notice">
           <p style={{ whiteSpace: 'pre-wrap' }}>{suggestion}</p>
           <ul className="ai-links">
-            {supportKnowledge.map((a) => (
-              <li key={a.id}>
-                <a href={'https://mycottagepantry.com' + a.href}>{a.title}</a>
-              </li>
-            ))}
+            {supportKnowledge
+              .filter((a) => sources.includes(a.id))
+              .map((a) => (
+                <li key={a.id}>
+                  <a href={'https://mycottagepantry.com' + a.href}>{a.title}</a>
+                </li>
+              ))}
           </ul>
           <button
             type="button"
@@ -79,6 +87,7 @@ export function SupportAiSuggestion({
   )
 }
 export function SupportAiUsage({ admin }: { admin: boolean }) {
+  const [policyConfirmed, setPolicyConfirmed] = useState(false)
   const [policy, setPolicy] = useState<Policy | null>(null),
     [usage, setUsage] = useState<
       {
@@ -102,12 +111,17 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
   }, [])
   async function save(e: FormEvent) {
     e.preventDefault()
+    if (!policyConfirmed) return
     setError('')
     setNotice('')
     setBusy(true)
     try {
       const p = supportAiPolicySchema.parse(policy)
-      await supportAiRequest(true, { action: 'policy', policy: p })
+      await supportAiRequest(true, {
+        action: 'policy',
+        policy: p,
+        consent: true,
+      })
       setNotice(
         'AI limits saved. Existing conversations keep their original expiry; new conversations use this retention period.',
       )
@@ -125,8 +139,9 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
       <p>
         Last 30 days · request attempts, failures and provider-reported tokens.
         No message text is included. Requests use gpt-4.1-mini through Netlify
-        AI Gateway and consume account credits. Each request is bounded to 550
-        output tokens; no automatic retries.
+        AI Gateway and consume account credits. Each question uses at most three
+        provider requests of 550 output tokens each, with at most four tool
+        calls. There are no automatic retries.
       </p>
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -171,9 +186,22 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
             paused)
           </label>
           {admin && (
-            <button className="support-button" disabled={busy}>
-              Save AI limits
-            </button>
+            <>
+              <label className="ai-check">
+                <input
+                  type="checkbox"
+                  checked={policyConfirmed}
+                  onChange={(e) => setPolicyConfirmed(e.target.checked)}
+                />
+                I reviewed the usage, spending limits and retention change.
+              </label>
+              <button
+                className="support-button"
+                disabled={busy || !policyConfirmed}
+              >
+                Save AI limits
+              </button>
+            </>
           )}
         </form>
       )}
@@ -182,10 +210,20 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
           <li key={row.day}>
             {new Date(row.day).toLocaleDateString()}: {row.requests} attempts ·{' '}
             {row.failures} failed · {row.input_tokens || 0} input /{' '}
-            {row.output_tokens || 0} output tokens
+            {row.output_tokens || 0} output tokens · estimated API tokens $
+            {supportTokenEstimate(
+              row.input_tokens || 0,
+              row.output_tokens || 0,
+            ).toFixed(4)}
           </li>
         ))}
       </ul>
+      <p>
+        Reference estimate: $0.40 per million input tokens and $1.60 per million
+        output tokens for gpt-4.1-mini; not an invoice. Check Netlify AI usage
+        for actual account credits and hosting charges. Token totals may be
+        incomplete if a provider response is interrupted.
+      </p>
       {!usage.length && <p>No AI usage recorded in this period.</p>}
     </details>
   )

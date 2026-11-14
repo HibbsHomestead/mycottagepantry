@@ -1,6 +1,6 @@
+import { selectedWorkspace } from './verified-session'
 import { handleSupportAi } from './support-ai-handler'
 import { z } from 'zod'
-import { requireLegacyAdmin } from './platform-admin-legacy'
 import { AdminError } from './platform-admin-core'
 import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
@@ -8,6 +8,7 @@ import { getStore } from '@netlify/blobs'
 import { ticketInput, replyInput, supportStatuses } from '../../src/lib/support'
 import {
   supportActor,
+  supportAdminActor,
   supportTransaction,
   getTicket,
   ticketView,
@@ -69,7 +70,7 @@ async function detail(
     aiConversation:
       (
         await c.query(
-          'SELECT id,messages,diagnostics,expires_at FROM support_ai_conversations WHERE ticket_id=$1 AND expires_at>now()',
+          "SELECT id,messages,diagnostics,expires_at FROM support_ai_conversations WHERE ticket_id=$1 AND audience='customer' AND expires_at>now()",
           [id],
         )
       ).rows[0] || null,
@@ -90,6 +91,7 @@ async function createTicket(
   c: SupportClient,
   actor: SupportActor,
   raw: unknown,
+  request?: Request,
 ) {
   const data = ticketInput.parse(raw)
   await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
@@ -117,9 +119,13 @@ async function createTicket(
   }
   await supportRateLimit(c, actor, true)
   const membership = await c.query(
-    'SELECT business_id FROM users WHERE identity_id=$1 AND active=true LIMIT 1',
+    'SELECT business_id FROM users WHERE identity_id=$1 AND active=true',
     [actor.id],
   )
+  const selected = request ? selectedWorkspace(request) : null
+  const business =
+    membership.rows.find((row) => row.business_id === selected) ||
+    (membership.rows.length === 1 ? membership.rows[0] : null)
   const ticketId = randomUUID(),
     messageId = randomUUID()
   await c.query(
@@ -128,7 +134,7 @@ async function createTicket(
       ticketId,
       actor.id,
       actor.email,
-      membership.rows[0]?.business_id || null,
+      business?.business_id || null,
       data.subject,
       data.category,
       data.submissionKey,
@@ -317,15 +323,18 @@ export default async function supportHandler(req: Request) {
         403,
         'Use the Cottage Pantry app to submit this request.',
       )
-    const actor = await supportActor(),
-      url = new URL(req.url),
-      staff =
-        viewInput.parse(url.searchParams.get('view') || 'customer') === 'staff'
+    const url = new URL(req.url)
+    const staff =
+      viewInput.parse(url.searchParams.get('view') || 'customer') === 'staff'
+    const actor =
+      staff || url.searchParams.has('settings')
+        ? await supportAdminActor(req)
+        : await supportActor()
     if (staff) requireSupportStaff(actor)
-    if (staff || url.searchParams.has('settings'))
-      await requireLegacyAdmin(req, actor.id)
     if (url.searchParams.has('ai'))
-      return await handleSupportAi(req, actor, staff, createTicket)
+      return await handleSupportAi(req, actor, staff, (c, a, input) =>
+        createTicket(c, a, input, req),
+      )
     if (req.method === 'GET' && url.searchParams.has('attachment')) {
       const response = await supportTransaction(actor, async (c) => {
         const id = uuid.parse(url.searchParams.get('attachment'))
@@ -374,9 +383,14 @@ export default async function supportHandler(req: Request) {
         throw new SupportError(400, 'Enter a valid support request.')
       }
       const action = z.string().parse(raw.action)
-      if (action === 'saveSettings' || action === 'confirmRecipient')
-        await requireLegacyAdmin(req, actor.id)
-      if (action === 'create') return createTicket(c, actor, raw.data)
+      if (action === 'saveSettings' || action === 'confirmRecipient') {
+        if (!staff)
+          throw new SupportError(
+            403,
+            'Use the platform support inbox to change settings.',
+          )
+      }
+      if (action === 'create') return createTicket(c, actor, raw.data, req)
       if (action === 'reply') return reply(c, actor, raw.data, staff)
       if (action === 'list') {
         const data = z

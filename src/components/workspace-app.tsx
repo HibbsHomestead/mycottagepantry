@@ -1700,48 +1700,57 @@ export function WorkspaceApp() {
                     open={open}
                     mutate={mutate}
                     refresh={load}
-                  />
-                  <PantryInventory
-                    ingredients={
-                      route.tab === 'Craft Materials'
-                        ? ingredients.filter((i) => i.usedAs === 'material')
-                        : route.tab === 'Ingredients'
-                          ? ingredients.filter(
-                              (i) =>
-                                !['material', 'packaging', 'supply'].includes(
-                                  i.usedAs,
-                                ),
+                  >
+                    {({ actions, labelSelection }) => (
+                      <PantryInventory
+                        actions={actions}
+                        labelSelection={labelSelection}
+                        ingredients={
+                          route.tab === 'Craft Materials'
+                            ? ingredients.filter((i) => i.usedAs === 'material')
+                            : route.tab === 'Ingredients'
+                              ? ingredients.filter(
+                                  (i) =>
+                                    ![
+                                      'material',
+                                      'packaging',
+                                      'supply',
+                                    ].includes(i.usedAs),
+                                )
+                              : route.tab === 'Packaging'
+                                ? ingredients.filter(
+                                    (i) => i.usedAs === 'packaging',
+                                  )
+                                : route.tab === 'Supplies'
+                                  ? ingredients.filter(
+                                      (i) => i.usedAs === 'supply',
+                                    )
+                                  : ingredients
+                        }
+                        typeFilter={route.filter}
+                        assets={state.graphic_assets}
+                        savedView={business.currentPantryView}
+                        onView={(view) => {
+                          if (ready)
+                            void mutate('pantryView', 'settings', {
+                              view,
+                            }).catch((e) => toast.error(e.message))
+                        }}
+                        savedSort={business.currentPantrySort}
+                        onSort={(sort) => {
+                          if (ready)
+                            void mutate('pantrySort', 'settings', sort).catch(
+                              (e) => toast.error(e.message),
                             )
-                          : route.tab === 'Packaging'
-                            ? ingredients.filter(
-                                (i) => i.usedAs === 'packaging',
-                              )
-                            : route.tab === 'Supplies'
-                              ? ingredients.filter((i) => i.usedAs === 'supply')
-                              : ingredients
-                    }
-                    typeFilter={route.filter}
-                    assets={state.graphic_assets}
-                    savedView={business.currentPantryView}
-                    onView={(view) => {
-                      if (ready)
-                        void mutate('pantryView', 'settings', { view }).catch(
-                          (e) => toast.error(e.message),
-                        )
-                    }}
-                    savedSort={business.currentPantrySort}
-                    onSort={(sort) => {
-                      if (ready)
-                        void mutate('pantrySort', 'settings', sort).catch((e) =>
-                          toast.error(e.message),
-                        )
-                    }}
-                    filter={filter}
-                    setFilter={setFilter}
-                    search={search}
-                    setSearch={setSearch}
-                    open={open}
-                  />
+                        }}
+                        filter={filter}
+                        setFilter={setFilter}
+                        search={search}
+                        setSearch={setSearch}
+                        open={open}
+                      />
+                    )}
+                  </InventoryTools>
                 </>
               ) : sub === 'Vendors' ? (
                 <>

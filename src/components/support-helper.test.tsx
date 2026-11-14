@@ -22,7 +22,7 @@ const chat = {
 beforeEach(() =>
   api
     .mockReset()
-    .mockImplementation(async (_staff: boolean, body: any) =>
+    .mockImplementation(async (_staff: boolean, body: unknown) =>
       body
         ? { conversation: chat, providerFailed: true }
         : { conversations: [], policy: supportAiDefaults },
@@ -47,6 +47,9 @@ it('requires explicit consent, preserves draft on request failure and reviews es
   ).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Contact support' }))
   expect(api.mock.calls.some((c) => c[1]?.action === 'escalate')).toBe(false)
+  expect(screen.getByLabelText('Issue summary for support')).toHaveValue(
+    'Inventory question',
+  )
   await user.clear(screen.getByLabelText('Issue summary for support'))
   await user.type(
     screen.getByLabelText('Issue summary for support'),
@@ -61,6 +64,7 @@ it('requires explicit consent, preserves draft on request failure and reviews es
       action: 'escalate',
       conversationId: chat.id,
       summary: 'Reviewed issue',
+      diagnostics: null,
     }),
   )
   expect(
@@ -89,4 +93,71 @@ it('shows diagnostic preview only after opt-in and requires an explicit delete c
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Conversation and its diagnostic attachment deleted',
   )
+})
+
+it('keeps the administrator experience private and binds questions to the selected ticket', async () => {
+  const user = userEvent.setup()
+  render(
+    <SupportHelper
+      staff
+      contextTicketId="20000000-0000-4000-8000-000000000002"
+    />,
+  )
+  await user.type(
+    await screen.findByLabelText('Your app question'),
+    'Inspect the selected ticket account status',
+  )
+  await user.click(screen.getByLabelText(/I agree to send/))
+  await user.click(screen.getByRole('button', { name: 'Send to AI' }))
+  await waitFor(() =>
+    expect(api).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        action: 'chat',
+        ticketId: '20000000-0000-4000-8000-000000000002',
+      }),
+    ),
+  )
+  expect(
+    screen.queryByRole('button', { name: 'Contact support' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByText('Attach sanitized error details for support review'),
+  ).not.toBeInTheDocument()
+})
+it('requires reviewed confirmation for recovery and displays an unverified outcome honestly', async () => {
+  const action = {
+    id: 'action-one',
+    conversation_id: chat.id,
+    tool: 'reconcile_billing',
+    status: 'proposed',
+  }
+  api.mockResolvedValueOnce({
+    conversations: [chat],
+    policy: supportAiDefaults,
+    actions: [action],
+  })
+  render(<SupportHelper staff />)
+  const confirm = await screen.findByRole('button', {
+    name: 'Confirm billing recovery',
+  })
+  expect(confirm).toBeDisabled()
+  expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
+  await userEvent.click(screen.getByLabelText(/I reviewed this recovery/))
+  api.mockResolvedValueOnce({
+    verified: false,
+    message: 'Recovery success could not be verified.',
+  })
+  await userEvent.click(confirm)
+  expect(api).toHaveBeenCalledWith(true, {
+    action: 'confirm',
+    actionId: action.id,
+    confirmation: 'RECONCILE',
+  })
+  expect(await screen.findByRole('status')).toHaveTextContent(
+    'could not be verified',
+  )
+  expect(
+    screen.queryByRole('button', { name: 'Confirm billing recovery' }),
+  ).not.toBeInTheDocument()
 })

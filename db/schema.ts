@@ -1124,6 +1124,11 @@ export const supportAiConversations = pgTable(
   'support_ai_conversations',
   {
     id: uuid().primaryKey(),
+    audience: text().notNull().default('customer'),
+    contextTicketId: uuid('context_ticket_id').references(
+      () => supportTickets.id,
+      { onDelete: 'set null' },
+    ),
     requesterId: text('requester_id').notNull(),
     businessId: uuid('business_id').references(() => businesses.id, {
       onDelete: 'cascade',
@@ -1145,6 +1150,11 @@ export const supportAiConversations = pgTable(
   (t) => [
     index('support_ai_owner').on(t.requesterId, t.businessId, t.updatedAt),
     index('support_ai_expiry').on(t.expiresAt),
+    check('support_ai_audience', sql`${t.audience} IN ('customer','admin')`),
+    check(
+      'support_ai_private_admin',
+      sql`${t.audience}='customer' OR (${t.ticketId} IS NULL AND ${t.businessId} IS NULL)`,
+    ),
   ],
 ).enableRLS()
 export const supportAiUsage = pgTable(
@@ -1172,3 +1182,23 @@ export const supportAiUsage = pgTable(
     check('support_ai_usage_output_tokens_check', sql`${t.outputTokens}>=0`),
   ],
 ).enableRLS()
+
+// Content-free tool outcomes and server-issued recovery proposals; never store provider secrets.
+export const supportAiActions = pgTable('support_ai_actions', {
+  id: uuid().primaryKey(),
+  conversationId: uuid('conversation_id')
+    .notNull()
+    .references(() => supportAiConversations.id, { onDelete: 'cascade' }),
+  actorId: text('actor_id').notNull(),
+  tool: text().notNull(),
+  businessId: uuid('business_id').references(() => businesses.id, {
+    onDelete: 'cascade',
+  }),
+  status: text().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}).enableRLS()

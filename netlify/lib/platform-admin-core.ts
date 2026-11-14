@@ -24,7 +24,10 @@ export const hash = (value: string) =>
 export const opaqueToken = () => randomBytes(32).toString('base64url')
 
 /** Exact configured origin only; forwarded host headers never establish authority. */
-export function requireAdminOrigin(request: Request) {
+export function requireAdminOrigin(
+  request: Request,
+  options: { allowUpload?: boolean } = {},
+) {
   const url = new URL(request.url)
   const env = globalThis.Netlify?.env
   const context = env?.get('CONTEXT')
@@ -58,7 +61,11 @@ export function requireAdminOrigin(request: Request) {
     )
   if (
     request.method === 'POST' &&
-    !request.headers.get('content-type')?.startsWith('application/json')
+    !request.headers.get('content-type')?.startsWith('application/json') &&
+    !(
+      options.allowUpload &&
+      request.headers.get('content-type')?.startsWith('multipart/form-data;')
+    )
   )
     throw new AdminError(415, 'JSON_REQUIRED', 'Use a JSON request.')
   return url.origin

@@ -22,6 +22,22 @@
   gap: 24px;
   align-items: stretch;
 }
+.pantry-card-grid > .calm-empty {
+  grid-column: 1 / -1;
+}
+.pantry-v2 .calm-empty {
+  width: 100%;
+  padding: 24px 12px;
+  gap: 8px;
+  text-align: center;
+  justify-items: center;
+}
+.pantry-v2 .calm-empty :is(h3, p) {
+  margin: 0;
+}
+.pantry-v2 .calm-empty .btn {
+  margin-top: 4px;
+}
 .pantry-card {
   min-width: 0;
   display: flex;
@@ -102,7 +118,7 @@
   padding: 6px 12px;
   border-radius: 7px;
 }
-.pantry-view-toggle button[aria-pressed='true'] {
+.pantry-view-toggle button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--primary);
   font-weight: 700;

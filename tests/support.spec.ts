@@ -1,3 +1,4 @@
+import { supportAiDefaults } from '../src/lib/support-ai'
 import { test, expect } from '@playwright/test'
 // Browser-only transport fixture: API privacy and persistence are tested separately against PostgreSQL.
 test('requester can submit, reopen and reply at desktop and phone sizes without business API requests', async ({
@@ -126,6 +127,15 @@ test('platform inbox exposes private notes only through its authorized API view'
     const request = route.request(),
       url = new URL(request.url())
     expect(url.searchParams.get('view')).toBe('staff')
+    if (url.searchParams.has('ai'))
+      return route.fulfill({
+        json: {
+          policy: supportAiDefaults,
+          usage: [],
+          conversations: [],
+          actions: [],
+        },
+      })
     if (request.method() === 'GET')
       return route.fulfill({
         json: url.searchParams.has('ticket')
@@ -176,11 +186,18 @@ test('signed-out requests to the real support function reveal no tickets or conf
     '?attachment=20000000-0000-4000-8000-000000000001',
   ]) {
     const response = await request.get('/api/support' + query)
-    expect(response.status()).toBe(401)
-    expect(response.headers()['cache-control']).toBe('private, no-store')
-    expect(await response.json()).toEqual({
-      error: 'Log in to Cottage Pantry to get help.',
-    })
+    expect(response.status()).toBe(
+      query.includes('staff') || query.includes('settings') ? 404 : 401,
+    )
+    if (response.status() === 401) {
+      expect(response.headers()['cache-control']).toBe('private, no-store')
+      expect(Object.keys(await response.json())).toEqual(['error'])
+    } else {
+      // Local Netlify dev falls through off-host admin 404s to the framework page.
+      expect(await response.text()).not.toContain(
+        'Private troubleshooting note',
+      )
+    }
   }
   await page.goto('/support', { waitUntil: 'networkidle' })
   await expect(page.getByRole('alert')).toContainText(

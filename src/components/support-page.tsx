@@ -1,9 +1,10 @@
 import { SupportAiUsage, SupportAiSuggestion } from './support-ai-admin'
-import { SupportTranscript } from './support-helper'
+import { SupportTranscript, SupportHelper } from './support-helper'
 import {
   useEffect,
   useState,
   useCallback,
+  useRef,
   type FormEvent,
   type ReactNode,
 } from 'react'
@@ -28,6 +29,7 @@ import {
   supportRequest,
   supportPost,
   uploadSupportScreenshot,
+  downloadSupportScreenshot,
 } from '@/lib/support-client'
 import './support-page.css'
 function time(value: string) {
@@ -78,6 +80,8 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
     admin: boolean
   } | null>(null)
   const [initialError, setInitialError] = useState(''),
+    [initialStatus, setInitialStatus] = useState(0),
+    [retry, setRetry] = useState(0),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('')
   const [tickets, setTickets] = useState<SupportTicket[]>([]),
@@ -104,67 +108,122 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   const [createKey, setCreateKey] = useState(() => crypto.randomUUID()),
     [replyKey, setReplyKey] = useState(() => crypto.randomUUID())
   const mode = staff ? '?view=staff' : '?view=customer'
+  const showError = useCallback((value: unknown) => {
+    const failure = value as { message: string; status?: number }
+    if (failure.status === 401 || failure.status === 403) {
+      setInitialError(failure.message)
+      setInitialStatus(failure.status)
+      setAccess(null)
+      setTickets([])
+      setDetail(null)
+    } else setError(failure.message)
+  }, [])
   useEffect(() => {
     let active = true
-    supportRequest(mode)
-      .then((v) => {
-        if (active) {
-          setAccess(v)
-          setSelected(ticketHash())
-        }
-      })
-      .catch((e) => {
-        if (active) setInitialError(e.message)
-      })
+    const check = () =>
+      supportRequest(mode)
+        .then((v) => {
+          if (active) {
+            setAccess((old) =>
+              old?.staff === v.staff && old?.admin === v.admin ? old : v,
+            )
+            setInitialError('')
+            setInitialStatus(0)
+            setSelected(ticketHash())
+          }
+        })
+        .catch((e) => {
+          if (active) {
+            setInitialError(e.message)
+            setInitialStatus(e.status || 503)
+            setAccess(null)
+            setTickets([])
+            setDetail(null)
+          }
+        })
+    void check()
+    window.addEventListener('focus', check)
+    const timer = window.setInterval(check, 60000)
     return () => {
       active = false
+      window.removeEventListener('focus', check)
+      window.clearInterval(timer)
     }
-  }, [mode])
+  }, [mode, retry])
+  useEffect(() => {
+    const navigate = () => {
+      setSelected(ticketHash())
+      setCompose(false)
+      setSettingsOpen(false)
+    }
+    window.addEventListener('hashchange', navigate)
+    window.addEventListener('popstate', navigate)
+    return () => {
+      window.removeEventListener('hashchange', navigate)
+      window.removeEventListener('popstate', navigate)
+    }
+  }, [])
+  const listRequest = useRef({ sequence: 0 })
   const loadList = useCallback(async () => {
+    const request = ++listRequest.current.sequence
     setLoading(true)
+    setError('')
     try {
       const v = await supportPost(staff, 'list', {
         search: appliedSearch,
         status,
         offset,
       })
+      if (request !== listRequest.current.sequence) return
       setTickets(v.tickets)
       setHasMore(v.hasMore)
     } catch (e) {
-      setError((e as Error).message)
+      if (request === listRequest.current.sequence) showError(e)
     } finally {
-      setLoading(false)
+      if (request === listRequest.current.sequence) setLoading(false)
     }
-  }, [staff, appliedSearch, status, offset])
+  }, [staff, appliedSearch, status, offset, showError])
   useEffect(() => {
-    if (access) void loadList()
+    const state = listRequest.current
+    let active = true
+    queueMicrotask(() => {
+      if (active && access) void loadList()
+    })
+    return () => {
+      active = false
+      state.sequence++
+    }
   }, [access, loadList])
   useEffect(() => {
     if (!selected || !access) return
     const controller = new AbortController()
-    setDetailLoading(true)
-    setDetail(null)
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) {
+        setDetailLoading(true)
+        setDetail(null)
+        setReply('')
+        setReplyFile(null)
+        setInternal(false)
+        setReplyKey(crypto.randomUUID())
+      }
+    })
     supportRequest(mode + '&ticket=' + selected, { signal: controller.signal })
       .then(setDetail)
       .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message)
+        if (!controller.signal.aborted) showError(e)
       })
       .finally(() => {
         if (!controller.signal.aborted) setDetailLoading(false)
       })
-    setReply('')
-    setReplyFile(null)
-    setInternal(false)
-    setReplyKey(crypto.randomUUID())
     return () => controller.abort()
-  }, [selected, access, mode])
+  }, [selected, access, mode, showError])
   function choose(id: string) {
     setSelected(id)
     setCompose(false)
     setSettingsOpen(false)
     setError('')
     setNotice('')
-    window.history.replaceState(null, '', '#ticket=' + id)
+    window.history.pushState(null, '', '#ticket=' + id)
   }
   function validateFile(value: File | null) {
     if (
@@ -221,7 +280,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       setCreateKey(crypto.randomUUID())
       await loadList()
     } catch (e) {
-      setError((e as Error).message)
+      showError(e)
     } finally {
       setBusy(false)
     }
@@ -247,7 +306,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       setReplyKey(crypto.randomUUID())
       await loadList()
     } catch (e) {
-      setError((e as Error).message)
+      showError(e)
     } finally {
       setBusy(false)
     }
@@ -265,7 +324,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       )
       await loadList()
     } catch (e) {
-      setError((e as Error).message)
+      showError(e)
     } finally {
       setBusy(false)
     }
@@ -309,7 +368,9 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                 </button>
               )}
               {!staff && access.staff && (
-                <a href="/platform-support">Platform support inbox</a>
+                <a href="https://admin.mycottagepantry.com/platform-support">
+                  Platform support inbox
+                </a>
               )}
               {staff && access.admin && (
                 <button
@@ -327,9 +388,40 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
         {initialError ? (
           <div className="support-panel">
             <p role="alert">{initialError}</p>
-            <a className="public-button" href={staff ? '/admin' : '/login'}>
-              Log in
-            </a>
+            {initialStatus === 401 ? (
+              <a
+                className="public-button"
+                href={
+                  staff
+                    ? '/admin?returnTo=%2Fplatform-support' +
+                      encodeURIComponent(window.location.hash)
+                    : '/login'
+                }
+              >
+                {staff ? 'Admin sign-in' : 'Log in'}
+              </a>
+            ) : initialStatus === 403 ? (
+              <p>
+                Access denied.{' '}
+                {staff
+                  ? 'Your account does not have platform support permission.'
+                  : 'Your account cannot open support.'}
+              </p>
+            ) : (
+              <p>
+                The inbox could not be loaded. Your saved conversations remain
+                available when the connection recovers.
+              </p>
+            )}
+            <button
+              className="support-button"
+              onClick={() => {
+                setInitialError('')
+                setRetry((v) => v + 1)
+              }}
+            >
+              Retry loading
+            </button>
             <p>
               <a href={staff ? 'https://mycottagepantry.com/help' : '/help'}>
                 Cannot sign in? Help & contact
@@ -351,6 +443,16 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
               </p>
             )}
             {staff && <SupportAiUsage admin={access.admin} />}
+            {staff && (
+              <details className="support-panel support-helper">
+                <summary>Private admin AI assistant</summary>
+                <SupportHelper
+                  key={selected}
+                  staff
+                  contextTicketId={selected || undefined}
+                />
+              </details>
+            )}
             {settingsOpen && access.admin ? (
               <SupportNotificationSettings />
             ) : (
@@ -433,6 +535,8 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                         </li>
                       ))}
                     </ul>
+                  ) : error ? (
+                    <p>Inbox loading failed. Use Refresh inbox to try again.</p>
                   ) : (
                     <p>No tickets match this view.</p>
                   )}
@@ -626,6 +730,13 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                             {m.attachments.map((a) => (
                               <a
                                 key={a.id}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  void downloadSupportScreenshot(
+                                    staff,
+                                    a.id,
+                                  ).catch(showError)
+                                }}
                                 href={`/api/support?view=${staff ? 'staff' : 'customer'}&attachment=${a.id}`}
                               >
                                 <Paperclip size={14} />
@@ -769,7 +880,20 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   )
 }
 function SupportNotificationSettings() {
-  const [settings, setSettings] = useState<any>(null),
+  type NotificationSettings = {
+    recipient: string
+    pendingRecipient: string
+    recipientVerified: boolean
+    fromAddress: string
+    replyTo: string
+    enabled: boolean
+    version: number
+    verifiedIdentityEmail: string
+    deliveryBlock: string | null
+    senderApproved: boolean
+    candidate?: string
+  }
+  const [settings, setSettings] = useState<NotificationSettings | null>(null),
     [error, setError] = useState(''),
     [saved, setSaved] = useState(''),
     [busy, setBusy] = useState(false),
@@ -779,7 +903,8 @@ function SupportNotificationSettings() {
       .then((v) => setSettings(v.settings))
       .catch((e) => setError(e.message))
   }, [])
-  function change(key: string, value: unknown) {
+  function change(key: keyof NotificationSettings, value: string | boolean) {
+    if (!settings) return
     setSettings({
       ...settings,
       [key]: value,
@@ -789,6 +914,7 @@ function SupportNotificationSettings() {
   }
   async function save(e: FormEvent) {
     e.preventDefault()
+    if (!settings) return
     setBusy(true)
     setError('')
     try {
@@ -810,6 +936,7 @@ function SupportNotificationSettings() {
     }
   }
   async function confirm() {
+    if (!settings) return
     setBusy(true)
     setError('')
     try {
