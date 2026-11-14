@@ -822,6 +822,7 @@ export const platformAdmins = pgTable('platform_admins', {
     .notNull()
     .defaultNow(),
 })
+// Inert historical public-key records. No application authentication path reads these.
 export const platformCredentials = pgTable('platform_credentials', {
   id: text().primaryKey(),
   identityId: text('identity_id')
@@ -834,29 +835,40 @@ export const platformCredentials = pgTable('platform_credentials', {
     .notNull()
     .defaultNow(),
 })
-export const platformSessions = pgTable('platform_sessions', {
-  tokenHash: text('token_hash').primaryKey(),
-  identityId: text('identity_id')
-    .notNull()
-    .references(() => platformAdmins.identityId),
-  epoch: integer().notNull(),
-  mfaAt: timestamp('mfa_at', { withTimezone: true }),
-  origin: text().notNull(),
-  challenge: text(),
-  challengeKind: text('challenge_kind'),
-  challengePurpose: text('challenge_purpose'),
-  challengeUntil: timestamp('challenge_until', { withTimezone: true }),
-  mfaMethod: text('mfa_method'),
-  smsVerificationSid: text('sms_verification_sid'),
-  smsSentAt: timestamp('sms_sent_at', { withTimezone: true }),
-  smsUntil: timestamp('sms_until', { withTimezone: true }),
-  smsSends: integer('sms_sends').notNull().default(0),
-  smsAttempts: integer('sms_attempts').notNull().default(0),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-})
+export const platformSessions = pgTable(
+  'platform_sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    identityId: text('identity_id')
+      .notNull()
+      .references(() => platformAdmins.identityId),
+    epoch: integer().notNull(),
+    mfaAt: timestamp('mfa_at', { withTimezone: true }),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    verificationMethod: text('verification_method'),
+    origin: text().notNull(),
+    challenge: text(),
+    challengeKind: text('challenge_kind'),
+    challengePurpose: text('challenge_purpose'),
+    challengeUntil: timestamp('challenge_until', { withTimezone: true }),
+    mfaMethod: text('mfa_method'),
+    smsVerificationSid: text('sms_verification_sid'),
+    smsSentAt: timestamp('sms_sent_at', { withTimezone: true }),
+    smsUntil: timestamp('sms_until', { withTimezone: true }),
+    smsSends: integer('sms_sends').notNull().default(0),
+    smsAttempts: integer('sms_attempts').notNull().default(0),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      'platform_verification_method',
+      sql`${t.verificationMethod} IS NULL OR ${t.verificationMethod} IN ('password','totp','recovery','sms')`,
+    ),
+  ],
+)
 export const platformAudit = pgTable('platform_audit', {
   id: uuid().defaultRandom().primaryKey(),
   actorId: text('actor_id'),

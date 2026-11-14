@@ -57,7 +57,13 @@ function client(primary = false, missing = false, reactivate = false) {
     }),
   }
 }
-const session = { role: 'owner', mfa_at: '2026-11-12', identity_id: 'admin' }
+const session = {
+  role: 'owner',
+  verified_at: new Date().toISOString(),
+  verification_method: 'totp',
+  mfa_at: '2026-11-12',
+  identity_id: 'admin',
+}
 it('protects the primary/last required owner and rejects missing cross-business targets', async () => {
   for (const c of [client(true), client(false, true)]) {
     await expect(

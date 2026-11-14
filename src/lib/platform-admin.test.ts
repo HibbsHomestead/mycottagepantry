@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
-import { randomUUID, createHash, generateKeyPairSync, sign } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import type { Context } from '@netlify/functions'
 const runtime = vi.hoisted(() => ({
   pool: null as any,
@@ -105,7 +105,7 @@ function request(
 }
 async function session(mfa = true, identity = 'platform-owner', value = token) {
   await database.query(
-    "INSERT INTO platform_sessions(token_hash,identity_id,epoch,origin,mfa_at,expires_at) VALUES($1,$2,1,$3,CASE WHEN $4 THEN NOW() ELSE NULL END,NOW()+INTERVAL '10 minutes')",
+    "INSERT INTO platform_sessions(token_hash,identity_id,epoch,origin,verified_at,verification_method,mfa_at,expires_at) VALUES($1,$2,1,$3,CASE WHEN $4 THEN NOW() ELSE NULL END,CASE WHEN $4 THEN 'totp' ELSE NULL END,CASE WHEN $4 THEN NOW() ELSE NULL END,NOW()+INTERVAL '10 minutes')",
     [hash(value), identity, origin, mfa],
   )
   return value
@@ -1114,180 +1114,6 @@ it('persists login rate limits across failed requests and ignores browser forwar
   expect(blocked.status).toBe(429)
   expect(blocked.headers.get('retry-after')).toBe('600')
 })
-it('binds optional MFA challenges to the session and consumes invalid responses without upgrading factor state', async () => {
-  await session(false)
-  const options = await handler(
-    request('action=mfa-options', { kind: 'registration' }, { token }),
-    context,
-  )
-  expect(options.status).toBe(200)
-  const data = await options.json()
-  expect(data.options.rp.id).toBe('admin.mycottagepantry.com')
-  expect(data.options.authenticatorSelection.userVerification).toBe('required')
-  expect(
-    data.options.authenticatorSelection.authenticatorAttachment,
-  ).toBeUndefined()
-  expect(data.options.hints).toEqual([
-    'client-device',
-    'hybrid',
-    'security-key',
-  ])
-  const failure = await handler(
-    request('action=mfa-verify', { id: 'invalid-response' }, { token }),
-    context,
-  )
-  expect(failure.status).toBe(403)
-  const row = (
-    await database.query<any>('SELECT challenge,mfa_at FROM platform_sessions')
-  ).rows[0]
-  expect(row.challenge).toBeNull()
-  expect(row.mfa_at).toBeNull()
-  const replay = await handler(
-    request('action=mfa-verify', { id: 'invalid-response' }, { token }),
-    context,
-  )
-  expect((await replay.json()).code).toBe('MFA_CHALLENGE_EXPIRED')
-})
-it.each([
-  ['internal', null],
-  ['hybrid', null],
-  ['usb', null],
-  ['internal', 'origin'],
-  ['hybrid', 'rp-id'],
-  ['usb', 'challenge'],
-  ['internal', 'user-verification'],
-])(
-  'validates a real signed %s WebAuthn assertion (fault: %s), session rotation and replay',
-  async (transport, fault) => {
-    const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
-    const jwk = keys.publicKey.export({ format: 'jwk' })
-    // COSE EC2 key: map {1:2,3:-7,-1:1,-2:x,-3:y}.
-    const cose = Buffer.concat([
-      Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
-      Buffer.from(jwk.x!, 'base64url'),
-      Buffer.from([0x22, 0x58, 0x20]),
-      Buffer.from(jwk.y!, 'base64url'),
-    ])
-    const credentialId = Buffer.from('test-webauthn-credential').toString(
-      'base64url',
-    )
-    await database.query(
-      'INSERT INTO platform_credentials(id,identity_id,public_key,counter,transports) VALUES($1,$2,$3,0,$4)',
-      [
-        credentialId,
-        'platform-owner',
-        cose.toString('base64url'),
-        JSON.stringify([transport]),
-      ],
-    )
-    await session(false)
-    const response = await handler(
-      request('action=mfa-options', { kind: 'authentication' }, { token }),
-      context,
-    )
-    const { options } = await response.json()
-    expect(options.allowCredentials).toEqual([
-      { id: credentialId, type: 'public-key' },
-    ])
-    expect(options.userVerification).toBe('required')
-    const client = Buffer.from(
-      JSON.stringify({
-        type: 'webauthn.get',
-        challenge:
-          fault === 'challenge' ? 'incorrect-challenge' : options.challenge,
-        origin: fault === 'origin' ? 'https://mycottagepantry.com' : origin,
-        crossOrigin: false,
-      }),
-    )
-    const counter = Buffer.alloc(4)
-    counter.writeUInt32BE(1)
-    const authenticator = Buffer.concat([
-      createHash('sha256')
-        .update(
-          fault === 'rp-id'
-            ? 'mycottagepantry.com'
-            : 'admin.mycottagepantry.com',
-        )
-        .digest(),
-      Buffer.from([fault === 'user-verification' ? 0x01 : 0x05]),
-      counter,
-    ])
-    const signature = sign(
-      'sha256',
-      Buffer.concat([
-        authenticator,
-        createHash('sha256').update(client).digest(),
-      ]),
-      keys.privateKey,
-    )
-    const assertion = {
-      id: credentialId,
-      rawId: credentialId,
-      type: 'public-key',
-      response: {
-        clientDataJSON: client.toString('base64url'),
-        authenticatorData: authenticator.toString('base64url'),
-        signature: signature.toString('base64url'),
-        userHandle: Buffer.from('platform-owner').toString('base64url'),
-      },
-      clientExtensionResults: {},
-      authenticatorAttachment: 'cross-platform',
-    }
-    const verified = await handler(
-      request('action=mfa-verify', assertion, { token }),
-      context,
-    )
-    if (fault) {
-      expect(verified.status).toBe(403)
-      expect(verified.headers.get('set-cookie')).toBeNull()
-      expect(
-        (
-          await database.query<any>(
-            'SELECT challenge,mfa_at FROM platform_sessions',
-          )
-        ).rows[0],
-      ).toEqual({ challenge: null, mfa_at: null })
-      expect(
-        (
-          await handler(
-            request('section=overview', undefined, { token }),
-            context,
-          )
-        ).status,
-      ).toBe(200)
-      return
-    }
-    expect(verified.status).toBe(200)
-    expect((await verified.json()).stage).toBe('authenticated')
-    const cookie = verified.headers.get('set-cookie')!,
-      newToken = cookie.match(/__Host-cp_admin=([^;]+)/)![1]
-    expect(newToken).not.toBe(token)
-    expect(
-      (
-        await handler(
-          request('section=overview', undefined, { token: newToken }),
-          context,
-        )
-      ).status,
-    ).toBe(200)
-    expect(
-      (
-        await handler(
-          request('section=overview', undefined, { token }),
-          context,
-        )
-      ).status,
-    ).toBe(401)
-    expect(
-      (
-        await handler(
-          request('action=mfa-verify', assertion, { token: newToken }),
-          context,
-        )
-      ).status,
-    ).toBe(403)
-  },
-)
 it('enforces the same password session, host and identity checks on legacy admin APIs and file access', async () => {
   await expect(
     requireLegacyAdmin(
@@ -1304,130 +1130,6 @@ it('enforces the same password session, host and identity checks on legacy admin
   await expect(
     requireLegacyAdmin(request('', undefined, { token }), 'platform-agent'),
   ).rejects.toThrow('Administrator identities do not match')
-})
-
-it.each([
-  ['device', 'client-device'],
-  ['phone', 'hybrid'],
-  ['security-key', 'security-key'],
-])(
-  'prefers %s without forcing attachment or changing enrolled credentials and deadlines',
-  async (method, hint) => {
-    await session(false)
-    const before = (
-      await database.query(
-        'SELECT enrollment_until FROM platform_admins WHERE identity_id=$1',
-        ['platform-owner'],
-      )
-    ).rows[0]
-    const registration = await handler(
-      request(
-        'action=mfa-options',
-        { kind: 'registration', method },
-        { token },
-      ),
-      context,
-    )
-    const prepared = await registration.json()
-    expect(registration.status).toBe(200)
-    expect(prepared.options.hints[0]).toBe(hint)
-    expect(prepared.options.hints).toHaveLength(3)
-    expect(
-      prepared.options.authenticatorSelection.authenticatorAttachment,
-    ).toBeUndefined()
-    expect(prepared.options.authenticatorSelection.userVerification).toBe(
-      'required',
-    )
-    expect(Date.parse(prepared.expiresAt)).toBeGreaterThan(Date.now())
-    const ownId = Buffer.from('own-credential').toString('base64url')
-    const otherId = Buffer.from('other-credential').toString('base64url')
-    await database.query(
-      "INSERT INTO platform_credentials(id,identity_id,public_key,transports) VALUES($1,'platform-owner','preserved-key','[\"usb\"]'),($2,'platform-agent','other-key','[\"internal\"]')",
-      [ownId, otherId],
-    )
-    const authentication = await handler(
-      request(
-        'action=mfa-options',
-        { kind: 'authentication', method },
-        { token },
-      ),
-      context,
-    )
-    const options = (await authentication.json()).options
-    expect(options.hints[0]).toBe(hint)
-    expect(options.allowCredentials).toEqual([
-      { id: ownId, type: 'public-key' },
-    ])
-    expect(options.allowCredentials[0]).not.toHaveProperty('transports')
-    expect(options.userVerification).toBe('required')
-    const blocked = await handler(
-      request(
-        'action=mfa-options',
-        { kind: 'registration', method },
-        { token },
-      ),
-      context,
-    )
-    expect(blocked.status).toBe(403)
-    expect(
-      (
-        await database.query(
-          'SELECT enrollment_until FROM platform_admins WHERE identity_id=$1',
-          ['platform-owner'],
-        )
-      ).rows[0],
-    ).toEqual(before)
-    expect(
-      (
-        await database.query(
-          'SELECT public_key,transports FROM platform_credentials WHERE id=$1',
-          [ownId],
-        )
-      ).rows[0],
-    ).toEqual({ public_key: 'preserved-key', transports: ['usb'] })
-    const history = (
-      await database.query<any>(
-        "SELECT after FROM platform_audit WHERE action='mfa_challenge' ORDER BY created_at DESC LIMIT 1",
-      )
-    ).rows[0].after
-    expect(history).toEqual({
-      kind: 'authentication',
-      method,
-      credentialCount: 1,
-      transportFilter: false,
-    })
-  },
-)
-
-it('reports the exact account, credential routes and enrollment deadline only to its password-verified session', async () => {
-  await session(false)
-  let response = await handler(
-    request('action=session', undefined, { token }),
-    context,
-  )
-  let data = await response.json()
-  expect(data.stage).toBe('authenticated')
-  expect(data.identityEmail).toBe('platform-owner@example.invalid')
-  expect(data.enrollmentAvailable).toBe(true)
-  expect(data.credentials).toEqual([])
-  expect(Date.parse(data.enrollmentUntil)).toBeGreaterThan(Date.now())
-  await database.query(
-    "INSERT INTO platform_credentials(id,identity_id,public_key,transports) VALUES('PRIVATE_CREDENTIAL_ID','platform-owner','PRIVATE_PUBLIC_KEY','[\"internal\",\"hybrid\"]')",
-  )
-  response = await handler(
-    request('action=session', undefined, { token }),
-    context,
-  )
-  const body = await response.text()
-  data = JSON.parse(body)
-  expect(data.stage).toBe('authenticated')
-  expect(data.enrollmentAvailable).toBe(false)
-  expect(data.credentials).toEqual([
-    { transports: ['internal', 'hybrid'], createdAt: expect.any(String) },
-  ])
-  expect(body).not.toContain('PRIVATE_')
-  expect(body).not.toContain('challenge')
-  expect((await handler(request('action=session'), context)).status).toBe(401)
 })
 
 it('denies direct legacy registration operations and private mutations without a portal session', async () => {
@@ -1459,176 +1161,7 @@ it('denies direct legacy registration operations and private mutations without a
   expect(staffFile.status).toBe(404)
 })
 
-it.each(['internal', 'hybrid', 'usb'])(
-  'enrolls a real %s WebAuthn public key only within the controlled window and audits safe before/after state',
-  async (transport) => {
-    await session(false)
-    const optionsResponse = await handler(
-      request('action=mfa-options', { kind: 'registration' }, { token }),
-      context,
-    )
-    const { options } = await optionsResponse.json()
-    const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
-    const jwk = keys.publicKey.export({ format: 'jwk' })
-    const cose = Buffer.concat([
-      Buffer.from([0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20]),
-      Buffer.from(jwk.x!, 'base64url'),
-      Buffer.from([0x22, 0x58, 0x20]),
-      Buffer.from(jwk.y!, 'base64url'),
-    ])
-    const credentialId = Buffer.from('enrollment-credential-id')
-    const length = Buffer.alloc(2)
-    length.writeUInt16BE(credentialId.length)
-    const authenticator = Buffer.concat([
-      createHash('sha256').update('admin.mycottagepantry.com').digest(),
-      Buffer.from([0x45]),
-      Buffer.alloc(4),
-      Buffer.alloc(16),
-      length,
-      credentialId,
-      cose,
-    ])
-    const authLength = Buffer.alloc(2)
-    authLength.writeUInt16BE(authenticator.length)
-    // CBOR attestation map: { fmt:'none', attStmt:{}, authData:bytes }.
-    const attestation = Buffer.concat([
-      Buffer.from([0xa3, 0x63]),
-      Buffer.from('fmt'),
-      Buffer.from([0x64]),
-      Buffer.from('none'),
-      Buffer.from([0x67]),
-      Buffer.from('attStmt'),
-      Buffer.from([0xa0, 0x68]),
-      Buffer.from('authData'),
-      Buffer.from([0x59]),
-      authLength,
-      authenticator,
-    ])
-    const client = Buffer.from(
-      JSON.stringify({
-        type: 'webauthn.create',
-        challenge: options.challenge,
-        origin,
-        crossOrigin: false,
-      }),
-    )
-    const registration = {
-      id: credentialId.toString('base64url'),
-      rawId: credentialId.toString('base64url'),
-      type: 'public-key',
-      response: {
-        clientDataJSON: client.toString('base64url'),
-        attestationObject: attestation.toString('base64url'),
-        transports: [transport],
-      },
-      clientExtensionResults: {},
-    }
-    const registered = await handler(
-      request('action=mfa-verify', registration, { token }),
-      context,
-    )
-    expect(registered.status).toBe(200)
-    const credentials = (
-      await database.query<any>('SELECT * FROM platform_credentials')
-    ).rows
-    expect(credentials).toHaveLength(1)
-    expect(credentials[0].public_key).toBe(cose.toString('base64url'))
-    expect(credentials[0].transports).toEqual([transport])
-    const history = (
-      await database.query<any>(
-        "SELECT * FROM platform_audit WHERE action='mfa_enrolled'",
-      )
-    ).rows[0]
-    expect(history.before).toEqual({ mfaEnrolled: false })
-    expect(history.target).toBe('platform-owner')
-    expect(history.after).toEqual({ mfaEnrolled: true })
-    expect(JSON.stringify(history)).not.toContain(cose.toString('base64url'))
-    expect(
-      (
-        await database.query<any>(
-          "SELECT enrollment_until FROM platform_admins WHERE identity_id='platform-owner'",
-        )
-      ).rows[0].enrollment_until,
-    ).toBeNull()
-    // Sign out the registration session, then authenticate the same enrolled
-    // public key in a fresh password-only session. Transport is metadata only.
-    const enrolledToken = registered.headers
-      .get('set-cookie')!
-      .match(/__Host-cp_admin=([^;]+)/)![1]
-    await handler(
-      request('action=logout', {}, { token: enrolledToken }),
-      context,
-    )
-    await session(false)
-    const subsequent = await handler(
-      request(
-        'action=mfa-options',
-        {
-          kind: 'authentication',
-          method: transport === 'hybrid' ? 'phone' : 'device',
-        },
-        { token },
-      ),
-      context,
-    )
-    const nextOptions = (await subsequent.json()).options
-    const authenticationClient = Buffer.from(
-      JSON.stringify({
-        type: 'webauthn.get',
-        challenge: nextOptions.challenge,
-        origin,
-        crossOrigin: false,
-      }),
-    )
-    const authenticationData = Buffer.concat([
-      createHash('sha256').update('admin.mycottagepantry.com').digest(),
-      Buffer.from([0x05]),
-      Buffer.from([0, 0, 0, 1]),
-    ])
-    const authentication = await handler(
-      request(
-        'action=mfa-verify',
-        {
-          id: credentialId.toString('base64url'),
-          rawId: credentialId.toString('base64url'),
-          type: 'public-key',
-          response: {
-            clientDataJSON: authenticationClient.toString('base64url'),
-            authenticatorData: authenticationData.toString('base64url'),
-            signature: sign(
-              'sha256',
-              Buffer.concat([
-                authenticationData,
-                createHash('sha256').update(authenticationClient).digest(),
-              ]),
-              keys.privateKey,
-            ).toString('base64url'),
-          },
-          clientExtensionResults: {},
-        },
-        { token },
-      ),
-      context,
-    )
-    expect(authentication.status).toBe(200)
-    const authenticatedToken = authentication.headers
-      .get('set-cookie')!
-      .match(/__Host-cp_admin=([^;]+)/)![1]
-    expect(
-      (
-        await handler(
-          request('section=overview', undefined, { token: authenticatedToken }),
-          context,
-        )
-      ).status,
-    ).toBe(200)
-    expect(
-      (await database.query('SELECT id FROM platform_credentials')).rows,
-    ).toHaveLength(1)
-  },
-)
-
-it('closes expired enrollment and keeps raw customer content and writes outside platform metadata permissions', async () => {
+it('retires enrollment routes and keeps raw customer content and writes outside platform metadata permissions', async () => {
   await session(false)
   await database.query(
     "UPDATE platform_admins SET enrollment_until=NOW()-INTERVAL '1 minute' WHERE identity_id='platform-owner'",
@@ -1640,7 +1173,7 @@ it('closes expired enrollment and keeps raw customer content and writes outside 
         context,
       )
     ).status,
-  ).toBe(403)
+  ).toBe(404)
   await database.exec(
     "BEGIN;SET LOCAL ROLE portal_test;SELECT set_config('app.platform_read','true',true);",
   )
@@ -1772,1084 +1305,6 @@ it('reports recovery service failures without reporting that an email was sent',
   expect(await response.text()).toContain('temporarily unavailable')
 })
 
-// TOTP exercises run through the same HTTP gateway, RLS role, and Identity checks.
-async function phonePasskey() {
-  const keys = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
-  const jwk = keys.publicKey.export({ format: 'jwk' })
-  const cose = Buffer.concat([
-    Buffer.from([0xa5, 1, 2, 3, 0x26, 0x20, 1, 0x21, 0x58, 0x20]),
-    Buffer.from(jwk.x!, 'base64url'),
-    Buffer.from([0x22, 0x58, 0x20]),
-    Buffer.from(jwk.y!, 'base64url'),
-  ])
-  const id = Buffer.from('existing-phone-passkey').toString('base64url')
-  await database.query(
-    'INSERT INTO platform_credentials(id,identity_id,public_key,transports) VALUES($1,$2,$3,$4)',
-    [id, 'platform-owner', cose.toString('base64url'), '["internal","hybrid"]'],
-  )
-  let count = 0
-  return async (purpose?: string) => {
-    const prepared = await handler(
-      request(
-        'action=mfa-options',
-        { kind: 'authentication', ...(purpose ? { purpose } : {}) },
-        { token },
-      ),
-      context,
-    )
-    expect(prepared.status).toBe(200)
-    const { options } = await prepared.json()
-    const client = Buffer.from(
-      JSON.stringify({
-        type: 'webauthn.get',
-        challenge: options.challenge,
-        origin,
-        crossOrigin: false,
-      }),
-    )
-    const counter = Buffer.alloc(4)
-    counter.writeUInt32BE(++count)
-    const authenticator = Buffer.concat([
-      createHash('sha256').update('admin.mycottagepantry.com').digest(),
-      Buffer.from([5]),
-      counter,
-    ])
-    const signature = sign(
-      'sha256',
-      Buffer.concat([
-        authenticator,
-        createHash('sha256').update(client).digest(),
-      ]),
-      keys.privateKey,
-    )
-    return handler(
-      request(
-        'action=mfa-verify',
-        {
-          id,
-          rawId: id,
-          type: 'public-key',
-          response: {
-            clientDataJSON: client.toString('base64url'),
-            authenticatorData: authenticator.toString('base64url'),
-            signature: signature.toString('base64url'),
-            userHandle: Buffer.from('platform-owner').toString('base64url'),
-          },
-          clientExtensionResults: {},
-        },
-        { token },
-      ),
-      context,
-    )
-  }
-}
-async function startTotp() {
-  runtime.env.ADMIN_MFA_ENCRYPTION_KEY = 'ab'.repeat(32)
-  await session(true)
-  const authorize = await phonePasskey()
-  const result = await authorize('totp-enroll')
-  expect(result.status).toBe(200)
-  const setup = await result.json()
-  expect(setup.stage).toBe('totp_setup')
-  const row = (await database.query<any>('SELECT * FROM platform_totp')).rows[0]
-  const secret = openSecret(row.pending_ciphertext, 'platform-owner')
-  return { authorize, setup, secret }
-}
-async function activateTotp() {
-  const state = await startTotp()
-  const confirmation = await handler(
-    request(
-      'action=totp-confirm',
-      { code: totpCode(state.secret, Math.floor(Date.now() / 30000)) },
-      { token },
-    ),
-    context,
-  )
-  expect(confirmation.status).toBe(200)
-  const result = await confirmation.json()
-  expect(result.recoveryCodes).toHaveLength(10)
-  return { ...state, codes: result.recoveryCodes as string[] }
-}
-
-it('enrolls TOTP only after fresh signed phone verification and confirmation, preserving the phone credential and grant', async () => {
-  const { setup, secret } = await startTotp()
-  expect(setup.uri).toMatch(/^otpauth:\/\/totp\//)
-  const pending = (await database.query<any>('SELECT * FROM platform_totp'))
-    .rows[0]
-  expect(pending.enabled_at).toBeNull()
-  expect(pending.secret_ciphertext).toBeNull()
-  expect(pending.pending_ciphertext).not.toContain(setup.secret)
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-verify',
-          { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  const confirmation = await handler(
-    request(
-      'action=totp-confirm',
-      { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
-      { token },
-    ),
-    context,
-  )
-  expect(confirmation.status).toBe(200)
-  const codes = (await confirmation.json()).recoveryCodes
-  const row = (await database.query<any>('SELECT * FROM platform_totp')).rows[0]
-  expect(row.enabled_at).toBeTruthy()
-  expect(row.pending_ciphertext).toBeNull()
-  expect(row.secret_ciphertext).not.toContain(setup.secret)
-  expect(
-    (await database.query('SELECT * FROM platform_credentials')).rows,
-  ).toHaveLength(1)
-  expect(
-    (
-      await database.query<any>(
-        'SELECT role FROM platform_admins WHERE identity_id=$1',
-        ['platform-owner'],
-      )
-    ).rows[0].role,
-  ).toBe('owner')
-  const storedCodes = (
-    await database.query<any>('SELECT code_hash FROM platform_recovery_codes')
-  ).rows
-  expect(JSON.stringify(storedCodes)).not.toContain(codes[0])
-  const audits = (await database.query('SELECT * FROM platform_audit')).rows
-  expect(JSON.stringify(audits)).not.toContain(setup.secret)
-  expect(JSON.stringify(audits)).not.toContain(codes[0])
-  // Confirmation consumes its own time step, so it cannot immediately log in again.
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-verify',
-          { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-})
-
-it('requires authenticated phone session, a fresh bound passkey assertion and same-session unexpired setup', async () => {
-  runtime.env.ADMIN_MFA_ENCRYPTION_KEY = 'ab'.repeat(32)
-  await session(false)
-  expect(
-    (
-      await handler(
-        request(
-          'action=mfa-options',
-          { kind: 'authentication', purpose: 'totp-enroll' },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  expect(
-    (
-      await handler(
-        request('action=totp-confirm', { code: '123456' }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  await database.query('UPDATE platform_sessions SET mfa_at=NOW()')
-  expect(
-    (
-      await handler(
-        request('action=totp-confirm', { code: '123456' }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  const authorize = await phonePasskey()
-  await authorize('totp-enroll')
-  await session(true, 'platform-owner', 'S'.repeat(43))
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-confirm',
-          { code: '123456' },
-          { token: 'S'.repeat(43) },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  await database.query(
-    "UPDATE platform_totp SET pending_until=NOW()-INTERVAL '1 second'",
-  )
-  expect(
-    (
-      await handler(
-        request('action=totp-confirm', { code: '123456' }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-})
-
-it('rejects simultaneous code replay, rotates the admin session, permits dashboard access, and denies logout reuse', async () => {
-  const { secret } = await activateTotp()
-  await database.query('UPDATE platform_totp SET last_step=-1')
-  await database.query('UPDATE platform_sessions SET mfa_at=NULL')
-  const code = totpCode(secret, Math.floor(Date.now() / 30000))
-  const results = await Promise.all(
-    [1, 2].map(() =>
-      handler(request('action=totp-verify', { code }, { token }), context),
-    ),
-  )
-  expect(results.filter((r) => r.status === 200)).toHaveLength(1)
-  const good = results.find((r) => r.status === 200)!
-  const fresh = /__Host-cp_admin=([^;]+)/.exec(
-    good.headers.get('set-cookie')!,
-  )![1]
-  expect(fresh).not.toBe(token)
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  expect(
-    (await handler(request('action=session', undefined, { token }), context))
-      .status,
-  ).toBe(401)
-  expect(
-    (await handler(request('action=logout', {}, { token: fresh }), context))
-      .status,
-  ).toBe(200)
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(401)
-})
-
-it('consumes recovery codes once with a password-verified session and leaves the existing passkey usable', async () => {
-  const { codes, authorize } = await activateTotp()
-  expect(
-    (await handler(request('action=totp-recover', { code: codes[0] }), context))
-      .status,
-  ).toBe(401)
-  await database.query('UPDATE platform_sessions SET mfa_at=NULL')
-  const response = await handler(
-    request('action=totp-recover', { code: codes[0] }, { token }),
-    context,
-  )
-  expect(response.status).toBe(200)
-  const fresh = /__Host-cp_admin=([^;]+)/.exec(
-    response.headers.get('set-cookie')!,
-  )![1]
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  await session(false)
-  expect(
-    (
-      await handler(
-        request('action=totp-recover', { code: codes[0] }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  // Existing phone key still signs in normally after TOTP enrollment and recovery.
-  const phone = await authorize()
-  expect(phone.status).toBe(200)
-  const phoneToken = /__Host-cp_admin=([^;]+)/.exec(
-    phone.headers.get('set-cookie')!,
-  )![1]
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: phoneToken }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-})
-
-it('requires a fresh passkey to regenerate recovery codes or remove TOTP, revoking codes and other sessions on removal', async () => {
-  const { authorize, codes } = await activateTotp()
-  expect(
-    (await handler(request('action=totp-remove', {}, { token }), context))
-      .status,
-  ).toBe(404)
-  const regenerated = await authorize('totp-recovery')
-  expect(regenerated.status).toBe(200)
-  const newCodes = (await regenerated.json()).recoveryCodes
-  expect(newCodes).not.toContain(codes[0])
-  const oldHash = hash('platform-owner:' + codes[0].replaceAll('-', ''))
-  expect(
-    (
-      await database.query(
-        'SELECT * FROM platform_recovery_codes WHERE code_hash=$1',
-        [oldHash],
-      )
-    ).rows,
-  ).toHaveLength(0)
-  await session(true, 'platform-owner', 'S'.repeat(43))
-  expect((await authorize('totp-remove')).status).toBe(200)
-  expect(
-    (await database.query('SELECT * FROM platform_totp')).rows,
-  ).toHaveLength(0)
-  expect(
-    (await database.query('SELECT * FROM platform_recovery_codes')).rows,
-  ).toHaveLength(0)
-  expect(
-    (
-      await handler(
-        request('action=session', undefined, { token: 'S'.repeat(43) }),
-        context,
-      )
-    ).status,
-  ).toBe(401)
-  expect(
-    (await handler(request('section=overview', undefined, { token }), context))
-      .status,
-  ).toBe(200)
-  expect(
-    (await database.query('SELECT * FROM platform_credentials')).rows,
-  ).toHaveLength(1)
-})
-
-it('rate-limits invalid TOTP attempts persistently across password-only sessions and rejects revoked grants', async () => {
-  const { secret } = await activateTotp()
-  await database.exec('TRUNCATE platform_limits')
-  await database.query('UPDATE platform_sessions SET mfa_at=NULL')
-  for (let i = 0; i < 10; i++)
-    expect(
-      (
-        await handler(
-          request('action=totp-verify', { code: 'bad' }, { token }),
-          context,
-        )
-      ).status,
-    ).toBe(403)
-  const good = totpCode(secret, Math.floor(Date.now() / 30000) + 1)
-  expect(
-    (
-      await handler(
-        request('action=totp-verify', { code: good }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(429)
-  await database.exec('TRUNCATE platform_limits')
-  await database.query(
-    'UPDATE platform_admins SET epoch=epoch+1 WHERE identity_id=$1',
-    ['platform-owner'],
-  )
-  expect(
-    (
-      await handler(
-        request('action=totp-recover', { code: 'not-used' }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(401)
-})
-
-it('cancels pending enrollment without enabling or removing methods, and fails closed without the encryption key', async () => {
-  const { secret } = await startTotp()
-  expect(
-    (await handler(request('action=totp-cancel', {}, { token }), context))
-      .status,
-  ).toBe(200)
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-confirm',
-          { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  const row = (await database.query<any>('SELECT * FROM platform_totp')).rows[0]
-  expect(row.pending_ciphertext).toBeNull()
-  delete runtime.env.ADMIN_MFA_ENCRYPTION_KEY
-  expect(
-    (
-      await handler(
-        request(
-          'action=mfa-options',
-          { kind: 'authentication', purpose: 'totp-enroll' },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(503)
-  expect(
-    (await handler(request('section=overview', undefined, { token }), context))
-      .status,
-  ).toBe(200)
-})
-
-it('isolates TOTP by account, enforces origin/session expiry/provider checks, and denies non-gateway reads', async () => {
-  const { secret, codes } = await activateTotp()
-  await session(false, 'platform-agent', 'S'.repeat(43))
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-recover',
-          { code: codes[0] },
-          { token: 'S'.repeat(43) },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  expect(
-    (
-      await handler(
-        request(
-          'action=totp-verify',
-          { code: totpCode(secret, Math.floor(Date.now() / 30000) + 1) },
-          { token, origin: 'https://attacker.example' },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  await database.exec('SET ROLE portal_test')
-  expect(
-    (await database.query('SELECT * FROM platform_totp')).rows,
-  ).toHaveLength(0)
-  expect(
-    (await database.query('SELECT * FROM platform_recovery_codes')).rows,
-  ).toHaveLength(0)
-  await database.exec('RESET ROLE')
-  delete runtime.identities['platform-owner']
-  expect(
-    (
-      await handler(
-        request('action=totp-recover', { code: codes[0] }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(503)
-  expect(
-    (
-      await database.query<any>(
-        'SELECT used_at FROM platform_recovery_codes WHERE code_hash=$1',
-        [hash('platform-owner:' + codes[0].replaceAll('-', ''))],
-      )
-    ).rows[0].used_at,
-  ).toBeNull()
-  await database.query(
-    "UPDATE platform_sessions SET expires_at=NOW()-INTERVAL '1 second' WHERE token_hash=$1",
-    [hash(token)],
-  )
-  expect(
-    (
-      await handler(
-        request('action=totp-recover', { code: codes[0] }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(401)
-})
-
-it('atomically rejects reuse of one recovery code across two password-verified sessions', async () => {
-  const { codes } = await activateTotp()
-  await database.query('UPDATE platform_sessions SET mfa_at=NULL')
-  await session(false, 'platform-owner', 'S'.repeat(43))
-  const results = await Promise.all(
-    [token, 'S'.repeat(43)].map((t) =>
-      handler(
-        request('action=totp-recover', { code: codes[0] }, { token: t }),
-        context,
-      ),
-    ),
-  )
-  expect(results.map((r) => r.status).sort()).toEqual([200, 403])
-})
-
-it('refuses an invalid fresh assertion for TOTP enrollment and consumes its challenge', async () => {
-  runtime.env.ADMIN_MFA_ENCRYPTION_KEY = 'ab'.repeat(32)
-  await session(true)
-  await phonePasskey()
-  expect(
-    (
-      await handler(
-        request(
-          'action=mfa-options',
-          { kind: 'authentication', purpose: 'totp-enroll' },
-          { token },
-        ),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  expect(
-    (
-      await handler(
-        request('action=mfa-verify', { id: 'invalid-signature' }, { token }),
-        context,
-      )
-    ).status,
-  ).toBe(403)
-  expect(
-    (await database.query('SELECT * FROM platform_totp')).rows,
-  ).toHaveLength(0)
-  expect(
-    (
-      await database.query<any>(
-        'SELECT challenge FROM platform_sessions WHERE token_hash=$1',
-        [hash(token)],
-      )
-    ).rows[0].challenge,
-  ).toBeNull()
-})
-
-it('rolls back activation and recovery-code generation if the immutable audit write fails', async () => {
-  const { secret } = await startTotp()
-  await database.exec(
-    "CREATE FUNCTION reject_totp_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='totp_enrolled' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_totp_audit BEFORE INSERT ON platform_audit FOR EACH ROW EXECUTE FUNCTION reject_totp_audit();",
-  )
-  try {
-    expect(
-      (
-        await handler(
-          request(
-            'action=totp-confirm',
-            { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
-            { token },
-          ),
-          context,
-        )
-      ).status,
-    ).toBe(503)
-    const row = (await database.query<any>('SELECT * FROM platform_totp'))
-      .rows[0]
-    expect(row.enabled_at).toBeNull()
-    expect(row.pending_ciphertext).toBeTruthy()
-    expect(
-      (await database.query('SELECT * FROM platform_recovery_codes')).rows,
-    ).toHaveLength(0)
-  } finally {
-    await database.exec(
-      'DROP TRIGGER reject_totp_audit ON platform_audit;DROP FUNCTION reject_totp_audit()',
-    )
-  }
-})
-
-// Password + SMS: a fake Twilio Verify with the provider's documented
-// single-use, pending-reuse and attempt-limit semantics.
-const twilio = {
-  verifications: new Map<
-    string,
-    { to: string; code: string; status: string; checks: number }
-  >(),
-  failNext: null as null | { status: number; code?: number } | 'network',
-  sends: 0,
-  bodies: [] as string[],
-}
-const phone = '(312) 555-0147'
-function stubTwilio() {
-  twilio.verifications.clear()
-  twilio.failNext = null
-  twilio.sends = 0
-  twilio.bodies = []
-  Object.assign(runtime.env, {
-    ADMIN_MFA_ENCRYPTION_KEY: 'ab'.repeat(32),
-    ADMIN_SMS_ENABLED: 'true',
-    TWILIO_API_KEY_SID: 'SK' + '0'.repeat(32),
-    TWILIO_API_KEY_SECRET: 'fixture-secret-value-not-real',
-    TWILIO_VERIFY_SERVICE_SID: 'VA' + '1'.repeat(32),
-  })
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init: RequestInit) => {
-      expect(url).toMatch(
-        /^https:\/\/verify\.twilio\.com\/v2\/Services\/VA1+\//,
-      )
-      expect(String((init.headers as any).Authorization)).toMatch(/^Basic /)
-      const form = new URLSearchParams(String(init.body))
-      twilio.bodies.push(String(init.body))
-      if (url.endsWith('/Verifications')) {
-        twilio.sends++
-        const failure = twilio.failNext
-        twilio.failNext = null
-        if (failure === 'network') throw new TypeError('fetch failed')
-        if (failure)
-          return Response.json(
-            { code: failure.code },
-            { status: failure.status },
-          )
-        const to = form.get('To')!
-        expect(form.get('Channel')).toBe('sms')
-        const existing = [...twilio.verifications].find(
-          ([, v]) => v.to === to && v.status === 'pending',
-        )
-        if (existing)
-          return Response.json(
-            { sid: existing[0], status: 'pending' },
-            { status: 201 },
-          )
-        const sid =
-          'VE' + String(twilio.verifications.size + 1).padStart(32, '0')
-        twilio.verifications.set(sid, {
-          to,
-          code: String(100000 + twilio.verifications.size * 7919),
-          status: 'pending',
-          checks: 0,
-        })
-        return Response.json({ sid, status: 'pending' }, { status: 201 })
-      }
-      const v = twilio.verifications.get(form.get('VerificationSid')!)
-      if (!v || v.status !== 'pending')
-        return Response.json({ code: 20404 }, { status: 404 })
-      if (++v.checks > 5) return Response.json({ code: 60202 }, { status: 429 })
-      if (v.code === form.get('Code')) {
-        v.status = 'approved'
-        return Response.json({ status: 'approved', valid: true })
-      }
-      return Response.json({ status: 'pending', valid: false })
-    }),
-  )
-}
-const latestCode = () => [...twilio.verifications.values()].at(-1)!.code
-async function post(action: string, body: unknown, value = token) {
-  return handler(request('action=' + action, body, { token: value }), context)
-}
-async function enrollSms() {
-  stubTwilio()
-  await session(true)
-  const authorize = await phonePasskey()
-  const setup = await authorize('sms-enroll')
-  expect(setup.status).toBe(200)
-  expect((await setup.json()).stage).toBe('sms_setup')
-  const sent = await post('sms-enroll-send', { phone })
-  expect(sent.status).toBe(200)
-  const confirmed = await post('sms-enroll-confirm', { code: latestCode() })
-  expect(confirmed.status).toBe(200)
-  twilio.verifications.clear()
-  return authorize
-}
-async function passwordLogin() {
-  const response = await handler(
-    request('action=login', {
-      email: 'platform-owner@example.invalid',
-      password: 'test-password',
-    }),
-    context,
-  )
-  expect(response.status).toBe(200)
-  return /__Host-cp_admin=([^;]+)/.exec(response.headers.get('set-cookie')!)![1]
-}
-function noPlaintextPhone(value: unknown) {
-  const text = JSON.stringify(value)
-  expect(text).not.toContain('3125550147')
-  expect(text).not.toContain('555-0147')
-}
-
-it('enrolls SMS only from an MFA session after a fresh passkey and a confirmed text, storing only ciphertext and a masked number', async () => {
-  stubTwilio()
-  await session(true)
-  // Without fresh passkey authorization no number is accepted or texted.
-  expect((await post('sms-enroll-send', { phone })).status).toBe(403)
-  const authorize = await phonePasskey()
-  expect((await (await authorize('sms-enroll')).json()).stage).toBe('sms_setup')
-  for (const bad of ['+44 20 7946 0958', '011 44 20 7946', '(312) 155-0147']) {
-    const response = await post('sms-enroll-send', { phone: bad })
-    expect(response.status).toBe(400)
-    expect((await response.json()).code).toBe('SMS_NUMBER_INVALID')
-  }
-  expect(twilio.sends).toBe(0)
-  const sent = await post('sms-enroll-send', { phone })
-  expect(await sent.json()).toMatchObject({
-    stage: 'sms_enroll_sent',
-    masked: '+1 •••-•••-0147',
-  })
-  expect(twilio.bodies[0]).toContain('To=%2B13125550147')
-  const wrong = await post('sms-enroll-confirm', { code: '000000' })
-  expect(wrong.status).toBe(403)
-  expect((await wrong.json()).code).toBe('SMS_INCORRECT')
-  let row = (await database.query<any>('SELECT * FROM platform_sms')).rows[0]
-  expect(row.verified_at).toBeNull()
-  const confirmed = await post('sms-enroll-confirm', { code: latestCode() })
-  expect(await confirmed.json()).toMatchObject({
-    stage: 'sms_enrolled',
-    masked: '+1 •••-•••-0147',
-    notification: 'unavailable',
-  })
-  row = (await database.query<any>('SELECT * FROM platform_sms')).rows[0]
-  expect(row.verified_at).toBeTruthy()
-  expect(
-    openSecret(row.phone_ciphertext, 'platform-owner', 'admin-sms').toString(),
-  ).toBe('+13125550147')
-  expect(() =>
-    openSecret(row.phone_ciphertext, 'platform-agent', 'admin-sms'),
-  ).toThrow()
-  noPlaintextPhone(row)
-  const audits = (await database.query<any>('SELECT * FROM platform_audit'))
-    .rows
-  noPlaintextPhone(audits)
-  noPlaintextPhone((await database.query('SELECT * FROM platform_limits')).rows)
-  expect(audits.map((a) => a.action)).toContain('sms_enrolled')
-  expect(JSON.stringify(audits)).not.toContain(latestCode())
-  expect(JSON.stringify(audits)).not.toContain('fixture-secret-value')
-  // The existing passkey is untouched.
-  expect(
-    (await database.query('SELECT * FROM platform_credentials')).rows,
-  ).toHaveLength(1)
-})
-
-it('never lets a password-only or SMS-only session enroll or replace a destination number', async () => {
-  stubTwilio()
-  const pending = await session(false, 'platform-owner', 'P'.repeat(43))
-  expect((await post('sms-enroll-send', { phone }, pending)).status).toBe(403)
-  expect(
-    (
-      await post(
-        'mfa-options',
-        { kind: 'authentication', purpose: 'sms-enroll' },
-        pending,
-      )
-    ).status,
-  ).toBe(403)
-  await enrollSms()
-  const login = await passwordLogin()
-  await post('sms-send', {}, login)
-  const verified = await post('sms-verify', { code: latestCode() }, login)
-  expect(verified.status).toBe(200)
-  const smsSession = /__Host-cp_admin=([^;]+)/.exec(
-    verified.headers.get('set-cookie')!,
-  )![1]
-  const status = await (
-    await handler(
-      request('action=session', undefined, { token: smsSession }),
-      context,
-    )
-  ).json()
-  expect(status).toMatchObject({ stage: 'authenticated', mfaMethod: 'sms' })
-  const replaced = await post(
-    'sms-enroll-send',
-    { phone: '(415) 555-0199' },
-    smsSession,
-  )
-  expect(replaced.status).toBe(403)
-  expect((await replaced.json()).code).toBe('FRESH_PASSKEY_REQUIRED')
-  expect(
-    (await post('sms-enroll-confirm', { code: '123456' }, smsSession)).status,
-  ).toBe(403)
-  // Enrollment + one sign-in text; refused requests never reached the provider.
-  expect(twilio.sends).toBe(2)
-})
-
-it('signs in with password + SMS without WebAuthn, then rotates the session, rejects reuse, and logout invalidates it', async () => {
-  await enrollSms()
-  const login = await passwordLogin()
-  const before = await (
-    await handler(
-      request('action=session', undefined, { token: login }),
-      context,
-    )
-  ).json()
-  expect(before).toMatchObject({
-    stage: 'authenticated',
-    smsEnabled: true,
-    smsMasked: '+1 •••-•••-0147',
-  })
-  noPlaintextPhone(before)
-  // No code exists before a text is requested.
-  expect(
-    (await (await post('sms-verify', { code: '123456' }, login)).json()).code,
-  ).toBe('SMS_EXPIRED')
-  const sent = await post('sms-send', {}, login)
-  expect(await sent.json()).toMatchObject({
-    stage: 'sms_sent',
-    masked: '+1 •••-•••-0147',
-    resendsRemaining: 2,
-  })
-  const cooldown = await post('sms-send', {}, login)
-  expect(cooldown.status).toBe(429)
-  expect((await cooldown.json()).code).toBe('SMS_COOLDOWN')
-  expect(cooldown.headers.get('retry-after')).toBe('30')
-  const wrong = await post('sms-verify', { code: '000000' }, login)
-  expect(wrong.status).toBe(403)
-  expect((await wrong.json()).code).toBe('SMS_INCORRECT')
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: login }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  const code = latestCode()
-  const ok = await post('sms-verify', { code }, login)
-  expect(ok.status).toBe(200)
-  const fresh = /__Host-cp_admin=([^;]+)/.exec(
-    ok.headers.get('set-cookie')!,
-  )![1]
-  expect(fresh).not.toBe(login)
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  expect((await post('sms-verify', { code }, login)).status).toBe(401)
-  // Reused code on a new pending sign-in is rejected (single use).
-  const second = await passwordLogin()
-  expect((await post('sms-verify', { code }, second)).status).toBe(403)
-  expect((await post('logout', {}, fresh)).status).toBe(200)
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(401)
-  const audits = (await database.query<any>('SELECT * FROM platform_audit'))
-    .rows
-  expect(JSON.stringify(audits)).not.toContain(code)
-  noPlaintextPhone(audits)
-})
-
-it('rejects expired, superseded and over-attempted codes and enforces the resend limit', async () => {
-  await enrollSms()
-  const a = await passwordLogin()
-  await post('sms-send', {}, a)
-  const b = await passwordLogin()
-  await post('sms-send', {}, b)
-  // Twilio re-sent the same pending code, but it is now bound only to B.
-  const superseded = await post('sms-verify', { code: latestCode() }, a)
-  expect((await superseded.json()).code).toBe('SMS_EXPIRED')
-  await database.query(
-    "UPDATE platform_sessions SET sms_until=NOW()-INTERVAL '1 second' WHERE token_hash=$1",
-    [hash(b)],
-  )
-  expect(
-    (await (await post('sms-verify', { code: latestCode() }, b)).json()).code,
-  ).toBe('SMS_EXPIRED')
-  // Attempt limit.
-  const c = await passwordLogin()
-  await post('sms-send', {}, c)
-  for (let i = 0; i < 5; i++)
-    expect(
-      (await (await post('sms-verify', { code: '000000' }, c)).json()).code,
-    ).toBe('SMS_INCORRECT')
-  expect(
-    (await (await post('sms-verify', { code: latestCode() }, c)).json()).code,
-  ).toBe('SMS_EXHAUSTED')
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: c }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  // Resend limit per pending sign-in (hourly destination/account caps reset).
-  await database.exec('TRUNCATE platform_limits')
-  const d = await passwordLogin()
-  for (let i = 0; i < 3; i++) {
-    await database.query(
-      "UPDATE platform_sessions SET sms_sent_at=NOW()-INTERVAL '1 minute'",
-    )
-    expect((await post('sms-send', {}, d)).status).toBe(200)
-  }
-  await database.query(
-    "UPDATE platform_sessions SET sms_sent_at=NOW()-INTERVAL '1 minute'",
-  )
-  const limited = await post('sms-send', {}, d)
-  expect(limited.status).toBe(429)
-  expect((await limited.json()).code).toBe('SMS_SEND_LIMIT')
-})
-
-it('reports provider and delivery failures distinctly, never sends when switched off, and fails closed without an active grant', async () => {
-  await enrollSms()
-  const login = await passwordLogin()
-  twilio.failNext = { status: 400, code: 60410 }
-  const blocked = await post('sms-send', {}, login)
-  expect(blocked.status).toBe(403)
-  expect((await blocked.json()).code).toBe('SMS_DESTINATION_BLOCKED')
-  twilio.failNext = 'network'
-  const offline = await post('sms-send', {}, login)
-  expect(offline.status).toBe(502)
-  expect((await offline.json()).code).toBe('SMS_PROVIDER_UNREACHABLE')
-  twilio.failNext = { status: 401, code: 20003 }
-  expect((await (await post('sms-send', {}, login)).json()).code).toBe(
-    'SMS_PROVIDER_CONFIGURATION',
-  )
-  const audits = (
-    await database.query<any>(
-      "SELECT * FROM platform_audit WHERE outcome='provider_rejected'",
-    )
-  ).rows
-  expect(audits.length).toBeGreaterThanOrEqual(2)
-  expect(JSON.stringify(audits)).not.toContain('fixture-secret-value')
-  expect(
-    (
-      await database.query<any>(
-        'SELECT sms_verification_sid FROM platform_sessions WHERE token_hash=$1',
-        [hash(login)],
-      )
-    ).rows[0].sms_verification_sid,
-  ).toBeNull()
-  // Switched off: no provider call, no bypass.
-  const calls = twilio.sends
-  runtime.env.ADMIN_SMS_ENABLED = 'false'
-  const off = await post('sms-send', {}, login)
-  expect(off.status).toBe(503)
-  expect((await off.json()).code).toBe('SMS_UNAVAILABLE')
-  expect(twilio.sends).toBe(calls)
-  runtime.env.ADMIN_SMS_ENABLED = 'true'
-  await post('sms-send', {}, login)
-  // Rotating the grant epoch revokes every outstanding session for the account.
-  await database.query(
-    "UPDATE platform_admins SET epoch=epoch+1 WHERE identity_id='platform-owner'",
-  )
-  expect((await post('sms-verify', { code: latestCode() }, login)).status).toBe(
-    401,
-  )
-  expect(
-    (
-      await database.query(
-        'SELECT * FROM platform_sessions WHERE mfa_at IS NOT NULL AND token_hash<>$1',
-        [hash(token)],
-      )
-    ).rows,
-  ).toHaveLength(0)
-})
-
-it('keeps the existing phone passkey working after SMS enrollment and requires it to remove SMS', async () => {
-  const authorize = await enrollSms()
-  await database.query('UPDATE platform_sessions SET mfa_at=NULL')
-  const signedIn = await authorize()
-  expect((await signedIn.json()).stage).toBe('authenticated')
-  const fresh = /__Host-cp_admin=([^;]+)/.exec(
-    signedIn.headers.get('set-cookie')!,
-  )![1]
-  expect(
-    (
-      await handler(
-        request('section=overview', undefined, { token: fresh }),
-        context,
-      )
-    ).status,
-  ).toBe(200)
-  await database.query(
-    'UPDATE platform_sessions SET token_hash=$1 WHERE token_hash=$2',
-    [hash(token), hash(fresh)],
-  )
-  const removed = await authorize('sms-remove')
-  expect((await removed.json()).stage).toBe('sms_removed')
-  expect(
-    (await database.query('SELECT * FROM platform_sms')).rows,
-  ).toHaveLength(0)
-  expect(
-    (await database.query('SELECT * FROM platform_credentials')).rows,
-  ).toHaveLength(1)
-})
-
-it('caps texts per destination, account and source across sign-ins to prevent cost exhaustion', async () => {
-  await enrollSms()
-  let accepted = 0
-  let limited: Response | null = null
-  for (let i = 0; i < 8 && !limited; i++) {
-    // Isolate the SMS caps from the separate password-attempt limits.
-    await database.query('DELETE FROM platform_limits WHERE key=ANY($1)', [
-      [
-        hash('login-account:platform-owner@example.invalid'),
-        hash('login-ip:' + context.ip),
-      ],
-    ])
-    const login = await passwordLogin()
-    const response = await post('sms-send', {}, login)
-    if (response.status === 200) accepted++
-    else limited = response
-  }
-  // One enrollment text plus five sign-in texts reach the hourly destination cap.
-  expect(accepted).toBe(5)
-  expect(limited!.status).toBe(429)
-  expect((await limited!.json()).code).toBe('RATE_LIMITED')
-  expect(twilio.sends).toBe(6)
-})
-
-it.each(['platform-agent', 'platform-owner'])(
-  'retires Square connection and setup actions for %s without creating OAuth state',
-  async (identity) => {
-    await session(false, identity)
-    for (const action of [
-      'billing-connect',
-      'billing-oauth-complete',
-      'billing-confirm-connection',
-      'billing-verify',
-      'billing-verify-mappings',
-      'billing-sync-plans',
-    ]) {
-      const response = await handler(
-        request(`action=${action}&environment=production`, {}, { token }),
-        context,
-      )
-      expect(response.status).toBe(404)
-      expect((await response.json()).code).toBe('ACTION_UNAVAILABLE')
-      expect(response.headers.get('set-cookie')).toBeNull()
-    }
-    expect(
-      (await database.query('SELECT * FROM square_billing_oauth_states')).rows,
-    ).toHaveLength(0)
-  },
-)
-
-it('refreshes a previously verified admin session with an enrolled SMS code and rotates the cookie', async () => {
-  await enrollSms()
-  await database.query(
-    "UPDATE platform_sessions SET mfa_at=NOW()-INTERVAL '15 minutes' WHERE token_hash=$1",
-    [hash(token)],
-  )
-  expect((await post('sms-send', {})).status).toBe(200)
-  const denied = await post('sms-verify', { code: '000000' })
-  expect(denied.status).toBe(403)
-  const response = await post('sms-verify', { code: latestCode() })
-  expect(response.status).toBe(200)
-  const rotated = /__Host-cp_admin=([^;]+)/.exec(
-    response.headers.get('set-cookie')!,
-  )![1]
-  expect(rotated).not.toBe(token)
-  const oldSession = await handler(
-    request('action=session', undefined, { token }),
-    context,
-  )
-  expect(oldSession.status).toBe(401)
-  const fresh = await handler(
-    request('action=session', undefined, { token: rotated }),
-    context,
-  )
-  expect((await fresh.json()).mfaMethod).toBe('sms')
-})
-
 it('previews and appends manual access with audit without billing writes, and rejects ordinary callers', async () => {
   const input = {
     businessId: oven,
@@ -2877,7 +1332,9 @@ it('previews and appends manual access with audit without billing writes, and re
       )
     ).status,
   ).toBe(403)
-  await database.query('UPDATE platform_sessions SET mfa_at=NOW()')
+  await database.query(
+    "UPDATE platform_sessions SET verified_at=NOW(),verification_method='totp',mfa_at=NOW()",
+  )
   const previewResponse = await handler(
     request('action=business-access', input, { token }),
     context,
@@ -3168,7 +1625,9 @@ it('records uncertain recovery without claiming a fix and requires fresh MFA bef
       )
     ).rows[0],
   ).toMatchObject({ status: 'proposed' })
-  await database.query('UPDATE platform_sessions SET mfa_at=now()')
+  await database.query(
+    "UPDATE platform_sessions SET verified_at=NOW(),verification_method='totp',mfa_at=NOW()",
+  )
   runtime.recoveryFails = true
   const result = await confirmAssistantAction(inboxRequest(), {
     actionId: proposal.actionId,
@@ -3185,4 +1644,474 @@ it('records uncertain recovery without claiming a fix and requires fresh MFA bef
     ).rows[0],
   ).toMatchObject({ status: 'unverified' })
   runtime.recoveryFails = false
+})
+
+// The old public-key rows remain inert history. No assertion is needed to migrate.
+const freshToken = (response: Response) =>
+  /__Host-cp_admin=([^;]+)/.exec(response.headers.get('set-cookie')!)![1]
+async function action(name: string, body: unknown = {}, value = token) {
+  return handler(request('action=' + name, body, { token: value }), context)
+}
+async function reverify(value = token) {
+  return action('password-verify', { password: 'fixture-password' }, value)
+}
+async function beginAuthenticator() {
+  runtime.env.ADMIN_MFA_ENCRYPTION_KEY = 'ab'.repeat(32)
+  await session(false)
+  const verified = await reverify()
+  expect(verified.status).toBe(200)
+  const value = freshToken(verified)
+  expect((await action('totp-enroll', {}, value)).status).toBe(200)
+  const row = (await database.query<any>('SELECT * FROM platform_totp')).rows[0]
+  return {
+    value,
+    secret: openSecret(row.pending_ciphertext, 'platform-owner'),
+  }
+}
+async function enrollAuthenticator() {
+  const { value, secret } = await beginAuthenticator()
+  const confirmed = await action(
+    'totp-confirm',
+    { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+    value,
+  )
+  expect(confirmed.status).toBe(200)
+  return {
+    value: freshToken(confirmed),
+    secret,
+    codes: (await confirmed.json()).recoveryCodes as string[],
+  }
+}
+
+it.each(['mfa-options', 'mfa-verify'])(
+  'retires %s for every signed-in administrator without preparing a challenge',
+  async (name) => {
+    await session(true)
+    expect((await action(name, { kind: 'registration' })).status).toBe(404)
+    expect(
+      (await database.query<any>('SELECT challenge FROM platform_sessions'))
+        .rows[0].challenge,
+    ).toBeNull()
+  },
+)
+it('verifies an existing passkey-only account with its password, rotates the session and opens billing controls without changing Stripe', async () => {
+  await database.query(
+    "INSERT INTO platform_credentials(id,identity_id,public_key) VALUES('retired-key','platform-owner','inert-public-key')",
+  )
+  await database.query(
+    "UPDATE platform_admins SET enrollment_until=NOW()-INTERVAL '1 year'",
+  )
+  const signedIn = await handler(
+    request('action=login', {
+      email: 'platform-owner@example.invalid',
+      password: 'fixture-password',
+    }),
+    context,
+  )
+  expect(signedIn.status).toBe(200)
+  const initial = freshToken(signedIn)
+  expect(
+    (
+      await action(
+        'stripe',
+        { environment: 'live', operation: 'test' },
+        initial,
+      )
+    ).status,
+  ).toBe(403)
+  const verified = await reverify(initial)
+  expect(verified.status).toBe(200)
+  const next = freshToken(verified)
+  expect(next).not.toBe(initial)
+  expect(
+    (
+      await handler(
+        request('action=session', undefined, { token: initial }),
+        context,
+      )
+    ).status,
+  ).toBe(401)
+  const state = await (
+    await handler(
+      request('action=session', undefined, { token: next }),
+      context,
+    )
+  ).json()
+  expect(state).toMatchObject({
+    verificationCurrent: true,
+    verificationMethod: 'password',
+    totpEnabled: false,
+  })
+  expect(state.credentials).toBeUndefined()
+  const row = (
+    await database.query<any>(
+      'SELECT mfa_at,mfa_method,verified_at,verification_method FROM platform_sessions',
+    )
+  ).rows[0]
+  expect(row).toMatchObject({
+    mfa_at: null,
+    mfa_method: null,
+    verification_method: 'password',
+  })
+  expect(row.verified_at).toBeTruthy()
+  expect(
+    (
+      await handler(
+        request('action=stripe', undefined, { token: next }),
+        context,
+      )
+    ).status,
+  ).toBe(200)
+  // A real request now reaches credential validation, rather than an MFA guard.
+  const invalidSave = await action(
+    'stripe',
+    {
+      environment: 'live',
+      operation: 'save',
+      key: '',
+      signing: '',
+      confirmation: 'SAVE LIVE',
+    },
+    next,
+  )
+  expect(invalidSave.status).toBe(400)
+  expect((await invalidSave.json()).code).not.toBe('ADMIN_REQUIRED')
+  expect(
+    (await database.query('SELECT * FROM stripe_provider_settings')).rows,
+  ).toHaveLength(0)
+  const history = JSON.stringify(
+    (await database.query('SELECT * FROM platform_audit')).rows,
+  )
+  expect(history).toContain('admin_reverification')
+  expect(history).not.toContain('fixture-password')
+  await database.query(
+    "UPDATE platform_sessions SET verified_at=NOW()-INTERVAL '11 minutes'",
+  )
+  expect(
+    (
+      await handler(
+        request('action=stripe', undefined, { token: next }),
+        context,
+      )
+    ).status,
+  ).toBe(403)
+})
+it('rejects wrong passwords, wrong identities, forged flags, expired sessions and revoked grants for reverification', async () => {
+  const { login } = await import('@netlify/identity')
+  await session(false)
+  vi.mocked(login).mockRejectedValueOnce(new Error('private provider details'))
+  expect((await reverify()).status).toBe(401)
+  expect(
+    (
+      await action('password-verify', {
+        password: 'fixture-password',
+        verified: true,
+      })
+    ).status,
+  ).toBe(400)
+  runtime.loginId = 'platform-agent'
+  expect((await reverify()).status).toBe(403)
+  runtime.loginId = 'platform-owner'
+  const state = (
+    await database.query<any>('SELECT verified_at FROM platform_sessions')
+  ).rows[0]
+  expect(state.verified_at).toBeNull()
+  await database.query(
+    "UPDATE platform_admins SET role='owner' WHERE identity_id='platform-agent'",
+  )
+  await database.query(
+    "UPDATE platform_admins SET enabled=false WHERE identity_id='platform-owner'",
+  )
+  expect((await reverify()).status).toBe(401)
+  await database.query(
+    "UPDATE platform_admins SET enabled=true WHERE identity_id='platform-owner'",
+  )
+  await database.query(
+    "UPDATE platform_sessions SET expires_at=NOW()-INTERVAL '1 minute'",
+  )
+  expect((await reverify()).status).toBe(401)
+})
+it('enforces origin, confirmation and durable account rate limits on password reverification', async () => {
+  const { login } = await import('@netlify/identity')
+  await session(false)
+  const blocked = await handler(
+    request(
+      'action=password-verify',
+      { password: 'fixture-password' },
+      { token, origin: 'https://other.invalid' },
+    ),
+    context,
+  )
+  expect(blocked.status).toBe(403)
+  vi.mocked(login).mockRejectedValue(new Error('Wrong password'))
+  try {
+    for (let n = 0; n < 5; n++) expect((await reverify()).status).toBe(401)
+    expect((await reverify()).status).toBe(429)
+  } finally {
+    vi.mocked(login).mockImplementation(
+      async () => runtime.identities[runtime.loginId],
+    )
+  }
+})
+it('enrolls and confirms an authenticator after password reverification without an old key or enrollment deadline', async () => {
+  const { value, secret } = await beginAuthenticator()
+  const pending = (await database.query<any>('SELECT * FROM platform_totp'))
+    .rows[0]
+  expect(pending.enabled_at).toBeNull()
+  expect(pending.secret_ciphertext).toBeNull()
+  await session(false, 'platform-owner', 'S'.repeat(43))
+  expect(
+    (
+      await action(
+        'totp-confirm',
+        { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+        'S'.repeat(43),
+      )
+    ).status,
+  ).toBe(403)
+  const confirmed = await action(
+    'totp-confirm',
+    { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+    value,
+  )
+  expect(confirmed.status).toBe(200)
+  const codes = (await confirmed.json()).recoveryCodes
+  expect(codes).toHaveLength(10)
+  expect(
+    (
+      await handler(
+        request('action=session', undefined, { token: 'S'.repeat(43) }),
+        context,
+      )
+    ).status,
+  ).toBe(401)
+  const stored = (await database.query<any>('SELECT * FROM platform_totp'))
+    .rows[0]
+  expect(stored.enabled_at).toBeTruthy()
+  expect(stored.pending_ciphertext).toBeNull()
+  expect(
+    JSON.stringify(
+      (await database.query('SELECT * FROM platform_recovery_codes')).rows,
+    ),
+  ).not.toContain(codes[0])
+  const fresh = freshToken(confirmed)
+  // Confirmation already consumes the time step. Replaying it cannot verify again.
+  expect(
+    (
+      await action(
+        'totp-verify',
+        { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+        fresh,
+      )
+    ).status,
+  ).toBe(403)
+  expect((await reverify(fresh)).status).toBe(403)
+})
+it('keeps enrolled authenticator and recovery verification usable, rotates sessions and atomically rejects replay', async () => {
+  const { secret, codes } = await enrollAuthenticator()
+  await database.query('DELETE FROM platform_sessions')
+  await database.query('UPDATE platform_totp SET last_step=-1')
+  await session(false)
+  const verified = await action('totp-verify', {
+    code: totpCode(secret, Math.floor(Date.now() / 30000)),
+  })
+  expect(verified.status).toBe(200)
+  const fresh = freshToken(verified)
+  expect(
+    (
+      await handler(
+        request('action=stripe', undefined, { token: fresh }),
+        context,
+      )
+    ).status,
+  ).toBe(200)
+  await session(false)
+  expect(
+    (
+      await action('totp-verify', {
+        code: totpCode(secret, Math.floor(Date.now() / 30000)),
+      })
+    ).status,
+  ).toBe(403)
+  await session(false, 'platform-owner', 'S'.repeat(43))
+  const recovered = await Promise.all(
+    [token, 'S'.repeat(43)].map((value) =>
+      action('totp-recover', { code: codes[0] }, value),
+    ),
+  )
+  expect(recovered.map((r) => r.status).sort()).toEqual([200, 403])
+  const recoveredToken = freshToken(recovered.find((r) => r.status === 200)!)
+  expect((await action('logout', {}, recoveredToken)).status).toBe(200)
+  expect(
+    (
+      await handler(
+        request('action=session', undefined, { token: recoveredToken }),
+        context,
+      )
+    ).status,
+  ).toBe(401)
+})
+it('requires actual recent verification for authenticator removal, recovery replacement and enrollment', async () => {
+  await session(false)
+  for (const name of ['totp-enroll', 'totp-remove', 'totp-recovery'])
+    expect((await action(name)).status).toBe(403)
+  await database.query('DELETE FROM platform_sessions')
+  const { value, codes } = await enrollAuthenticator()
+  await database.query(
+    "UPDATE platform_sessions SET verified_at=NOW()-INTERVAL '11 minutes'",
+  )
+  expect((await action('totp-remove', {}, value)).status).toBe(403)
+  const verified = await action('totp-recover', { code: codes[0] }, value)
+  const active = freshToken(verified)
+  const replaced = await action('totp-recovery', {}, active)
+  expect(replaced.status).toBe(200)
+  expect((await replaced.json()).recoveryCodes).not.toContain(codes[0])
+  await session(false, 'platform-owner', 'S'.repeat(43))
+  expect((await action('totp-remove', {}, active)).status).toBe(200)
+  expect(
+    (await database.query('SELECT * FROM platform_totp')).rows,
+  ).toHaveLength(0)
+  expect(
+    (await database.query('SELECT * FROM platform_recovery_codes')).rows,
+  ).toHaveLength(0)
+  expect(
+    (
+      await handler(
+        request('action=session', undefined, { token: 'S'.repeat(43) }),
+        context,
+      )
+    ).status,
+  ).toBe(401)
+})
+it('rejects expired authenticator setup and cancels it without activating a factor', async () => {
+  const { value, secret } = await beginAuthenticator()
+  await database.query(
+    "UPDATE platform_totp SET pending_until=NOW()-INTERVAL '1 minute'",
+  )
+  expect(
+    (
+      await action(
+        'totp-confirm',
+        { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+        value,
+      )
+    ).status,
+  ).toBe(403)
+  expect((await action('totp-cancel', {}, value)).status).toBe(200)
+  expect(
+    (
+      await database.query<any>(
+        'SELECT enabled_at,pending_ciphertext FROM platform_totp',
+      )
+    ).rows[0],
+  ).toEqual({ enabled_at: null, pending_ciphertext: null })
+})
+it('rolls back authenticator activation if the mandatory audit write fails', async () => {
+  const { value, secret } = await beginAuthenticator()
+  await database.exec(
+    "CREATE FUNCTION reject_totp_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='totp_enrolled' THEN RAISE EXCEPTION 'audit unavailable'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_totp_audit BEFORE INSERT ON platform_audit FOR EACH ROW EXECUTE FUNCTION reject_totp_audit();",
+  )
+  try {
+    expect(
+      (
+        await action(
+          'totp-confirm',
+          { code: totpCode(secret, Math.floor(Date.now() / 30000)) },
+          value,
+        )
+      ).status,
+    ).toBe(503)
+    expect(
+      (await database.query<any>('SELECT enabled_at FROM platform_totp'))
+        .rows[0].enabled_at,
+    ).toBeNull()
+    expect(
+      (await database.query('SELECT * FROM platform_recovery_codes')).rows,
+    ).toHaveLength(0)
+  } finally {
+    await database.exec(
+      'DROP TRIGGER reject_totp_audit ON platform_audit;DROP FUNCTION reject_totp_audit()',
+    )
+  }
+})
+it('saves disposable test credentials only after actual verification, encryption and confirmation requirements are met', async () => {
+  const { sealStripe, openStripe } =
+    await import('../../netlify/lib/stripe-provider')
+  runtime.env.STRIPE_BILLING_ENCRYPTION_KEY = 'ab'.repeat(32)
+  const liveCiphertext = sealStripe(
+    { key: 'sk_live_disposable_fixture_key', signing: 'whsec_disposablelive' },
+    'live',
+  )
+  await database.query(
+    "INSERT INTO stripe_provider_settings(environment,ciphertext,account_id,checkout_enabled,configuration) VALUES('live',$1,'acct_existing_fixture',false,$2)",
+    [
+      liveCiphertext,
+      JSON.stringify({
+        mappings: { 'cottage-kitchen': { price: 'price_existing_fixture' } },
+        launchDisabled: true,
+      }),
+    ],
+  )
+  const before = (
+    await database.query(
+      "SELECT * FROM stripe_provider_settings WHERE environment='live'",
+    )
+  ).rows
+  await session(false)
+  const input = {
+    environment: 'test',
+    operation: 'save',
+    key: 'sk_test_disposable_fixture_key',
+    signing: 'whsec_disposabletest',
+    confirmation: 'SAVE TEST',
+  }
+  expect((await action('stripe', input)).status).toBe(403)
+  const verified = await reverify()
+  const value = freshToken(verified)
+  expect(
+    (await action('stripe', { ...input, confirmation: '' }, value)).status,
+  ).toBe(409)
+  const saved = await action('stripe', input, value)
+  expect(saved.status).toBe(200)
+  const stored = (
+    await database.query<any>(
+      "SELECT * FROM stripe_provider_settings WHERE environment='test'",
+    )
+  ).rows[0]
+  expect(stored.checkout_enabled).toBe(false)
+  expect(openStripe(stored.ciphertext, 'test')).toEqual({
+    key: input.key,
+    signing: input.signing,
+  })
+  expect(
+    (
+      await database.query(
+        "SELECT * FROM stripe_provider_settings WHERE environment='live'",
+      )
+    ).rows,
+  ).toEqual(before)
+  const body = await saved.text()
+  expect(body).not.toContain(input.key)
+  expect(body).not.toContain(input.signing)
+})
+it('keeps single-use recovery codes available when authenticator encryption is temporarily unavailable', async () => {
+  const { value, codes } = await enrollAuthenticator()
+  delete runtime.env.ADMIN_MFA_ENCRYPTION_KEY
+  const rejected = await reverify(value)
+  expect(rejected.status).toBe(403)
+  expect((await rejected.json()).code).toBe('CODE_REQUIRED')
+  const recovered = await action('totp-recover', { code: codes[0] }, value)
+  expect(recovered.status).toBe(200)
+  const state = await (
+    await handler(
+      request('action=session', undefined, { token: freshToken(recovered) }),
+      context,
+    )
+  ).json()
+  expect(state).toMatchObject({
+    totpEnabled: true,
+    totpAvailable: false,
+    verificationCurrent: true,
+    verificationMethod: 'recovery',
+  })
 })

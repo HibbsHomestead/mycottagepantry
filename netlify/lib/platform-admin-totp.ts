@@ -9,6 +9,7 @@ import {
 import { z } from 'zod'
 import {
   AdminError,
+  hasRecentAdminVerification,
   audit,
   hash,
   type AdminClient,
@@ -21,7 +22,7 @@ function encryptionKey() {
     throw new AdminError(
       503,
       'MFA_SETUP_UNAVAILABLE',
-      'Authenticator setup is unavailable. Your existing passkey still works.',
+      'Authenticator setup is unavailable. Password confirmation remains available for accounts without an enrolled authenticator.',
     )
   return Buffer.from(value, 'hex')
 }
@@ -120,19 +121,19 @@ async function recoveryCodes(c: AdminClient, identity: string) {
     )
   return codes
 }
-/** Called only after a fresh existing-passkey assertion for the bound purpose. */
-export async function afterTotpPasskey(
+/** Requires recent server-verified administrator authentication. */
+export async function afterTotpVerification(
   c: AdminClient,
   session: AdminMetadata,
   purpose: string,
   reference: string,
 ) {
   const identity = session.identity_id
-  if (!session.mfa_at)
+  if (!hasRecentAdminVerification(session))
     throw new AdminError(
       403,
       'MFA_REQUIRED',
-      'Use your authenticated phone admin session for MFA settings.',
+      'Verify your administrator authentication before changing security settings.',
     )
   const row = (
     await c.query(
@@ -145,7 +146,7 @@ export async function afterTotpPasskey(
       throw new AdminError(
         409,
         'ALREADY_ENROLLED',
-        'Authenticator codes are already enabled. Remove them with your existing passkey before replacing them.',
+        'Authenticator codes are already enabled. Verify your enrolled authenticator or recovery code before removing them.',
       )
     const secret = randomBytes(20)
     await c.query(
@@ -176,7 +177,7 @@ export async function afterTotpPasskey(
     )
   if (purpose === 'totp-remove') {
     await c.query('DELETE FROM platform_totp WHERE identity_id=$1', [identity])
-    // Revoke other sessions without invalidating this freshly passkey-verified phone.
+    // Revoke other sessions without invalidating this freshly verified session.
     await c.query(
       'DELETE FROM platform_sessions WHERE identity_id=$1 AND token_hash<>$2',
       [identity, session.token_hash],
@@ -204,7 +205,7 @@ export async function totpAction(
 ) {
   const identity = session.identity_id
   if (action === 'totp-cancel') {
-    if (!session.mfa_at)
+    if (!hasRecentAdminVerification(session))
       throw new AdminError(
         403,
         'MFA_REQUIRED',
@@ -237,7 +238,7 @@ export async function totpAction(
   let valid = false
   if (action === 'totp-confirm') {
     if (
-      !session.mfa_at ||
+      !hasRecentAdminVerification(session) ||
       !row?.pending_ciphertext ||
       row.pending_session !== session.token_hash ||
       Date.parse(row.pending_until) <= Date.now()
@@ -245,7 +246,7 @@ export async function totpAction(
       throw new AdminError(
         403,
         'SETUP_EXPIRED',
-        'Authenticator setup expired or belongs to another session. Verify your phone passkey to start again.',
+        'Authenticator setup expired or belongs to another session. Confirm your administrator authentication to start again.',
       )
     const step = acceptedStep(
       openSecret(row.pending_ciphertext, identity),
@@ -256,6 +257,10 @@ export async function totpAction(
       await c.query(
         'UPDATE platform_totp SET secret_ciphertext=pending_ciphertext,enabled_at=NOW(),last_step=$2,pending_ciphertext=NULL,pending_session=NULL,pending_until=NULL WHERE identity_id=$1',
         [identity, step],
+      )
+      await c.query(
+        'DELETE FROM platform_sessions WHERE identity_id=$1 AND token_hash<>$2',
+        [identity, session.token_hash],
       )
       const codes = await recoveryCodes(c, identity)
       await audit(c, identity, 'totp_enrolled', identity, 'success', reference)

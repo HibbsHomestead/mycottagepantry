@@ -1,15 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import {
-  startAuthentication,
-  type PublicKeyCredentialRequestOptionsJSON,
-} from '@simplewebauthn/browser'
-
 type Request = (query: string, body?: unknown) => Promise<any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Sent = { expiresAt: string; resendAt: string; resendsRemaining?: number }
 const codeError = (e: unknown) => (e as { code?: string })?.code || ''
 const digits = (value: string) => value.replace(/\D/g, '').slice(0, 10)
 const time = (value: string) =>
-  new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  new Date(value).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(() => Date.now())
@@ -22,19 +20,18 @@ function useNow(active: boolean) {
 }
 
 /**
- * Second factor after a verified password. Never calls WebAuthn: selecting
- * text-message sign-in cannot open a USB/security-key prompt.
+ * Second factor after a verified password. Uses only explicitly requested code delivery.
  */
 export function AdminSmsSignIn({
   masked,
   request,
   onSuccess,
-  onUsePasskey,
+  onUseAnotherMethod,
 }: {
   masked: string
   request: Request
   onSuccess: () => void
-  onUsePasskey: () => void
+  onUseAnotherMethod: () => void
 }) {
   const [sent, setSent] = useState<Sent | null>(null)
   const [code, setCode] = useState('')
@@ -88,8 +85,7 @@ export function AdminSmsSignIn({
       <p>
         Your password is verified. We text a code only to the phone already
         enrolled from your authenticated admin session:{' '}
-        <strong>{masked}</strong>. No USB key or passkey prompt is used for this
-        method.
+        <strong>{masked}</strong>. Codes are sent only when requested.
       </p>
       {status && <p role="status">{status}</p>}
       {error && (
@@ -146,102 +142,64 @@ export function AdminSmsSignIn({
       <button
         type="button"
         className="admin-text-button"
-        onClick={onUsePasskey}
+        onClick={onUseAnotherMethod}
       >
-        Use a passkey instead
+        Use another verification method
       </button>
       <details>
         <summary>Text not arriving or phone lost?</summary>
         <p>
           Wait a minute and use Resend. Check that the phone has signal and can
           receive texts from short codes. If texts keep failing, use your
-          passkey or enrolled authenticator / recovery code instead. Failed
-          texts never skip verification. If you lost the phone and cannot use
-          another method, contact the platform owner for audited,
+          password confirmation or enrolled authenticator / recovery code
+          instead. Failed texts never skip verification. If you lost the phone
+          and cannot use another method, contact the platform owner for audited,
           identity-verified recovery; the number can only be replaced from an
-          authenticated session with a fresh passkey check.
+          authenticated session with recent verification.
         </p>
       </details>
     </section>
   )
 }
 
-type Prepared = {
-  options: PublicKeyCredentialRequestOptionsJSON
-  expiresAt: string
-  purpose: 'sms-enroll' | 'sms-remove'
-}
-/** Phone enrollment/change/removal: always behind a fresh existing-passkey assertion. */
 export function AdminSmsSettings({
   enabled,
   masked,
   available,
-  method,
   request,
   onChange,
 }: {
   enabled: boolean
   masked: string | null
   available: boolean
-  method: string | null
   request: Request
   onChange: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [prepared, setPrepared] = useState<Prepared | null>(null)
   const [setup, setSetup] = useState(false)
   const [phone, setPhone] = useState('')
   const [sent, setSent] = useState<(Sent & { masked: string }) | null>(null)
   const [code, setCode] = useState('')
   const now = useNow(!!sent)
   const wait = sent ? Math.ceil((Date.parse(sent.resendAt) - now) / 1000) : 0
-  async function prepare(purpose: Prepared['purpose']) {
+  async function prepare(purpose: 'sms-enroll' | 'sms-remove') {
     if (busy) return
     setBusy(true)
     setMessage('')
     try {
-      const result = await request('action=mfa-options', {
-        kind: 'authentication',
-        method: 'device',
-        purpose,
-      })
-      setPrepared({ ...result, purpose })
+      const result = await request('action=' + purpose, {})
+      if (result.stage === 'sms_setup') setSetup(true)
+      else if (result.stage === 'sms_removed') {
+        setMessage(
+          'Text-message sign-in removed. Other administrator sessions were signed out.',
+        )
+        onChange()
+      }
     } catch (e) {
       setMessage((e as Error).message)
     } finally {
       setBusy(false)
-    }
-  }
-  async function verifyPasskey() {
-    if (busy || !prepared) return
-    if (Date.parse(prepared.expiresAt) <= Date.now()) {
-      setPrepared(null)
-      setMessage('Verification expired. Prepare a fresh passkey request.')
-      return
-    }
-    setBusy(true)
-    setMessage('')
-    try {
-      // Direct gesture: no network await before the existing-passkey ceremony.
-      const assertion = await startAuthentication({
-        optionsJSON: prepared.options,
-      })
-      const result = await request('action=mfa-verify', assertion)
-      if (result.stage === 'sms_setup') setSetup(true)
-      else if (result.stage === 'sms_removed') {
-        setMessage(
-          'Text-message sign-in removed. Your passkey is preserved. Other admin sessions were signed out.',
-        )
-        onChange()
-      } else throw new Error('Fresh passkey verification did not complete.')
-    } catch {
-      setMessage(
-        'Passkey verification was canceled or failed. Nothing changed. Prepare verification again.',
-      )
-    } finally {
-      setBusy(false)
-      setPrepared(null)
     }
   }
   async function sendCode(event?: FormEvent) {
@@ -258,7 +216,7 @@ export function AdminSmsSettings({
       )
     } catch (e) {
       setMessage((e as Error).message)
-      if (codeError(e) === 'FRESH_PASSKEY_REQUIRED') reset()
+      if (codeError(e) === 'RECENT_AUTH_REQUIRED') reset()
     } finally {
       setBusy(false)
     }
@@ -282,7 +240,7 @@ export function AdminSmsSettings({
     } catch (e) {
       setMessage((e as Error).message)
       setCode('')
-      if (codeError(e) === 'FRESH_PASSKEY_REQUIRED') reset()
+      if (codeError(e) === 'RECENT_AUTH_REQUIRED') reset()
     } finally {
       setBusy(false)
     }
@@ -292,7 +250,6 @@ export function AdminSmsSettings({
     setSent(null)
     setPhone('')
     setCode('')
-    setPrepared(null)
   }
   async function cancel() {
     if (busy) return
@@ -311,14 +268,9 @@ export function AdminSmsSettings({
     <details className="admin-mfa-settings">
       <summary>Text-message sign-in</summary>
       <p>
-        Status: {enabled ? `enabled for ${masked}` : 'not enrolled'}. Your
-        passkey is always kept. Text-message codes are weaker than passkeys;
-        adding, changing or removing the phone requires a fresh check with your
-        existing passkey
-        {method === 'sms'
-          ? ', so this text-message session cannot change it by itself'
-          : ''}
-        . Only US and Canadian (+1) mobile numbers are supported.
+        Status: {enabled ? `enabled for ${masked}` : 'not enrolled'}. Adding,
+        changing or removing a phone requires recent administrator verification.
+        Only US and Canadian (+1) mobile numbers are supported.
       </p>
       {message && <p role="status">{message}</p>}
       {sent ? (
@@ -367,34 +319,20 @@ export function AdminSmsSettings({
           <small>
             We text a code to this number. It becomes your sign-in phone only
             after you enter that code here. Setup expires 10 minutes after your
-            passkey check.
+            administrator verification.
           </small>
           <button disabled={busy}>Send verification text</button>
           <button type="button" disabled={busy} onClick={cancel}>
             Cancel setup
           </button>
         </form>
-      ) : prepared ? (
-        <div>
-          <p>
-            {prepared.purpose === 'sms-remove'
-              ? 'Remove text-message sign-in; keep the passkey. Other admin sessions will be signed out.'
-              : 'Authorize phone setup using your existing passkey.'}
-          </p>
-          <button disabled={busy} onClick={verifyPasskey}>
-            {busy ? 'Verifying…' : 'Verify existing passkey'}
-          </button>
-          <button disabled={busy} onClick={() => setPrepared(null)}>
-            Cancel
-          </button>
-        </div>
       ) : (
         <div>
           {!available && (
             <p>
               Text-message verification is not switched on yet (the SMS provider
-              has not been configured). No texts can be sent. Your passkey still
-              works.
+              has not been configured). No texts can be sent. Password
+              confirmation remains available.
             </p>
           )}
           <button
