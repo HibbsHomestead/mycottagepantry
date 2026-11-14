@@ -354,7 +354,12 @@ export function CatalogLookup({
         ),
       )}
       {data?.fallbackUrl && (
-        <a href={data.fallbackUrl} target="_blank" rel="noreferrer">
+        <a
+          className="catalog-web-search"
+          href={data.fallbackUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
           Open exact-barcode web search
         </a>
       )}
@@ -366,7 +371,7 @@ export function CatalogLookup({
           packageSetup={packageSetup}
           source={
             choice.status === 'external'
-              ? 'USDA product data — check the package'
+              ? choice.reviewScope
               : 'Catalog reference — ' + choice.reviewScope
           }
           apply={(patch, fields) =>

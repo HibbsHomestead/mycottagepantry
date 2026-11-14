@@ -1,3 +1,4 @@
+import { openFoodFactsProduct } from './open-food-facts'
 import {
   ProductImportFailure,
   diagnosticUrl,
@@ -449,6 +450,24 @@ export async function fetchProductDetails(url: string) {
   const requestedAt = new Date().toISOString()
   const requestedUrl = productUrl(url)
   const input = new URL(normalizeProductUrl(requestedUrl))
+  if (input.hostname === 'world.openfoodfacts.org') {
+    const code = input.pathname.match(
+      /^\/product\/(\d{8}|\d{12,14})(?:\/|$)/,
+    )?.[1]
+    if (!code)
+      throw new Error(
+        'Choose an Open Food Facts product page with a complete barcode.',
+      )
+    const product = await openFoodFactsProduct(
+      code,
+      code.length === 8 ? 'ean_8' : undefined,
+    )
+    if (!product)
+      throw new Error(
+        'No exact public product record was found. Your draft is unchanged.',
+      )
+    return productImportResponse.parse({ products: [product] }).products
+  }
   const failure = (
     message: string,
     source: 'retailer' | 'network',

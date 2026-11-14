@@ -6,6 +6,9 @@ import { randomUUID } from 'node:crypto'
 import sharp from 'sharp'
 const runtime = vi.hoisted(() => ({
   session: 'maker-a' as string | null,
+  providerFails: false,
+  providerHook: null as null | (() => Promise<void>),
+  denyLegacy: false,
   identities: {} as Record<string, any>,
   pool: null as any,
   files: new Map<string, ArrayBuffer>(),
@@ -29,7 +32,21 @@ vi.mock('@netlify/database', () => ({
 // Support workflow unit tests assume an already verified MFA middleware result.
 // Real origin/session/MFA denial is covered by platform-admin.test.ts.
 vi.mock('../../netlify/lib/platform-admin-legacy', () => ({
-  requireLegacyAdmin: vi.fn(async () => {}),
+  requireLegacyAdmin: vi.fn(async () => {
+    if (runtime.denyLegacy) throw new Error('MFA required')
+  }),
+}))
+vi.mock('../../netlify/lib/support-ai-provider', () => ({
+  supportAnswer: vi.fn(async () => {
+    if (runtime.providerHook) await runtime.providerHook()
+    if (runtime.providerFails) throw new Error('private provider error')
+    return {
+      text: 'AI: Review Receive Stock before confirming.',
+      articles: ['inventory'],
+      inputTokens: 50,
+      outputTokens: 20,
+    }
+  }),
 }))
 vi.mock('@netlify/blobs', () => ({
   getStore: () => ({
@@ -40,6 +57,8 @@ vi.mock('@netlify/blobs', () => ({
   }),
 }))
 import handler from '../../netlify/lib/support-handler'
+import { supportAnswer } from '../../netlify/lib/support-ai-provider'
+import cleanupAi from '../../netlify/functions/support-ai-retention.mts'
 import {
   dispatchSupportMail,
   supportDeliveryWebhook,
@@ -111,7 +130,13 @@ beforeAll(async () => {
     ),
   )
   await db.exec(
-    'GRANT SELECT,INSERT,UPDATE ON ALL TABLES IN SCHEMA public TO support_test; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO support_test;',
+    await readFile(
+      'netlify/database/migrations/20261205010000_support_ai/migration.sql',
+      'utf8',
+    ),
+  )
+  await db.exec(
+    'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO support_test; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO support_test;',
   )
   // Serialize pool connections over the embedded engine. Production uses PostgreSQL row/advisory locks.
   let tail = Promise.resolve()
@@ -149,7 +174,21 @@ beforeEach(async () => {
   await db.exec(
     'TRUNCATE support_tickets,support_messages,support_attachments,support_outbox,support_delivery_events,support_audit CASCADE; UPDATE support_settings SET recipient=NULL,pending_recipient=NULL,recipient_verified_at=NULL,from_address=NULL,reply_to=NULL,enabled=false,version=1;',
   )
+  await db.exec('TRUNCATE support_ai_conversations,support_ai_usage;')
+  await db.query("UPDATE support_ai_policy SET data=$1 WHERE id='platform'", [
+    JSON.stringify({
+      enabled: true,
+      userDaily: 20,
+      businessDaily: 60,
+      globalDaily: 400,
+      cooldownSeconds: 10,
+      retentionDays: 30,
+    }),
+  ])
   runtime.session = 'maker-a'
+  runtime.providerFails = false
+  runtime.providerHook = null
+  runtime.denyLegacy = false
   runtime.files.clear()
   runtime.env = {}
   runtime.queries = []
@@ -746,4 +785,317 @@ it('handles non-JSON provider errors and suppresses future notices after a verif
       )
     ).rows[0].status,
   ).toBe('suppressed')
+})
+
+function ai(data: any, staff = false) {
+  return handler(
+    new Request(
+      origin + '/api/support?ai=1&view=' + (staff ? 'staff' : 'customer'),
+      {
+        method: 'POST',
+        headers: {
+          Origin: origin,
+          'Content-Type': 'application/json',
+          'x-cp-admin': '1',
+        },
+        body: JSON.stringify(data),
+      },
+    ),
+  )
+}
+it('stores private AI conversations, survives reload, escalates a reviewed summary, and deletes only the attachment', async () => {
+  const response = await ai({
+    action: 'chat',
+    message: 'How do I receive inventory?',
+    consent: true,
+    diagnostics: {
+      appVersion: 'a'.repeat(64),
+      page: '/oven#Inventory',
+      timestamp: new Date().toISOString(),
+      password: 'never attach',
+      error: { message: 'customer private inventory', stack: 'token=secret' },
+    },
+  })
+  expect(response.status, runtime.errors.join(';')).toBe(200)
+  const { conversation } = await response.json()
+  expect(conversation.messages).toHaveLength(2)
+  expect(JSON.stringify(conversation.diagnostics)).not.toMatch(
+    /never attach|private inventory|token=secret/,
+  )
+  expect((await (await get('ai=1')).json()).conversations[0].id).toBe(
+    conversation.id,
+  )
+  runtime.session = 'maker-b'
+  expect((await (await get('ai=1')).json()).conversations).toHaveLength(0)
+  expect(
+    (
+      await ai({
+        action: 'chat',
+        conversationId: conversation.id,
+        message: 'inventory',
+        consent: true,
+      })
+    ).status,
+  ).toBe(404)
+  expect(
+    (await ai({ action: 'delete', conversationId: conversation.id })).status,
+  ).toBe(404)
+  runtime.session = 'maker-a'
+  const escalated = await ai({
+    action: 'escalate',
+    conversationId: conversation.id,
+    summary: 'Please review my receiving question.',
+  })
+  expect(escalated.status, runtime.errors.join(';')).toBe(200)
+  const { ticketId } = await escalated.json()
+  const detail = await (await get('ticket=' + ticketId)).json()
+  expect(detail.aiConversation.messages).toHaveLength(2)
+  expect(detail.messages[0].body).toBe('Please review my receiving question.')
+  expect(
+    (
+      await ai({
+        action: 'escalate',
+        conversationId: conversation.id,
+        summary: 'Please review my receiving question.',
+      })
+    ).status,
+  ).toBe(200)
+  runtime.session = 'support-owner'
+  expect((await (await get('ai=1&view=staff')).json()).usage[0].requests).toBe(
+    1,
+  )
+  const staffDetail = await (await get('view=staff&ticket=' + ticketId)).json()
+  expect(staffDetail.aiConversation.id).toBe(conversation.id)
+  runtime.session = 'maker-a'
+  expect(
+    (await ai({ action: 'delete', conversationId: conversation.id })).status,
+  ).toBe(200)
+  expect(
+    (await (await get('ticket=' + ticketId)).json()).aiConversation,
+  ).toBeNull()
+  expect((await db.query('SELECT * FROM support_tickets')).rows).toHaveLength(1)
+})
+it('preserves a conversation on provider failure, counts the attempt, and limits immediate retries', async () => {
+  runtime.providerFails = true
+  const result = await ai({
+    action: 'chat',
+    message: 'Inventory fails',
+    consent: true,
+  })
+  expect(result.status, runtime.errors.join(';')).toBe(200)
+  const data = await result.json()
+  expect(data.providerFailed).toBe(true)
+  expect(data.conversation.messages[1].text).toContain('cannot determine')
+  expect(JSON.stringify(data)).not.toContain('private provider error')
+  expect(
+    (await db.query<{ status: string }>('SELECT status FROM support_ai_usage'))
+      .rows[0].status,
+  ).toBe('failed')
+  expect(
+    (await ai({ action: 'chat', message: 'Inventory again', consent: true }))
+      .status,
+  ).toBe(429)
+  expect((await db.query('SELECT * FROM support_ai_usage')).rows).toHaveLength(
+    1,
+  )
+})
+it('rejects unconsented input, forged business IDs and non-MFA AI administration', async () => {
+  expect((await ai({ action: 'chat', message: 'Inventory' })).status).toBe(400)
+  expect(
+    (
+      await ai({
+        action: 'chat',
+        message: 'Inventory',
+        consent: true,
+        businessId: business,
+      })
+    ).status,
+  ).toBe(400)
+  const policy = {
+    enabled: false,
+    userDaily: 1,
+    businessDaily: 1,
+    globalDaily: 1,
+    cooldownSeconds: 60,
+    retentionDays: 1,
+  }
+  runtime.session = 'support-owner'
+  expect((await ai({ action: 'policy', policy })).status).toBe(403)
+  runtime.denyLegacy = true
+  expect(
+    (await ai({ action: 'policy', policy }, true)).status,
+  ).toBeGreaterThanOrEqual(400)
+  runtime.denyLegacy = false
+  expect((await ai({ action: 'policy', policy }, true)).status).toBe(200)
+  runtime.session = 'maker-a'
+  expect(
+    (await ai({ action: 'chat', message: 'Inventory', consent: true })).status,
+  ).toBe(503)
+})
+it('does not expose un-escalated AI chats to staff and expires attachments without removing tickets', async () => {
+  const data = await (
+    await ai({ action: 'chat', message: 'inventory', consent: true })
+  ).json()
+  await supportTransaction(
+    {
+      id: 'support-owner',
+      email: 'support-owner@example.test',
+      staff: true,
+      admin: true,
+    },
+    async (c) => {
+      expect(
+        (await c.query('SELECT * FROM support_ai_conversations')).rows,
+      ).toHaveLength(0)
+    },
+  )
+  await db.query(
+    "UPDATE support_ai_conversations SET expires_at=now()-interval '1 second' WHERE id=$1",
+    [data.conversation.id],
+  )
+  expect((await (await get('ai=1')).json()).conversations).toHaveLength(0)
+  expect(
+    (await db.query('SELECT * FROM support_ai_conversations')).rows,
+  ).toHaveLength(0)
+})
+
+it('isolates the same requester’s conversations between selected verified businesses', async () => {
+  const second = '10000000-0000-4000-8000-000000000002'
+  await db.query('INSERT INTO businesses VALUES($1)', [second])
+  await db.query("INSERT INTO users VALUES('maker-a',$1,true)", [second])
+  const scoped = (action: any, selected: string) =>
+    handler(
+      new Request(origin + '/api/support?ai=1', {
+        method: 'POST',
+        headers: {
+          Origin: origin,
+          'Content-Type': 'application/json',
+          Cookie: 'cp_selected_workspace=' + selected,
+        },
+        body: JSON.stringify(action),
+      }),
+    )
+  try {
+    expect(
+      (await ai({ action: 'chat', message: 'inventory', consent: true }))
+        .status,
+    ).toBe(409)
+    const result = await scoped(
+      { action: 'chat', message: 'inventory', consent: true },
+      business,
+    )
+    expect(result.status, runtime.errors.join(';')).toBe(200)
+    const chat = (await result.json()).conversation
+    expect(
+      (
+        await scoped(
+          {
+            action: 'chat',
+            conversationId: chat.id,
+            message: 'inventory',
+            consent: true,
+          },
+          second,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (await scoped({ action: 'delete', conversationId: chat.id }, second))
+        .status,
+    ).toBe(404)
+    const list = await handler(
+      new Request(origin + '/api/support?ai=1', {
+        headers: { Cookie: 'cp_selected_workspace=' + second },
+      }),
+    )
+    expect((await list.json()).conversations).toHaveLength(0)
+    expect(
+      (
+        await scoped(
+          {
+            action: 'escalate',
+            conversationId: chat.id,
+            summary: 'Reviewed summary',
+          },
+          '10000000-0000-4000-8000-000000000099',
+        )
+      ).status,
+    ).toBe(409)
+  } finally {
+    await db.query('DELETE FROM users WHERE business_id=$1', [second])
+    await db.query('DELETE FROM businesses WHERE id=$1', [second])
+  }
+})
+it('summarizes only consented support tickets and excludes private staff notes and diagnostics', async () => {
+  const plain = await create()
+  runtime.session = 'support-owner'
+  expect(
+    (await ai({ action: 'summarize', ticketId: plain.ticket.id }, true)).status,
+  ).toBe(403)
+  runtime.session = 'maker-a'
+  const result = await post('create', {
+    ...createData(),
+    aiReviewConsent: true,
+  })
+  const ticket = (await result.json()).ticket
+  runtime.session = 'support-owner'
+  await post(
+    'reply',
+    {
+      ticketId: ticket.id,
+      message: 'PRIVATE_NOTE_NEVER_SENT',
+      submissionKey: randomUUID(),
+      internal: true,
+    },
+    true,
+  )
+  vi.mocked(supportAnswer).mockClear()
+  const summary = await ai({ action: 'summarize', ticketId: ticket.id }, true)
+  expect(summary.status, runtime.errors.join(';')).toBe(200)
+  expect(JSON.stringify(vi.mocked(supportAnswer).mock.calls)).not.toContain(
+    'PRIVATE_NOTE_NEVER_SENT',
+  )
+  expect((await summary.json()).suggestion).toContain('Review')
+  expect(
+    (await db.query("SELECT * FROM support_messages WHERE kind='support'"))
+      .rows,
+  ).toHaveLength(0)
+})
+it('runs scheduled retention for inactive chats and content-free usage records', async () => {
+  const data = await (
+    await ai({ action: 'chat', message: 'inventory', consent: true })
+  ).json()
+  await db.query(
+    "UPDATE support_ai_conversations SET expires_at=now()-interval '1 second' WHERE id=$1",
+    [data.conversation.id],
+  )
+  await db.query(
+    "UPDATE support_ai_usage SET created_at=now()-interval '31 days'",
+  )
+  await cleanupAi()
+  expect(
+    (await db.query('SELECT * FROM support_ai_conversations')).rows,
+  ).toHaveLength(0)
+  expect((await db.query('SELECT * FROM support_ai_usage')).rows).toHaveLength(
+    0,
+  )
+})
+
+it('settles usage if another tab deletes the conversation while the provider is replying', async () => {
+  runtime.providerHook = async () => {
+    await db.query('DELETE FROM support_ai_conversations')
+  }
+  const result = await ai({
+    action: 'chat',
+    message: 'inventory question',
+    consent: true,
+  })
+  expect(result.status).toBe(409)
+  expect(
+    (await db.query<{ status: string }>('SELECT status FROM support_ai_usage'))
+      .rows[0].status,
+  ).toBe('success')
+  expect(
+    (await db.query('SELECT * FROM support_ai_conversations')).rows,
+  ).toHaveLength(0)
 })

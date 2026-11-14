@@ -7,6 +7,17 @@ const api = vi.hoisted(() => ({
   upload: vi.fn(),
 }))
 vi.mock('@/lib/support-client', () => ({
+  supportAiRequest: vi.fn(async () => ({
+    policy: {
+      enabled: true,
+      userDaily: 20,
+      businessDaily: 60,
+      globalDaily: 400,
+      cooldownSeconds: 10,
+      retentionDays: 30,
+    },
+    usage: [],
+  })),
   supportRequest: api.request,
   supportPost: api.post,
   uploadSupportScreenshot: api.upload,

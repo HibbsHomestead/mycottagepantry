@@ -136,3 +136,91 @@
 .pantry-v2 .pantry-sort {
   white-space: nowrap;
 }
+
+/* Bound the item content rather than allocating the remaining table width to it. */
+@media screen {
+  .pantry-table {
+    min-width: 0;
+  }
+  .pantry-table .table-wrap {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .pantry-table table {
+    display: table;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    table-layout: auto;
+  }
+  .pantry-table thead {
+    display: table-header-group;
+  }
+  .pantry-table tbody {
+    display: table-row-group;
+  }
+  .pantry-table tr {
+    display: table-row;
+    background: transparent;
+  }
+  .pantry-table table :is(th, td) {
+    display: table-cell;
+    padding: 0.5rem !important;
+    white-space: nowrap !important;
+    vertical-align: middle;
+  }
+  .pantry-table td[data-label]::before {
+    display: none;
+  }
+  .pantry-table table :is(th, td):first-child {
+    width: 15rem;
+    min-width: 13rem;
+    max-width: 17rem;
+  }
+  .pantry-table .item-name {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 15rem;
+    min-width: 0;
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+  .pantry-table .item-name > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .pantry-table .item-name strong {
+    white-space: normal;
+  }
+  .pantry-table .item-name .pantry-photo {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+  }
+  .pantry-table .warning-text {
+    max-width: 15rem;
+    white-space: normal;
+  }
+  .pantry-table table :is(th, td):nth-child(n + 3):nth-child(-n + 5),
+  .pantry-table table :is(th, td):nth-child(7) {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .pantry-table :is(th, td):nth-child(n + 3):nth-child(-n + 5) .sort-heading,
+  .pantry-table :is(th, td):nth-child(7) .sort-heading {
+    justify-content: flex-end;
+    width: 100%;
+  }
+  .pantry-table table :is(th, td):nth-child(2),
+  .pantry-table table :is(th, td):nth-child(8) {
+    max-width: 12rem;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  .pantry-table .icon-button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}

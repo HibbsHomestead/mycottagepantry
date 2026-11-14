@@ -128,3 +128,114 @@ it('keeps long ingredient/subingredient text complete and separates explicit Con
     'May contain soy.\nMade in a facility that handles milk.',
   )
 })
+
+it('falls back for the actual marmalade barcode, retaining leading zeros and unverified selection', async () => {
+  setup(true)
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ foods: [], totalHits: 0 }))
+    .mockResolvedValueOnce(Response.json({ status: 0 }))
+    .mockResolvedValueOnce(
+      Response.json({
+        organic_results: [
+          {
+            title: 'Smucker’s Orange Marmalade',
+            link: 'https://www.smuckers.com/fruit-spreads/marmalade/orange-marmalade',
+          },
+        ],
+      }),
+    )
+  vi.stubGlobal('fetch', fetch)
+  const { handleCatalog } = await import('../../netlify/lib/catalog-handler')
+  const queries: string[] = []
+  const response = await handleCatalog(
+    new Request('https://example.org/api/workspace?catalog=1', {
+      method: 'POST',
+      body: JSON.stringify({
+        operation: 'lookup',
+        query: '051500141335',
+        kind: 'ingredient',
+      }),
+    }),
+    {
+      client: {
+        query: async (sql) => {
+          queries.push(sql)
+          return { rows: [] }
+        },
+      },
+      org: 'test-org',
+      actor: 'test-user',
+      role: 'Owner',
+      state: { ingredients: [] } as unknown as import('./domain').Workspace,
+    },
+  )
+  expect(response.status).toBe(200)
+  const data = await response.json()
+  expect(data.results).toEqual([])
+  expect(data.candidates[0]).toMatchObject({
+    confirmed: false,
+    title: 'Smucker’s Orange Marmalade',
+  })
+  expect(JSON.parse(fetch.mock.calls[0][1].body).query).toBe('051500141335')
+  expect(new URL(fetch.mock.calls[2][0]).searchParams.get('q')).toBe(
+    '"051500141335"',
+  )
+  expect(
+    queries.some((q) => /INSERT INTO (ingredients|inventory|stock)/i.test(q)),
+  ).toBe(false)
+})
+
+it('maps explicit package weight without inventing an allergen statement', async () => {
+  setup()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        foods: [
+          {
+            description: 'Orange Marmalade',
+            brandName: 'Smucker’s',
+            gtinUpc: '051500141335',
+            fdcId: 123,
+            packageWeight: '18 oz',
+            ingredients: 'Oranges, sugar',
+          },
+          { description: 'Different jar', gtinUpc: '036000291452', fdcId: 124 },
+        ],
+      }),
+    ),
+  )
+  const data = await fdcLookup('051500141335')
+  expect(data.results).toHaveLength(1)
+  expect(data.results[0].fields).toMatchObject({
+    barcode: '051500141335',
+    purchaseQuantity: 18,
+    purchaseUnit: 'oz',
+  })
+  expect(data.results[0].fields.sourceContains).toBeUndefined()
+})
+
+it('enables configured search without an extra flag and treats a genuinely empty Google result as empty', async () => {
+  vi.stubGlobal('Netlify', {
+    env: {
+      get: (key: string) =>
+        key === 'SERPAPI_API_KEY' ? 'synthetic-test-key' : undefined,
+    },
+  })
+  const fetch = vi.fn(async () =>
+    Response.json({
+      error: "Google hasn't returned any results for this query.",
+      search_information: {
+        organic_results_state: 'Fully empty',
+        total_results: 0,
+      },
+    }),
+  )
+  vi.stubGlobal('fetch', fetch)
+  const result = await internetLookup('051500141335')
+  expect(fetch).toHaveBeenCalledOnce()
+  expect(result.candidates).toEqual([])
+  expect(result.notice).toContain('No web results')
+  expect(result.fallbackUrl).toContain('051500141335')
+})

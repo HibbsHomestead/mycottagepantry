@@ -30,6 +30,8 @@ export default async (request: Request) => {
   const application =
     url.pathname === '/admin' ||
     url.pathname === '/api/admin' ||
+    url.pathname === '/platform-support' ||
+    url.pathname === '/api/support' ||
     url.pathname === '/api/admin/square/callback' ||
     url.pathname === '/api/square/sandbox/webhook' ||
     url.pathname === '/api/square/production/webhook' ||

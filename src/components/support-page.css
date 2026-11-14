@@ -284,3 +284,21 @@
     padding: 14px;
   }
 }
+
+.admin-support-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem max(1rem, calc((100vw - 1200px) / 2));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.admin-support-header a {
+  font-weight: 700;
+  color: var(--primary);
+}
+.admin-support-site .support-helper {
+  margin-block: 1rem;
+}

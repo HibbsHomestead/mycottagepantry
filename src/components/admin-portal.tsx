@@ -371,6 +371,12 @@ export function AdminPortal() {
               <span>{name}</span>
             </a>
           ))}
+          {authenticated && (
+            <a href="/platform-support">
+              <BookOpen size={18} />
+              <span>Support inbox</span>
+            </a>
+          )}
         </nav>
         <div className="admin-sidebar-footer">
           <LockKeyhole size={17} />

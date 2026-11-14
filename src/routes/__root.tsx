@@ -1,3 +1,4 @@
+import { BackToTop } from '@/components/back-to-top'
 import {
   appearanceBootScript,
   appearanceVariables,
@@ -95,6 +96,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <script dangerouslySetInnerHTML={{ __html: adminHeadBootScript }} />
         <TooltipProvider>{children}</TooltipProvider>
+        <BackToTop />
         <Toaster />
         <Scripts />
       </body>

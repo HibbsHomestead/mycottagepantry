@@ -13,6 +13,9 @@ import {
 } from '../../src/lib/barcodes'
 import type { Item, Workspace } from '../../src/lib/domain'
 import { limitedBody } from './support-core'
+import { normalizeUnit } from '../../src/lib/domain'
+import { packageStatements } from './package-statements'
+import { openFoodFactsProduct } from './open-food-facts'
 
 export type CatalogClient = {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Item[] }>
@@ -180,6 +183,7 @@ export async function fdcLookup(
         brandName: z.string().optional(),
         gtinUpc: z.string(),
         ingredients: z.string().optional(),
+        packageWeight: z.string().optional(),
         fdcId: z.number().int().positive(),
       }),
     )
@@ -202,6 +206,10 @@ export async function fdcLookup(
       })
       .slice(0, 10)
       .flatMap((f) => {
+        const weight = f.packageWeight?.match(
+          /^\s*(\d+(?:\.\d+)?)\s*(g|kg|oz|lb|ml|l|fl oz)\s*$/i,
+        )
+        const weightUnit = weight && normalizeUnit(weight[2])
         const parsed = catalogSnapshotSchema.safeParse({
           kind: 'ingredient',
           entryType: 'branded',
@@ -209,6 +217,12 @@ export async function fdcLookup(
             name: f.description,
             brand: f.brandName || undefined,
             barcode: String(f.gtinUpc),
+            ...(weight && weightUnit && Number(weight[1]) > 0
+              ? {
+                  purchaseQuantity: Number(weight[1]),
+                  purchaseUnit: weightUnit,
+                }
+              : {}),
             ...packageStatements(f.ingredients || ''),
           },
         })
@@ -238,10 +252,10 @@ export async function fdcLookup(
 export async function internetLookup(code: string) {
   const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent('"' + code + '"')}`
   const key = globalThis.Netlify?.env.get('SERPAPI_API_KEY')
-  // Subscription/content-rights enablement is an explicit deployment setting.
+  // Configuring the supported provider enables search; an explicit false remains an opt-out.
   if (
     !key ||
-    globalThis.Netlify?.env.get('CATALOG_INTERNET_SEARCH_ENABLED') !== 'true'
+    globalThis.Netlify?.env.get('CATALOG_INTERNET_SEARCH_ENABLED') === 'false'
   )
     return {
       candidates: [],
@@ -270,6 +284,14 @@ export async function internetLookup(code: string) {
       'Internet search is unavailable or rate limited. Retry later.',
     )
   const data = await res.json().catch(() => null)
+  if (data?.search_information?.organic_results_state === 'Fully empty')
+    return {
+      candidates: [],
+      fallbackUrl,
+      notice:
+        'No web results for this exact barcode. Try a product URL or enter details manually.',
+      provider: 'Google results via SerpApi.',
+    }
   if (!data || data.error || !Array.isArray(data.organic_results))
     throw new LookupError(
       502,
@@ -484,12 +506,17 @@ export async function handleCatalog(
     if (input.operation === 'internet') {
       if (
         globalThis.Netlify?.env.get('SERPAPI_API_KEY') &&
-        globalThis.Netlify?.env.get('CATALOG_INTERNET_SEARCH_ENABLED') ===
-          'true'
+        globalThis.Netlify?.env.get('CATALOG_INTERNET_SEARCH_ENABLED') !==
+          'false'
       )
         await reserveLookup(c, org, 'internet')
       else await c.query('COMMIT')
-      return response({ version: 1, ...(await internetLookup(input.query)) })
+      return response({
+        version: 1,
+        ...(await internetLookup(
+          input.format === 'upc_e' ? expandedUPCE(input.query)! : input.query,
+        )),
+      })
     }
     const results = await catalogSearch(c, input.kind, '', identifier)
     if (results.length) {
@@ -505,13 +532,67 @@ export async function handleCatalog(
           'The external food provider does not cover packaging or supplies. Try internet search or manual entry.',
       })
     }
-    if (globalThis.Netlify?.env.get('USDA_FDC_API_KEY'))
-      await reserveLookup(c, org, 'fdc')
-    else await c.query('COMMIT')
-    return response({
-      version: 1,
-      ...(await fdcLookup(input.query, input.format)),
-    })
+    await reserveLookup(c, org, 'fdc')
+    let food: { results: CatalogResult[]; notice?: string }
+    try {
+      food = await fdcLookup(input.query, input.format)
+    } catch (error) {
+      if (!(error instanceof LookupError)) throw error
+      food = { results: [], notice: error.message }
+    }
+    if (food.results.length) return response({ version: 1, ...food })
+    try {
+      const product = await openFoodFactsProduct(input.query, input.format)
+      if (product)
+        return response({
+          version: 1,
+          results: [],
+          candidates: [
+            {
+              title: product.title,
+              url: product.sourceUrl,
+              domain: 'world.openfoodfacts.org',
+              confirmed: false,
+            },
+          ],
+          notice:
+            'Exact barcode found in Open Food Facts. Community product details need review: choose the page, then Import details. Unknown allergens are not inferred.',
+          provider:
+            'Open Food Facts — database ODbL, contents DbCL, images CC BY-SA. Check your package.',
+        })
+    } catch {
+      // A public provider outage must not block the supported web-search fallback.
+    }
+    // Quota reservation requires a new transaction after the FDC reservation commits.
+    if (
+      globalThis.Netlify?.env.get('SERPAPI_API_KEY') &&
+      globalThis.Netlify?.env.get('CATALOG_INTERNET_SEARCH_ENABLED') !== 'false'
+    ) {
+      await c.query('BEGIN')
+      await c.query("SELECT set_config('app.business_id',$1,true)", [org])
+      await reserveLookup(c, org, 'internet')
+    }
+    try {
+      const search = await internetLookup(
+        input.format === 'upc_e' ? expandedUPCE(input.query)! : input.query,
+      )
+      return response({
+        version: 1,
+        ...food,
+        ...search,
+        notice:
+          [food.notice, search.notice].filter(Boolean).join(' ') ||
+          'No exact catalog match. Choose a search result to review product details.',
+      })
+    } catch (error) {
+      if (!(error instanceof LookupError)) throw error
+      return response({
+        version: 1,
+        ...food,
+        notice: error.message,
+        fallbackUrl: `https://www.google.com/search?q=${encodeURIComponent('"' + input.query + '"')}`,
+      })
+    }
   } catch (e) {
     await c.query('ROLLBACK').catch(() => {})
     const known = e instanceof LookupError
@@ -589,30 +670,4 @@ export async function saveCatalogAcceptance(
       }),
     ],
   )
-}
-
-/** Split explicit statement headings without truncating or inferring allergens. */
-export function packageStatements(text: string) {
-  const matches = [
-    ...text.matchAll(
-      /(?:^|\n|(?<=\.)\s+)(Contains(?::)?(?!\s+(?:\d|less\b))\s+|May contain(?::)?\s+|(?:Made|Manufactured|Processed|Packed) in (?:a |the )?(?:facility|factory)\b)/gi,
-    ),
-  ]
-  const out: Record<string, string> = {}
-  if (!matches.length) return text ? { subingredients: text } : out
-  const start = (match: RegExpMatchArray) =>
-    match.index! + match[0].indexOf(match[1])
-  const first = start(matches[0])
-  if (text.slice(0, first).trim())
-    out.subingredients = text.slice(0, first).trim()
-  for (const [i, m] of matches.entries()) {
-    const key = /^Contains\b/i.test(m[1])
-      ? 'sourceContains'
-      : 'sourceMayContain'
-    const part = text
-      .slice(start(m), matches[i + 1] ? start(matches[i + 1]) : text.length)
-      .trim()
-    out[key] = [out[key], part].filter(Boolean).join('\n')
-  }
-  return out
 }

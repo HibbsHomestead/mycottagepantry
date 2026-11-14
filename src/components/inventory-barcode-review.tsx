@@ -282,11 +282,9 @@ export function InventoryBarcodeReview({
           )}
           {!matches.length && (
             <p>
-              Barcode read: <strong>{code}</strong>. Product lookup unavailable:
-              no product-data provider is connected. No product details or price
-              were found. The barcode stays in this form; continue with manual
-              details or URL import. Review ingredient/allergen information
-              before saving.
+              Barcode read: <strong>{code}</strong>. No saved inventory match.
+              The barcode stays in this form; continue with manual details or
+              URL import. Review ingredient/allergen information before saving.
             </p>
           )}
         </div>
