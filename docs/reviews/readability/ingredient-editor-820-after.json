@@ -1,0 +1,1567 @@
+{
+  "viewport": {
+    "width": 820,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "NameCategoryOn handCurrent unit costInventory valueStatusReorder pointPreferred ",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Item ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Category ↑",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "On hand ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Current unit cost ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Inventory value ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Status ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Reorder point ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Preferred vendor ↕",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TH",
+      "inputType": "",
+      "className": "",
+      "text": "Item actions",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "ALDI Canned Pumpkin",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "ALDI Canned Pumpkin",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 can",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "0",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$1.09 / can",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ can",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.00",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Out of stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status pink",
+      "text": "Out of stock",
+      "size": "14px",
+      "color": "rgb(160, 43, 67)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 can",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Aldi",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking Soda",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Baking Soda",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "0",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.66518519 / lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ lb",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.00",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Out of stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status pink",
+      "text": "Out of stock",
+      "size": "14px",
+      "color": "rgb(160, 43, 67)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Sam’s Club",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Clabber Girl Baking Powder, 22 oz., 2 pk.",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Clabber Girl Baking Powder, 22 oz., 2 pk.",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "0",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.00311949 / g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ g",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.00",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Out of stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status pink",
+      "text": "Out of stock",
+      "size": "14px",
+      "color": "rgb(160, 43, 67)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "600 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Sam’s Club",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Instant Dry Yeast",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Instant Dry Yeast",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "1 lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "1",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$6.98 / lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ lb",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$6.98",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Low stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Low stock",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "1 lb",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Sam’s Club",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Mott’s Natural Applesauce, 3.9 oz., 36 ct.",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Mott’s Natural Applesauce, 3.9 oz., 36 ct.",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0.30751659 each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "0.30751659",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.34611111 / each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ each",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.11",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Low stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Low stock",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "10 each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Sam’s Club",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Vegetable Oil",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Vegetable Oil",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Baking essentials",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "1 gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "1",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$12.34 / gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ gallon",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$12.34",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Low stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Low stock",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "1 gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Walmart",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Premium Dark Chocolate Chunks",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Premium Dark Chocolate Chunks",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Chocolate & add-ins",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "283.49523125 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "283.49523125",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.01746061 / g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ g",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$4.95",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "In stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "In stock",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "100 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Aldi",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Premium Semi-Sweet Chocolate Chunks",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Premium Semi-Sweet Chocolate Chunks",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Chocolate & add-ins",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "10 oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "10",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.495 / oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ oz",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$4.95",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "In stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "In stock",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "5 oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Aldi",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Asiago Cheese Wedge",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Asiago Cheese Wedge",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Dairy & eggs",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "8 oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "8",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.62375 / oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ oz",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$4.99",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "In stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "In stock",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0 oz",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "HyVee",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Cage Free Grade AA Large White Eggs, 2 dozen",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Cage Free Grade AA Large White Eggs, 2 dozen",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Dairy & eggs",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "48 each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "48",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.20083333 / each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ each",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$9.64",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "In stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "In stock",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "12 each",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Sam’s Club",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Milk - Whole",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Milk - Whole",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Dairy & eggs",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0.5 gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "0.5",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$7.94 / gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ gallon",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$3.97",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "In stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "In stock",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "0.25 gallon",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Walmart",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Parmesan Cheese Wedge",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "Parmesan Cheese Wedge",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Dairy & eggs",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "226 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "STRONG",
+      "inputType": "",
+      "className": "",
+      "text": "226",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$0.01765487 / g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "",
+      "text": "/ g",
+      "size": "15px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "$3.99",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Low stock",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Low stock",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "226 g",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "Aldi",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TD",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "text-sm text-muted-foreground",
+      "text": "Baking essentialsLow stock",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status neutral",
+      "text": "Low stock",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Flour & grainsSugar & sweetenersDairy & eggsBaking essentialsSpices & flavorings",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Not setSam’s ClubCostcoRestaurant DepotLocal groceryOnline packaging supplier",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Choose unitmggkgoz (weight)lbmLLUS fl ozUS cupUS tbspUS tspUS liquid pintUS liqu",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Choose unitmggkgoz (weight)lbmLLUS fl ozUS cupUS tbspUS tspUS liquid pintUS liqu",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Choose unitmggkgoz (weight)lbmLLUS fl ozUS cupUS tbspUS tspUS liquid pintUS liqu",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Not specifiedIncludedExcluded",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Not specifiedIncludedExcluded",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    }
+  ],
+  "underMinimum": [],
+  "clippedControls": [],
+  "ancestors": [
+    {
+      "tag": "SECTION",
+      "className": "panel pantry-table",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "pantry-v2",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "MAIN",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "main-shell",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "app-shell stage-one-shell",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "BODY",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "HTML",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    }
+  ],
+  "pageOverflow": 0
+}

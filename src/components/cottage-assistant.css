@@ -52,7 +52,7 @@ details[open] > summary > .assistant-chevron {
   justify-self: start;
 }
 .assistant-hint {
-  font-size: 0.82rem;
+  font-size: max(var(--interface-text-min, 0px), 0.82rem);
   color: var(--muted);
 }
 .assistant-connection {
@@ -60,7 +60,7 @@ details[open] > summary > .assistant-chevron {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 0.82rem;
+  font-size: max(var(--interface-text-min, 0px), 0.82rem);
 }
 .assistant-connection > span:last-child {
   color: var(--muted);
@@ -105,7 +105,7 @@ details[open] > summary > .assistant-chevron {
 }
 .assistant-usage > summary {
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: max(var(--interface-text-min, 0px), 0.82rem);
   font-weight: 600;
 }
 .assistant-usage > p {
@@ -137,13 +137,13 @@ details[open] > summary > .assistant-chevron {
 .assistant-field-change {
   display: block;
   margin-block: 4px;
-  font-size: 0.9rem;
+  font-size: max(var(--interface-text-min, 0px), 0.9rem);
 }
 .assistant-field-option small,
 .assistant-sources small {
   display: block;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: max(var(--interface-text-min, 0px), 0.8rem);
 }
 .assistant-answer {
   white-space: pre-wrap;
@@ -151,7 +151,7 @@ details[open] > summary > .assistant-chevron {
 }
 .assistant-sources {
   min-width: 0;
-  font-size: 0.85rem;
+  font-size: max(var(--interface-text-min, 0px), 0.85rem);
 }
 .assistant-sources summary {
   cursor: pointer;

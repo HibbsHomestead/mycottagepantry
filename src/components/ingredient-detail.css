@@ -146,7 +146,7 @@
   margin-left: 8px;
 }
 .ingredient-detail-body .ingredient-section > h3 {
-  font-size: 17px;
+  font-size: max(var(--interface-heading-min, 0px), 17px);
 }
 .ingredient-detail-body .ingredient-section > .btn {
   justify-self: start;
@@ -191,7 +191,7 @@
   border: 0;
   border-bottom: 2px solid transparent;
   color: var(--muted);
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .ingredient-detail-tabs button.active {
   color: var(--primary);
@@ -239,7 +239,7 @@
   }
   .ingredient-detail-tabs button {
     padding: 12px 8px;
-    font-size: 13px;
+    font-size: max(var(--interface-text-min, 0px), 13px);
   }
   .ingredient-detail-header {
     padding: 16px;
@@ -249,7 +249,7 @@
     padding: 12px;
   }
   .ingredient-overview-metrics strong {
-    font-size: 16px;
+    font-size: max(var(--interface-text-min, 0px), 16px);
   }
 }
 .ingredient-detail-body .text-button {
@@ -327,7 +327,7 @@
 }
 .ingredient-purchase-notice p {
   margin: 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.5;
 }
 /* Editor groups flow within each column; no grid row waits for its neighbor.
@@ -438,7 +438,7 @@
   border-bottom: 1px solid var(--border);
 }
 .ingredient-setup-tabs .btn {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   padding: 7px 10px;
 }
 .purchase-unit-summary {
@@ -585,7 +585,7 @@
   margin: 0;
 }
 .find-product-panel > strong {
-  font-size: 15px;
+  font-size: max(var(--interface-text-min, 0px), 15px);
 }
 .find-product-panel .product-link-entry {
   display: grid;
@@ -598,14 +598,14 @@
   gap: 4px;
 }
 .find-product-panel .field > span {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .ingredient-import-tools .find-product-panel input:not([type='checkbox']),
 .ingredient-import-tools .find-product-panel .btn {
   min-height: 36px;
   height: 36px;
   padding: 6px 10px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 22px;
 }
 .find-product-panel .catalog-lookup {
@@ -639,7 +639,7 @@
   min-height: 28px;
   line-height: 22px;
   padding: 3px 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   cursor: pointer;
 }
 .find-product-panel > details[open] {
@@ -647,7 +647,7 @@
 }
 .find-product-panel .lookup-error {
   margin: 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .lookup-error > p {
   display: flex;

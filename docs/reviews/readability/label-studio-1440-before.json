@@ -1,0 +1,783 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Label name",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "studio-small-note",
+      "text": "Unsaved draft. Save creates a label; Cancel creates no record.",
+      "size": "12px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Populate fromProduct & recipeBatch runPantry item",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Product & recipeBatch runPantry item",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "ProductChoose…Homestyle White Bread LoafHalf-Dozen Chocolate Chip CookiesFour-Pa",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Choose…Homestyle White Bread LoafHalf-Dozen Chocolate Chip CookiesFour-Pack Cinn",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Label formatSingle labelFront + Back labels",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Single labelFront + Back labels",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Dynamic fieldChoose a field…product.nameproduct.displayNameLabel main nameLabel ",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Choose a field…product.nameproduct.displayNameLabel main nameLabel product typep",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "DIV",
+      "inputType": "",
+      "className": "studio-small-note",
+      "text": "Select an element to edit it. Drag to move; use its corner to resize. Arrow keys",
+      "size": "12px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "studio-small-note",
+      "text": "Manually entered text",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Original caseUPPERCASElowercaseTitle Case",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Xpt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Ypt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Wpt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Hpt",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "pt",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Angle°",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "°",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-compact-number",
+      "text": "Opacity%",
+      "size": "11px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "studio-control-unit",
+      "text": "%",
+      "size": "11px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Data bindingStatic textproduct.nameproduct.displayNameLabel main nameLabel produ",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Static textproduct.nameproduct.displayNameLabel main nameLabel product typeprodu",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "TextYour text",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "TEXTAREA",
+      "inputType": "",
+      "className": "",
+      "text": "Your text",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "DIV",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Font for selected textSelect a word or range in Text to change its font.DM SansB",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Font pairingApply a pairing · locked elements stay unchangedFarmhouse BoldArtisa",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Apply a pairing · locked elements stay unchangedFarmhouse BoldArtisan BreadModer",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Group ID (same ID moves together)",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "studio-field",
+      "text": "Show elementAlwaysWhen field has a valueWhen allergens are declaredWhen a batch ",
+      "size": "13px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "AlwaysWhen field has a valueWhen allergens are declaredWhen a batch is selected",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "studio-small-note",
+      "text": "Drag to move; use edge handles to resize and the round handle to rotate. Images ",
+      "size": "12px",
+      "color": "rgb(96, 104, 121)"
+    }
+  ],
+  "underMinimum": [
+    {
+      "text": "HH",
+      "size": "13px"
+    },
+    {
+      "text": "Hibbs Homestead Market",
+      "size": "13px"
+    },
+    {
+      "text": "Business oven",
+      "size": "12px"
+    },
+    {
+      "text": "YOUR OVEN",
+      "size": "10px"
+    },
+    {
+      "text": "SH",
+      "size": "12px"
+    },
+    {
+      "text": "Sarah Hibbs",
+      "size": "13px"
+    },
+    {
+      "text": "Owner",
+      "size": "12px"
+    },
+    {
+      "text": "·",
+      "size": "12px"
+    },
+    {
+      "text": "Private oven",
+      "size": "12px"
+    },
+    {
+      "text": "My Oven",
+      "size": "13px"
+    },
+    {
+      "text": "Labels",
+      "size": "13px"
+    },
+    {
+      "text": "Search",
+      "size": "11px"
+    },
+    {
+      "text": "SH",
+      "size": "13px"
+    },
+    {
+      "text": "COTTAGE PANTRY",
+      "size": "10px"
+    },
+    {
+      "text": "Unsaved changes",
+      "size": "12px"
+    },
+    {
+      "text": "Duplicate",
+      "size": "13px"
+    },
+    {
+      "text": "Unsaved draft. Save creates a label; Cancel creates no record.",
+      "size": "12px"
+    },
+    {
+      "text": "Choose a starting design (optional)",
+      "size": "13px"
+    },
+    {
+      "text": "Populate from",
+      "size": "13px"
+    },
+    {
+      "text": "Product",
+      "size": "13px"
+    },
+    {
+      "text": "Label format",
+      "size": "13px"
+    },
+    {
+      "text": "Elements",
+      "size": "11px"
+    },
+    {
+      "text": "Assets",
+      "size": "11px"
+    },
+    {
+      "text": "Layers",
+      "size": "11px"
+    },
+    {
+      "text": "Static text",
+      "size": "13px"
+    },
+    {
+      "text": "Dynamic field",
+      "size": "13px"
+    },
+    {
+      "text": "Shape",
+      "size": "13px"
+    },
+    {
+      "text": "— Line / divider",
+      "size": "13px"
+    },
+    {
+      "text": "Border",
+      "size": "13px"
+    },
+    {
+      "text": "Select an element to edit it. Drag to move; use its corner to resize. Arrow keys",
+      "size": "12px"
+    },
+    {
+      "text": "Original bakery illustrations",
+      "size": "13px"
+    },
+    {
+      "text": "100",
+      "size": "12px"
+    },
+    {
+      "text": "%",
+      "size": "12px"
+    },
+    {
+      "text": "Safe area",
+      "size": "11px"
+    },
+    {
+      "text": "Grid",
+      "size": "11px"
+    },
+    {
+      "text": "Snap",
+      "size": "11px"
+    },
+    {
+      "text": "Snap angles",
+      "size": "11px"
+    },
+    {
+      "text": "Bleed guide",
+      "size": "11px"
+    },
+    {
+      "text": "0",
+      "size": "10px"
+    },
+    {
+      "text": "″",
+      "size": "10px"
+    },
+    {
+      "text": "1",
+      "size": "10px"
+    },
+    {
+      "text": "″",
+      "size": "10px"
+    },
+    {
+      "text": "2",
+      "size": "10px"
+    },
+    {
+      "text": "″",
+      "size": "10px"
+    },
+    {
+      "text": "3",
+      "size": "10px"
+    },
+    {
+      "text": "″",
+      "size": "10px"
+    },
+    {
+      "text": "4.00",
+      "size": "11px"
+    },
+    {
+      "text": "×",
+      "size": "11px"
+    },
+    {
+      "text": "6.00",
+      "size": "11px"
+    },
+    {
+      "text": "inches · dimensions, not screen size · ⅛″ safe margin",
+      "size": "11px"
+    },
+    {
+      "text": "Manually entered text",
+      "size": "11px"
+    },
+    {
+      "text": "DM Sans",
+      "size": "12px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "Position, size & layers",
+      "size": "12px"
+    },
+    {
+      "text": "X",
+      "size": "11px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "Y",
+      "size": "11px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "W",
+      "size": "11px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "H",
+      "size": "11px"
+    },
+    {
+      "text": "pt",
+      "size": "11px"
+    },
+    {
+      "text": "Angle",
+      "size": "10px"
+    },
+    {
+      "text": "°",
+      "size": "11px"
+    },
+    {
+      "text": "Opacity",
+      "size": "10px"
+    },
+    {
+      "text": "%",
+      "size": "11px"
+    },
+    {
+      "text": "Layers",
+      "size": "11px"
+    },
+    {
+      "text": "Data binding",
+      "size": "13px"
+    },
+    {
+      "text": "Text",
+      "size": "13px"
+    },
+    {
+      "text": "Advanced",
+      "size": "13px"
+    },
+    {
+      "text": "Edit label setup",
+      "size": "13px"
+    }
+  ],
+  "clippedControls": [],
+  "ancestors": [],
+  "pageOverflow": 0
+}

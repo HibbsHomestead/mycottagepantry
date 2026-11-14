@@ -29,13 +29,13 @@
 }
 .recipe-detail-body h3 {
   margin: 0 0 10px;
-  font-size: 16px;
+  font-size: max(var(--interface-heading-min, 0px), 16px);
 }
 .recipe-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   color: var(--muted);
 }
 .recipe-meta:empty {
@@ -51,7 +51,7 @@
   margin: 0;
 }
 .recipe-summary dt {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .recipe-summary dd {
@@ -78,14 +78,14 @@
 }
 .recipe-breakdown p {
   margin: 10px 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.6;
 }
 .recipe-ingredients {
   width: 100%;
   border-collapse: collapse;
   min-width: 0 !important;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .recipe-ingredients th,
 .recipe-ingredients td {
@@ -95,7 +95,7 @@
   white-space: normal;
 }
 .recipe-ingredients th {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
   background: var(--surface-soft);
 }
@@ -107,7 +107,7 @@
 .recipe-ingredients small,
 .linked-product small {
   display: block;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .recipe-ingredients .warning-text {
@@ -166,7 +166,7 @@
 }
 .linked-product-name {
   color: var(--primary);
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   font-weight: 600;
   text-align: left;
   text-decoration: underline;
@@ -269,7 +269,7 @@
 .recipe-detail-shell .recipe-ingredients td {
   display: table-cell;
   padding: 9px 8px !important;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   text-align: left !important;
   border-bottom: 1px solid var(--border) !important;
 }
@@ -287,7 +287,7 @@
 .recipe-detail-shell .recipe-ingredients button {
   margin: 0;
   min-height: 36px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   white-space: normal;
 }
 .recipe-detail-shell .recipe-ingredients td {

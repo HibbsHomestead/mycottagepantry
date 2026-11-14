@@ -36,7 +36,7 @@ body:has(.stage-one-shell) [data-slot='dialog-content'].barcode-scanner-dialog {
   body:has(.stage-one-shell) [data-slot='dialog-content'] input,
   body:has(.stage-one-shell) [data-slot='dialog-content'] select,
   body:has(.stage-one-shell) [data-slot='dialog-content'] textarea {
-    font-size: 16px;
+    font-size: max(var(--interface-text-min, 0px), 16px);
   }
 }
 @media (max-width: 700px) {

@@ -2,6 +2,7 @@ import { BackToTop } from '@/components/back-to-top'
 import '../styles.css'
 import '../workspace.css'
 import '../surface-layout.css'
+import '../interface-typography.css'
 /** Development-only screenshot fixture. Not a route or production entry point.
  * Browser tests intercept /api/workspace with deterministic demonstration records. */
 import { createRoot } from 'react-dom/client'

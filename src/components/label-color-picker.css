@@ -4,7 +4,7 @@
   min-width: 0;
 }
 .color-control-label {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   font-weight: 600;
   color: var(--muted);
 }
@@ -17,13 +17,13 @@
 .color-compact input {
   width: 100%;
   min-width: 0;
-  font-size: 12px !important;
+  font-size: max(var(--interface-text-min, 0px), 12px) !important;
   padding: 7px !important;
 }
 .compact-opacity {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   gap: 2px;
 }
 .checker {
@@ -83,7 +83,7 @@
 .label-color-popover label {
   display: grid;
   gap: 4px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .label-color-popover input:not([type='range']),
@@ -150,7 +150,7 @@
 .picker-previews > span {
   display: grid;
   gap: 4px;
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .picker-previews .checker {
   display: block;
@@ -159,7 +159,7 @@
   border-radius: 5px;
 }
 .picker-swatches h4 {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   margin: 0 0 6px;
 }
 .picker-swatches > div {

@@ -1,0 +1,228 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Review margin",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status green",
+      "text": "Costed",
+      "size": "14px",
+      "color": "rgb(34, 99, 66)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "status amber",
+      "text": "Review margin",
+      "size": "14px",
+      "color": "rgb(128, 83, 9)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "text-sm text-muted-foreground",
+      "text": "Everything you need to keep your business in good order.",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Ingredients",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "per sellable package",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Packaging",
+      "size": "14px",
+      "color": "rgb(49, 85, 110)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "per sellable package",
+      "size": "14px",
+      "color": "rgb(49, 85, 110)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Labor",
+      "size": "14px",
+      "color": "rgb(113, 80, 32)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "per sellable package",
+      "size": "14px",
+      "color": "rgb(113, 80, 32)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Overhead",
+      "size": "14px",
+      "color": "rgb(80, 80, 94)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "per sellable package",
+      "size": "14px",
+      "color": "rgb(80, 80, 94)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Cost per package",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "1 item per package",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Selling price",
+      "size": "14px",
+      "color": "rgb(49, 85, 110)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "No applicable tax",
+      "size": "14px",
+      "color": "rgb(49, 85, 110)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Profit per package",
+      "size": "14px",
+      "color": "rgb(43, 96, 64)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "Revenue less product cost; excludes tax",
+      "size": "14px",
+      "color": "rgb(43, 96, 64)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Margin",
+      "size": "14px",
+      "color": "rgb(113, 80, 32)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "Target margin: 65%",
+      "size": "14px",
+      "color": "rgb(113, 80, 32)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-label",
+      "text": "Suggested selling price",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    },
+    {
+      "tag": "SMALL",
+      "inputType": "",
+      "className": "cost-card-note",
+      "text": "For 65% target margin",
+      "size": "14px",
+      "color": "rgb(80, 55, 120)"
+    }
+  ],
+  "underMinimum": [],
+  "clippedControls": [],
+  "ancestors": [
+    {
+      "tag": "DIV",
+      "className": "fixed z-50 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-lg border bg-card p-6 shadow-lg outline-none sm:max-w-lg app-dialog wide-dialog item-detail-dialog",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "BODY",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "HTML",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    }
+  ],
+  "pageOverflow": 0
+}

@@ -11,7 +11,7 @@
   html body [contenteditable='true'],
   html body [role='combobox'],
   html body [data-slot='select-trigger'] {
-    font-size: 16px !important;
+    font-size: max(var(--interface-text-min, 0px), 16px) !important;
     min-width: 0;
     max-width: 100%;
     scroll-margin-block: 24px;
@@ -90,7 +90,7 @@
 }
 .access-technical {
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   margin-block: 16px;
 }
 .access-technical pre {

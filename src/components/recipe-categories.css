@@ -52,7 +52,7 @@
   border: 0;
 }
 .recipe-category-icon-picker legend {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .recipe-category-icon-picker button {
   display: flex;
@@ -64,7 +64,7 @@
   border-radius: 9px;
   background: transparent;
   font: inherit;
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   color: inherit;
   cursor: pointer;
 }
@@ -105,7 +105,7 @@
   gap: 6px;
 }
 .recipe-category-row button {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .recipe-category-heading {
   display: flex;

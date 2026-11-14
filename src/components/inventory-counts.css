@@ -23,7 +23,7 @@
 .count-heading p,
 .count-context {
   color: var(--muted);
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.6;
 }
 .count-actions {
@@ -52,7 +52,7 @@
   font-size: 18px;
 }
 .count-panel p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -76,7 +76,7 @@
   gap: 10px;
   padding: 10px 0;
   border-bottom: 1px solid #e7e2ef;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .count-scope-row span {
   flex: 1;
@@ -96,7 +96,7 @@
   color: #543278;
   border-radius: 9px;
   padding: 13px;
-  font-size: 16px;
+  font-size: max(var(--interface-text-min, 0px), 16px);
   overflow-wrap: anywhere;
 }
 .count-feedback svg {
@@ -110,7 +110,7 @@
   flex-wrap: wrap;
   padding: 10px 0;
   border-bottom: 1px solid #e8e4ee;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   overflow-wrap: anywhere;
 }
 .count-compact-row strong {
@@ -118,7 +118,7 @@
 }
 .count-save-state {
   color: var(--count-teal);
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .count-manual-barcode {
   display: flex;
@@ -149,7 +149,7 @@
 }
 .count-history-row small {
   display: block;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
   margin-top: 5px;
 }
@@ -162,7 +162,7 @@
     ) minmax(100px, 1.4fr);
   gap: 12px;
   align-items: center;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .count-review-head {
   padding: 10px 0;
@@ -174,7 +174,7 @@
   padding: 13px 0;
 }
 .count-review-item details {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   margin-top: 8px;
   color: var(--muted);
 }
@@ -203,7 +203,7 @@
   align-items: start;
   gap: 9px;
   margin: 10px 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .count-confirm input[type='checkbox'] {
   flex-shrink: 0;
@@ -213,7 +213,7 @@
   max-width: 250px;
 }
 .barcode-scanner-dialog .count-feedback {
-  font-size: 15px;
+  font-size: max(var(--interface-text-min, 0px), 15px);
 }
 .barcode-scanner-dialog .count-running {
   width: 100%;
@@ -244,7 +244,7 @@
   .count-review-row > [data-label]:before {
     content: attr(data-label);
     display: block;
-    font-size: 10px;
+    font-size: max(var(--interface-text-min, 0px), 10px);
     color: var(--muted);
     font-weight: 400;
     margin-bottom: 4px;
@@ -259,7 +259,7 @@
     flex: 1;
   }
   .count-feedback {
-    font-size: 15px;
+    font-size: max(var(--interface-text-min, 0px), 15px);
   }
   .count-manual-barcode button {
     flex: 1;
@@ -278,7 +278,7 @@
   }
   .count-running > .count-actions .btn {
     flex: 1;
-    font-size: 12px;
+    font-size: max(var(--interface-text-min, 0px), 12px);
   }
 }
 @media print {

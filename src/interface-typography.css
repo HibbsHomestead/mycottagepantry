@@ -1,0 +1,173 @@
+/* Screen-only floors keep the existing type hierarchy while making small UI
+   text readable. Font declarations retain their original print fallback. Do not
+   apply these tokens to label artwork, SVG text, or exported label documents. */
+@media screen {
+  :root {
+    --interface-text-min: 0.875rem;
+    --interface-body-min: 1rem;
+    --interface-heading-min: 1.125rem;
+    --text-xs: 0.875rem;
+  }
+
+  :root
+    :is(
+      input,
+      select,
+      textarea,
+      [data-slot='select-trigger'],
+      [data-slot='select-content']
+    ) {
+    --interface-text-min: 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+
+  :root :is(.print-label, .studio-label-svg, .studio-brand-preview) {
+    --interface-text-min: 0px;
+    --interface-heading-min: 0px;
+  }
+
+  :root .cp-admin {
+    font-size: 1rem;
+    --admin-muted: #606879;
+  }
+
+  /* Table values and names share one size; units are part of the value. Keep
+     modest padding and allow horizontal scrolling instead of shrinking text. */
+  :root table {
+    --interface-text-min: 0.9375rem;
+  }
+  :root th {
+    --interface-text-min: 0.875rem;
+    letter-spacing: 0.02em;
+  }
+  :root :is(.status, .badge, .admin-badge) {
+    --interface-text-min: 0.875rem;
+    line-height: 1.4;
+  }
+  :root .pantry-table .status {
+    padding: 3px 7px;
+  }
+
+  /* Native controls, including compact editors, grow with their text. Icon
+     buttons and the label canvas keep their existing geometry. */
+  :root
+    :is(
+      .field,
+      .settings-panel,
+      .support-field,
+      .support-search,
+      .stripe-settings
+    )
+    :is(
+      input:not([type='checkbox']):not([type='radio']):not([type='range']):not(
+          [type='color']
+        ),
+      select,
+      textarea
+    ) {
+    height: auto;
+    min-height: 2.5rem;
+    font-size: 1rem;
+  }
+  :root [data-slot='input'],
+  :root [data-slot='select-trigger'] {
+    height: auto;
+    min-height: var(--control-height);
+    font-size: 1rem;
+  }
+  :root .btn,
+  :root .support-button,
+  :root .cp-admin .admin-primary,
+  :root .cp-admin .admin-secondary {
+    height: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  :root .workspace-switch > span:not(.workspace-avatar),
+  :root .profile > span:not(.profile-avatar) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  :root .workspace-avatar {
+    flex-shrink: 0;
+  }
+
+  :root .admin-sidebar {
+    overflow-y: auto;
+  }
+  :root .admin-topbar,
+  :root .admin-page-heading,
+  :root .admin-pager,
+  :root .admin-pager > div {
+    flex-wrap: wrap;
+  }
+  :root .cp-admin .admin-main h2 {
+    font-size: 1.25rem;
+  }
+  :root .cp-admin th {
+    color: #606879;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  :root .cp-admin :is(.admin-nav-label, .admin-asof, .admin-id) {
+    color: #606879;
+  }
+  :root .cp-admin :is(th, td) {
+    padding-block: 10px;
+  }
+  /* Support reuses an eyebrow style with an existing important declaration. */
+  :root .support-shell .public-eyebrow {
+    font-size: 0.875rem !important;
+    letter-spacing: 0.08em;
+  }
+  :root .admin-main-support .support-panel p,
+  :root .support-message p {
+    font-size: 1rem;
+  }
+
+  :root
+    .label-studio
+    .studio-property-toolbar
+    .studio-compact-number
+    input[type='number'] {
+    height: auto;
+    min-height: 2rem;
+  }
+  :root .font-picker-trigger.font-picker-compact {
+    height: auto;
+    min-height: 2rem;
+  }
+  :root .font-picker-trigger .font-picker-value {
+    font-size: 1rem;
+  }
+  :root .font-picker-compact .font-picker-value {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  :root .studio-left-tabs {
+    flex-wrap: wrap;
+  }
+  :root .studio-left-tabs button {
+    flex: 1 1 auto;
+  }
+  :root .studio-element-list h3,
+  :root .studio-panel-title h3 {
+    margin-block: 0;
+  }
+}
+
+@media screen and (max-width: 700px) {
+  /* Let readable navigation names keep their width on the smallest phones. */
+  :root .mobile-bottom-nav {
+    overflow-x: auto;
+  }
+  :root .mobile-bottom-nav button {
+    flex: 1 0 max-content;
+    min-width: 44px;
+    padding-inline: 2px;
+  }
+}

@@ -153,13 +153,13 @@
   margin: 0;
 }
 .receipt-line p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .receipt-fields > .finance-form-grid {
   margin: 20px 0;
 }
 .receipt-review-dialog .badge {
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   margin-top: 4px;
   display: inline-block;
 }
@@ -185,7 +185,7 @@
   font-size: 30px;
 }
 .finance-workspace .stat-card small {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .finance-workspace button:focus-visible,
 .finance-workspace input:focus-visible {
@@ -269,7 +269,7 @@
   padding: 16px 0;
   border-top: 1px solid var(--border);
   color: var(--muted);
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -279,7 +279,7 @@
   gap: 24px;
 }
 .transaction-picker h3 {
-  font-size: 15px;
+  font-size: max(var(--interface-heading-min, 0px), 15px);
   margin-bottom: 10px;
 }
 .transaction-choice {
@@ -306,7 +306,7 @@
 .transaction-choice small {
   display: block;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -343,7 +343,7 @@
 .finance-scope {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .finance-dashboard-heading .field {
   margin: 0;
@@ -374,7 +374,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   font-weight: 600;
 }
 .finance-summary-card > strong {
@@ -389,7 +389,7 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .finance-summary-card.income {
   border-color: color-mix(in srgb, var(--finance-teal) 35%, var(--border));
@@ -422,7 +422,7 @@
   flex-wrap: wrap;
 }
 .finance-quick-actions .btn {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .finance-visual-grid {
   display: grid;
@@ -438,11 +438,11 @@
   margin: 0;
 }
 .finance-dashboard .panel-heading p {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   margin: 4px 0 0;
 }
 .finance-legend {
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -493,18 +493,18 @@
   border-radius: 5px 5px 0 0;
   background: var(--primary);
   color: var(--primary-ink);
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   min-height: 0;
 }
 .finance-bar-pair span.out {
   background: var(--finance-teal);
 }
 .finance-month small {
-  font-size: 10px;
+  font-size: max(var(--interface-text-min, 0px), 10px);
 }
 .finance-chart-note {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   padding: 8px 20px;
   margin: 0;
 }
@@ -521,7 +521,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .finance-category strong {
   white-space: nowrap;
@@ -563,7 +563,7 @@
 }
 .finance-attention small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   margin-left: auto;
 }
 .finance-attention-links {
@@ -579,7 +579,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   padding: 5px 0;
 }
 .finance-attention-links strong {
@@ -605,7 +605,7 @@
   gap: 12px;
   border-top: 1px solid var(--border);
   padding: 12px 20px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .finance-source-row > span:nth-child(2) {
   flex: 1;
@@ -616,7 +616,7 @@
   display: block;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .finance-record-icon {
   display: grid;
@@ -633,7 +633,7 @@
   background: color-mix(in srgb, var(--finance-coral) 10%, var(--card));
 }
 .finance-definitions {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .finance-definitions summary {
@@ -661,7 +661,7 @@
 .finance-dialog textarea,
 .finance-dashboard input,
 .finance-dashboard select {
-  font-size: 16px !important;
+  font-size: max(var(--interface-text-min, 0px), 16px) !important;
   min-height: 44px;
   max-width: 100%;
   scroll-margin: 24px 0 140px;
@@ -677,7 +677,7 @@
   padding: 0;
   margin: 0;
   gap: 16px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
   flex-wrap: wrap;
 }
@@ -705,22 +705,22 @@
 }
 .receipt-summary small {
   font-weight: 600;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .receipt-summary span {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .receipt-summary dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 20px;
   margin: 0 0 0 auto;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .receipt-summary dt {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .receipt-summary dd {
   margin: 3px 0 0;
@@ -759,7 +759,7 @@
   margin-top: 16px;
 }
 .receipt-adjustments p {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .receipt-review-filters {
@@ -770,7 +770,7 @@
 }
 .receipt-review-filters .btn {
   padding: 8px 10px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .receipt-line {
   padding: 0;
@@ -803,12 +803,12 @@
 }
 .receipt-row-summary small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   font-weight: 400;
 }
 .receipt-review-status {
   color: var(--finance-teal, #227d83);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .receipt-review-status.needs-review {
   color: var(--danger);
@@ -823,7 +823,7 @@
 }
 .receipt-row-editor .panel-heading .btn {
   padding: 6px 9px;
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
 }
 .receipt-row-editor .finance-form-grid {
   gap: 14px;
@@ -843,7 +843,7 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .receipt-total-review dd,
 .receipt-confirmation dd {
@@ -860,7 +860,7 @@
 }
 .receipt-total-review li,
 .receipt-total-review p {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--danger);
 }
 .receipt-confirmation {
@@ -873,7 +873,7 @@
   margin: 0;
 }
 .receipt-confirmation p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .receipt-full-preview {
   width: min(900px, calc(100vw - 20px)) !important;
@@ -941,18 +941,18 @@
   }
   .receipt-review-dialog .finance-sticky-actions .btn {
     min-height: 44px;
-    font-size: 12px;
+    font-size: max(var(--interface-text-min, 0px), 12px);
     padding: 10px;
   }
   .receipt-review-dialog .finance-sticky-actions .btn:last-child {
     flex-basis: 100%;
   }
   .receipt-total-review dl > div {
-    font-size: 12px;
+    font-size: max(var(--interface-text-min, 0px), 12px);
   }
   .receipt-progress {
     gap: 12px;
-    font-size: 11px;
+    font-size: max(var(--interface-text-min, 0px), 11px);
   }
   .finance-record-filters {
     flex-direction: column;
@@ -969,7 +969,7 @@
   }
   .finance-summary-card > span {
     align-items: start;
-    font-size: 12px;
+    font-size: max(var(--interface-text-min, 0px), 12px);
     gap: 6px;
   }
   .finance-summary-card > span svg {
@@ -980,7 +980,7 @@
     font-size: 23px;
   }
   .finance-summary-card small {
-    font-size: 10px;
+    font-size: max(var(--interface-text-min, 0px), 10px);
   }
   .finance-quick-actions {
     display: grid;
@@ -989,7 +989,7 @@
   }
   .finance-quick-actions .btn {
     padding: 10px;
-    font-size: 11px;
+    font-size: max(var(--interface-text-min, 0px), 11px);
   }
   .finance-dashboard-heading h2 {
     font-size: 28px;

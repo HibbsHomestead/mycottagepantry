@@ -1,0 +1,655 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "14px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "admin-badge",
+      "text": "Operational access",
+      "size": "8px",
+      "color": "rgb(118, 91, 156)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Stripe credential changes and membership updates use the existing enrolled platf",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Cottage Pantry software subscriptions. Business Square sales connections remain ",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "EnvironmentTESTLIVE",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "TESTLIVE",
+      "size": "16px",
+      "color": "rgb(48, 35, 62)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "No validated account · Unconnected · No saved credential",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "API: Not verified · Webhook: Not verified · New checkout: Disabled",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Hosted Checkout does not require a publishable key. Enter a secret or supported ",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Stripe secret API key",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "password",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Webhook signing secret",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "password",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Leave an input empty to retain its saved value. Sign out and authenticate again ",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Action confirmation",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Rotation confirmation: ROTATE TEST. Disconnect confirmation: DISCONNECT TEST. Di",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Stable webhook endpoint",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Create this endpoint in the matching Stripe environment, subscribe to these even",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Set Stripe product metadata cottage_pantry_tier to the exact tier ID. USD monthl",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "All four paid tiers are approved for test checkout. Cottage Mercantile includes ",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Free · $0/month · 1 users · internal available · purchase disabledMissing mappin",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Mixing Bowl · $10/month · 1 users · internal available · purchase disabledMissin",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Baker’s Bench · $20/month · 1 users · internal available · purchase disabledMiss",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Cottage Kitchen · $30/month · 2 users · internal available · purchase disabledMi",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Cottage Mercantile · $40/month · 6 users · internal available · purchase disable",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "TierMixing Bowl (mixing-bowl)Baker’s Bench (bakers-bench)Cottage Kitchen (cottag",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "Mixing Bowl (mixing-bowl)Baker’s Bench (bakers-bench)Cottage Kitchen (cottage-ki",
+      "size": "16px",
+      "color": "rgb(48, 35, 62)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Recurring Price ID",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Approve purchase availability for this mapped tier",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Supported policy for explicit approval: no trials; access through verified paid ",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Reviewed Stripe portal configuration ID",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "For test checkout on production, explicitly designate a newly created disposable",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Type APPROVE POLICIES in Action confirmation to approve these terms. Stripe tax ",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Live Square subscriber findings and cutover decision",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "TEXTAREA",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(48, 35, 62)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Confirm authoritative live provider records. Preserve existing Square subscriber",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "LABEL",
+      "inputType": "",
+      "className": "",
+      "text": "Search events",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Retries retrieve provider state; they do not create subscriptions or charges. St",
+      "size": "14px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Connect the platform account receiving Cottage Pantry subscription revenue. Cust",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "No Square plan variations are mapped yet.",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Last successful production synchronization: Not recorded. Update timestamps belo",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "admin-empty",
+      "text": "No customer billing records are available.",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Latest 30 recorded events. Provider object IDs, merchant credentials and event p",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "admin-empty",
+      "text": "No Square billing processing events have been recorded.",
+      "size": "12px",
+      "color": "rgb(114, 121, 138)"
+    }
+  ],
+  "underMinimum": [
+    {
+      "text": "Cottage Pantry",
+      "size": "11px"
+    },
+    {
+      "text": "Overview",
+      "size": "11px"
+    },
+    {
+      "text": "Customers",
+      "size": "11px"
+    },
+    {
+      "text": "Plans & Access",
+      "size": "11px"
+    },
+    {
+      "text": "Billing",
+      "size": "11px"
+    },
+    {
+      "text": "Operations",
+      "size": "11px"
+    },
+    {
+      "text": "Content",
+      "size": "11px"
+    },
+    {
+      "text": "Audit & Settings",
+      "size": "11px"
+    },
+    {
+      "text": "Support inbox",
+      "size": "11px"
+    },
+    {
+      "text": "Cottage Pantry Admin",
+      "size": "10px"
+    },
+    {
+      "text": "Operational access",
+      "size": "8px"
+    },
+    {
+      "text": "Sign out",
+      "size": "10px"
+    },
+    {
+      "text": "COTTAGE PANTRY / ADMINISTRATION",
+      "size": "8px"
+    },
+    {
+      "text": "Platform subscriptions, separate from customer seller connections.",
+      "size": "11px"
+    },
+    {
+      "text": "Refresh records",
+      "size": "9px"
+    },
+    {
+      "text": "Cottage Pantry software subscriptions. Business Square sales connections remain ",
+      "size": "12px"
+    },
+    {
+      "text": "No validated account",
+      "size": "12px"
+    },
+    {
+      "text": "·",
+      "size": "12px"
+    },
+    {
+      "text": "Unconnected",
+      "size": "12px"
+    },
+    {
+      "text": "·",
+      "size": "12px"
+    },
+    {
+      "text": "No saved credential",
+      "size": "12px"
+    },
+    {
+      "text": "API:",
+      "size": "12px"
+    },
+    {
+      "text": "Not verified",
+      "size": "12px"
+    },
+    {
+      "text": "· Webhook:",
+      "size": "12px"
+    },
+    {
+      "text": "Not verified",
+      "size": "12px"
+    },
+    {
+      "text": "· New checkout:",
+      "size": "12px"
+    },
+    {
+      "text": "Disabled",
+      "size": "12px"
+    },
+    {
+      "text": "Rotation confirmation: ROTATE",
+      "size": "12px"
+    },
+    {
+      "text": "TEST",
+      "size": "12px"
+    },
+    {
+      "text": ". Disconnect confirmation: DISCONNECT",
+      "size": "12px"
+    },
+    {
+      "text": "TEST",
+      "size": "12px"
+    },
+    {
+      "text": ". Disconnect blocks new checkout and reconciliation. Active subscriptions block ",
+      "size": "12px"
+    },
+    {
+      "text": "Last successful production synchronization:",
+      "size": "12px"
+    },
+    {
+      "text": "Not recorded",
+      "size": "12px"
+    },
+    {
+      "text": ". Update timestamps below describe stored records.",
+      "size": "12px"
+    },
+    {
+      "text": "No customer billing records are available.",
+      "size": "12px"
+    },
+    {
+      "text": "0",
+      "size": "9px"
+    },
+    {
+      "text": "records · Page",
+      "size": "9px"
+    },
+    {
+      "text": "1",
+      "size": "9px"
+    },
+    {
+      "text": "of",
+      "size": "9px"
+    },
+    {
+      "text": "1",
+      "size": "9px"
+    },
+    {
+      "text": "Open Square billing management",
+      "size": "12px"
+    },
+    {
+      "text": "Latest 30 recorded events. Provider object IDs, merchant credentials and event p",
+      "size": "12px"
+    },
+    {
+      "text": "No Square billing processing events have been recorded.",
+      "size": "12px"
+    },
+    {
+      "text": "Read access is audited. Session expires",
+      "size": "9px"
+    },
+    {
+      "text": "1/1/2027, 12:00:00 AM",
+      "size": "9px"
+    },
+    {
+      "text": ".",
+      "size": "9px"
+    },
+    {
+      "text": "Administrator",
+      "size": "9px"
+    },
+    {
+      "text": "demo-admin",
+      "size": "9px"
+    }
+  ],
+  "clippedControls": [],
+  "ancestors": [
+    {
+      "tag": "MAIN",
+      "className": "admin-main",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "admin-workspace",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "cp-admin",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "BODY",
+      "className": "",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "HTML",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    }
+  ],
+  "pageOverflow": 0
+}
