@@ -10,6 +10,7 @@ import {
   verifyStripeSignature,
   stripeTierPurchasable,
   stripePortalMatchesPolicy,
+  stripeEncryptionReady,
 } from '../../netlify/lib/stripe-provider'
 import {
   effectiveAccess,
@@ -31,7 +32,32 @@ beforeEach(() =>
     },
   }),
 )
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
+it('uses the existing encryption root from Node Functions without requiring Netlify.env', () => {
+  const existing = sealStripe({ key: testKey }, 'test')
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', root)
+  vi.stubGlobal('Netlify', undefined)
+  expect(stripeEncryptionReady()).toBe(true)
+  expect(openStripe(existing, 'test').key).toBe(testKey)
+  expect(openStripe(sealStripe({ key: testKey }, 'test'), 'test').key).toBe(
+    testKey,
+  )
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', '')
+  expect(stripeEncryptionReady()).toBe(false)
+  expect(() => sealStripe({}, 'test')).toThrow(/hosting setup/)
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', 'invalid-root')
+  expect(stripeEncryptionReady()).toBe(false)
+  expect(() => sealStripe({}, 'test')).toThrow(/hosting setup/)
+})
+it('does not override an explicitly empty Netlify encryption root with a Node value', () => {
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', root)
+  vi.stubGlobal('Netlify', { env: { get: () => '' } })
+  expect(stripeEncryptionReady()).toBe(false)
+  expect(() => sealStripe({}, 'test')).toThrow(/hosting setup/)
+})
 it('encrypts credentials with an environment binding and rejects tampering or missing root', () => {
   const value = sealStripe({ key: testKey, signing: 'fixture-signing' }, 'test')
   expect(value).not.toContain(testKey)

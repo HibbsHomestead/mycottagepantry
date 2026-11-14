@@ -1,7 +1,7 @@
 import { getDatabase } from '@netlify/database'
 import { admin } from '@netlify/identity'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import type { Context } from '@netlify/functions'
+import { getContext, type Context } from '@netlify/functions'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 
 export const adminOrigin = 'https://admin.mycottagepantry.com'
@@ -30,14 +30,34 @@ export function requireAdminOrigin(
 ) {
   const url = new URL(request.url)
   const env = globalThis.Netlify?.env
-  const context = env?.get('CONTEXT')
-  const preview = env?.get('DEPLOY_URL')
+  // Build metadata is not guaranteed in Functions. The runtime context identifies
+  // this deployment without accepting a hostname supplied by the caller.
+  let runtime: Context | undefined
+  try {
+    runtime = getContext()
+  } catch {
+    // Unit tests and non-Functions development have no request context.
+  }
+  const context = runtime?.deploy?.context ?? env?.get('CONTEXT')
+  const runtimePreview =
+    context === 'deploy-preview' &&
+    runtime?.site?.id === '299e7942-6246-467a-bef5-fa3f6817b210' &&
+    /^[a-f0-9]{24}$/.test(runtime.deploy.id)
+      ? `https://${runtime.deploy.id}--mycottagepantry.netlify.app`
+      : undefined
+  const preview = runtimePreview ?? env?.get('DEPLOY_URL')
+  const stablePreview = env?.get('DEPLOY_PRIME_URL')
   const allowed =
     url.origin === adminOrigin ||
     (context === 'deploy-preview' &&
-      !!preview &&
-      /^https:\/\/[a-z0-9-]+--mycottagepantry\.netlify\.app$/.test(preview) &&
-      url.origin === preview) ||
+      ((!!preview &&
+        /^https:\/\/[a-z0-9-]+--mycottagepantry\.netlify\.app$/.test(preview) &&
+        url.origin === preview) ||
+        (!!stablePreview &&
+          /^https:\/\/deploy-preview-[0-9]+--mycottagepantry\.netlify\.app$/.test(
+            stablePreview,
+          ) &&
+          url.origin === stablePreview))) ||
     (context === 'dev' && url.origin === 'http://localhost:8889')
   if (!allowed || url.username || url.password)
     throw new AdminError(
