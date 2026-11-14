@@ -8,7 +8,12 @@ import {
   timingSafeEqual,
 } from 'node:crypto'
 import { z } from 'zod'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 import {
   launchPricing,
@@ -442,7 +447,10 @@ export async function stripeAdminAction(
   session: AdminMetadata,
   reference: string,
 ) {
-  if (!session.mfa_at || !['owner', 'admin'].includes(session.role))
+  if (
+    !hasRecentAdminVerification(session) ||
+    !['owner', 'admin'].includes(session.role)
+  )
     throw new AdminError(
       403,
       'ADMIN_REQUIRED',
@@ -479,15 +487,6 @@ export async function stripeAdminAction(
     })
     .strict()
     .parse(JSON.parse((await limitedBody(request, 5000)).toString()))
-  if (
-    !['test', 'retry'].includes(input.operation) &&
-    Date.parse(String(session.mfa_at)) < Date.now() - 10 * 60000
-  )
-    throw new AdminError(
-      403,
-      'RECENT_AUTH_REQUIRED',
-      'Sign out and verify your existing admin authentication again before changing billing configuration.',
-    )
   const e = input.environment
   await c.query(
     'INSERT INTO stripe_provider_settings(environment) VALUES($1) ON CONFLICT DO NOTHING',

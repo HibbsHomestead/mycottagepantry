@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   adminTransaction,
   requireAdmin,
+  hasRecentAdminVerification,
   requireAdminOrigin,
   requireRate,
 } from './platform-admin-core'
@@ -25,10 +26,7 @@ export async function confirmAssistantAction(req: Request, raw: unknown) {
   // Do not consume a proposal if authentication needs refreshing.
   await adminTransaction(async (c) => {
     const session = await requireAdmin(c, req)
-    if (
-      !session.mfa_at ||
-      Date.now() - Date.parse(session.mfa_at) > 10 * 60 * 1000
-    )
+    if (!hasRecentAdminVerification(session))
       throw new SupportError(
         403,
         'Verify existing administrator authentication, then confirm this recovery again.',
@@ -65,7 +63,10 @@ export async function confirmAssistantAction(req: Request, raw: unknown) {
   try {
     verified = await adminTransaction(async (c) => {
       const session = await requireAdmin(c, req)
-      if (session.identity_id !== actor.id || !session.mfa_at)
+      if (
+        session.identity_id !== actor.id ||
+        !hasRecentAdminVerification(session)
+      )
         throw new SupportError(403, 'Administrator verification required.')
       await reconcileSupportBilling(c, proposal.business_id)
       const check = (

@@ -70,7 +70,8 @@ async function admin(body: unknown, mfa = true) {
       {
         identity_id: 'catalog-admin',
         role: 'admin',
-        mfa_at: mfa ? '2026-11-07' : null,
+        verified_at: mfa ? new Date().toISOString() : null,
+        verification_method: mfa ? 'totp' : null,
       },
       crypto.randomUUID(),
     )

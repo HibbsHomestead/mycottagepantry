@@ -1,7 +1,12 @@
 import { serverEnvironment as env } from './runtime-environment'
 import { createHmac } from 'node:crypto'
 import { z } from 'zod'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import { openSecret, sealSecret, totpConfigured } from './platform-admin-totp'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 
@@ -32,7 +37,7 @@ function requireConfigured() {
     throw new AdminError(
       503,
       'SMS_UNAVAILABLE',
-      'Text-message verification is not switched on yet. No text was sent. Use your passkey or authenticator code.',
+      'Text-message verification is not switched on yet. No text was sent. Use password confirmation or an enrolled code method.',
     )
 }
 
@@ -87,7 +92,7 @@ async function twilio(path: string, form: Record<string, string>) {
     throw new AdminError(
       502,
       'SMS_PROVIDER_UNREACHABLE',
-      'The text-message service could not be reached. No code was confirmed. Wait a moment and try again, or use your passkey.',
+      'The text-message service could not be reached. No code was confirmed. Wait a moment and try again, or use password confirmation or an enrolled authenticator code.',
     )
   }
   let body: TwilioResult['body'] = {}
@@ -118,13 +123,13 @@ export function sendFailure(result: TwilioResult) {
     return new AdminError(
       429,
       'SMS_PROVIDER_LIMIT',
-      'The text-message provider paused sends to this number. Wait 10 minutes, or use your passkey.',
+      'The text-message provider paused sends to this number. Wait 10 minutes, or use password confirmation or an enrolled authenticator code.',
     )
   if (code === 60410 || code === 60605 || code === 21408 || code === 60220)
     return new AdminError(
       403,
       'SMS_DESTINATION_BLOCKED',
-      'The provider blocked texts to this destination (fraud or geographic protection). Use your passkey, or contact the platform owner.',
+      'The provider blocked texts to this destination (fraud or geographic protection). Use password confirmation or an enrolled authenticator code, or contact the platform owner.',
     )
   if (
     result.status === 401 ||
@@ -135,12 +140,12 @@ export function sendFailure(result: TwilioResult) {
     return new AdminError(
       503,
       'SMS_PROVIDER_CONFIGURATION',
-      'Text-message verification is misconfigured on the server. No text was sent. Use your passkey; the owner must check the Twilio settings.',
+      'Text-message verification is misconfigured on the server. No text was sent. Use password confirmation or an enrolled authenticator code; the owner must check the Twilio settings.',
     )
   return new AdminError(
     502,
     'SMS_DELIVERY_FAILED',
-    'The text could not be sent. No code was issued. Try again shortly, or use your passkey.',
+    'The text could not be sent. No code was issued. Try again shortly, or use password confirmation or an enrolled authenticator code.',
   )
 }
 
@@ -197,7 +202,7 @@ async function checkVerification(sid: string, code: string) {
   throw new AdminError(
     502,
     'SMS_CHECK_UNAVAILABLE',
-    'The code could not be checked right now. It was not accepted. Try again shortly, or use your passkey.',
+    'The code could not be checked right now. It was not accepted. Try again shortly, or use password confirmation or an enrolled authenticator code.',
   )
 }
 const codeSchema = z
@@ -223,7 +228,7 @@ const failureMessage: Record<Exclude<CheckOutcome, 'approved'>, string> = {
   expired:
     'That code expired, was already used, or was replaced by a newer text. Request a new code.',
   exhausted:
-    'Too many incorrect codes. Request a new text, or use your passkey.',
+    'Too many incorrect codes. Request a new text, or use password confirmation or an enrolled authenticator code.',
 }
 
 /**
@@ -288,14 +293,14 @@ export async function smsLoginSend(
     throw new AdminError(
       403,
       'SMS_NOT_ENROLLED',
-      'No verified phone is enrolled for text-message sign-in. Use your passkey. A phone can be enrolled only from an authenticated admin session.',
+      'No verified phone is enrolled for text-message sign-in. Use password confirmation or an enrolled authenticator code. A phone can be enrolled only from an authenticated admin session.',
     )
   cooldownCheck(session.sms_sent_at)
   if (session.sms_sends >= SMS_LOGIN_SENDS)
     throw new AdminError(
       429,
       'SMS_SEND_LIMIT',
-      'The resend limit for this sign-in was reached. Choose “Use another account” to start over in a few minutes, or use your passkey.',
+      'The resend limit for this sign-in was reached. Choose “Use another account” to start over in a few minutes, or use password confirmation or an enrolled authenticator code.',
     )
   const phone = openSecret(row.phone_ciphertext, identity, AAD).toString()
   const sid = await startVerification(phone, identity, 'sms_login_code')
@@ -404,7 +409,7 @@ export async function notifySecurityChange(email: string, change: string) {
         From: env('SUPPORT_VERIFIED_FROM'),
         To: email,
         Subject: 'Cottage Pantry Admin security change',
-        TextBody: `${change}\n\nIf you did not make this change, sign in at https://admin.mycottagepantry.com with your passkey and review Admin sign-in security, then contact the platform owner for audited recovery.\nThis message never contains codes or full phone numbers.`,
+        TextBody: `${change}\n\nIf you did not make this change, sign in at https://admin.mycottagepantry.com with your password and review Admin sign-in security, then contact the platform owner for audited recovery.\nThis message never contains codes or full phone numbers.`,
         MessageStream: 'outbound',
       }),
     })
@@ -419,7 +424,7 @@ function requireAuthorized(
   session: AdminMetadata,
 ) {
   if (
-    !session.mfa_at ||
+    !hasRecentAdminVerification(session) ||
     !row?.authorized_session ||
     row.authorized_session !== session.token_hash ||
     !row.authorized_until ||
@@ -427,20 +432,20 @@ function requireAuthorized(
   )
     throw new AdminError(
       403,
-      'FRESH_PASSKEY_REQUIRED',
-      'Phone setup expired or belongs to another session. Verify your existing passkey again to continue.',
+      'RECENT_AUTH_REQUIRED',
+      'Phone setup expired or belongs to another session. Verify your administrator authentication again to continue.',
     )
 }
 
-/** Called only after a fresh existing-passkey assertion for the bound purpose. */
-export async function afterSmsPasskey(
+/** Requires recent server-verified administrator authentication. */
+export async function afterSmsVerification(
   c: AdminClient,
   session: AdminMetadata,
   purpose: string,
   reference: string,
 ) {
   const identity = session.identity_id
-  if (!session.mfa_at)
+  if (!hasRecentAdminVerification(session))
     throw new AdminError(
       403,
       'MFA_REQUIRED',
@@ -481,7 +486,7 @@ export async function afterSmsPasskey(
   )
   const notification = await notifySecurityChange(
     session.identity_email,
-    `Text-message sign-in to ${row.phone_masked} was removed from your Cottage Pantry Admin account. Your passkey is unchanged.`,
+    `Text-message sign-in to ${row.phone_masked} was removed from your Cottage Pantry Admin account. Your password and authenticator are unchanged.`,
   )
   await audit(
     c,
@@ -551,7 +556,7 @@ export async function smsEnrollAction(
       throw new AdminError(
         429,
         'SMS_SEND_LIMIT',
-        'The text limit for this setup was reached. Verify your passkey again in a few minutes to restart setup.',
+        'The text limit for this setup was reached. Verify your administrator authentication again in a few minutes to restart setup.',
       )
     const sid = await startVerification(e164, identity, 'sms_enrollment_code')
     const masked = maskPhone(e164)
@@ -626,7 +631,7 @@ export async function smsEnrollAction(
     pending_sent_at=NULL,pending_sends=0,pending_attempts=0 WHERE identity_id=$1`,
     [identity],
   )
-  // Revoke other sessions without signing out this passkey-verified phone.
+  // Revoke other sessions without signing out this verified session.
   await c.query(
     'DELETE FROM platform_sessions WHERE identity_id=$1 AND token_hash<>$2',
     [identity, session.token_hash],
@@ -634,8 +639,8 @@ export async function smsEnrollAction(
   const notification = await notifySecurityChange(
     session.identity_email,
     before
-      ? `Your Cottage Pantry Admin text-message sign-in phone changed from ${before} to ${row.pending_masked}. Your passkey is unchanged.`
-      : `Text-message sign-in to ${row.pending_masked} was enabled for your Cottage Pantry Admin account. Your passkey is unchanged.`,
+      ? `Your Cottage Pantry Admin text-message sign-in phone changed from ${before} to ${row.pending_masked}. Your password and authenticator are unchanged.`
+      : `Text-message sign-in to ${row.pending_masked} was enabled for your Cottage Pantry Admin account. Your password and authenticator are unchanged.`,
   )
   await audit(
     c,
@@ -644,7 +649,7 @@ export async function smsEnrollAction(
     identity,
     'success',
     reference,
-    'Fresh passkey verification and confirmed text to the new number',
+    'Fresh administrator verification and confirmed text to the new number',
     { destination: before },
     { destination: row.pending_masked, notification },
   )

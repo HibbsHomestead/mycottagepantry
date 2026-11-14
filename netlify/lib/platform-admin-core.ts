@@ -210,7 +210,7 @@ export async function requireAdmin(c: AdminClient, request: Request) {
       'Sign in with your platform administrator account.',
     )
   const { rows } = await c.query(
-    `SELECT s.*,a.role,a.enrollment_until FROM platform_sessions s JOIN platform_admins a ON a.identity_id=s.identity_id
+    `SELECT s.*,a.role,EXISTS(SELECT 1 FROM platform_totp t WHERE t.identity_id=s.identity_id AND t.enabled_at IS NOT NULL) AS totp_enabled FROM platform_sessions s JOIN platform_admins a ON a.identity_id=s.identity_id
     WHERE s.token_hash=$1 AND a.enabled=true AND s.epoch=a.epoch AND s.expires_at>NOW() AND s.origin=$2 FOR UPDATE OF s,a`,
     [hash(token), new URL(request.url).origin],
   )
@@ -230,22 +230,28 @@ export async function createSession(
   identity: string,
   epoch: number,
   origin: string,
-  mfa = false,
-  method: 'passkey' | 'totp' | 'recovery' | 'sms' | null = null,
+  verified = false,
+  method: 'password' | 'totp' | 'recovery' | 'sms' | null = null,
 ) {
   const token = opaqueToken()
   await c.query(
-    `INSERT INTO platform_sessions(token_hash,identity_id,epoch,origin,mfa_at,mfa_method,expires_at) VALUES($1,$2,$3,$4,CASE WHEN $5 THEN NOW() ELSE NULL END,$6,NOW()+INTERVAL '30 minutes')`,
-    [
-      hash(token),
-      identity,
-      epoch,
-      origin,
-      mfa,
-      mfa ? method || 'passkey' : null,
-    ],
+    `INSERT INTO platform_sessions(token_hash,identity_id,epoch,origin,verified_at,verification_method,mfa_at,mfa_method,expires_at) VALUES($1,$2,$3,$4,CASE WHEN $5 THEN NOW() ELSE NULL END,$6,CASE WHEN $5 AND $6<>'password' THEN NOW() ELSE NULL END,CASE WHEN $6<>'password' THEN $6 ELSE NULL END,NOW()+INTERVAL '30 minutes')`,
+    [hash(token), identity, epoch, origin, verified, verified ? method : null],
   )
   return token
+}
+/** Only server-issued, recent verification can authorize sensitive actions. */
+export function hasRecentAdminVerification(session: AdminMetadata) {
+  const verified = Date.parse(String(session.verified_at))
+  return (
+    ['password', 'totp', 'recovery', 'sms'].includes(
+      session.verification_method,
+    ) &&
+    Number.isFinite(verified) &&
+    verified <= Date.now() &&
+    verified > Date.now() - 10 * 60000 &&
+    !(session.verification_method === 'password' && session.totp_enabled)
+  )
 }
 export function requestReference() {
   return randomUUID()

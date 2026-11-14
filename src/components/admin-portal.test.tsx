@@ -29,12 +29,6 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('./label-studio', () => ({
   LabelCanvas: () => <svg aria-label="Stock label preview" />,
 }))
-vi.mock('@simplewebauthn/browser', () => ({
-  browserSupportsWebAuthn: vi.fn(() => true),
-  startAuthentication: vi.fn(async () => ({ id: 'test-assertion' })),
-  startRegistration: vi.fn(async () => ({ id: 'test-enrollment' })),
-}))
-import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import { AdminPortal } from './admin-portal'
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -43,12 +37,6 @@ beforeEach(() => {
   sdk.handleAuthCallback.mockReset().mockResolvedValue({ type: 'recovery' })
   sdk.updateUser.mockReset().mockResolvedValue({})
   sdk.logout.mockReset().mockResolvedValue(undefined)
-  vi.mocked(startRegistration)
-    .mockReset()
-    .mockResolvedValue({ id: 'test-enrollment' } as never)
-  vi.mocked(startAuthentication)
-    .mockReset()
-    .mockResolvedValue({ id: 'test-assertion' } as never)
   Object.assign(runtime, {
     search: '?section=overview',
     pathname: '/admin',
@@ -350,8 +338,6 @@ it('opens the dashboard with email and password without invoking any second fact
       }),
     }),
   )
-  expect(startAuthentication).not.toHaveBeenCalled()
-  expect(startRegistration).not.toHaveBeenCalled()
   expect(runtime.calls.some((call) => /mfa-|totp-|sms-/.test(call))).toBe(false)
   expect(screen.queryByText('Admin sign-in security')).not.toBeInTheDocument()
   expect(screen.queryByText('Text-message sign-in')).not.toBeInTheDocument()
@@ -380,8 +366,6 @@ it.each(['mfa_required', 'enrollment_required'])(
     expect(screen.queryByText(/enrollment is closed/)).not.toBeInTheDocument()
     await submitPassword()
     expect(await screen.findByText('Customer accounts')).toBeVisible()
-    expect(startAuthentication).not.toHaveBeenCalled()
-    expect(startRegistration).not.toHaveBeenCalled()
   },
 )
 

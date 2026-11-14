@@ -17,19 +17,12 @@ import type { Context } from '@netlify/functions'
 import { login, requestPasswordRecovery } from '@netlify/identity'
 import { z, ZodError } from 'zod'
 import {
-  generateAuthenticationOptions,
-  generateRegistrationOptions,
-  verifyAuthenticationResponse,
-  verifyRegistrationResponse,
-} from '@simplewebauthn/server'
-import {
-  afterTotpPasskey,
+  afterTotpVerification,
   totpAction,
   totpConfigured,
 } from '../lib/platform-admin-totp'
 import {
-  afterSmsPasskey,
-  smsConfigured,
+  afterSmsVerification,
   smsEnrollAction,
   smsLoginSend,
   smsDestinationKey,
@@ -47,6 +40,7 @@ import {
   currentIdentity,
   requestReference,
   requireAdmin,
+  hasRecentAdminVerification,
   requireAdminOrigin,
   requireRate,
   sessionCookie,
@@ -173,7 +167,7 @@ export default async (request: Request, context: Context) => {
       headers.append('Set-Cookie', sessionCookie(result))
       return Response.json({ stage: 'authenticated' }, { headers })
     }
-    if (action === 'mfa-options' || action === 'mfa-verify') {
+    if (action === 'password-verify') {
       await requireRate(clientAddress(context), 'mfa-ip', 20)
       await requireRate(
         sessionToken(request) || 'no-session',
@@ -208,12 +202,21 @@ export default async (request: Request, context: Context) => {
       if (destination)
         await requireRate(destination, 'sms-destination', 6, 3600)
     }
-    if (action?.startsWith('totp-') && request.method === 'POST') {
+    if (
+      (action?.startsWith('totp-') || action === 'password-verify') &&
+      request.method === 'POST'
+    ) {
       await requireRate(clientAddress(context), 'totp-ip', 20)
       const identity = await adminTransaction(
         async (c) => (await requireAdmin(c, request)).identity_id,
       )
-      await requireRate(identity, 'totp-account', 10)
+      await requireRate(
+        identity,
+        action === 'password-verify'
+          ? 'password-verification-account'
+          : 'totp-account',
+        action === 'password-verify' ? 5 : 10,
+      )
     }
     if (action === 'stripe' && request.method === 'POST') {
       const identity = await adminTransaction(
@@ -225,12 +228,6 @@ export default async (request: Request, context: Context) => {
       const session = await requireAdmin(c, request)
       actor = session.identity_id
       if (action === 'session' && request.method === 'GET') {
-        const credentials = (
-          await c.query(
-            'SELECT transports,created_at FROM platform_credentials WHERE identity_id=$1 ORDER BY created_at',
-            [actor],
-          )
-        ).rows
         const totp = (
           await c.query(
             'SELECT enabled_at FROM platform_totp WHERE identity_id=$1',
@@ -239,7 +236,8 @@ export default async (request: Request, context: Context) => {
         ).rows[0]
         return {
           ...(await smsStatus(c, session.identity_id)),
-          mfaMethod: session.mfa_method || null,
+          verificationMethod: session.verification_method || null,
+          verificationCurrent: hasRecentAdminVerification(session),
           totpEnabled: !!totp?.enabled_at,
           totpAvailable: totpConfigured(),
           stage: 'authenticated',
@@ -247,15 +245,6 @@ export default async (request: Request, context: Context) => {
           identityEmail: session.identity_email,
           role: session.role,
           expiresAt: session.expires_at,
-          enrollmentUntil: session.enrollment_until,
-          credentials: credentials.map((credential) => ({
-            transports: credential.transports,
-            createdAt: credential.created_at,
-          })),
-          enrollmentAvailable:
-            !credentials.length &&
-            !!session.enrollment_until &&
-            Date.parse(session.enrollment_until) > Date.now(),
         }
       }
       if (
@@ -266,7 +255,10 @@ export default async (request: Request, context: Context) => {
       ) {
         const input = JSON.parse((await limitedBody(request, 500)).toString())
         const result = await totpAction(c, session, action!, input, reference)
-        if (result.stage === 'authenticated') {
+        if (
+          result.stage === 'authenticated' ||
+          (action === 'totp-confirm' && result.stage === 'recovery_codes')
+        ) {
           const token = await createSession(
             c,
             actor!,
@@ -312,7 +304,7 @@ export default async (request: Request, context: Context) => {
         ) &&
         request.method === 'POST'
       ) {
-        if (!session.mfa_at)
+        if (!hasRecentAdminVerification(session))
           throw new AdminError(
             403,
             'MFA_REQUIRED',
@@ -332,260 +324,36 @@ export default async (request: Request, context: Context) => {
         headers.append('Set-Cookie', sessionCookie('', 0))
         return { stage: 'signed_out' }
       }
-      if (action === 'mfa-options' && request.method === 'POST') {
-        const { kind, method, purpose } = z
-          .object({
-            kind: z.enum(['registration', 'authentication']),
-            purpose: z
-              .enum([
-                'totp-enroll',
-                'totp-remove',
-                'totp-recovery',
-                'sms-enroll',
-                'sms-remove',
-              ])
-              .optional(),
-            method: z
-              .enum(['device', 'phone', 'security-key'])
-              .default('device'),
-          })
+      if (action === 'password-verify' && request.method === 'POST') {
+        const { password } = z
+          .object({ password: z.string().min(1).max(256) })
           .strict()
-          .parse(JSON.parse((await limitedBody(request, 300)).toString()))
-        if (purpose && (!session.mfa_at || kind !== 'authentication'))
+          .parse(JSON.parse((await limitedBody(request, 1500)).toString()))
+        // An enrolled authenticator cannot be bypassed with a password fallback.
+        if (session.totp_enabled)
           throw new AdminError(
             403,
-            'FRESH_PASSKEY_REQUIRED',
-            'Verify your existing passkey from your authenticated phone session.',
+            'CODE_REQUIRED',
+            'Use your enrolled authenticator or a single-use recovery code.',
           )
-        if (purpose === 'totp-enroll' && !totpConfigured())
-          throw new AdminError(
-            503,
-            'MFA_SETUP_UNAVAILABLE',
-            'Authenticator setup is unavailable; your passkey still works.',
-          )
-        if (purpose === 'sms-enroll' && !smsConfigured())
-          throw new AdminError(
-            503,
-            'SMS_UNAVAILABLE',
-            'Text-message verification is not switched on yet. Your passkey still works.',
-          )
-        const credentials = (
-          await c.query(
-            'SELECT id,transports FROM platform_credentials WHERE identity_id=$1',
-            [actor],
-          )
-        ).rows
-        if (
-          kind === 'registration' &&
-          (credentials.length ||
-            !session.enrollment_until ||
-            Date.parse(session.enrollment_until) <= Date.now())
-        )
-          throw new AdminError(
-            403,
-            'ENROLLMENT_CLOSED',
-            'Passkey enrollment is closed. Use your registered passkey, or request audited owner-verified recovery. Existing credentials and enrollment deadlines are preserved.',
-          )
-        if (kind === 'authentication' && !credentials.length)
-          throw new AdminError(
-            403,
-            'MFA_NOT_ENROLLED',
-            'A platform owner must authorize passkey enrollment.',
-          )
-        const rpID = new URL(origin).hostname
-        const options =
-          kind === 'registration'
-            ? await generateRegistrationOptions({
-                rpName: 'Cottage Pantry Admin',
-                rpID,
-                userName: actor!,
-                userDisplayName: session.identity_email,
-                userID: new TextEncoder().encode(actor!),
-                attestationType: 'none',
-                authenticatorSelection: {
-                  userVerification: 'required',
-                  residentKey: 'preferred',
-                },
-                supportedAlgorithmIDs: [-7, -257],
-              })
-            : await generateAuthenticationOptions({
-                rpID,
-                userVerification: 'required',
-                // Preserve account-bound credential selection. Stored transports
-                // are advisory browser metadata and can hide a synced/hybrid
-                // route; omit them without changing or replacing any credential.
-                allowCredentials: credentials.map((r) => ({ id: r.id })),
-              })
-        // Hints order the chooser without restricting attachment. In particular,
-        // preferredAuthenticatorType would also set authenticatorAttachment.
-        options.hints =
-          method === 'phone'
-            ? ['hybrid', 'client-device', 'security-key']
-            : method === 'security-key'
-              ? ['security-key', 'client-device', 'hybrid']
-              : ['client-device', 'hybrid', 'security-key']
-        const challenge = await c.query(
-          "UPDATE platform_sessions SET challenge=$2,challenge_kind=$3,challenge_purpose=$4,challenge_until=NOW()+INTERVAL '2 minutes' WHERE token_hash=$1 RETURNING challenge_until",
-          [session.token_hash, options.challenge, kind, purpose || null],
-        )
-        await audit(
-          c,
-          actor,
-          'mfa_challenge',
-          null,
-          'issued',
-          reference,
-          null,
-          null,
-          {
-            kind,
-            method,
-            credentialCount: credentials.length,
-            transportFilter: false,
-          },
-        )
-        return { options, kind, expiresAt: challenge.rows[0].challenge_until }
-      }
-      if (action === 'mfa-verify' && request.method === 'POST') {
-        const response = JSON.parse(
-          (await limitedBody(request, 20000)).toString(),
-        )
-        if (
-          !session.challenge ||
-          !session.challenge_until ||
-          Date.parse(session.challenge_until) <= Date.now()
-        )
-          throw new AdminError(
-            403,
-            'MFA_CHALLENGE_EXPIRED',
-            'The passkey challenge expired. Prepare a new challenge and try again.',
-          )
-        if (
-          session.challenge_purpose &&
-          (!session.mfa_at || session.challenge_kind !== 'authentication')
-        )
-          throw new AdminError(
-            403,
-            'FRESH_PASSKEY_REQUIRED',
-            'Use your authenticated phone session.',
-          )
-        // Consume even failed challenges; returning the failure commits this update.
-        await c.query(
-          'UPDATE platform_sessions SET challenge=NULL,challenge_kind=NULL,challenge_purpose=NULL,challenge_until=NULL WHERE token_hash=$1',
-          [session.token_hash],
-        )
-        let valid = false
-        let registered = false
+        let identity
         try {
-          if (session.challenge_kind === 'registration') {
-            const existing = (
-              await c.query(
-                'SELECT id FROM platform_credentials WHERE identity_id=$1',
-                [actor],
-              )
-            ).rows
-            if (
-              !existing.length &&
-              session.enrollment_until &&
-              Date.parse(session.enrollment_until) > Date.now()
-            ) {
-              const verification = await verifyRegistrationResponse({
-                response,
-                expectedChallenge: session.challenge,
-                expectedOrigin: origin,
-                expectedRPID: new URL(origin).hostname,
-                requireUserVerification: true,
-                supportedAlgorithmIDs: [-7, -257],
-              })
-              if (verification.verified) {
-                const credential = verification.registrationInfo.credential
-                await c.query(
-                  'INSERT INTO platform_credentials(id,identity_id,public_key,counter,transports) VALUES($1,$2,$3,$4,$5)',
-                  [
-                    credential.id,
-                    actor,
-                    Buffer.from(credential.publicKey).toString('base64url'),
-                    credential.counter,
-                    JSON.stringify(credential.transports || []),
-                  ],
-                )
-                await c.query(
-                  'UPDATE platform_admins SET enrollment_until=NULL WHERE identity_id=$1',
-                  [actor],
-                )
-                valid = true
-                registered = true
-              }
-            }
-          } else if (session.challenge_kind === 'authentication') {
-            const credential = (
-              await c.query(
-                'SELECT * FROM platform_credentials WHERE id=$1 AND identity_id=$2 FOR UPDATE',
-                [String(response?.id || '').slice(0, 1500), actor],
-              )
-            ).rows[0]
-            if (credential) {
-              const verification = await verifyAuthenticationResponse({
-                response,
-                expectedChallenge: session.challenge,
-                expectedOrigin: origin,
-                expectedRPID: new URL(origin).hostname,
-                requireUserVerification: true,
-                credential: {
-                  id: credential.id,
-                  publicKey: new Uint8Array(
-                    Buffer.from(credential.public_key, 'base64url'),
-                  ),
-                  counter: credential.counter,
-                  transports: credential.transports,
-                },
-              })
-              if (verification.verified) {
-                await c.query(
-                  'UPDATE platform_credentials SET counter=$2 WHERE id=$1',
-                  [credential.id, verification.authenticationInfo.newCounter],
-                )
-                valid = true
-              }
-            }
-          }
-        } catch (error) {
-          // Database errors must roll back; WebAuthn validation failures are safe denials.
-          if (typeof (error as { code?: unknown })?.code === 'string')
-            throw error
-        }
-        await audit(
-          c,
-          actor,
-          registered ? 'mfa_enrolled' : 'mfa_verification',
-          registered ? actor : null,
-          valid ? 'success' : 'denied',
-          reference,
-          registered
-            ? 'Controlled enrollment following administrator password verification'
-            : null,
-          registered ? { mfaEnrolled: false } : null,
-          registered ? { mfaEnrolled: true } : null,
-        )
-        if (!valid)
-          return {
-            stage: 'verification_failed',
-            error:
-              'Passkey verification failed. Prepare a new challenge and try again.',
-          }
-        if (session.challenge_purpose?.startsWith('sms-'))
-          return afterSmsPasskey(
-            c,
-            session,
-            session.challenge_purpose,
-            reference,
+          identity = await login(session.identity_email, password)
+        } catch {
+          throw new AdminError(
+            401,
+            'VERIFICATION_FAILED',
+            'Password verification failed. Try again.',
           )
-        if (session.challenge_purpose)
-          return afterTotpPasskey(
-            c,
-            session,
-            session.challenge_purpose,
-            reference,
+        } finally {
+          context.cookies.delete('nf_jwt')
+          context.cookies.delete('nf_refresh')
+        }
+        if (identity.id !== actor || !identity.confirmedAt)
+          throw new AdminError(
+            403,
+            'VERIFICATION_FAILED',
+            'Administrator verification failed.',
           )
         const token = await createSession(
           c,
@@ -593,15 +361,39 @@ export default async (request: Request, context: Context) => {
           session.epoch,
           origin,
           true,
+          'password',
         )
         await c.query('DELETE FROM platform_sessions WHERE token_hash=$1', [
           session.token_hash,
         ])
+        await audit(
+          c,
+          actor,
+          'admin_reverification',
+          actor,
+          'success',
+          reference,
+          null,
+          null,
+          { method: 'password' },
+        )
         headers.append('Set-Cookie', sessionCookie(token))
         return { stage: 'authenticated' }
       }
+      if (
+        ['totp-enroll', 'totp-remove', 'totp-recovery'].includes(
+          action || '',
+        ) &&
+        request.method === 'POST'
+      )
+        return afterTotpVerification(c, session, action!, reference)
+      if (
+        ['sms-enroll', 'sms-remove'].includes(action || '') &&
+        request.method === 'POST'
+      )
+        return afterSmsVerification(c, session, action!, reference)
       if (action === 'business-reconcile' && request.method === 'POST') {
-        if (!session.mfa_at)
+        if (!hasRecentAdminVerification(session))
           throw new AdminError(
             403,
             'MFA_REQUIRED',
@@ -626,7 +418,7 @@ export default async (request: Request, context: Context) => {
       if (action === 'membership')
         return adminMembership(c, request, session, reference)
       if (action === 'identity-status' && request.method === 'GET') {
-        if (!session.mfa_at)
+        if (!hasRecentAdminVerification(session))
           throw new AdminError(
             403,
             'ADMIN_REQUIRED',

@@ -4,7 +4,12 @@ import {
   registrationPolicySchema,
   type RegistrationPolicy,
 } from '../../src/lib/free-registration-policy'
-import { AdminError, audit, type AdminClient } from './platform-admin-core'
+import {
+  AdminError,
+  audit,
+  hasRecentAdminVerification,
+  type AdminClient,
+} from './platform-admin-core'
 import type { RegistrationClient } from './registration-core'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 import { limitedBody } from './support-core'
@@ -36,7 +41,7 @@ export async function handleRegistrationPolicies(
   session: AdminMetadata,
   reference: string,
 ) {
-  if (!session.mfa_at || session.role !== 'owner')
+  if (!hasRecentAdminVerification(session) || session.role !== 'owner')
     throw new AdminError(
       403,
       'OWNER_REQUIRED',
