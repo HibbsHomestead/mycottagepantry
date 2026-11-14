@@ -49,6 +49,7 @@ it('extracts real Schema.org Recipe data and ordered steps without executing mar
       {
         '@type': 'Recipe',
         name: 'Test bread',
+        recipeCategory: ['Family breads', 'Breakfast'],
         recipeIngredient: ['2 cups bread flour', '1 tsp salt'],
         recipeYield: '2 loaves',
         prepTime: 'PT20M',
@@ -70,6 +71,8 @@ it('extracts real Schema.org Recipe data and ordered steps without executing mar
   )
   expect(parsed.recipes[0]).toMatchObject({
     title: 'Test bread',
+    importedCategory: 'Family breads; Breakfast',
+    recipeCategoryId: '',
     yieldQuantity: 2,
     yieldUnit: 'loaves',
     prepMinutes: 20,

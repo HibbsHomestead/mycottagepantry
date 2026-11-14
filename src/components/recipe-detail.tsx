@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { recipeCategories, recipeCategoryLabel } from '@/lib/recipe-categories'
 import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react'
 import {
   costBreakdown,
@@ -125,6 +126,21 @@ export function RecipeDetail({
         )}
         {stage === 'details' ? (
           <>
+            <div className="recipe-category-detail">
+              <PantryPhoto
+                item={r}
+                assets={w.graphic_assets}
+                kind="recipe"
+                recipeCategories={recipeCategories(w)}
+              />
+              <span>{recipeCategoryLabel(r, recipeCategories(w))}</span>
+            </div>
+            {r.importedCategory && (
+              <p className="form-hint">
+                Imported category: {r.importedCategory}
+                {r.categoryNeedsReview ? ' · Category review needed' : ''}
+              </p>
+            )}
             <div className="recipe-meta">
               {r.laborMinutes != null && (
                 <span>Costing labor {r.laborMinutes} min</span>
