@@ -1,10 +1,8 @@
-import { withSquareConnections } from '../lib/square-credentials'
 import { SessionError } from '../lib/verified-session'
 import { requireLegacyAdmin } from '../lib/platform-admin-legacy'
 import { AdminError } from '../lib/platform-admin-core'
 import { ZodError } from 'zod'
 import type { Config } from '@netlify/functions'
-import { squareReconciliationWorker } from '../lib/square-reconcile-worker'
 import { registrationReadiness } from '../../src/lib/registration'
 import { publicRegistrationPolicy } from '../lib/registration-policies'
 import { createFreeWorkspace } from '../lib/free-registration'
@@ -18,17 +16,7 @@ import {
   acceptFixturePolicy,
   provisionTestWorkspace,
   saveChecklist,
-  billingView,
-  registrationRateLimit,
 } from '../lib/registration-core'
-import {
-  billingAdminStatus,
-  cancelAtPeriodEnd,
-  recordConnectionCheck,
-  refreshOwnBilling,
-  startCheckout,
-  syncPlanMappings,
-} from '../lib/billing-service'
 
 export default async (request: Request) => {
   const headers = {
@@ -74,60 +62,14 @@ export default async (request: Request) => {
         view !== 'billing')
     )
       await requireLegacyAdmin(request, actor.id)
-    if (view === 'billing-admin' && !actor.platformAdmin)
-      throw new RegistrationError(
-        403,
-        'ADMIN_REQUIRED',
-        'Platform administrator access is required.',
+    if (billingViews.includes(view || ''))
+      return Response.json(
+        {
+          code: 'BILLING_ROUTE_RETIRED',
+          error: 'Use Subscription & Billing in My Oven.',
+        },
+        { status: 410, headers },
       )
-    if (request.method === 'POST' && billingViews.includes(view || '')) {
-      if (request.headers.get('origin') !== url.origin)
-        throw new RegistrationError(
-          403,
-          'ORIGIN_FORBIDDEN',
-          'Billing changes must come from Cottage Pantry.',
-        )
-      const text = await request.text()
-      if (text.length > 2000)
-        throw new RegistrationError(
-          413,
-          'REQUEST_TOO_LARGE',
-          'The request is too large.',
-        )
-      const data = JSON.parse(text)
-      const result = await registrationTransaction(actor, (client) =>
-        withSquareConnections(client, async () => {
-          await client.query(
-            "SELECT set_config('app.billing_worker','true',true)",
-          )
-          await registrationRateLimit(client, actor.id, 'billing', 30)
-          await client.query(
-            "SELECT set_config('app.billing_worker','false',true)",
-          )
-          if (view === 'billing-admin') {
-            const environment =
-              data.environment === 'production' ? 'production' : 'sandbox'
-            if (data.action === 'verifyConnection')
-              return recordConnectionCheck(client, environment)
-            if (data.action === 'syncPlans')
-              return syncPlanMappings(client, environment)
-          } else {
-            if (data.action === 'checkout')
-              return startCheckout(client, actor, data, url.origin)
-            if (data.action === 'refresh' && Object.keys(data).length === 1)
-              return refreshOwnBilling(client, actor)
-            if (data.action === 'cancel')
-              return cancelAtPeriodEnd(client, actor, data)
-          }
-          throw new RegistrationError(
-            409,
-            'ACTION_UNAVAILABLE',
-            'This billing action is unavailable.',
-          )
-        }),
-      )
-      return Response.json(result, { headers })
-    }
     if (request.method === 'POST' && view === 'free') {
       if (request.headers.get('origin') !== url.origin)
         throw new RegistrationError(
@@ -190,14 +132,6 @@ export default async (request: Request) => {
       return Response.json(
         await registrationTransaction(actor, async (client) => {
           if (view === 'access') return workspaceAccess(client, actor)
-          if (view === 'billing')
-            return withSquareConnections(client, () =>
-              billingView(client, actor),
-            )
-          if (view === 'billing-admin')
-            return withSquareConnections(client, () =>
-              billingAdminStatus(client),
-            )
           if (view === 'operations') {
             if (!actor.platformAdmin)
               throw new RegistrationError(
@@ -247,24 +181,6 @@ export default async (request: Request) => {
         'The request is too large.',
       )
     const data = JSON.parse(text)
-    if (data.action === 'reconcileSandbox' && Object.keys(data).length === 1) {
-      await registrationTransaction(actor, (client) =>
-        registrationRateLimit(client, actor.id, 'reconcile', 12),
-      )
-      const response = await squareReconciliationWorker('sandbox')
-      if (!response.ok)
-        throw new RegistrationError(
-          503,
-          'RECONCILIATION_UNAVAILABLE',
-          'Sandbox reconciliation could not complete. Try again later.',
-        )
-      return Response.json(
-        response.status === 204
-          ? { checked: 0, disabled: true }
-          : await response.json(),
-        { status: response.status === 204 ? 200 : response.status, headers },
-      )
-    }
     const result = await registrationTransaction(actor, async (client) => {
       if (data.action === 'saveDraft')
         return saveRegistrationDraft(client, actor, data)

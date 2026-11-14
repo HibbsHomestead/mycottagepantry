@@ -1,15 +1,10 @@
 // @vitest-environment node
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createHmac } from 'node:crypto'
 import {
   resolveBillingAccess,
   billingFeatureAllowed,
   type PaidEvidence,
 } from '../../netlify/lib/billing-state'
-import {
-  squareSandboxRequest,
-  verifySquareSignature,
-} from '../../netlify/lib/square-sandbox'
 const now = Date.parse('2026-11-15T00:00:00Z')
 const evidence: PaidEvidence = {
   environment: 'sandbox',
@@ -170,27 +165,6 @@ it('keeps historical reads/export after expiry while denying new writes', () => 
   expect(billingFeatureAllowed(result, 'finance', 'read')).toBe(true)
   expect(billingFeatureAllowed(result, 'dataExport', 'export')).toBe(true)
 })
-it('validates exact Square URL/body signatures and rejects malformed signatures', () => {
-  const body = '{"event_id":"fixture"}',
-    url = 'https://fixture.netlify.app/api/square/sandbox/webhook',
-    key = 'development-fixture'
-  const signature = createHmac('sha256', key)
-    .update(url + body)
-    .digest('base64')
-  expect(verifySquareSignature(body, signature, url, key)).toBe(true)
-  expect(verifySquareSignature(body + ' ', signature, url, key)).toBe(false)
-  expect(verifySquareSignature(body, signature, url + '/changed', key)).toBe(
-    false,
-  )
-  expect(verifySquareSignature(body, 'short', url, key)).toBe(false)
-})
-it('blocks all Square traffic when Sandbox configuration is absent, including production contexts', async () => {
-  vi.stubGlobal('Netlify', { env: { get: () => undefined } })
-  await expect(
-    squareSandboxRequest('/v2/subscriptions/fixture'),
-  ).rejects.toMatchObject({ code: 'SANDBOX_NOT_CONFIGURED' })
-  expect(fetch).not.toHaveBeenCalled()
-})
 it('does not abandon unresolved paid collection when selecting Free', () => {
   const failed = { ...evidence, paymentStatus: 'FAILED' }
   expect(
@@ -210,24 +184,4 @@ it('does not abandon unresolved paid collection when selecting Free', () => {
       now,
     ).state,
   ).toBe('free_active')
-})
-it('uses only the Sandbox origin with an injected transport and supports encoded invoice references', async () => {
-  const values: Record<string, string> = {
-    CONTEXT: 'deploy-preview',
-    REGISTRATION_PRIVATE_TESTS_ENABLED: 'true',
-    SQUARE_SANDBOX_ENABLED: 'true',
-    SQUARE_SANDBOX_ACCESS_TOKEN: 'development-fixture-only',
-    SQUARE_SANDBOX_API_VERSION: '2026-01-22',
-  }
-  vi.stubGlobal('Netlify', { env: { get: (name: string) => values[name] } })
-  const transport = vi
-    .fn()
-    .mockResolvedValue(
-      Response.json({ invoice: { id: 'inv:fixture', status: 'UNPAID' } }),
-    )
-  await squareSandboxRequest('/v2/invoices/inv%3Afixture', {}, transport)
-  expect(transport.mock.calls[0][0]).toBe(
-    'https://connect.squareupsandbox.com/v2/invoices/inv%3Afixture',
-  )
-  expect(fetch).not.toHaveBeenCalled()
 })

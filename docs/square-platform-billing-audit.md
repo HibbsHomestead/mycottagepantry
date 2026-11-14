@@ -1,5 +1,7 @@
 # Square platform billing: audit and proposed implementation
 
+> Historical implementation record. Square integration and its setup requirements were retired; see [the retirement record](./square-subscription-billing.md). For current connection evidence, see [Stripe status](./reviews/stripe-connection-status.md).
+
 > Historical audit of the initial Sandbox implementation. Connection, Production synchronization and setup details below were superseded by [the current OAuth/setup guide](./square-oauth-setup.md) and [stage checkpoints](./signup-billing-stages.md). Production checkout remains disabled.
 
 ## Audit outcome

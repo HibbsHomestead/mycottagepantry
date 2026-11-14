@@ -1,5 +1,4 @@
 import { AdminError, type AdminClient } from './platform-admin-core'
-import { withSquareConnections } from './square-credentials'
 
 /** Shared with the existing administrator recovery workflow. No charge/cancel/plan-write API. */
 export async function reconcileSupportBilling(
@@ -21,13 +20,10 @@ export async function reconcileSupportBilling(
   if (billing?.source?.startsWith('stripe_') || attempts.length) {
     const { reconcileStripeCheckout } = await import('./stripe-subscriptions')
     for (const attempt of attempts) await reconcileStripeCheckout(c, attempt)
-  } else if (billing?.source?.startsWith('square_')) {
-    const { reconcileBusiness } = await import('./billing-service')
-    await withSquareConnections(c, () => reconcileBusiness(c, businessId))
   } else
     throw new AdminError(
       409,
       'NO_PROVIDER_LINK',
-      'No trusted provider billing relationship exists for this business.',
+      'No supported billing connection is available for synchronization. Historical billing and verified paid access are preserved.',
     )
 }

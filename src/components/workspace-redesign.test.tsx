@@ -58,7 +58,7 @@ it('reveals custom tax dates only when selected and exports the chosen report', 
     expect.any(Array),
   )
 })
-it('distinguishes implemented integrations from planned Square sync without starting paid requests', async () => {
+it('keeps exports available without Square connection controls or provider requests', async () => {
   const openTaxReports = vi.fn()
   const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
     expect(options?.method).not.toBe('POST')
@@ -109,7 +109,7 @@ it('distinguishes implemented integrations from planned Square sync without star
     expect(
       screen.queryByRole('button', { name: /Test shopping search/i }),
     ).not.toBeInTheDocument()
-    expect(screen.getByText('Planned')).toBeInTheDocument()
+    expect(screen.queryByText('Square')).not.toBeInTheDocument()
     expect(
       screen.getByRole('heading', { name: 'Tax reports & exports' }),
     ).toBeInTheDocument()
@@ -122,10 +122,7 @@ it('distinguishes implemented integrations from planned Square sync without star
     )
     expect(openTaxReports).toHaveBeenCalledOnce()
     expect(fetcher).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByText(/Proposed sync scope/))
-    expect(
-      screen.getByText(/Imports do not deduct stock or post financial entries/),
-    ).toBeVisible()
+    expect(screen.queryByText(/Proposed sync scope/)).not.toBeInTheDocument()
   } finally {
     vi.unstubAllGlobals()
   }

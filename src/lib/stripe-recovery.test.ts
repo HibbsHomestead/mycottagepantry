@@ -10,7 +10,7 @@ import {
   processStripeEvent,
   reconcileStripeCheckout,
 } from '../../netlify/lib/stripe-subscriptions'
-import { squareBilledAccess } from '../../netlify/lib/billing-entitlements'
+import { providerBilledAccess } from '../../netlify/lib/billing-entitlements'
 import { stripePriceIssue } from '../../netlify/lib/stripe-provider'
 import { launchPricing } from './launch-plans'
 
@@ -161,12 +161,12 @@ it('expires Stripe paid access at coverage end without Square sandbox grace', ()
     paid_through: new Date(through).toISOString(),
     entitlement_policy: 'kitchen-two-v1' as const,
   }
-  expect(squareBilledAccess(row, through - 1).plan).toBe('cottage-kitchen')
-  expect(squareBilledAccess(row, through).plan).toBe('free')
+  expect(providerBilledAccess(row, through - 1).plan).toBe('cottage-kitchen')
+  expect(providerBilledAccess(row, through).plan).toBe('free')
   expect(
-    squareBilledAccess({ ...row, status: 'cancelled' }, through - 1).plan,
+    providerBilledAccess({ ...row, status: 'cancelled' }, through - 1).plan,
   ).toBe('cottage-kitchen')
   expect(
-    squareBilledAccess({ ...row, status: 'cancelled' }, through).plan,
+    providerBilledAccess({ ...row, status: 'cancelled' }, through).plan,
   ).toBe('free')
 })

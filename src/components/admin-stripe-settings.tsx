@@ -208,7 +208,7 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
               Stripe API keys
             </a>{' '}
             in the matching account and environment. Enter its secret key below
-            (sk_live_ or sk_test_), type{' '}
+            (sk_live_, rk_live_, sk_test_ or rk_test_), type{' '}
             <code>SAVE {environment.toUpperCase()}</code> in Action
             confirmation, then select Save credentials. A publishable key (pk_)
             cannot connect billing. Leave the webhook secret blank for automatic
@@ -240,17 +240,16 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           <li>
             <strong>Check subscription availability.</strong> API connected does
             not mean checkout enabled. Check New checkout below. Hosted LIVE
-            setup can activate after account readiness and signed delivery pass;
-            otherwise complete Required policies and activation review and
-            follow any displayed error. TEST checkout and access evidence appear
-            in Setup checklist.
+            setup keeps checkout disabled. Activation requires your explicit
+            approval in Required policies and activation review. TEST checkout
+            and access evidence appear in Setup checklist.
           </li>
         </ol>
       </div>
       <AdminStepUp request={request} />
       <p>
-        Cottage Pantry software subscriptions. Business Square sales connections
-        remain separate.
+        Cottage Pantry software subscriptions. Connecting Stripe does not enable
+        live checkout.
       </p>
       <div role="status" aria-label="Stripe account connections">
         <p>
@@ -321,7 +320,11 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       </button>
       <p>
         API: {dt(row.validated_at)} · Webhook: {dt(row.webhook_verified_at)} ·
-        New checkout: {row.checkout_enabled ? 'Enabled' : 'Disabled'}
+        New checkout:{' '}
+        {row.checkout_enabled &&
+        (environment === 'test' || config.liveCheckoutApprovedAt)
+          ? 'Enabled'
+          : 'Disabled'}
       </p>
       {config.apiError && (
         <p role="alert">
@@ -632,14 +635,14 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           receive your account review.
         </p>
         <label>
-          Live Square subscriber findings and cutover decision
+          Existing subscriber review and activation decision
           <textarea
             value={review}
             onChange={(e) => setReview(e.target.value)}
           />
         </label>
         <p>
-          Confirm authoritative live provider records. Preserve existing Square
+          Confirm authoritative live provider records. Preserve existing
           subscribers and their webhooks. Approval enables only new Stripe
           checkout; no migration or charge is created. Type ENABLE{' '}
           {environment.toUpperCase()} CHECKOUT in Action confirmation.

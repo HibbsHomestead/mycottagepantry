@@ -53,16 +53,6 @@ import {
   sessionToken,
 } from '../lib/platform-admin-core'
 import { readAdministration } from '../lib/platform-admin-read'
-import { withSquareConnections } from '../lib/square-credentials'
-import {
-  beginSquareOAuth,
-  completeSquareOAuth,
-  confirmSquareConnection,
-  squareOAuthAdminStatus,
-  squareState,
-  squareStateCookie,
-  requireSquareOwner,
-} from '../lib/square-oauth'
 
 export default async (request: Request, context: Context) => {
   const reference = requestReference()
@@ -610,92 +600,6 @@ export default async (request: Request, context: Context) => {
         headers.append('Set-Cookie', sessionCookie(token))
         return { stage: 'authenticated' }
       }
-      if (
-        request.method === 'POST' &&
-        [
-          'billing-connect',
-          'billing-oauth-complete',
-          'billing-confirm-connection',
-        ].includes(action || '')
-      ) {
-        requireSquareOwner(session)
-        const environment = z
-          .enum(['sandbox', 'production'])
-          .parse(url.searchParams.get('environment'))
-        let outcome
-        if (action === 'billing-connect') {
-          const started = await beginSquareOAuth(c, session, environment)
-          headers.append('Set-Cookie', started.cookie)
-          outcome = { url: started.url }
-        } else if (action === 'billing-oauth-complete') {
-          outcome = await completeSquareOAuth(c, session, squareState(request))
-        } else {
-          const input = JSON.parse(
-            (await limitedBody(request, 1000)).toString(),
-          )
-          outcome = await confirmSquareConnection(
-            c,
-            session,
-            squareState(request),
-            input,
-          )
-          headers.append('Set-Cookie', squareStateCookie('', 0))
-        }
-        await audit(
-          c,
-          actor,
-          action!,
-          environment,
-          'ok' in outcome && outcome.ok === false
-            ? 'verification_failed'
-            : 'success',
-          reference,
-        )
-        return outcome
-      }
-      if (
-        request.method === 'POST' &&
-        (action === 'billing-verify' ||
-          action === 'billing-sync-plans' ||
-          action === 'billing-verify-mappings')
-      ) {
-        requireSquareOwner(session)
-        // Platform subscription billing only; separate from customer Square sync.
-        const environment =
-          url.searchParams.get('environment') === 'production'
-            ? 'production'
-            : 'sandbox'
-        const billing = await import('../lib/billing-service')
-        try {
-          const outcome =
-            action === 'billing-verify'
-              ? await withSquareConnections(c, () =>
-                  billing.recordConnectionCheck(c, environment),
-                )
-              : action === 'billing-verify-mappings'
-                ? await withSquareConnections(c, () =>
-                    billing.verifyPlanMappings(c, environment),
-                  )
-                : await withSquareConnections(c, () =>
-                    billing.syncPlanMappings(c, environment),
-                  )
-          await audit(c, actor, action, environment, 'success', reference)
-          return outcome
-        } catch (error) {
-          const e = error as {
-            status?: number
-            code?: string
-            message?: string
-          }
-          throw new AdminError(
-            e.status && e.status < 600 ? e.status : 503,
-            e.code || 'BILLING_UNAVAILABLE',
-            e.code
-              ? String(e.message)
-              : 'Square billing could not be checked. No credentials were shown.',
-          )
-        }
-      }
       if (action === 'business-reconcile' && request.method === 'POST') {
         if (!session.mfa_at)
           throw new AdminError(
@@ -758,11 +662,10 @@ export default async (request: Request, context: Context) => {
         )
       const data =
         url.searchParams.get('section') === 'billing'
-          ? await withSquareConnections(c, async () => ({
+          ? {
               ...(await readAdministration(c, url.searchParams)),
-              oauth: await squareOAuthAdminStatus(c, session),
               stripe: await stripeAdminView(c),
-            }))
+            }
           : await readAdministration(c, url.searchParams)
       await audit(
         c,

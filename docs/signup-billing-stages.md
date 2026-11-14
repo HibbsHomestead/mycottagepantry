@@ -1,5 +1,7 @@
 # Signup and platform billing checkpoints
 
+> Historical implementation record. Square integration and its setup requirements were retired; see [the retirement record](./square-subscription-billing.md). For current connection evidence, see [Stripe status](./reviews/stripe-connection-status.md).
+
 ## Stage 1 — selected-plan registration
 
 Added Get Started Free and Choose [Plan Name] links to the existing card footers. All five approved plan IDs can be selected, including Cottage Mercantile at $40 USD per business monthly. Existing card layout and tier definitions were retained.

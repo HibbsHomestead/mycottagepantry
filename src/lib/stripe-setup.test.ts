@@ -28,7 +28,7 @@ afterEach(() => {
 })
 
 it.each([true, false])(
-  'requires charge capability before marking hosted launch ready (%s)',
+  'never authorizes live purchases after hosted setup (charges enabled: %s)',
   async (chargesEnabled) => {
     f.hostedKey = 'fixture'
     f.request.mockImplementation(async (_key: string, path: string) => {
@@ -59,9 +59,9 @@ it.each([true, false])(
       },
       'live',
     )
-    expect(c.query.mock.calls[0][1][2].hostedLaunchReady === true).toBe(
-      chargesEnabled,
-    )
+    expect(c.query.mock.calls[0][1][2].hostedLaunchReady).toBeUndefined()
+    expect(c.query.mock.calls[0][1][2].liveCheckoutApprovedAt).toBeUndefined()
+    expect(c.query.mock.calls[0][1][2].hostedSetupComplete).toBe(true)
   },
 )
 it('blocks live resource writes on previews and refuses changed accounts', async () => {
@@ -84,7 +84,10 @@ it('blocks live resource writes on previews and refuses changed accounts', async
   expect(c.query).not.toHaveBeenCalled()
 })
 it('reuses prices, stores webhook secret encrypted, and leaves activation and signed-delivery evidence to their real handlers', async () => {
-  const c = { query: vi.fn().mockResolvedValue({ rows: [] }), release: vi.fn() }
+  const c = {
+    query: vi.fn().mockResolvedValue({ rows: [] }),
+    release: vi.fn(),
+  }
   f.request.mockImplementation(async (_key: string, path: string) => {
     if (path === '/account') return { id: 'acct_fixture' }
     if (path.startsWith('/prices?')) return { data: [{ id: 'price_fixture' }] }

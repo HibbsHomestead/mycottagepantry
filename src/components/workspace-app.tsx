@@ -795,7 +795,7 @@ export function WorkspaceApp() {
     const access =
       resolution?.manualValid ||
       resolution?.suspended ||
-      resolution?.source?.startsWith('square_')
+      /^(square|stripe)_/.test(resolution?.source || '')
         ? resolution?.access
         : undefined
     if (
@@ -2362,22 +2362,11 @@ export function WorkspaceApp() {
                 />
               ) : sub === 'Integrations' ? (
                 <section className="panel settings-panel">
-                  <h2>Square</h2>
-                  <Badge tone="amber">Planned · not yet available</Badge>
-                  <p>
-                    Square authorization, product matching and transaction
-                    imports are not implemented.
-                  </p>
-                  <p>
-                    Manual sales are available now. Square authorization and
-                    imports are planned.
-                  </p>
+                  <h2>Sales exports</h2>
+                  <p>Export your recorded manual sales for reconciliation.</p>
                   <Btn secondary onClick={() => exportData('sales')}>
                     <Download size={16} />
                     Export manual sales
-                  </Btn>
-                  <Btn secondary onClick={() => go('Settings', 'Integrations')}>
-                    View proposed sync scope
                   </Btn>
                 </section>
               ) : sub === 'Chart of accounts' ? (

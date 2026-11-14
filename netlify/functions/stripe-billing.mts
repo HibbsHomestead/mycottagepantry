@@ -1,7 +1,11 @@
 import { deploymentRuntime } from '../lib/runtime-environment'
 import { adminTransaction } from '../lib/platform-admin-core'
 import { launchPricing } from '../../src/lib/launch-plans'
-import { stripeSettings, stripeTierPurchasable } from '../lib/stripe-provider'
+import {
+  stripeSettings,
+  stripeTierPurchasable,
+  stripeCheckoutEnabled,
+} from '../lib/stripe-provider'
 import { z, ZodError } from 'zod'
 import {
   registrationActor,
@@ -33,7 +37,7 @@ export default async (request: Request) => {
         const settings = await stripeSettings(c, 'live')
         if (
           deploymentRuntime().context !== 'production' ||
-          !settings?.checkout_enabled ||
+          !stripeCheckoutEnabled(settings, 'live') ||
           !settings.validated_at ||
           settings.configuration?.apiError ||
           !settings.webhook_verified_at ||

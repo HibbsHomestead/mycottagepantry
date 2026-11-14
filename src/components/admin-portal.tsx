@@ -29,7 +29,7 @@ import { AdminPasswordReset } from './admin-password-reset'
 import { AdminReconcileControl } from './admin-reconcile-control'
 import { AdminMemberControl } from './admin-member-control'
 import { AdminStripeSettings } from './admin-stripe-settings'
-import { AdminSquareConnection } from './admin-square-connection'
+import { AdminStepUp } from './admin-step-up'
 import './admin-portal.css'
 
 const sections = [
@@ -564,6 +564,7 @@ export function AdminPortal() {
                   )}
                 </>
               )}
+              {section !== 'billing' && <AdminStepUp request={adminRequest} />}
               <footer className="admin-page-footer">
                 <CircleCheck size={14} />
                 Read access is audited. Session expires{' '}
@@ -915,10 +916,6 @@ function AdminView({
       <>
         <Notice>{data.notice}</Notice>
         <AdminStripeSettings data={data.stripe || {}} request={adminRequest} />
-        <details>
-          <summary>Existing Square app billing</summary>
-          <BillingConnection data={data} />
-        </details>
         <section className="admin-panel">
           <h2>Platform billing records</h2>
           <p>
@@ -960,15 +957,6 @@ function AdminView({
             ]}
           />
           <Pager data={data} section="billing" query={{}} />
-          <a
-            className="admin-external"
-            href={data.managementUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Open Square billing management <ArrowUpRight size={15} />
-          </a>
-          <p>{data.managementNote}</p>
         </section>
         <BillingEvents rows={data.events} />
       </>
@@ -1251,15 +1239,15 @@ function OperationalRecords({ rows }: { rows: AdminMetadata[] }) {
 function BillingEvents({ rows }: { rows: AdminMetadata[] }) {
   return (
     <section className="admin-panel">
-      <h2>Square billing processing events</h2>
+      <h2>Historical billing processing events</h2>
       <p>
         Latest 30 recorded events. Provider object IDs, merchant credentials and
-        event payloads are excluded. Correlation failures require engineering
-        review; lookup failures require a Sandbox configuration check.
+        event payloads are excluded. These historical records remain available
+        for review.
       </p>
       <DataTable
         rows={rows}
-        empty="No Square billing processing events have been recorded."
+        empty="No Historical billing processing events have been recorded."
         columns={[
           { title: 'Event reference', cell: (r) => identityCell(r.id) },
           {
@@ -1276,8 +1264,4 @@ function BillingEvents({ rows }: { rows: AdminMetadata[] }) {
       />
     </section>
   )
-}
-
-function BillingConnection({ data }: { data: AdminMetadata }) {
-  return <AdminSquareConnection data={data} request={adminRequest} />
 }

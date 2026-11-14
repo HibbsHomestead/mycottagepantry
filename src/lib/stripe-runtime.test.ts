@@ -186,25 +186,28 @@ it('reads the current Node environment when the runtime replaces it after module
   }
 })
 
-it('recovers the production missing-root condition using a separate derived key and retains ciphertext after root delivery resumes', () => {
-  vi.stubGlobal('Netlify', undefined)
-  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', undefined)
-  const key = 'sk_live_' + randomBytes(24).toString('hex')
-  vi.stubEnv('STRIPE_LIVE_SECRET_KEY', key)
-  expect(stripeEncryptionStatus()).toMatchObject({
-    ready: true,
-    source: 'live_credential',
-  })
-  const encrypted = sealStripe({ key, signing: 'fixture' }, 'live')
-  expect(encrypted.startsWith('v2live.')).toBe(true)
-  expect(encrypted).not.toContain(key)
-  expect(openStripe(encrypted, 'live')).toEqual({ key, signing: 'fixture' })
-  expect(() => openStripe(encrypted, 'test')).toThrow()
-  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', randomBytes(32).toString('hex'))
-  expect(openStripe(encrypted, 'live').key).toBe(key)
-  vi.stubEnv(
-    'STRIPE_LIVE_SECRET_KEY',
-    'sk_live_' + randomBytes(24).toString('hex'),
-  )
-  expect(() => openStripe(encrypted, 'live')).toThrow()
-})
+it.each(['sk', 'rk'])(
+  'recovers the production missing-root condition with %s credentials and retains ciphertext after root delivery resumes',
+  (kind) => {
+    vi.stubGlobal('Netlify', undefined)
+    vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', undefined)
+    const key = kind + '_live_' + randomBytes(24).toString('hex')
+    vi.stubEnv('STRIPE_LIVE_SECRET_KEY', key)
+    expect(stripeEncryptionStatus()).toMatchObject({
+      ready: true,
+      source: 'live_credential',
+    })
+    const encrypted = sealStripe({ key, signing: 'fixture' }, 'live')
+    expect(encrypted.startsWith('v2live.')).toBe(true)
+    expect(encrypted).not.toContain(key)
+    expect(openStripe(encrypted, 'live')).toEqual({ key, signing: 'fixture' })
+    expect(() => openStripe(encrypted, 'test')).toThrow()
+    vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', randomBytes(32).toString('hex'))
+    expect(openStripe(encrypted, 'live').key).toBe(key)
+    vi.stubEnv(
+      'STRIPE_LIVE_SECRET_KEY',
+      'sk_live_' + randomBytes(24).toString('hex'),
+    )
+    expect(() => openStripe(encrypted, 'live')).toThrow()
+  },
+)

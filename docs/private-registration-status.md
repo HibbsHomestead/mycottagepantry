@@ -1,5 +1,7 @@
 # Private registration implementation and remaining release gates
 
+> Historical implementation record. Square integration and its setup requirements were retired; see [the retirement record](./square-subscription-billing.md). For current connection evidence, see [Stripe status](./reviews/stripe-connection-status.md).
+
 ## Current scope
 
 The first audit and screen/data proposal is in [the registration plan](business-registration-signup-plan.md). The owner approved implementing the existing draft Free scope (5 active recipes, 5 active products, 10 actively tracked inventory items) and the proposed next-renewal/no-proration/7-day renewal-grace policies **for Sandbox development**, while keeping public acceptance, admission, activation and live billing closed. These approvals did not provide legal documents, authorize beta admission or approve tax treatment.

@@ -18,6 +18,7 @@ import {
   stripeEndpoint,
   validatedPrice,
   stripeTierPurchasable,
+  stripeCheckoutEnabled,
   stripePortalMatchesPolicy,
   type StripeEnvironment,
 } from './stripe-provider'
@@ -79,7 +80,7 @@ export async function stripeOwnerView(
         billing?.source === 'stripe_test'))
   const available = settings.filter(
     (r) =>
-      r.checkout_enabled &&
+      stripeCheckoutEnabled(r, r.environment) &&
       ((r.environment === 'live' &&
         deploymentRuntime().context === 'production') ||
         (r.environment === 'test' && testAllowed)),
@@ -88,6 +89,12 @@ export async function stripeOwnerView(
   const signupSelection = await currentSignupSelection(c, actor)
   return {
     workspace: { id: member.id, name: member.business_name },
+    historicalInvoices: (
+      await c.query(
+        'SELECT environment,status,amount_cents,paid_cents,refunded_cents,service_from,service_through FROM billing_invoices WHERE business_id=$1 ORDER BY service_from DESC NULLS LAST LIMIT 50',
+        [member.id],
+      )
+    ).rows,
     signupSelection,
     billing: billing
       ? {
@@ -150,7 +157,7 @@ export async function stripeCheckout(
   if (
     !input.confirmed ||
     (e === 'live' && deploymentRuntime().context !== 'production') ||
-    !row?.checkout_enabled ||
+    !stripeCheckoutEnabled(row, e) ||
     !row.validated_at ||
     row.configuration?.apiError ||
     !row.webhook_verified_at ||

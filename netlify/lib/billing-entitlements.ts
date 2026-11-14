@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- untyped Square provider JSON */
+/* eslint-disable @typescript-eslint/no-explicit-any -- historical provider billing rows */
 import type { AccessResult } from './billing-state'
 import { planGateDecision } from './plan-feature-gates'
 import {
@@ -20,7 +20,7 @@ export type BillingPolicyRow = Row
 /** Server-side access for an oven billed through a verified provider. Paid features apply only
  * while a verified paid period (plus Sandbox test grace) covers `now`; otherwise the
  * oven keeps Free-scope access and every record. Never derived from client input. */
-export function squareBilledAccess(row: Row, now = Date.now()): AccessResult {
+export function providerBilledAccess(row: Row, now = Date.now()): AccessResult {
   const through = row.paid_through ? Date.parse(String(row.paid_through)) : NaN
   const grace =
     row.environment === 'sandbox'
@@ -46,7 +46,7 @@ export function squareBilledAccess(row: Row, now = Date.now()): AccessResult {
         entitlementPolicy: row.entitlement_policy || 'legacy',
       }
 }
-export const isSquareBilled = (row: Row | undefined | null) =>
+export const isProviderBilled = (row: Row | undefined | null) =>
   !!row &&
   [
     'square_sandbox',
@@ -58,7 +58,7 @@ export const isSquareBilled = (row: Row | undefined | null) =>
 const lookupTables = new Set(['ingredients', 'products', 'recipes', 'batches'])
 /** Throws when a write uses a workflow outside the oven's current paid access.
  * Reads, exports, refunds, reversals and other continuations are always allowed. */
-export async function enforceSquareBilledWrite(input: {
+export async function enforceProviderBilledWrite(input: {
   client: { query: (sql: string, values?: any[]) => Promise<{ rows: any[] }> }
   org: string
   row: Row
@@ -68,7 +68,7 @@ export async function enforceSquareBilledWrite(input: {
   now?: number
   access?: AccessResult
 }) {
-  const access = input.access || squareBilledAccess(input.row, input.now)
+  const access = input.access || providerBilledAccess(input.row, input.now)
   if (input.method !== 'POST') {
     const decision = planGateDecision(access, {
       method: input.method,

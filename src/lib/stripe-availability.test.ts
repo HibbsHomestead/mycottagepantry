@@ -31,6 +31,7 @@ const settings = () => ({
   webhook_verified_at: '2026-11-14',
   checkout_enabled: true,
   configuration: {
+    liveCheckoutApprovedAt: '2026-11-14T00:00:00Z',
     policy: {},
     mappings: {
       'mixing-bowl': {
@@ -81,5 +82,12 @@ it('requires mappings verified for the connected Stripe account', async () => {
   expect(await available()).toEqual({ plans: [] })
   fixture.settings = settings()
   delete fixture.settings.configuration.mappings['mixing-bowl'].verifiedAt
+  expect(await available()).toEqual({ plans: [] })
+})
+
+it('never treats old automatic launch readiness as explicit live checkout approval', async () => {
+  fixture.settings = settings()
+  delete fixture.settings.configuration.liveCheckoutApprovedAt
+  fixture.settings.configuration.hostedLaunchReady = true
   expect(await available()).toEqual({ plans: [] })
 })

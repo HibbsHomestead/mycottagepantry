@@ -7,7 +7,7 @@ import type { Item, Workspace } from '../../src/lib/domain'
 import { planWriteAllowed, type AccessResult } from './billing-state'
 
 /**
- * Enforced only for ovens billed through Square (see billing-entitlements.ts);
+ * Enforced for provider-billed ovens (see billing-entitlements.ts);
  * legacy, complimentary and app-managed Free ovens keep unrestricted access while
  * `launchPricing.restrictionsEnabled` is false. Maps workspace API requests to stable feature keys so a
  * future plan gate cannot be bypassed through Add Item, receipts, barcode/URL

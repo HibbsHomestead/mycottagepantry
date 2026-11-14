@@ -1,6 +1,6 @@
 /** Owner-approved monthly USD prices (2026-11). All paid tiers support approved
  * Stripe test checkout, subject to provider setup. Live activation remains separate;
- * existing Square release gates and legacy access policies are preserved. Public
+ * historical paid access policies are preserved. Public
  * availability is server-controlled and never enabled by comparison approval. */
 export const launchPricing = {
   status: 'approved_pricing',
@@ -513,13 +513,12 @@ export const launchFeatures = [
   },
   {
     id: 'salesIntegration',
-    label: 'Square sales integration',
+    label: 'Sales integration',
     status: 'planned',
     plans: kitchenAndMercantilePlans,
     testing: 'not_tested',
-    dependencies:
-      'Square account, OAuth app review and webhooks; no live connection',
-    gap: 'Sales provider is a placeholder; Square sandbox is used for billing tests only.',
+    dependencies: 'Provider account connections are unavailable',
+    gap: 'Manual sales and exports are available; provider imports are unavailable.',
   },
   {
     id: 'activityReports',

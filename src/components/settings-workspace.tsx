@@ -498,63 +498,6 @@ export function SettingsWorkspace({
           {selected === 'Integrations' && (
             <>
               <div className="integration-row">
-                <Plug size={23} aria-hidden="true" />
-                <div>
-                  <h3>Square sales</h3>
-                  <p>
-                    Not yet available. Authorization, product mapping and
-                    transaction imports are not implemented. Manual sales and
-                    CSV exports are available.
-                  </p>
-                  <details>
-                    <summary>
-                      Proposed sync scope · requires review before
-                      implementation
-                    </summary>
-                    <p>
-                      Start with an Owner-triggered import for selected Square
-                      locations, currency and explicit start/end dates in the
-                      location’s timezone. No scheduled sync or automatic
-                      historical backfill.
-                    </p>
-                    <p>
-                      Match Square catalog variation IDs to oven product IDs
-                      through a user-approved mapping. Names and SKUs are
-                      suggestions only; unmatched lines stay unresolved. Never
-                      create products silently.
-                    </p>
-                    <p>
-                      Stage completed orders with gross sales, line/order
-                      discounts and net sales. Keep collected taxes separate
-                      from revenue; record actual payment processing fees
-                      separately, with pending fees flagged. Link partial and
-                      full refunds to the original order, payment and line IDs
-                      without rewriting history.
-                    </p>
-                    <p>
-                      Prevent duplicate imports with oven, Square
-                      merchant/location and provider order/payment/refund IDs.
-                      Repeated date ranges update only unapproved staged
-                      records; changed approved records require a reviewed
-                      correction.
-                    </p>
-                    <p>
-                      Imports do not deduct stock or post financial entries. Any
-                      future inventory adjustment requires explicit review,
-                      verified product quantities and a stock ledger record.
-                      Refunds never assume restocking.
-                    </p>
-                    <p>
-                      Show a preview with unmatched products, missing fees,
-                      refunds, duplicates and differences between order totals,
-                      payments and payouts. Require user reconciliation before a
-                      separate approved posting workflow is implemented.
-                    </p>
-                  </details>
-                </div>
-                <span className="status neutral">Planned</span>
-              </div>
-              <div className="integration-row">
                 <Receipt size={23} aria-hidden="true" />
                 <div>
                   <h3>Tax reports &amp; exports</h3>

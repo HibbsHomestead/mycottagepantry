@@ -63,6 +63,7 @@ export const checklistSteps = [
   ['costing', 'Review costing'],
   ['inventory', 'Try a supported inventory or batch workflow'],
 ] as const
+/** Retained for historical verified sandbox coverage; no provider traffic. */
 export const sandboxBillingPolicy = {
   revision: 'sandbox-2026-11-v1',
   planChange: 'next_renewal',
@@ -72,45 +73,4 @@ export const sandboxBillingPolicy = {
   cancellation: 'end_of_paid_period',
   preserveRecords: true,
   seatDowngrade: 'owner_review',
-} as const
-/** Proposed platform billing policies — NOT approved for production. Sandbox uses
- * `sandboxBillingPolicy` above purely as labeled test configuration. */
-export const billingPolicyProposal = {
-  status: 'pending_owner_approval',
-  items: [
-    [
-      'Failed payment',
-      'A previously paid oven keeps its plan for 7 calendar days after the paid-through date while Square retries or emails an invoice link. After that it uses Free limits; nothing is deleted. A first payment that fails never grants paid access.',
-    ],
-    [
-      'Cancellation',
-      'Cancellation takes effect at the end of the current paid period (Square cancels at the billing-period boundary). Paid access continues until then; no partial refunds.',
-    ],
-    [
-      'Upgrade',
-      'Proposed: takes effect at the next renewal at the new monthly price, with no proration and no immediate charge. Not implemented until approved.',
-    ],
-    [
-      'Downgrade',
-      'Proposed: takes effect at the next renewal. Not implemented until approved.',
-    ],
-    [
-      'Refunds',
-      'No automatic refunds. The platform owner may issue a manual refund in Square; a refunded or disputed period stops counting as paid and is flagged for review.',
-    ],
-    [
-      'Over plan limits after a downgrade',
-      'All records, history and exports stay available. Existing records stay editable; only creating new records beyond the lower plan’s limits, or new records for workflows outside that plan, is blocked.',
-    ],
-    [
-      'Sales tax on the subscription',
-      'Not collected yet. Software-subscription taxability depends on the customer’s state; the owner must confirm treatment with a tax advisor before production. Bakery merchandise tax settings are never used for platform billing.',
-    ],
-  ],
-} as const
-/** Shown and hashed at checkout; changing the wording requires a new version. */
-export const subscriptionConsent = {
-  version: 'subscription-consent-2026-11-v1',
-  text: (planName: string, monthlyUsd: number) =>
-    `I authorize Hibbs Homestead Market to charge my payment method $${monthlyUsd.toFixed(2)} USD every month for the ${planName} plan for my Cottage Pantry oven, starting today and renewing monthly until I cancel. Cancellation takes effect at the end of the current paid month. Payment is processed by Square.`,
 } as const
