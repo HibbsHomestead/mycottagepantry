@@ -238,3 +238,45 @@ it.each(['', 'production'])(
     expect(bootstrap).toHaveBeenCalledTimes(context === 'production' ? 1 : 0)
   },
 )
+
+it('persists a restricted LIVE credential across requests when the production encryption root is absent', async () => {
+  vi.stubGlobal('Netlify', undefined)
+  vi.stubEnv('CONTEXT', 'production')
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', undefined)
+  vi.stubEnv('STRIPE_TEST_SECRET_KEY', undefined)
+  vi.stubEnv('STRIPE_LIVE_WEBHOOK_SECRET', undefined)
+  const key = 'rk_live_' + randomBytes(24).toString('hex')
+  vi.stubEnv('STRIPE_LIVE_SECRET_KEY', key)
+  const transport = vi.fn(async (url: string) =>
+    Response.json(
+      url.endsWith('/account') ? { id: 'acct_fixture' } : { data: [] },
+    ),
+  )
+  vi.stubGlobal('fetch', transport)
+  const { db, client } = await connectionDatabase()
+  try {
+    await client.query('BEGIN')
+    const first = await stripeAdminView(client)
+    await client.query('COMMIT')
+    expect(first.encryptionReady).toBe(true)
+    expect(first.connectionErrors).toEqual({})
+    expect(first.rows[0].validated_at).toBeTruthy()
+    const stored = (
+      await client.query('SELECT * FROM stripe_provider_settings')
+    ).rows[0]
+    expect(stored.ciphertext).toMatch(/^v2live\./)
+    expect(stored.ciphertext).not.toContain(key)
+    expect(openStripe(stored.ciphertext, 'live').key).toBe(key)
+    transport.mockClear()
+    await client.query('BEGIN')
+    const second = await stripeAdminView(client)
+    await client.query('COMMIT')
+    expect(second.rows[0].account_id).toBe('acct_fixture')
+    expect(second.rows[0].checkout_enabled).toBe(false)
+    expect(transport).not.toHaveBeenCalled()
+    expect(JSON.stringify(second)).not.toContain(key)
+    expect(JSON.stringify(second)).not.toContain(stored.ciphertext)
+  } finally {
+    await db.close()
+  }
+})

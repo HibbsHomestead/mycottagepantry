@@ -59,7 +59,7 @@ export function stripeEncryptionStatus() {
   // Only recover an absent root; never silently replace a malformed one.
   const credentialFallback =
     status === 'missing' &&
-    /^sk_live_[A-Za-z0-9]{20,}$/.test(
+    /^(sk|rk)_live_[A-Za-z0-9]{20,}$/.test(
       serverEnvironment('STRIPE_LIVE_SECRET_KEY'),
     )
   return {

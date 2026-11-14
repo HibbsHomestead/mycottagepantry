@@ -70,6 +70,16 @@ export function stripeEndpoint(e: StripeEnvironment) {
     ? `https://mycottagepantry.com/api/stripe/${e}/webhook`
     : ''
 }
+/** LIVE checkout requires a separate, recent-authenticated administrator approval. */
+export function stripeCheckoutEnabled(
+  row: AdminMetadata | undefined,
+  environment: StripeEnvironment,
+) {
+  return (
+    row?.checkout_enabled === true &&
+    (environment === 'test' || !!row.configuration?.liveCheckoutApprovedAt)
+  )
+}
 export function stripeEncryptionReady() {
   return stripeEncryptionStatus().ready
 }
@@ -480,6 +490,7 @@ export async function stripeAdminAction(
       ...(keyChanged ? { apiError: null, mappings: {} } : {}),
     }
     delete nextConfig.hostedLaunchReady
+    delete nextConfig.liveCheckoutApprovedAt
     // A signing change still requires new signed delivery and checkout activation.
     await c.query(
       'UPDATE stripe_provider_settings SET ciphertext=$2,fingerprint=$3,validated_at=CASE WHEN $5 THEN NULL ELSE validated_at END,webhook_verified_at=NULL,checkout_enabled=false,configuration=$4,updated_at=NOW() WHERE environment=$1',
@@ -647,9 +658,11 @@ export async function stripeAdminAction(
         throw new AdminError(
           409,
           'CUTOVER_REVIEW_REQUIRED',
-          'Complete test checkout, access and portal evidence; review authoritative live Square subscriber state and record the cutover decision on production before activation.',
+          'Complete test checkout, access and portal evidence; review existing subscriber records and record the activation decision on production before activation.',
         )
       config.subscriberReview = input.subscriberReview
+      config.liveCheckoutApprovedAt = new Date().toISOString()
+      delete config.launchDisabled
     }
     await c.query(
       'UPDATE stripe_provider_settings SET checkout_enabled=true,configuration=$2 WHERE environment=$1',

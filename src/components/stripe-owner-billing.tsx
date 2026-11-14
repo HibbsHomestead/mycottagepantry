@@ -104,6 +104,25 @@ export function StripeOwnerBilling() {
             Verified paid through: {date(data.billing?.paidThrough)} · Last
             reconciliation: {date(data.billing?.lastReconciled)}
           </p>
+          {data.historicalInvoices?.length > 0 && (
+            <details>
+              <summary>Historical invoices</summary>
+              <ul>
+                {data.historicalInvoices.map(
+                  (invoice: AdminMetadata, index: number) => (
+                    <li key={index}>
+                      {invoice.environment} · {invoice.status} · Amount $
+                      {(invoice.amount_cents / 100).toFixed(2)} · Paid $
+                      {(invoice.paid_cents / 100).toFixed(2)} · Refunded $
+                      {(invoice.refunded_cents / 100).toFixed(2)} ·{' '}
+                      {date(invoice.service_from)} –{' '}
+                      {date(invoice.service_through)}
+                    </li>
+                  ),
+                )}
+              </ul>
+            </details>
+          )}
           {data.billing?.cancellation && (
             <p>
               Cancellation scheduled/recorded: {date(data.billing.cancellation)}

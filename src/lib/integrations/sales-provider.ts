@@ -14,12 +14,3 @@ export interface SalesProvider {
   status: 'planned' | 'not_connected' | 'connected' | 'demo'
   fetchSales(start: string, end: string): Promise<ImportedSale[]>
 }
-export const squareProvider: SalesProvider = {
-  id: 'square',
-  status: 'planned',
-  async fetchSales() {
-    throw new Error(
-      'Square sales sync is planned. Authorization and transaction imports are not yet implemented.',
-    )
-  },
-}

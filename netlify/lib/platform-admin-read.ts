@@ -36,7 +36,7 @@ const accountsCTE = `WITH account_memberships AS (
 const billingProjection = `w.business_id,w.plan_id,w.source,w.status,w.paid_from,w.paid_through,w.updated_at,w.environment,w.entitlement_policy,w.last_reconciled_at,
   CASE WHEN w.subscription_id IS NOT NULL THEN '••••' || RIGHT(w.subscription_id,4) ELSE NULL END AS subscription_reference`
 const billingNotice =
-  'Billing provider identity remains explicit. Reconciliation uses verified provider state; timestamps alone do not prove successful payment. Existing Square billing remains release-gated and Stripe checkout controls are independent.'
+  'Billing provider identity remains explicit. Reconciliation uses verified provider state; timestamps alone do not prove successful payment. Historical billing records are preserved. Stripe setup and checkout approval are independent.'
 export const diagnosticCoverage = [
   {
     area: 'Receipt PDF extraction',
@@ -57,10 +57,10 @@ export const diagnosticCoverage = [
       'Unresolved recovery draft references are available. They are recovery evidence, not a complete failure log.',
   },
   {
-    area: 'Square subscriptions',
+    area: 'Historical subscription records',
     availability: 'recorded_metadata',
     detail:
-      'Environment-specific webhook references and successful synchronization records are available; absent evidence is not a healthy status.',
+      'Stored billing event references and past synchronization records remain available. Retired providers are not synchronized; absent evidence is not a healthy status.',
   },
   {
     area: 'Background processing',
@@ -309,31 +309,6 @@ export async function readAdministration(
       )
     ).rows[0].count
     const events = await billingEvents(c)
-    const { billingConfiguration, PRODUCTION_BILLING_RELEASE_APPROVED } =
-      await import('./square-billing')
-    // Names of missing settings only; values are never read into this response.
-    const connection = (['sandbox', 'production'] as const).map(
-      (environment) => {
-        const config = billingConfiguration(environment)
-        return {
-          environment,
-          missing: config.missing,
-          deploymentAllowed: config.contextAllowed,
-          releaseApproved:
-            environment === 'sandbox' || PRODUCTION_BILLING_RELEASE_APPROVED,
-        }
-      },
-    )
-    const checks = (
-      await c.query(
-        'SELECT DISTINCT ON (environment) environment,checked_at,ok,merchant_id,location_id,location_name,currency,country,missing,error_code FROM billing_connection_checks ORDER BY environment,checked_at DESC',
-      )
-    ).rows
-    const mappings = (
-      await c.query(
-        'SELECT environment,plan_id,variation_id,amount_cents,cadence,verified_at FROM billing_plan_mappings ORDER BY environment,amount_cents',
-      )
-    ).rows
     const syncRuns = (
       await c.query(
         'SELECT DISTINCT ON (environment) environment,completed_at,checked,swept,failures FROM billing_sync_runs WHERE failures=0 AND (checked>0 OR swept>0) ORDER BY environment,completed_at DESC',
@@ -352,16 +327,10 @@ export async function readAdministration(
       events,
       syncRuns,
       webhookEvidence,
-      connection,
-      checks,
-      mappings,
       notice: billingNotice,
       lastSuccessfulProductionSync:
         syncRuns.find((r) => r.environment === 'production')?.completed_at ||
         null,
-      managementUrl: 'https://squareup.com/dashboard/subscriptions',
-      managementNote:
-        'Square platform merchant dashboard; sign in to the platform billing merchant account. Customer-connected seller accounts are separate.',
     }
   }
   if (input.section === 'operations')

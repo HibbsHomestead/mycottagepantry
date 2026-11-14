@@ -1,5 +1,7 @@
 # Integrations release audit
 
+> Historical implementation record. Square integration and its setup requirements were retired; see [the retirement record](./square-subscription-billing.md). For current connection evidence, see [Stripe status](./reviews/stripe-connection-status.md).
+
 | Integration               | Implemented functionality                                                                                   | Missing setup                                                                       | Next action                                                                                   |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Shopping price comparison | SerpApi adapter, explicit search/test, normalization, private cache and reviewed quotes retained internally | Deferred by default-OFF server flag; all customer controls removed                  | Keep OFF; separate owner cancellation if externally subscribed; see internal deferral guide   |

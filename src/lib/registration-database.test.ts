@@ -42,9 +42,7 @@ import {
   assertFullFreeStockCoverage,
 } from '../../netlify/lib/registration-usage'
 import registration from '../../netlify/functions/registration.mts'
-import webhook from '../../netlify/functions/square-sandbox-webhook.mts'
 import identityHook from '../../netlify/functions/identity.mts'
-import { createHmac } from 'node:crypto'
 const db = new PGlite()
 const profile = {
   name: 'Juniper Crumb Kitchen',
@@ -610,47 +608,6 @@ it('protects draft/billing rows with real tenant policies and denies billing to 
     'Owner',
   ])
 })
-it('authenticates, deduplicates and stores only references from Sandbox webhooks without paid activation', async () => {
-  runtime.values = {
-    ...runtime.values,
-    SQUARE_SANDBOX_ENABLED: 'true',
-    SQUARE_SANDBOX_WEBHOOK_URL:
-      'https://fixture.netlify.app/api/square/sandbox/webhook',
-    SQUARE_SANDBOX_WEBHOOK_SIGNATURE_KEY: 'fixture-signature',
-    SQUARE_SANDBOX_MERCHANT_ID: 'fixture-merchant',
-  }
-  const body = JSON.stringify({
-    event_id: 'fixture-event',
-    merchant_id: 'fixture-merchant',
-    type: 'invoice.payment_made',
-    data: { id: 'fixture-invoice' },
-    buyer: { email: 'discard-this@example.invalid' },
-  })
-  const signature = createHmac('sha256', 'fixture-signature')
-    .update(runtime.values.SQUARE_SANDBOX_WEBHOOK_URL + body)
-    .digest('base64')
-  const make = (sig: string) =>
-    new Request(runtime.values.SQUARE_SANDBOX_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'x-square-hmacsha256-signature': sig },
-      body,
-    })
-  expect((await webhook(make('bad'))).status).toBe(403)
-  expect((await webhook(make(signature))).status).toBe(200)
-  expect((await webhook(make(signature))).status).toBe(200)
-  expect((await db.query('SELECT * FROM billing_events')).rows).toHaveLength(1)
-  const event: any = (await db.query('SELECT * FROM billing_events')).rows[0]
-  expect(event.status).toBe('pending')
-  expect(JSON.stringify(event)).not.toContain('discard-this')
-  expect(
-    (
-      await db.query(
-        "SELECT * FROM workspace_billing WHERE status='paid_active'",
-      )
-    ).rows,
-  ).toHaveLength(0)
-  expect(fetch).not.toHaveBeenCalled()
-})
 it('enforces one unresolved checkout in SQL and preserves the oven on retry', async () => {
   const membership = await currentMembership(runtime.client, actor)
   const insert =
@@ -689,6 +646,7 @@ it('denies CSRF, public activation and unsupported invitation/grant bypasses', a
   })
   expect((await registration(foreign)).status).toBe(403)
   for (const action of [
+    'reconcileSandbox',
     'acceptInvitation',
     'complimentary',
     'checkout',
@@ -700,67 +658,6 @@ it('denies CSRF, public activation and unsupported invitation/grant bypasses', a
     (await registration(request({ action: 'provisionTest' }))).status,
   ).toBe(403)
   expect(fetch).not.toHaveBeenCalled()
-})
-it('reconciles canonical Sandbox references out of order without granting paid access or deleting a grant', async () => {
-  runtime.values = {
-    ...runtime.values,
-    SQUARE_SANDBOX_ENABLED: 'true',
-    SQUARE_SANDBOX_ACCESS_TOKEN: 'fixture-only',
-    SQUARE_SANDBOX_API_VERSION: '2026-01-22',
-    SQUARE_SANDBOX_MERCHANT_ID: 'fixture-merchant',
-    SQUARE_SANDBOX_LOCATION_ID: 'fixture-location',
-  }
-  const member = await currentMembership(runtime.client, actor)
-  await db.query(
-    'INSERT INTO complimentary_grants(business_id,owner_identity,actor_identity,reason) VALUES($1,$2,$3,$4)',
-    [
-      member.id,
-      actor.id,
-      'fixture-platform-admin',
-      'Disposable database fixture only',
-    ],
-  )
-  await db.query(
-    "INSERT INTO billing_events(id,merchant_id,kind,object_id) VALUES('sandbox:older-event','fixture-merchant','invoice.updated','fixture-invoice')",
-  )
-  const fake = vi.fn().mockImplementation(async () =>
-    Response.json({
-      invoice: {
-        id: 'fixture-invoice',
-        status: 'PAID',
-        subscription_id: 'unmapped-subscription',
-      },
-    }),
-  )
-  vi.stubGlobal('fetch', fake)
-  for (let n = 0; n < 2; n++)
-    expect(
-      (await registration(request({ action: 'reconcileSandbox' }))).status,
-    ).toBe(200)
-  expect(
-    (await db.query("SELECT * FROM billing_events WHERE status='needs_review'"))
-      .rows,
-  ).toHaveLength(2)
-  expect(
-    (
-      await db.query(
-        "SELECT * FROM workspace_billing WHERE status='paid_active'",
-      )
-    ).rows,
-  ).toHaveLength(0)
-  expect(
-    (
-      await db.query(
-        'SELECT * FROM complimentary_grants WHERE business_id=$1',
-        [member.id],
-      )
-    ).rows,
-  ).toHaveLength(1)
-  expect(
-    fake.mock.calls.every((call: any[]) =>
-      call[0].startsWith('https://connect.squareupsandbox.com/'),
-    ),
-  ).toBe(true)
 })
 it.each(['recipes', 'products'])(
   'enforces the five-active %s limit while retaining existing rows',

@@ -32,9 +32,6 @@ export default async (request: Request) => {
     url.pathname === '/api/admin' ||
     url.pathname === '/platform-support' ||
     url.pathname === '/api/support' ||
-    url.pathname === '/api/admin/square/callback' ||
-    url.pathname === '/api/square/sandbox/webhook' ||
-    url.pathname === '/api/square/production/webhook' ||
     url.pathname === '/.netlify/functions/platform-admin'
   // The provider enforces its own authentication. Blocking its namespace also
   // blocks password verification, recovery and SDK session cleanup on this host.

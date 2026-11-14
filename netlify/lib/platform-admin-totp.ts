@@ -1,3 +1,4 @@
+import { serverEnvironment } from './runtime-environment'
 import {
   createCipheriv,
   createDecipheriv,
@@ -15,7 +16,7 @@ import {
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 
 function encryptionKey() {
-  const value = globalThis.Netlify?.env?.get('ADMIN_MFA_ENCRYPTION_KEY') || ''
+  const value = serverEnvironment('ADMIN_MFA_ENCRYPTION_KEY')
   if (!/^[a-f0-9]{64}$/i.test(value))
     throw new AdminError(
       503,
@@ -25,9 +26,7 @@ function encryptionKey() {
   return Buffer.from(value, 'hex')
 }
 export function totpConfigured() {
-  return /^[a-f0-9]{64}$/i.test(
-    globalThis.Netlify?.env?.get('ADMIN_MFA_ENCRYPTION_KEY') || '',
-  )
+  return /^[a-f0-9]{64}$/i.test(serverEnvironment('ADMIN_MFA_ENCRYPTION_KEY'))
 }
 export function sealSecret(
   secret: Buffer,

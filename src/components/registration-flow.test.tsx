@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({
   request: vi.fn(),
   account: null as any,
@@ -29,6 +29,7 @@ vi.mock('@/lib/session.functions', () => ({
 import { OnboardingPage } from './onboarding-page'
 import { BillingPage } from './billing-page'
 import { VerificationPage } from './verification-page'
+afterEach(() => vi.unstubAllGlobals())
 const profile = {
   name: 'Juniper Crumb Kitchen',
   country: 'US',
@@ -56,7 +57,7 @@ it('does not expose the private form or acceptance to an unauthorized visitor', 
   api.account.error = true
   render(<OnboardingPage />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'could not be checked',
+    'could not be loaded',
   )
   expect(
     screen.queryByLabelText('Business/display name'),
@@ -136,7 +137,7 @@ it('does not create another oven for an existing membership', async () => {
   api.account.access = null
   render(<OnboardingPage />)
   expect(
-    screen.getByRole('heading', { name: 'Checking account access…' }),
+    screen.getByRole('heading', { name: 'Opening your oven…' }),
   ).toBeInTheDocument()
   expect(
     screen.queryByRole('button', { name: 'Create empty Free test oven' }),
@@ -164,42 +165,40 @@ it('marks handmade production unavailable and keeps premium interest from activa
     screen.queryByRole('button', { name: /pay|subscribe/i }),
   ).not.toBeInTheDocument()
 })
-it('shows uncertain payment without offering another charge or fabricated invoice', async () => {
-  api.request.mockResolvedValue({
-    workspace: { id: 'test', name: 'Test Kitchen' },
-    billing: {
-      source: 'square_sandbox',
-      plan_id: 'mixing-bowl',
-      status: 'payment_processing',
-      snapshot: {},
-    },
-    attempts: [
-      {
-        id: 'fixture-attempt',
-        plan_id: 'mixing-bowl',
-        status: 'payment_processing',
-      },
-    ],
-    invoiceHistoryAvailable: false,
-  })
+it('shows verified Stripe billing without requesting Square checkout or fabricating invoices', async () => {
+  const fetcher = vi.fn(async (url: string) =>
+    Response.json(
+      url.includes('availability')
+        ? { plans: [] }
+        : {
+            workspace: { id: 'test', name: 'Test Kitchen' },
+            billing: {
+              provider: 'stripe_test',
+              plan: 'mixing-bowl',
+              status: 'payment_processing',
+            },
+            access: { plan: 'free' },
+            attempts: [{ id: 'fixture', status: 'open' }],
+            available: [],
+            historicalInvoices: [],
+          },
+    ),
+  )
+  vi.stubGlobal('fetch', fetcher)
   render(<BillingPage />)
   expect(
-    await screen.findByText(/Payment pending confirmation\. This can take/),
+    await screen.findByText(/Returning from checkout does not grant access/),
   ).toBeInTheDocument()
+  expect(screen.queryByText('Historical invoices')).not.toBeInTheDocument()
   expect(
-    screen.getByText(/Sample invoices are never shown/),
-  ).toBeInTheDocument()
-  expect(
-    screen.queryByRole('button', { name: /Square checkout/ }),
+    screen.queryByRole('button', { name: /hosted checkout/ }),
   ).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
-  // Refresh only re-reads status from Square; it never starts a checkout.
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Refresh verified billing' }),
+  )
+  expect(api.request).not.toHaveBeenCalled()
   expect(
-    api.request.mock.calls.every(
-      (call: any[]) =>
-        call[0] === 'billing' &&
-        (call.length === 1 || call[1]?.action === 'refresh'),
-    ),
+    fetcher.mock.calls.every(([url]) => url.startsWith('/api/stripe/billing')),
   ).toBe(true)
 })
 it('offers recovery without claiming that mail was already requested or delivered', () => {
@@ -231,7 +230,7 @@ it('keeps the saved paid choice while allowing business setup without unpublishe
   ).toBeInTheDocument()
   expect(screen.getByLabelText('Business/display name')).toBeInTheDocument()
   expect(screen.getByText(/Selected plan: Cottage Kitchen/)).toHaveTextContent(
-    'no paid subscription exists',
+    'no paid access is granted by this form',
   )
   expect(screen.queryByLabelText('Plan interest')).not.toBeInTheDocument()
   expect(

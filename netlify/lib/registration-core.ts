@@ -312,7 +312,7 @@ export async function provisionTestWorkspace(
     throw new RegistrationError(
       409,
       'CHECKOUT_UNAVAILABLE',
-      'Paid activation is blocked pending Square Sandbox, tax and payment verification. Your draft is saved.',
+      'Paid activation requires verified billing and explicit approval. Your draft is saved.',
     )
   await registrationRateLimit(client, actor.id, 'provision', 5)
   const id = randomUUID()
@@ -408,7 +408,6 @@ export async function billingView(
   client: RegistrationClient,
   actor: RegistrationActor,
 ) {
-  // Single owner-only billing view (see billing-service.ts); loaded lazily to avoid a cycle.
-  const { billingOverview } = await import('./billing-service')
-  return billingOverview(client, actor)
+  const { stripeOwnerView } = await import('./stripe-subscriptions')
+  return stripeOwnerView(client, actor)
 }

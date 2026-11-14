@@ -1,7 +1,7 @@
 import type { AdminClient } from './platform-admin-core'
 import {
-  squareBilledAccess,
-  isSquareBilled,
+  providerBilledAccess,
+  isProviderBilled,
   type BillingPolicyRow,
 } from './billing-entitlements'
 import type { AccessResult } from './billing-state'
@@ -65,8 +65,8 @@ export function effectiveAccess(
       entitlementPolicy: 'kitchen-two-v1',
     }
     source = grant.grant_source
-  } else if (isSquareBilled(billing)) {
-    access = squareBilledAccess(billing!, now)
+  } else if (isProviderBilled(billing)) {
+    access = providerBilledAccess(billing!, now)
     source = billing!.source
   } else if (
     billing?.plan_id &&

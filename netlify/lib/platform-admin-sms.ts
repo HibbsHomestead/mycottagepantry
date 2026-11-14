@@ -1,3 +1,4 @@
+import { serverEnvironment as env } from './runtime-environment'
 import { createHmac } from 'node:crypto'
 import { z } from 'zod'
 import { AdminError, audit, type AdminClient } from './platform-admin-core'
@@ -11,7 +12,6 @@ import type { AdminMetadata } from '../../src/lib/platform-admin-types'
  * provider credentials. Sending stays OFF until the owner sets
  * ADMIN_SMS_ENABLED=true together with server-only Twilio credentials.
  */
-const env = (name: string) => globalThis.Netlify?.env?.get(name) || ''
 export const SMS_COOLDOWN_SECONDS = 30
 export const SMS_LOGIN_SENDS = 3
 export const SMS_ENROLL_SENDS = 3
@@ -283,8 +283,6 @@ export async function smsLoginSend(
 ) {
   requireConfigured()
   const identity = session.identity_id
-  if (session.mfa_at)
-    throw new AdminError(409, 'ALREADY_VERIFIED', 'You are already signed in.')
   const row = await smsRow(c, identity)
   if (!row?.verified_at)
     throw new AdminError(
@@ -303,7 +301,7 @@ export async function smsLoginSend(
   const sid = await startVerification(phone, identity, 'sms_login_code')
   // Older pending sign-ins for this identity can no longer use a code.
   await c.query(
-    'UPDATE platform_sessions SET sms_verification_sid=NULL,sms_until=NULL WHERE identity_id=$1 AND token_hash<>$2 AND mfa_at IS NULL',
+    'UPDATE platform_sessions SET sms_verification_sid=NULL,sms_until=NULL WHERE identity_id=$1 AND token_hash<>$2',
     [identity, session.token_hash],
   )
   const updated = (
@@ -348,7 +346,6 @@ export async function smsLoginVerify(
   const row = await smsRow(c, identity)
   let outcome: CheckOutcome = 'expired'
   if (
-    !session.mfa_at &&
     row?.verified_at &&
     session.sms_verification_sid &&
     session.sms_until &&

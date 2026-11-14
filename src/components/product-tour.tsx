@@ -127,7 +127,7 @@ const sections = [
     ],
     example:
       'Record the loaves sold and the market fee. Review those records and export the relevant tax-period information.',
-    note: 'Reports reflect the records entered and their calculation basis; not every report has date filtering. Tax exports do not file returns. Live Square sync and bank synchronization are unavailable.',
+    note: 'Reports reflect the records entered and their calculation basis; not every report has date filtering. Tax exports do not file returns. Live sales sync and bank synchronization are unavailable.',
     image: 'finances',
     alt: 'Actual Finance Tax Center with demonstration records, date-range selection and CSV report export',
     availability: [

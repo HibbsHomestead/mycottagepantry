@@ -422,9 +422,9 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Account access is suspended; a manual grant cannot bypass suspension.',
         )
-      const { enforceSquareBilledWrite } =
+      const { enforceProviderBilledWrite } =
         await import('../lib/billing-entitlements')
-      moduleAccess = await enforceSquareBilledWrite({
+      moduleAccess = await enforceProviderBilledWrite({
         client,
         org,
         row: managedBilling || {
@@ -485,12 +485,17 @@ export default async (req: Request, context: Context) => {
         )
     } else if (
       managedBilling &&
-      ['square_sandbox', 'square_production'].includes(managedBilling.source)
+      [
+        'square_sandbox',
+        'square_production',
+        'stripe_test',
+        'stripe_live',
+      ].includes(managedBilling.source)
     ) {
       // Server-side subscription entitlements: verified paid period only.
-      const { enforceSquareBilledWrite } =
+      const { enforceProviderBilledWrite } =
         await import('../lib/billing-entitlements')
-      const access = await enforceSquareBilledWrite({
+      const access = await enforceProviderBilledWrite({
         client,
         org,
         row: managedBilling,

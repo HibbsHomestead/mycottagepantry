@@ -981,7 +981,7 @@ it('keeps checkout gated and reports no successful production sync without evide
   expect(billing.status).toBe(200)
   const data = await billing.json()
   expect(data.lastSuccessfulProductionSync).toBeNull()
-  expect(data.notice).toContain('release-gated')
+  expect(data.notice).toContain('Historical billing records are preserved')
   const ops = await handler(
     request('section=operations', undefined, { token }),
     context,
@@ -2797,57 +2797,57 @@ it('caps texts per destination, account and source across sign-ins to prevent co
   expect(twilio.sends).toBe(6)
 })
 
-it('restricts Square connection and replacement actions to the platform owner', async () => {
-  await session(false, 'platform-agent')
-  for (const action of [
-    'billing-connect',
-    'billing-oauth-complete',
-    'billing-confirm-connection',
-    'billing-verify',
-    'billing-verify-mappings',
-    'billing-sync-plans',
-  ]) {
-    const response = await handler(
-      request(`action=${action}&environment=sandbox`, {}, { token }),
-      context,
-    )
-    expect(response.status).toBe(403)
-    expect(await response.text()).toContain('BILLING_OWNER_REQUIRED')
-  }
-})
+it.each(['platform-agent', 'platform-owner'])(
+  'retires Square connection and setup actions for %s without creating OAuth state',
+  async (identity) => {
+    await session(false, identity)
+    for (const action of [
+      'billing-connect',
+      'billing-oauth-complete',
+      'billing-confirm-connection',
+      'billing-verify',
+      'billing-verify-mappings',
+      'billing-sync-plans',
+    ]) {
+      const response = await handler(
+        request(`action=${action}&environment=production`, {}, { token }),
+        context,
+      )
+      expect(response.status).toBe(404)
+      expect((await response.json()).code).toBe('ACTION_UNAVAILABLE')
+      expect(response.headers.get('set-cookie')).toBeNull()
+    }
+    expect(
+      (await database.query('SELECT * FROM square_billing_oauth_states')).rows,
+    ).toHaveLength(0)
+  },
+)
 
-it('starts owner OAuth in the existing password session and commits its bound state', async () => {
-  await session(false)
-  Object.assign(runtime.env, {
-    SQUARE_BILLING_ENCRYPTION_KEY: '56'.repeat(32),
-    SQUARE_PRODUCTION_APPLICATION_ID: 'fixture-app',
-    SQUARE_PRODUCTION_APPLICATION_SECRET: 'fixture-secret',
-    SQUARE_PRODUCTION_API_VERSION: '2026-01-22',
-  })
-  const response = await handler(
-    request('action=billing-connect&environment=production', {}, { token }),
+it('refreshes a previously verified admin session with an enrolled SMS code and rotates the cookie', async () => {
+  await enrollSms()
+  await database.query(
+    "UPDATE platform_sessions SET mfa_at=NOW()-INTERVAL '15 minutes' WHERE token_hash=$1",
+    [hash(token)],
+  )
+  expect((await post('sms-send', {})).status).toBe(200)
+  const denied = await post('sms-verify', { code: '000000' })
+  expect(denied.status).toBe(403)
+  const response = await post('sms-verify', { code: latestCode() })
+  expect(response.status).toBe(200)
+  const rotated = /__Host-cp_admin=([^;]+)/.exec(
+    response.headers.get('set-cookie')!,
+  )![1]
+  expect(rotated).not.toBe(token)
+  const oldSession = await handler(
+    request('action=session', undefined, { token }),
     context,
   )
-  expect(response.status).toBe(200)
-  const data = await response.json()
-  expect(new URL(data.url).origin).toBe('https://connect.squareup.com')
-  expect(response.headers.get('set-cookie')).toContain(
-    'HttpOnly; Secure; SameSite=Lax',
+  expect(oldSession.status).toBe(401)
+  const fresh = await handler(
+    request('action=session', undefined, { token: rotated }),
+    context,
   )
-  const rows = (
-    await database.query(
-      'SELECT session_hash,identity_id,environment,code_ciphertext FROM square_billing_oauth_states',
-    )
-  ).rows
-  expect(rows).toEqual([
-    {
-      session_hash: hash(token),
-      identity_id: 'platform-owner',
-      environment: 'production',
-      code_ciphertext: null,
-    },
-  ])
-  expect(JSON.stringify(data)).not.toContain('fixture-secret')
+  expect((await fresh.json()).mfaMethod).toBe('sms')
 })
 
 it('previews and appends manual access with audit without billing writes, and rejects ordinary callers', async () => {

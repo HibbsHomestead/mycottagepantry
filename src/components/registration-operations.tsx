@@ -5,25 +5,6 @@ import './registration.css'
 export function RegistrationOperations() {
   const [data, setData] = useState<any>(null),
     [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  async function reconcile() {
-    setBusy(true)
-    setError('')
-    try {
-      const result = await registrationRequest('', {
-        action: 'reconcileSandbox',
-      })
-      setData(await registrationRequest('operations'))
-      if (result.disabled)
-        setError(
-          'Square Sandbox is not configured. No provider request was made.',
-        )
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
   useEffect(() => {
     let active = true
     registrationRequest('operations')
@@ -63,26 +44,6 @@ export function RegistrationOperations() {
                   ))
                 ) : (
                   <li>No private test drafts.</li>
-                )}
-              </ul>
-              <h2>Square Sandbox reconciliation</h2>
-              <button
-                className="public-button"
-                onClick={reconcile}
-                disabled={busy}
-              >
-                {busy ? 'Checking…' : 'Check next Sandbox event'}
-              </button>
-              <ul>
-                {data.events.length ? (
-                  data.events.map((r: any) => (
-                    <li key={r.id}>
-                      {r.id} · {r.kind} · {r.status} · {r.attempts} attempts{' '}
-                      {r.error_code && `· ${r.error_code}`}
-                    </li>
-                  ))
-                ) : (
-                  <li>No received Sandbox events.</li>
                 )}
               </ul>
               <h2>Complimentary grant audit</h2>

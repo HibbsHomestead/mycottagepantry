@@ -4,7 +4,7 @@ import {
   assertPlanRecordWrite,
   planGateDecision,
 } from '../../netlify/lib/plan-feature-gates'
-import { squareBilledAccess } from '../../netlify/lib/billing-entitlements'
+import { providerBilledAccess } from '../../netlify/lib/billing-entitlements'
 import type { AccessResult } from '../../netlify/lib/billing-state'
 import type { Workspace } from './domain'
 import { planUserLimit } from './launch-plans'
@@ -152,15 +152,15 @@ it('uses the server billing policy across paid and lapsed states with approved t
     paid_through: '2099-01-01',
     entitlement_policy: 'kitchen-two-v1' as const,
   }
-  expect(squareBilledAccess(row)).toMatchObject({
+  expect(providerBilledAccess(row)).toMatchObject({
     plan: 'cottage-kitchen',
     entitlementPolicy: 'kitchen-two-v1',
   })
   expect(
-    squareBilledAccess({ ...row, paid_through: '2020-01-01' }),
+    providerBilledAccess({ ...row, paid_through: '2020-01-01' }),
   ).toMatchObject({ plan: 'free', entitlementPolicy: 'kitchen-two-v1' })
   expect(
-    squareBilledAccess({ ...row, entitlement_policy: undefined }),
+    providerBilledAccess({ ...row, entitlement_policy: undefined }),
   ).toMatchObject({ entitlementPolicy: 'legacy' })
   expect(planUserLimit('cottage-kitchen')).toBe(2)
   expect(planUserLimit('cottage-mercantile')).toBe(6)
