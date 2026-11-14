@@ -2286,7 +2286,10 @@ export function WorkspaceApp() {
               ].includes(sub) ? (
                 <FinanceWorkspace
                   workspace={state}
-                  onWorkspace={setState}
+                  onWorkspace={(workspace) => {
+                    setState(workspace)
+                    setError('')
+                  }}
                   section={sub}
                   onNavigate={(section) =>
                     section === 'Reports'

@@ -167,8 +167,32 @@ export function FinanceDashboard({
         Posted records only · drafts and pending activity excluded from
         figures.
       </p>
-      {ready && valid && (
+      {ready && valid && !loadError && (
         <>
+          {!data.expenses.records.length && (
+            <p className="finance-scope" role="status">
+              {data.drafts.length
+                ? `Receipts awaiting review: ${data.drafts.length}. No posted operating expenses recorded in this period.`
+                : 'No operating expenses recorded in this period.'}{' '}
+              {data.receiptRecords.some(
+                (r) => r.withinPeriod && r.inventoryLines > 0,
+              ) &&
+                'Posted inventory purchases are assets and appear in the receipt details below.'}
+            </p>
+          )}
+          {!!data.outsidePeriod.length && (
+            <p className="finance-scope">
+              {data.outsidePeriod.length} posted{' '}
+              {data.outsidePeriod.length === 1 ? 'receipt is' : 'receipts are'}{' '}
+              outside the selected period.{' '}
+              <button
+                className="btn secondary"
+                onClick={() => setPeriod('All time')}
+              >
+                Show all time
+              </button>
+            </p>
+          )}
           <section className="finance-summary" aria-label="At a glance">
             {[
               {
@@ -556,6 +580,77 @@ export function FinanceDashboard({
                 ))
             )}
           </section>
+          {!!data.receiptRecords.length && (
+            <section className="panel" aria-label="Saved receipt inclusion">
+              <div className="panel-heading">
+                <div>
+                  <h3>Saved receipts & overview totals</h3>
+                  <p>
+                    All saved documents in this business. Contributions use the
+                    selected date range; receipt totals are never added twice.
+                  </p>
+                </div>
+                <button
+                  className="btn secondary"
+                  onClick={() => onNavigate('Receipt inbox')}
+                >
+                  Receipt inbox
+                </button>
+              </div>
+              {data.receiptRecords.map((r) => (
+                <div className="finance-source-row finance-receipt-row" key={r.receipt.id}>
+                  <span>
+                    <strong>{r.receipt.vendor || r.receipt.name}</strong>
+                    <small>
+                      {r.receipt.date || 'Date needs review'} ·{' '}
+                      {r.receipt.status === 'draft'
+                        ? 'Awaiting review and posting'
+                        : r.receipt.status}{' '}
+                      · {r.receipt.id.slice(0, 8)}
+                    </small>
+                    <small>{r.reason}</small>
+                    {r.contributes && (
+                      <small>
+                        Operating expenses in this period:{' '}
+                        {r.expenseAmount == null
+                          ? 'Incomplete'
+                          : money(r.expenseAmount)}
+                      </small>
+                    )}
+                    {r.withinPeriod && r.inventoryLines > 0 && (
+                      <small>
+                        Inventory asset:{' '}
+                        {r.inventoryAmount == null
+                          ? 'Incomplete'
+                          : money(r.inventoryAmount)}
+                        . Payment activity is recorded separately.
+                      </small>
+                    )}
+                    {!r.withinPeriod && !!r.receipt.date && (
+                      <small>
+                        Outside selected period; changing the period is required
+                        to include eligible expense details.
+                      </small>
+                    )}
+                    {r.awaitingReview && (
+                      <small>
+                        Reading status: {r.receipt.extractionStatus || 'manual'}
+                        . Saved drafts do not affect totals.
+                      </small>
+                    )}
+                  </span>
+                  <button
+                    className="btn secondary"
+                    onClick={() => onReceipt(r.receipt)}
+                  >
+                    {r.awaitingReview
+                      ? 'Review existing receipt'
+                      : 'View existing receipt'}
+                  </button>
+                </div>
+              ))}
+            </section>
+          )}
           {!!data.activity.length && (
             <details className="finance-definitions">
               <summary>

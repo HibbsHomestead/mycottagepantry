@@ -36,7 +36,7 @@ it('keeps approved paid prices, proposed Free, total seats and closed commercial
     ['mixing-bowl', true, 'draft'],
     ['bakers-bench', true, 'draft'],
     ['cottage-kitchen', true, 'draft'],
-    ['cottage-mercantile', true, 'unpublished_draft'],
+    ['cottage-mercantile', true, 'published'],
   ])
   expect(launchPricing.plans.some((p) => 'annualUsd' in p)).toBe(false)
   expect(
@@ -216,8 +216,8 @@ it('makes Cottage Mercantile inherit every lower-tier capability and keep its ow
   ))
     expect('testing' in f && f.testing).toBeTruthy()
 })
-it('keeps Cottage Mercantile out of public signup but billable at its approved price once paid', () => {
-  expect(selectedPlan('cottage-mercantile')).toBe('free')
+it('allows the approved Cottage Mercantile selection without granting paid access', () => {
+  expect(selectedPlan('cottage-mercantile')).toBe('cottage-mercantile')
   expect(selectedPlan('cottage-kitchen')).toBe('cottage-kitchen')
   // Server-owned approved internal entitlements include implemented workflows.
   expect(

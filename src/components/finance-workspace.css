@@ -607,10 +607,14 @@
   padding: 12px 20px;
   font-size: max(var(--interface-text-min, 0px), 13px);
 }
-.finance-source-row > span:nth-child(2) {
+.finance-source-row > span:nth-child(2),
+.finance-receipt-row > span:first-child {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.finance-receipt-row > button {
+  flex-shrink: 0;
 }
 .finance-source-row small {
   display: block;

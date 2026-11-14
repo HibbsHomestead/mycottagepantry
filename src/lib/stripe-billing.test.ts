@@ -422,6 +422,29 @@ it('approves the $40 six-user tier in test mode without enabling live purchase',
       ),
     ),
   ).toBe(true)
+  const writes = c.query.mock.calls.length
+  await expect(
+    stripeAdminAction(
+      c,
+      new Request(request.url, {
+        method: 'POST',
+        body: JSON.stringify({
+          environment: 'live',
+          operation: 'map',
+          plan: 'cottage-mercantile',
+          price: 'price_fixture',
+          purchase: true,
+        }),
+      }),
+      { role: 'owner', mfa_at: new Date().toISOString() },
+      'fixture',
+    ),
+  ).rejects.toMatchObject({ code: 'TIER_INCOMPLETE' })
+  expect(
+    c.query.mock.calls
+      .slice(writes)
+      .some(([sql]) => sql.startsWith('UPDATE stripe_provider_settings')),
+  ).toBe(false)
 })
 it('never starts live checkout from a preview/dev copy of enabled production settings', async () => {
   vi.stubGlobal('Netlify', {

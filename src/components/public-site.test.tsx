@@ -94,7 +94,7 @@ it('compares approved monthly prices while distinguishing proposed scope and una
   expect(comparison).not.toHaveTextContent(/\$25|\$50|annual|trial/i)
   expect(comparison).toHaveTextContent('Cottage Mercantile')
   expect(comparison).toHaveTextContent('2 total users, including the owner')
-  expect(comparison).toHaveTextContent('Team user limit awaiting confirmation')
+  expect(comparison).toHaveTextContent('6 total users, including the owner')
   expect(comparison).toHaveTextContent('Excludes resale and consignment')
   expect(comparison).toHaveTextContent('Free’s proposed limits are not active')
   expect(

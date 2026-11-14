@@ -178,6 +178,60 @@ export function financeDashboard(
       t.kind !== 'reversal' &&
       !(w.finance_reviews || []).some((r) => r.transactionId === t.id),
   )
+  // Receipt documents explain the figures; they are never an additional expense.
+  // Review/processing status is historical once the receipt has been posted.
+  const receiptRecords = (w.receipt_extractions || []).map((receipt) => {
+    const linked = (w.finance_transactions || []).filter(
+      (t) =>
+        t.receiptId === receipt.id ||
+        t.id === receipt.transactionId ||
+        t.id === receipt.matchedTransactionId,
+    )
+    const contributes = expenses.records.filter(
+      (e) =>
+        e.receiptId === receipt.id ||
+        linked.some((t) => e.transactionId === t.id || e.sourceId === t.id),
+    )
+    const inventoryLines = linked
+      .filter(posted)
+      .flatMap((t) =>
+        (t.lineSnapshots || []).filter((l: Item) => l.decision === 'inventory'),
+      )
+    const inventoryAmount = inventoryLines.some(
+      (l: Item) => numeric(l.postedAmount) == null,
+    )
+      ? null
+      : inventoryLines.reduce(
+          (sum: number, l: Item) => sum + numeric(l.postedAmount)!,
+          0,
+        ) / 100
+    const withinPeriod = inRange(receipt)
+    const awaitingReview = receipt.status === 'draft'
+    const reason = awaitingReview
+      ? 'Awaiting review and posting; saved document only. Open the existing receipt to review.'
+      : receipt.status === 'cancelled'
+        ? 'Cancelled receipt; excluded from financial figures.'
+        : !withinPeriod
+          ? 'Receipt date is outside the selected period.'
+          : contributes.length
+            ? 'Linked posted expense details contribute once. The receipt total is not added again.'
+            : inventoryLines.length
+              ? 'Posted inventory purchase; recorded as an asset, not an operating expense.'
+              : 'No eligible operating expense linked; review the existing receipt and purchase details.'
+    return {
+      receipt,
+      withinPeriod,
+      awaitingReview,
+      reason,
+      contributes: contributes.length > 0,
+      expenseAmount: contributes.some((r) => r.amount == null)
+        ? null
+        : contributes.reduce((sum, r) => sum + receiptCents(r.amount)!, 0) /
+          100,
+      inventoryAmount,
+      inventoryLines: inventoryLines.length,
+    }
+  })
   return {
     rows,
     daily,
@@ -205,6 +259,11 @@ export function financeDashboard(
     categories,
     trend,
     drafts,
+    receiptRecords,
+    outsidePeriod: receiptRecords.filter(
+      (r) =>
+        !r.withinPeriod && ['posted', 'attached'].includes(r.receipt.status),
+    ),
     transactions,
     unreconciled,
     missingCategories: expenses.records.filter((r) => !r.category),

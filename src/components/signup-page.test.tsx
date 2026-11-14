@@ -89,8 +89,8 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
   expect(screen.getByRole('radio', { name: /Baker’s Bench/ })).toBeEnabled()
   expect(screen.getByRole('radio', { name: /Cottage Kitchen/ })).toBeEnabled()
   expect(
-    screen.queryByRole('radio', { name: /Cottage Mercantile/ }),
-  ).not.toBeInTheDocument()
+    screen.getByRole('radio', { name: /Cottage Mercantile/ }),
+  ).toBeEnabled()
   expect(
     screen.getByText(/Creating an account does not activate a paid plan/),
   ).toBeInTheDocument()
@@ -107,11 +107,14 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
     await screen.findByRole('link', { name: 'Continue to login' }),
   ).toHaveAttribute('href', '/login?plan=mixing-bowl')
 })
-it('preserves an existing $40 preference for sign-in without advertising it as a signup choice', () => {
+it('shows the approved $40 tier selected without activating a purchase', () => {
   history.replaceState({}, '', '/signup?plan=cottage-mercantile')
   render(<SignupPage />)
   expect(
-    screen.queryByRole('radio', { name: /Cottage Mercantile/ }),
+    screen.getByRole('radio', { name: /Cottage Mercantile — \$40 USD/ }),
+  ).toBeChecked()
+  expect(
+    screen.queryByRole('button', { name: /checkout|subscribe|pay/i }),
   ).not.toBeInTheDocument()
   expect(
     screen.getByRole('link', { name: 'Already have an account? Log in.' }),
