@@ -425,9 +425,11 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
     ['suspended', 'security_suspended', 'disabled'].includes(existing.status)
       ? existing.status
       : status
+  // A new subscription adopts the current policy even on an older Free account.
+  // Reconciliation of the same historical subscription retains its saved policy.
   await c.query(
     `INSERT INTO workspace_billing(business_id,plan_id,source,status,subscription_id,customer_id,environment,billing_owner_identity,plan_variation_id,provider_status,paid_from,paid_through,canceled_date,next_billing_date,last_reconciled_at,entitlement_policy)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp(NULLIF($11,0)),to_timestamp(NULLIF($12,0)),$13,$14,NOW(),'kitchen-two-v1') ON CONFLICT(business_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,source=EXCLUDED.source,status=EXCLUDED.status,subscription_id=EXCLUDED.subscription_id,customer_id=EXCLUDED.customer_id,environment=EXCLUDED.environment,billing_owner_identity=EXCLUDED.billing_owner_identity,plan_variation_id=EXCLUDED.plan_variation_id,provider_status=EXCLUDED.provider_status,paid_from=EXCLUDED.paid_from,paid_through=EXCLUDED.paid_through,canceled_date=EXCLUDED.canceled_date,next_billing_date=EXCLUDED.next_billing_date,last_reconciled_at=NOW(),updated_at=NOW()`,
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp(NULLIF($11,0)),to_timestamp(NULLIF($12,0)),$13,$14,NOW(),'kitchen-two-v1') ON CONFLICT(business_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,entitlement_policy=CASE WHEN workspace_billing.subscription_id IS DISTINCT FROM EXCLUDED.subscription_id THEN EXCLUDED.entitlement_policy ELSE workspace_billing.entitlement_policy END,source=EXCLUDED.source,status=EXCLUDED.status,subscription_id=EXCLUDED.subscription_id,customer_id=EXCLUDED.customer_id,environment=EXCLUDED.environment,billing_owner_identity=EXCLUDED.billing_owner_identity,plan_variation_id=EXCLUDED.plan_variation_id,provider_status=EXCLUDED.provider_status,paid_from=EXCLUDED.paid_from,paid_through=EXCLUDED.paid_through,canceled_date=EXCLUDED.canceled_date,next_billing_date=EXCLUDED.next_billing_date,last_reconciled_at=NOW(),updated_at=NOW()`,
     [
       attempt.business_id,
       attempt.plan_id,
