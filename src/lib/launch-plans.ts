@@ -1,8 +1,7 @@
-/** Owner-approved monthly USD prices (2026-11). Paid checkout is Sandbox-only until the
- * production release gate in netlify/lib/square-billing.ts is approved; plan feature
- * restrictions for existing ovens remain disabled. Cottage Mercantile is billable in
- * Sandbox. All five plans may be compared publicly; paid signup and Production
- * checkout remain unavailable. Existing billing records retain their legacy policy. */
+/** Owner-approved monthly USD prices (2026-11). All paid tiers support approved
+ * Stripe test checkout, subject to provider setup. Live activation remains separate;
+ * existing Square release gates and legacy access policies are preserved. Public
+ * availability is server-controlled and never enabled by comparison approval. */
 export const launchPricing = {
   status: 'approved_pricing',
   currency: 'USD',
@@ -100,21 +99,21 @@ export const launchPricing = {
       publication: 'unpublished_draft',
       name: 'Cottage Mercantile',
       monthlyUsd: 40,
-      users: null,
+      users: 6,
       caption:
         'The complete Cottage Pantry program — including resale, consignment, and business team access.',
       description:
-        'The full intended program for food, handmade, resale and consignment businesses. The team seat allowance is not yet confirmed.',
+        'The full intended program for food, handmade, resale and consignment businesses. Includes five users plus the owner (six total).',
       highlights: [
         'Resale merchandise, pack/case receiving, starting inventory & separate purchase/selling prices',
         'Fabric yardage with separate width, fractional lengths & remnant pieces without double counting',
         'Handmade designs, material/labor/packaging costing, production usage, waste & finished-goods additions',
         'Receipt matching across ingredients, materials, packaging and resale stock',
         'Proposed: yarn length/weight stock, dye lots, storage locations & purchase orders',
-        'Consignment stock, sales, refunds and consignor payouts; team seat limit awaiting confirmation',
+        'Consignment stock, sales, refunds and consignor payouts; six total business users including the owner',
       ],
       caveat:
-        'Unpublished. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented. Its $40 monthly price is approved and testable in Square Sandbox only. Not available for purchase.',
+        'Approved for Stripe test-mode checkout at $40/month with six total users. Live purchase remains disabled pending launch review. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented.',
     },
   ],
 } as const

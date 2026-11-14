@@ -143,7 +143,7 @@ it('preserves legacy access, historical reads/exports and committed corrections'
   ).not.toThrow()
 })
 
-it('uses the server billing policy across paid and lapsed states and leaves the top cap unknown', () => {
+it('uses the server billing policy across paid and lapsed states with approved total seats', () => {
   const row = {
     plan_id: 'cottage-kitchen' as const,
     status: 'paid_active',
@@ -163,5 +163,5 @@ it('uses the server billing policy across paid and lapsed states and leaves the 
     squareBilledAccess({ ...row, entitlement_policy: undefined }),
   ).toMatchObject({ entitlementPolicy: 'legacy' })
   expect(planUserLimit('cottage-kitchen')).toBe(2)
-  expect(planUserLimit('cottage-mercantile')).toBeNull()
+  expect(planUserLimit('cottage-mercantile')).toBe(6)
 })

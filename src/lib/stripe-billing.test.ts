@@ -8,13 +8,19 @@ import {
   stripePriceIssue,
   stripeRequest,
   verifyStripeSignature,
+  stripeTierPurchasable,
+  stripePortalMatchesPolicy,
 } from '../../netlify/lib/stripe-provider'
 import {
   effectiveAccess,
   type ManualGrant,
 } from '../../netlify/lib/manual-access'
 import { stripeAdminAction } from '../../netlify/lib/stripe-provider'
-import { stripeCheckout } from '../../netlify/lib/stripe-subscriptions'
+import {
+  stripeCheckout,
+  stripePortal,
+} from '../../netlify/lib/stripe-subscriptions'
+import { launchPricing } from './launch-plans'
 const testKey = 'sk_test_' + randomBytes(20).toString('hex')
 const root = randomBytes(32).toString('hex')
 beforeEach(() =>
@@ -76,6 +82,90 @@ const price = {
     metadata: { cottage_pantry_tier: 'cottage-kitchen' },
   },
 }
+const portalConfiguration = {
+  active: true,
+  livemode: false,
+  features: {
+    payment_method_update: { enabled: true },
+    invoice_history: { enabled: true },
+    subscription_update: { enabled: false },
+    subscription_cancel: { enabled: false },
+  },
+}
+it('requires portal payment methods/invoices and rejects subscription actions or environment mismatches', () => {
+  expect(stripePortalMatchesPolicy(portalConfiguration, 'test')).toBe(true)
+  expect(stripePortalMatchesPolicy(portalConfiguration, 'live')).toBe(false)
+  for (const [feature, enabled] of [
+    ['payment_method_update', false],
+    ['invoice_history', false],
+    ['subscription_update', true],
+    ['subscription_cancel', true],
+  ] as const)
+    expect(
+      stripePortalMatchesPolicy(
+        {
+          ...portalConfiguration,
+          features: { ...portalConfiguration.features, [feature]: { enabled } },
+        },
+        'test',
+      ),
+    ).toBe(false)
+})
+it('launches the reviewed portal for the verified owner customer and records return evidence', async () => {
+  const c = {
+    release: vi.fn(),
+    query: vi.fn(async (sql: string) => {
+      if (sql.startsWith('SELECT b.id'))
+        return { rows: [{ id: 'business', role: 'Owner', active: true }] }
+      if (sql.startsWith('SELECT * FROM stripe_checkouts'))
+        return {
+          rows: [
+            { id: 'attempt', customer_id: 'cus_fixture', environment: 'test' },
+          ],
+        }
+      if (sql.startsWith('SELECT * FROM stripe_provider_settings'))
+        return {
+          rows: [
+            {
+              ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
+              configuration: { policy: { portal: 'bpc_fixture' } },
+            },
+          ],
+        }
+      return { rows: [] }
+    }),
+  }
+  const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
+    if (url.endsWith('/billing_portal/configurations/bpc_fixture'))
+      return Response.json(portalConfiguration)
+    if (url.endsWith('/billing_portal/sessions')) {
+      const body = options?.body as URLSearchParams
+      expect(body.get('customer')).toBe('cus_fixture')
+      expect(body.get('configuration')).toBe('bpc_fixture')
+      expect(body.get('return_url')).toBe(
+        'https://mycottagepantry.com/oven/billing?checkout=verifying',
+      )
+      return Response.json({
+        url: 'https://billing.stripe.com/p/session/fixture',
+      })
+    }
+    throw new Error('Unexpected portal fixture request')
+  })
+  vi.stubGlobal('fetch', fetcher)
+  expect(
+    await stripePortal(c, {
+      id: 'owner',
+      email: 'fixture@example.invalid',
+      privateTest: true,
+      platformAdmin: false,
+    }),
+  ).toEqual({ url: 'https://billing.stripe.com/p/session/fixture' })
+  expect(
+    c.query.mock.calls.some(([sql]) =>
+      sql.startsWith('UPDATE stripe_checkouts SET portal_launched_at'),
+    ),
+  ).toBe(true)
+})
 it('validates recurring objects, approved amounts, environment and tier metadata', () => {
   expect(stripePriceIssue(price, 'cottage-kitchen', 'test')).toBeNull()
   for (const change of [
@@ -244,15 +334,36 @@ it('returns masked metadata after credential save and audits only environment/ac
   expect(JSON.stringify(audit.params)).not.toContain(testKey)
   expect(JSON.stringify(audit.params)).not.toContain('whsec_fixture')
 })
-it('cannot approve the unresolved $40 tier for purchase', async () => {
+it('approves the $40 six-user tier in test mode without enabling live purchase', async () => {
+  expect(stripeTierPurchasable('cottage-mercantile', 'test')).toBe(true)
+  expect(stripeTierPurchasable('cottage-mercantile', 'live')).toBe(false)
   const c = {
     release: vi.fn(),
     query: vi.fn(async (sql: string) => ({
       rows: sql.startsWith('SELECT * FROM stripe_provider_settings')
-        ? [{ validated_at: new Date().toISOString(), configuration: {} }]
+        ? [
+            {
+              validated_at: new Date().toISOString(),
+              configuration: {},
+              ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
+            },
+          ]
         : [],
     })),
   }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        ...price,
+        unit_amount: 4000,
+        product: {
+          active: true,
+          metadata: { cottage_pantry_tier: 'cottage-mercantile' },
+        },
+      }),
+    ),
+  )
   const request = new Request(
     'https://admin.mycottagepantry.com/api/admin?action=stripe',
     {
@@ -273,7 +384,14 @@ it('cannot approve the unresolved $40 tier for purchase', async () => {
       { role: 'owner', mfa_at: new Date().toISOString() },
       'fixture',
     ),
-  ).rejects.toThrow('not approved for purchase')
+  ).resolves.toBeDefined()
+  expect(
+    c.query.mock.calls.some(([sql]) =>
+      sql.startsWith(
+        'UPDATE stripe_provider_settings SET configuration=$2,checkout_enabled=false',
+      ),
+    ),
+  ).toBe(true)
 })
 it('never starts live checkout from a preview/dev copy of enabled production settings', async () => {
   const c = {
@@ -321,3 +439,106 @@ it('never starts live checkout from a preview/dev copy of enabled production set
     ),
   ).toBe(false)
 })
+
+it.each(launchPricing.plans.filter((p) => p.monthlyUsd > 0))(
+  'creates and resumes one test checkout for $id at the approved price',
+  async (tier) => {
+    let attempt: Record<string, unknown> | null = null
+    const url = 'https://checkout.stripe.com/c/pay/fixture'
+    const c = {
+      release: vi.fn(),
+      query: vi.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.startsWith('SELECT b.id'))
+          return { rows: [{ id: 'business', role: 'Owner', active: true }] }
+        if (sql.startsWith('SELECT * FROM stripe_provider_settings'))
+          return {
+            rows: [
+              {
+                checkout_enabled: true,
+                validated_at: '2026-11-14',
+                webhook_verified_at: '2026-11-14',
+                ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
+                configuration: {
+                  policy: {},
+                  mappings: {
+                    [tier.id]: { price: 'price_fixture', purchase: true },
+                  },
+                },
+              },
+            ],
+          }
+        if (sql.startsWith('SELECT * FROM stripe_checkouts'))
+          return { rows: attempt ? [attempt] : [] }
+        if (sql.startsWith('INSERT INTO stripe_checkouts')) {
+          attempt = {
+            id: params[0],
+            price_id: params[5],
+            environment: 'test',
+            plan_id: tier.id,
+          }
+          return { rows: [attempt] }
+        }
+        if (sql.startsWith('UPDATE stripe_checkouts SET session_id'))
+          attempt = { ...attempt, session_id: params[1] }
+        return { rows: [] }
+      }),
+    }
+    const fetcher = vi.fn(async (address: string, options?: RequestInit) => {
+      if (address.endsWith('/prices/price_fixture'))
+        return Response.json({
+          ...price,
+          unit_amount: tier.monthlyUsd * 100,
+          product: { active: true, metadata: { cottage_pantry_tier: tier.id } },
+        })
+      if (address.endsWith('/checkout/sessions')) {
+        const body = options?.body as URLSearchParams
+        expect(body.get('line_items[0][price]')).toBe('price_fixture')
+        expect(body.get('line_items[0][quantity]')).toBe('1')
+        expect(body.get('subscription_data[trial_period_days]')).toBeNull()
+        expect(
+          (options?.headers as Record<string, string>)['Idempotency-Key'],
+        ).toBe('cottage-checkout-' + attempt?.id)
+        return Response.json({
+          id: 'cs_fixture',
+          mode: 'subscription',
+          livemode: false,
+          url,
+          expires_at: 2000000000,
+        })
+      }
+      if (address.endsWith('/checkout/sessions/cs_fixture'))
+        return Response.json({ status: 'open', url })
+      throw new Error('Unexpected Stripe fixture request')
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const actor = {
+      id: 'owner',
+      email: 'fixture@example.invalid',
+      privateTest: true,
+      platformAdmin: false,
+    }
+    const input = {
+      environment: 'test' as const,
+      plan: tier.id,
+      confirmed: true,
+    }
+    await stripeCheckout(c, actor, input, true)
+    expect(
+      fetcher.mock.calls.some(([address]) =>
+        address.endsWith('/checkout/sessions'),
+      ),
+    ).toBe(false)
+    expect(await stripeCheckout(c, actor, input)).toEqual({ url })
+    expect(await stripeCheckout(c, actor, input)).toEqual({ url })
+    expect(
+      fetcher.mock.calls.filter(([address]) =>
+        address.endsWith('/checkout/sessions'),
+      ),
+    ).toHaveLength(1)
+    expect(
+      c.query.mock.calls.filter(([sql]) =>
+        sql.startsWith('INSERT INTO stripe_checkouts'),
+      ),
+    ).toHaveLength(1)
+  },
+)
