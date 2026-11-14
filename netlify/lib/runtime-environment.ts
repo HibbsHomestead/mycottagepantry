@@ -1,9 +1,11 @@
-import { env as nodeEnvironment } from 'node:process'
+import process from 'node:process'
 import { getContext, type Context } from '@netlify/functions'
 import { deploymentMetadata } from './deployment-metadata'
 
 export function serverEnvironment(name: string) {
-  return globalThis.Netlify?.env?.get(name) ?? nodeEnvironment[name] ?? ''
+  // Resolve at invocation time; an imported `env` binding can retain the
+  // pre-injection object if the runtime replaces process.env after module load.
+  return globalThis.Netlify?.env?.get(name) ?? process.env[name] ?? ''
 }
 
 export function deploymentRuntime() {
@@ -49,7 +51,7 @@ export function stripeEncryptionStatus() {
   const netlifyRoot = globalThis.Netlify?.env?.get(
     'STRIPE_BILLING_ENCRYPTION_KEY',
   )
-  const nodeRoot = nodeEnvironment.STRIPE_BILLING_ENCRYPTION_KEY
+  const nodeRoot = process.env.STRIPE_BILLING_ENCRYPTION_KEY
   const selected = netlifyRoot ?? nodeRoot
   const status = rootState(selected)
   return {

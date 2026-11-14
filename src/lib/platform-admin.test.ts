@@ -937,6 +937,41 @@ it('returns the same nonsecret storage status in Stripe and billing responses', 
   expect(refreshedData.encryptionReady).toBe(false)
   expect(refreshedData.encryptionStatus.status).toBe('invalid_format')
 })
+it('logs only fixed Stripe runtime statuses in production and preserves authentication and origin checks', async () => {
+  const root =
+    randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '')
+  const key = 'sk_live_' + randomUUID().replaceAll('-', '')
+  runtime.env.STRIPE_BILLING_ENCRYPTION_KEY = root
+  runtime.env.STRIPE_LIVE_SECRET_KEY = key
+  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+  try {
+    const response = await handler(request('action=stripe'), context)
+    expect(response.status).toBe(401)
+    const body = await response.text()
+    expect(body).not.toContain(root)
+    expect(body).not.toContain(key)
+    expect(log).toHaveBeenCalledTimes(1)
+    const [event, payload] = log.mock.calls[0]
+    expect(event).toBe('stripe_runtime_status_v2')
+    expect(JSON.parse(String(payload))).toMatchObject({
+      encryption: { ready: true, status: 'valid', source: 'netlify' },
+      liveCredentialPresent: true,
+    })
+    expect(String(payload)).not.toContain(root)
+    expect(String(payload)).not.toContain(key)
+    log.mockClear()
+    const denied = await handler(
+      request('action=stripe', undefined, {
+        host: 'https://untrusted.invalid',
+      }),
+      context,
+    )
+    expect(denied.status).toBe(404)
+    expect(log).not.toHaveBeenCalled()
+  } finally {
+    log.mockRestore()
+  }
+})
 it('keeps checkout gated and reports no successful production sync without evidence', async () => {
   await session()
   const billing = await handler(

@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { randomBytes } from 'node:crypto'
+import process from 'node:process'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import type { AdminMetadata } from './platform-admin-types'
@@ -76,6 +77,62 @@ async function connectionDatabase() {
     },
   }
 }
+
+it('connects on refresh after runtime injection replaces an environment that had no encryption root', async () => {
+  const original = process.env
+  const root = randomBytes(32).toString('hex')
+  const key = 'sk_live_' + randomBytes(24).toString('hex')
+  const { db, client } = await connectionDatabase()
+  vi.stubGlobal('Netlify', undefined)
+  const transport = vi.fn(async (url: string) =>
+    Response.json(
+      url.endsWith('/account') ? { id: 'acct_fixture' } : { data: [] },
+    ),
+  )
+  vi.stubGlobal('fetch', transport)
+  try {
+    process.env = { ...original, CONTEXT: '' }
+    for (const name of [
+      'STRIPE_BILLING_ENCRYPTION_KEY',
+      'STRIPE_LIVE_SECRET_KEY',
+      'STRIPE_TEST_SECRET_KEY',
+      'STRIPE_LIVE_WEBHOOK_SECRET',
+    ])
+      delete process.env[name]
+    await client.query('BEGIN')
+    const missing = await stripeAdminView(client)
+    await client.query('COMMIT')
+    expect(missing.encryptionStatus.status).toBe('missing')
+    expect(missing.rows).toEqual([])
+    expect(transport).not.toHaveBeenCalled()
+    process.env = {
+      ...process.env,
+      STRIPE_BILLING_ENCRYPTION_KEY: root,
+      STRIPE_LIVE_SECRET_KEY: key,
+    }
+    await client.query('BEGIN')
+    const connected = await stripeAdminView(client)
+    await client.query('COMMIT')
+    expect(connected.encryptionReady).toBe(true)
+    expect(connected.connectionErrors).toEqual({})
+    expect(connected.rows).toHaveLength(1)
+    expect(connected.rows[0]).toMatchObject({
+      environment: 'live',
+      account_id: 'acct_fixture',
+      checkout_enabled: false,
+    })
+    expect(connected.rows[0].validated_at).toBeTruthy()
+    const saved = (await client.query('SELECT * FROM stripe_provider_settings'))
+      .rows[0]
+    expect(openStripe(saved.ciphertext, 'live').key).toBe(key)
+    expect(JSON.stringify(connected)).not.toContain(key)
+    expect(JSON.stringify(connected)).not.toContain(root)
+    expect(JSON.stringify(connected)).not.toContain(saved.ciphertext)
+  } finally {
+    process.env = original
+    await db.close()
+  }
+})
 
 it.each(['provider', 'database'])(
   'commits verified encrypted credentials when %s setup fails, with checkout still disabled',

@@ -7,6 +7,7 @@ import {
 } from '../lib/stripe-provider'
 import {
   deploymentRuntime,
+  serverEnvironment,
   stripeEncryptionStatus,
 } from '../lib/runtime-environment'
 import { handleAdminAccess } from '../lib/admin-access'
@@ -88,15 +89,18 @@ export default async (request: Request, context: Context) => {
     if (
       request.method === 'GET' &&
       (action === 'stripe' || url.searchParams.get('section') === 'billing') &&
-      deploymentRuntime().context === 'deploy-preview'
+      ['production', 'deploy-preview'].includes(deploymentRuntime().context)
     ) {
       // Private hosting logs let operators verify injection without an admin
-      // session. The public response still passes every existing auth check.
+      // session on the affected deployment, including production. Fixed
+      // presence/status fields only; never log environment values or errors.
+      // The public response still passes every existing auth check.
       console.info(
         'stripe_runtime_status_v2',
         JSON.stringify({
           deployment: context.deploy?.id,
           encryption: stripeEncryptionStatus(),
+          liveCredentialPresent: !!serverEnvironment('STRIPE_LIVE_SECRET_KEY'),
           previewWebhookReady: !!stripeEndpoint('test'),
         }),
       )

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest'
 import { randomBytes } from 'node:crypto'
+import process from 'node:process'
 import type { Context } from '@netlify/functions'
 import { publicDeploymentMetadata } from '../../scripts/deployment-metadata'
 
@@ -16,6 +17,7 @@ vi.mock('../../netlify/lib/deployment-metadata', () => ({
 }))
 import {
   deploymentRuntime,
+  serverEnvironment,
   stripeEncryptionStatus,
 } from '../../netlify/lib/runtime-environment'
 import {
@@ -153,4 +155,33 @@ it('reports source presence and validation without serializing the root and pres
     ready: false,
     status: 'invalid_format',
   })
+})
+
+it('reads the current Node environment when the runtime replaces it after module import', () => {
+  const original = process.env
+  const root = randomBytes(32).toString('hex')
+  const key = 'sk_live_' + randomBytes(24).toString('hex')
+  vi.stubGlobal('Netlify', undefined)
+  try {
+    process.env = { ...original }
+    delete process.env.STRIPE_BILLING_ENCRYPTION_KEY
+    delete process.env.STRIPE_LIVE_SECRET_KEY
+    expect(stripeEncryptionStatus().status).toBe('missing')
+    process.env = {
+      ...process.env,
+      STRIPE_BILLING_ENCRYPTION_KEY: root,
+      STRIPE_LIVE_SECRET_KEY: key,
+    }
+    expect(stripeEncryptionStatus()).toMatchObject({
+      ready: true,
+      source: 'node',
+    })
+    expect(serverEnvironment('STRIPE_LIVE_SECRET_KEY')).toBe(key)
+    const encrypted = sealStripe({ key, signing: '' }, 'live')
+    expect(openStripe(encrypted, 'live').key).toBe(key)
+    expect(JSON.stringify(stripeEncryptionStatus())).not.toContain(root)
+    expect(JSON.stringify(stripeEncryptionStatus())).not.toContain(key)
+  } finally {
+    process.env = original
+  }
 })
