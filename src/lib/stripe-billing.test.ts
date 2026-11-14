@@ -28,7 +28,11 @@ beforeEach(() =>
   vi.stubGlobal('Netlify', {
     env: {
       get: (name: string) =>
-        name === 'STRIPE_BILLING_ENCRYPTION_KEY' ? root : '',
+        name === 'STRIPE_BILLING_ENCRYPTION_KEY'
+          ? root
+          : name === 'CONTEXT'
+            ? 'production'
+            : '',
     },
   }),
 )
@@ -420,6 +424,16 @@ it('approves the $40 six-user tier in test mode without enabling live purchase',
   ).toBe(true)
 })
 it('never starts live checkout from a preview/dev copy of enabled production settings', async () => {
+  vi.stubGlobal('Netlify', {
+    env: {
+      get: (name: string) =>
+        name === 'STRIPE_BILLING_ENCRYPTION_KEY'
+          ? root
+          : name === 'CONTEXT'
+            ? 'deploy-preview'
+            : '',
+    },
+  })
   const c = {
     release: vi.fn(),
     query: vi.fn(async (sql: string) => {

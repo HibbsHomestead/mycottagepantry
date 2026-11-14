@@ -2,6 +2,7 @@ import { getDatabase } from '@netlify/database'
 import { admin } from '@netlify/identity'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { getContext, type Context } from '@netlify/functions'
+import { deploymentRuntime } from './runtime-environment'
 import type { AdminMetadata } from '../../src/lib/platform-admin-types'
 
 export const adminOrigin = 'https://admin.mycottagepantry.com'
@@ -46,7 +47,7 @@ export function requireAdminOrigin(
       ? `https://${runtime.deploy.id}--mycottagepantry.netlify.app`
       : undefined
   const preview = runtimePreview ?? env?.get('DEPLOY_URL')
-  const stablePreview = env?.get('DEPLOY_PRIME_URL')
+  const stablePreview = deploymentRuntime().previewOrigin
   const allowed =
     url.origin === adminOrigin ||
     (context === 'deploy-preview' &&
