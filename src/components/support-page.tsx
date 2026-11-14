@@ -1,4 +1,12 @@
-import { useEffect, useState, useCallback, type FormEvent } from 'react'
+import { SupportAiUsage, SupportAiSuggestion } from './support-ai-admin'
+import { SupportTranscript } from './support-helper'
+import {
+  useEffect,
+  useState,
+  useCallback,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import {
   ArrowLeft,
   Plus,
@@ -45,6 +53,25 @@ function ScreenshotInput({ onFile }: { onFile: (file: File | null) => void }) {
     </label>
   )
 }
+function SupportFrame({
+  staff,
+  children,
+}: {
+  staff: boolean
+  children: ReactNode
+}) {
+  return staff ? (
+    <div className="public-site admin-support-site">
+      <header className="admin-support-header">
+        <a href="/admin">Cottage Pantry · Administration</a>
+        <span>Restricted support inbox</span>
+      </header>
+      {children}
+    </div>
+  ) : (
+    <PublicSite>{children}</PublicSite>
+  )
+}
 export function SupportPage({ staff = false }: { staff?: boolean }) {
   const [access, setAccess] = useState<{
     staff: boolean
@@ -70,7 +97,8 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
     [category, setCategory] = useState<string>(supportCategories[0]),
     [message, setMessage] = useState(''),
     [reply, setReply] = useState(''),
-    [internal, setInternal] = useState(false)
+    [internal, setInternal] = useState(false),
+    [aiReviewConsent, setAiReviewConsent] = useState(false)
   const [file, setFile] = useState<File | null>(null),
     [replyFile, setReplyFile] = useState<File | null>(null)
   const [createKey, setCreateKey] = useState(() => crypto.randomUUID()),
@@ -180,11 +208,13 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
         category,
         message,
         submissionKey: createKey,
+        aiReviewConsent,
         route: safeSupportRoute(from || '/support'),
       })) as SupportDetail
       choose(result.ticket.id)
       setDetail(result)
       await attach(result, file, createKey)
+      setAiReviewConsent(false)
       setSubject('')
       setMessage('')
       setFile(null)
@@ -241,11 +271,11 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
     }
   }
   return (
-    <PublicSite>
+    <SupportFrame staff={staff}>
       <section className="support-shell">
-        <a className="public-text-link" href="/oven">
+        <a className="public-text-link" href={staff ? '/admin' : '/oven'}>
           <ArrowLeft size={16} />
-          Open oven
+          {staff ? 'Administration' : 'Open oven'}
         </a>
         <header className="support-heading">
           <div>
@@ -290,18 +320,20 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                   Notification settings
                 </button>
               )}
-              {staff && <a href="/support">My tickets</a>}
+              {staff && <a href="/admin">Administration</a>}
             </div>
           )}
         </header>
         {initialError ? (
           <div className="support-panel">
             <p role="alert">{initialError}</p>
-            <a className="public-button" href="/login">
+            <a className="public-button" href={staff ? '/admin' : '/login'}>
               Log in
             </a>
             <p>
-              <a href="/help">Cannot sign in? Help & contact</a>
+              <a href={staff ? 'https://mycottagepantry.com/help' : '/help'}>
+                Cannot sign in? Help & contact
+              </a>
             </p>
           </div>
         ) : !access ? (
@@ -318,6 +350,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                 {notice}
               </p>
             )}
+            {staff && <SupportAiUsage admin={access.admin} />}
             {settingsOpen && access.admin ? (
               <SupportNotificationSettings />
             ) : (
@@ -460,6 +493,18 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                           onChange={(e) => setMessage(e.target.value)}
                         />
                       </label>
+                      <label className="support-note-choice">
+                        <input
+                          type="checkbox"
+                          checked={aiReviewConsent}
+                          onChange={(e) => setAiReviewConsent(e.target.checked)}
+                        />
+                        Allow support staff to send my issue summary and public
+                        replies to OpenAI via Netlify AI Gateway for
+                        troubleshooting suggestions. Screenshots, diagnostics
+                        and private notes are excluded. Optional; support
+                        remains available without AI review.
+                      </label>
                       <ScreenshotInput key={createKey} onFile={setFile} />
                       <p className="support-fine">
                         We include only a sanitized app location and release
@@ -591,6 +636,47 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                           </li>
                         ))}
                       </ol>
+                      {detail.aiConversation && (
+                        <details className="support-helper">
+                          <summary>
+                            Attached AI conversation & diagnostics
+                          </summary>
+                          <SupportTranscript
+                            messages={detail.aiConversation.messages}
+                            requesterLabel={staff ? 'Requester' : 'You'}
+                          />
+                          {!!detail.aiConversation.diagnostics && (
+                            <pre className="ai-diagnostics">
+                              {JSON.stringify(
+                                detail.aiConversation.diagnostics,
+                                null,
+                                2,
+                              )}
+                            </pre>
+                          )}
+                          <p>
+                            Attachment expires{' '}
+                            {time(detail.aiConversation.expires_at)}. The
+                            requester can delete it sooner. Ticket summaries and
+                            replies remain.
+                          </p>
+                        </details>
+                      )}
+                      {staff && (
+                        <SupportAiSuggestion
+                          key={detail.ticket.id}
+                          ticketId={detail.ticket.id}
+                          consent={
+                            !!detail.aiConversation ||
+                            detail.ticket.diagnostics?.aiReviewConsent ===
+                              'true'
+                          }
+                          onDraft={(text) => {
+                            setReply(text)
+                            setInternal(false)
+                          }}
+                        />
+                      )}
                       <form onSubmit={sendReply} aria-label="Ticket reply">
                         {staff && (
                           <label className="support-note-choice">
@@ -679,7 +765,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
           </>
         )}
       </section>
-    </PublicSite>
+    </SupportFrame>
   )
 }
 function SupportNotificationSettings() {

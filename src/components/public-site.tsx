@@ -1,3 +1,4 @@
+import { supportKnowledge } from '@/lib/support-knowledge'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react'
@@ -332,6 +333,13 @@ export function HelpPage() {
       </section>
       <section className="public-width help-layout">
         <div>
+          {supportKnowledge.map((article) => (
+            <details id={article.id} key={article.id}>
+              <summary>{article.title}</summary>
+              <p>{article.text}</p>
+              <a href={article.href}>Open {article.title.toLowerCase()}</a>
+            </details>
+          ))}
           {[
             [
               'How do recipe imports work?',

@@ -253,6 +253,8 @@ let failedRequest: {
   pathname: string
   request: NonNullable<InventoryErrorDetails['request']>
 } | null = null
+let latestCaptured: InventoryErrorDetails | null = null
+export const latestInventoryErrorDetails = () => latestCaptured
 const captured = new WeakMap<object, InventoryErrorDetails>()
 const listeners = new Set<() => void>()
 
@@ -304,10 +306,8 @@ export function captureInventoryError(
   info: { componentStack?: string | null },
 ) {
   if (!inventoryErrorLocation() || !error || typeof error !== 'object') return
-  captured.set(
-    error,
-    createInventoryErrorDetails(error, info.componentStack || ''),
-  )
+  latestCaptured = createInventoryErrorDetails(error, info.componentStack || '')
+  captured.set(error, latestCaptured)
   listeners.forEach((listener) => listener())
 }
 export const inventoryErrorSnapshot = (error: unknown) =>

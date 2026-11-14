@@ -1,0 +1,124 @@
+.support-helper {
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+.support-helper :is(h3, p) {
+  margin: 0;
+}
+.support-helper label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+.support-helper :is(textarea, select) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border, #ddd);
+  background: var(--card, white);
+  border-radius: 7px;
+  padding: 0.6rem;
+  font: inherit;
+}
+.support-helper form {
+  display: grid;
+  gap: 0.65rem;
+}
+.ai-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ai-toolbar button {
+  border: 1px solid var(--border, #ddd);
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  background: var(--card, white);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.support-helper .ai-check {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+.ai-check input {
+  margin-top: 0.2rem;
+  flex: 0 0 auto;
+}
+.support-helper details {
+  font-size: 0.8rem;
+}
+.support-helper summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.3rem 0;
+}
+.support-helper details p {
+  margin: 0.6rem 0;
+}
+.support-helper pre,
+.ai-diagnostics {
+  max-width: 100%;
+  max-height: 15rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+.ai-messages {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.ai-messages > li {
+  background: var(--background, #faf8f2);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 8px;
+  padding: 0.7rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ai-messages > .user {
+  margin-left: 1rem;
+}
+.ai-messages strong {
+  font-size: 0.75rem;
+}
+.ai-messages p {
+  margin: 0.3rem 0 0;
+  white-space: pre-wrap;
+}
+.ai-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding-left: 1rem;
+  margin: 0.4rem 0 0;
+}
+.ai-notice {
+  padding: 0.65rem;
+  background: #f3efe4;
+  border-radius: 6px;
+}
+.support-helper :is(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid #705287;
+  outline-offset: 3px;
+}
+.support-helper button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ai-admin-policy {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+}

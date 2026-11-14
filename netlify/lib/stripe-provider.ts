@@ -24,7 +24,7 @@ export function stripeTierPurchasable(plan: unknown, e: StripeEnvironment) {
     !!tier &&
     planBillable(plan) &&
     tier.users !== null &&
-    (e === 'test' || tier.assignable)
+    (e === 'test' || tier.stripeLiveApproved)
   )
 }
 export function stripePortalMatchesPolicy(

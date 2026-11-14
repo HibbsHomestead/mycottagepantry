@@ -60,7 +60,7 @@ it('never treats an unknown leading-zero barcode as successful product lookup', 
       autoSearch
     />,
   )
-  expect(screen.getByText(/Product lookup unavailable/)).toBeVisible()
+  expect(screen.getByText(/No saved inventory match/)).toBeVisible()
   expect(screen.getByText('000000123456', { exact: true })).toBeVisible()
 })
 it('searches current Oven pantry and resale records without cross-type duplicates or foreign records', () => {

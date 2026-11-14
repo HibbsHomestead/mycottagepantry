@@ -36,9 +36,13 @@ it('keeps approved paid prices, proposed Free, total seats and closed commercial
     ['mixing-bowl', true, 'draft'],
     ['bakers-bench', true, 'draft'],
     ['cottage-kitchen', true, 'draft'],
-    ['cottage-mercantile', false, 'unpublished_draft'],
+    ['cottage-mercantile', true, 'unpublished_draft'],
   ])
   expect(launchPricing.plans.some((p) => 'annualUsd' in p)).toBe(false)
+  expect(
+    launchPricing.plans.find((p) => p.id === 'cottage-mercantile')
+      ?.stripeLiveApproved,
+  ).toBe(false)
   expect(launchPricing.checkoutEnabled).toBe(false)
   expect(launchPricing.signupEnabled).toBe(true)
   expect(launchPricing.restrictionsEnabled).toBe(false)
@@ -77,7 +81,7 @@ it('keeps the entire verified solo-business core in every paid proposal without 
       expect(planIncludes(plan, feature)).toBe(true)
       expect(
         entitlementDecision({ plan, status: 'active' }, feature, 'write'),
-      ).toBe(plan !== 'cottage-mercantile')
+      ).toBe(true)
     }
   }
 })
@@ -215,14 +219,14 @@ it('makes Cottage Mercantile inherit every lower-tier capability and keep its ow
 it('keeps Cottage Mercantile out of public signup but billable at its approved price once paid', () => {
   expect(selectedPlan('cottage-mercantile')).toBe('free')
   expect(selectedPlan('cottage-kitchen')).toBe('cottage-kitchen')
-  // Legacy subscription status labels never grant the unpublished tier.
+  // Server-owned approved internal entitlements include implemented workflows.
   expect(
     entitlementDecision(
       { plan: 'cottage-mercantile', status: 'active' },
       'fabricInventory',
       'write',
     ),
-  ).toBe(false)
+  ).toBe(true)
   // Verified paid access (server-derived) includes its implemented workflows.
   expect(
     billingFeatureAllowed(

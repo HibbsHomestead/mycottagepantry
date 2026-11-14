@@ -103,3 +103,10 @@
     flex-basis: 100%;
   }
 }
+
+.catalog-lookup > .text-button,
+.catalog-web-search {
+  display: block;
+  width: fit-content;
+  margin-block: 0.45rem;
+}

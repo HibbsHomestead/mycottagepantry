@@ -6,6 +6,7 @@ import './ingredient-modal.css'
 import './inventory-overlay.css'
 import '../mobile-usability.css'
 import './dialog-position.css'
+import { BackToTop } from '../back-to-top'
 import { XIcon } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 
@@ -59,6 +60,7 @@ function DialogContent({
   ingredient = false,
   positioning = 'center',
   overlayClassName,
+  ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -67,6 +69,21 @@ function DialogContent({
   positioning?: 'center' | 'css'
   overlayClassName?: string
 }) {
+  const scrollScope = React.useRef<HTMLDivElement>(null)
+  const setScrollScope = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollScope.current = node
+      if (typeof forwardedRef === 'function') {
+        const cleanup = forwardedRef(node)
+        if (cleanup)
+          return () => {
+            scrollScope.current = null
+            cleanup()
+          }
+      } else if (forwardedRef) forwardedRef.current = node
+    },
+    [forwardedRef],
+  )
   const bounded = presentation !== 'page'
   const returnFocus = React.useRef<HTMLElement | null>(null)
   const [viewport, setViewport] = React.useState<React.CSSProperties>({})
@@ -98,6 +115,7 @@ function DialogContent({
       )}
       <DialogPrimitive.Content
         key="content"
+        ref={setScrollScope}
         data-slot="dialog-content"
         data-presentation={presentation}
         data-positioning={positioning}
@@ -143,6 +161,7 @@ function DialogContent({
         }}
       >
         {children}
+        <BackToTop scope={scrollScope} />
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"

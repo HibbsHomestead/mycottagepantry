@@ -10,13 +10,18 @@ export const registrationReadiness = (policyReady: boolean) => ({
   blockers: [],
 })
 export function selectedPlan(value: unknown): PlanId {
-  // Unpublished, unassignable drafts (Cottage Mercantile) are never selectable.
-  return launchPricing.plans.some((p) => p.id === value && p.assignable)
+  // Public selection stays separate from approved internal assignment.
+  return launchPricing.plans.some(
+    (p) =>
+      p.id === value && p.assignable && p.publication !== 'unpublished_draft',
+  )
     ? (value as PlanId)
     : 'free'
 }
 export function planDetails(value: unknown) {
-  return launchPricing.plans.find((p) => p.id === selectedPlan(value))!
+  return (
+    launchPricing.plans.find((p) => p.id === value) || launchPricing.plans[0]
+  )
 }
 export const businessProfile = z
   .object({

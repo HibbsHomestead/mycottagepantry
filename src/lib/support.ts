@@ -14,6 +14,7 @@ export const supportStatuses = {
 export const ticketInput = z
   .object({
     subject: z.string().trim().min(1).max(160),
+    aiReviewConsent: z.boolean().default(false),
     category: z.enum(supportCategories),
     message: z.string().trim().min(1).max(6000),
     submissionKey: z.string().uuid(),
@@ -55,6 +56,12 @@ export type SupportMessage = {
   attachments: { id: string; byteSize: number }[]
 }
 export type SupportDetail = {
+  aiConversation?: {
+    id: string
+    messages: import('./support-ai').SupportAiMessage[]
+    diagnostics: unknown
+    expires_at: string
+  } | null
   ticket: SupportTicket
   messages: SupportMessage[]
   notifications?: {

@@ -1114,3 +1114,61 @@ export const stripeEvents = pgTable('stripe_events', {
     .defaultNow(),
   processedAt: timestamp('processed_at', { withTimezone: true }),
 })
+
+// Support chats are private to the requester and verified business; only escalated chats enter support's view.
+export const supportAiPolicy = pgTable('support_ai_policy', {
+  id: text().primaryKey().default('platform'),
+  data: jsonb().notNull(),
+}).enableRLS()
+export const supportAiConversations = pgTable(
+  'support_ai_conversations',
+  {
+    id: uuid().primaryKey(),
+    requesterId: text('requester_id').notNull(),
+    businessId: uuid('business_id').references(() => businesses.id, {
+      onDelete: 'cascade',
+    }),
+    messages: jsonb().notNull().default([]),
+    diagnostics: jsonb(),
+    ticketId: uuid('ticket_id').references(() => supportTickets.id, {
+      onDelete: 'set null',
+    }),
+    pendingId: uuid('pending_id'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index('support_ai_owner').on(t.requesterId, t.businessId, t.updatedAt),
+    index('support_ai_expiry').on(t.expiresAt),
+  ],
+).enableRLS()
+export const supportAiUsage = pgTable(
+  'support_ai_usage',
+  {
+    id: uuid().primaryKey(),
+    requesterId: text('requester_id').notNull(),
+    businessId: uuid('business_id').references(() => businesses.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    status: text().notNull().default('pending'),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+  },
+  (t) => [
+    index('support_ai_usage_day').on(t.createdAt, t.requesterId, t.businessId),
+    check(
+      'support_ai_usage_status_check',
+      sql`${t.status} IN ('pending','success','failed')`,
+    ),
+    check('support_ai_usage_input_tokens_check', sql`${t.inputTokens}>=0`),
+    check('support_ai_usage_output_tokens_check', sql`${t.outputTokens}>=0`),
+  ],
+).enableRLS()

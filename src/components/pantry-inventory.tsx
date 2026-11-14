@@ -517,7 +517,6 @@ export function PantryInventory({
                           <PantryPhoto item={i} assets={assets} />
                           <span>
                             <strong>{i.name}</strong>
-                            <small>{i.category}</small>
                           </span>
                         </button>
                         {warning && <p className="warning-text">{warning}</p>}

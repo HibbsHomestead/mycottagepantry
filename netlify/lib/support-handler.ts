@@ -1,3 +1,4 @@
+import { handleSupportAi } from './support-ai-handler'
 import { z } from 'zod'
 import { requireLegacyAdmin } from './platform-admin-legacy'
 import { AdminError } from './platform-admin-core'
@@ -65,6 +66,13 @@ async function detail(
     : undefined
   return {
     ticket: ticketView(ticket, staff),
+    aiConversation:
+      (
+        await c.query(
+          'SELECT id,messages,diagnostics,expires_at FROM support_ai_conversations WHERE ticket_id=$1 AND expires_at>now()',
+          [id],
+        )
+      ).rows[0] || null,
     messages: rows.map((m) => ({
       id: m.id,
       kind: m.kind,
@@ -124,7 +132,10 @@ async function createTicket(
       data.subject,
       data.category,
       data.submissionKey,
-      JSON.stringify(supportDiagnostics(data.route)),
+      JSON.stringify({
+        ...supportDiagnostics(data.route),
+        ...(data.aiReviewConsent ? { aiReviewConsent: 'true' } : {}),
+      }),
     ],
   )
   await c.query(
@@ -313,6 +324,8 @@ export default async function supportHandler(req: Request) {
     if (staff) requireSupportStaff(actor)
     if (staff || url.searchParams.has('settings'))
       await requireLegacyAdmin(req, actor.id)
+    if (url.searchParams.has('ai'))
+      return await handleSupportAi(req, actor, staff, createTicket)
     if (req.method === 'GET' && url.searchParams.has('attachment')) {
       const response = await supportTransaction(actor, async (c) => {
         const id = uuid.parse(url.searchParams.get('attachment'))

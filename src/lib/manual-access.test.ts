@@ -53,7 +53,5 @@ it('uses manual precedence without modifying billing, and restores fallback on e
   expect(
     effectiveAccess(null, { ...grant, operation: 'revoke' }, 'owner', now).plan,
   ).toBeNull()
-  expect(assignableTierIssue('cottage-mercantile')).toMatch(
-    /not approved for internal assignment/,
-  )
+  expect(assignableTierIssue('cottage-mercantile')).toBeNull()
 })

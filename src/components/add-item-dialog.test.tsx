@@ -132,7 +132,7 @@ it.each(itemTypes)(
       expect(
         await screen.findByText('No confirmed product match.'),
       ).toBeVisible()
-    else expect(screen.getByText(/Product lookup unavailable/)).toBeVisible()
+    else expect(screen.getByText(/No saved inventory match/)).toBeVisible()
     fireEvent.change(screen.getByLabelText('Item name'), {
       target: { value: 'New item' },
     })

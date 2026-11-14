@@ -110,7 +110,9 @@ export function AdminBusinessAccess({ data }: { data: AdminMetadata }) {
               {data.tierCatalog.map((p: AdminMetadata) => (
                 <option key={p.id} value={p.id} disabled={!!p.issue}>
                   {p.name}
-                  {p.issue ? ` — ${p.issue}` : ` · ${p.users} users`}
+                  {p.issue
+                    ? ` — ${p.issue}`
+                    : ` · ${p.users} ${p.users === 1 ? 'user' : 'users'}`}
                 </option>
               ))}
             </select>

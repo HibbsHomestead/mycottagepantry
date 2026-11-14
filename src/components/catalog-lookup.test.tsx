@@ -202,3 +202,51 @@ it('previews only allowed contribution fields and requires explicit sharing cons
     JSON.parse(String(fetch.mock.calls[0]?.[1]?.body || '{}')).snapshot.fields,
   ).toEqual({ name: 'Flour', brand: 'Mill' })
 })
+
+it('automatically looks up the scanned marmalade string and keeps candidates in the draft flow', async () => {
+  const apply = vi.fn(),
+    source = vi.fn()
+  const fetch = vi.fn(async () =>
+    Response.json({
+      version: 1,
+      results: [],
+      candidates: [
+        {
+          title: 'Smucker’s Orange Marmalade',
+          url: 'https://www.smuckers.com/orange-marmalade',
+          domain: 'www.smuckers.com',
+          confirmed: false,
+        },
+      ],
+      fallbackUrl: 'https://www.google.com/search?q=051500141335',
+    }),
+  )
+  vi.stubGlobal('fetch', fetch)
+  render(
+    <CatalogLookup
+      autoSearch
+      draft={{
+        name: 'My draft',
+        barcode: '051500141335',
+        usedAs: 'ingredient',
+      }}
+      workspace={demoData()}
+      apply={apply}
+      onSourceUrl={source}
+    />,
+  )
+  await screen.findByText('Smucker’s Orange Marmalade')
+  expect(JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]!.body as string).query).toBe('051500141335')
+  expect(apply).not.toHaveBeenCalled()
+  expect(screen.getByLabelText('Scan or enter barcode')).toHaveValue(
+    '051500141335',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Use this product page' }))
+  expect(source).toHaveBeenCalledWith(
+    'https://www.smuckers.com/orange-marmalade',
+  )
+  expect(fetch).toHaveBeenCalledTimes(1)
+  expect(apply).toHaveBeenCalledWith({
+    productSourceUrl: 'https://www.smuckers.com/orange-marmalade',
+  })
+})

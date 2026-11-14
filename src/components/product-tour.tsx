@@ -1,3 +1,5 @@
+import { useRef } from 'react'
+import { BackToTop } from './back-to-top'
 import * as Dialog from '@radix-ui/react-dialog'
 import { ArrowRight, Expand, X } from 'lucide-react'
 import { launchFeatures, type FeatureId } from '@/lib/launch-plans'
@@ -143,6 +145,7 @@ function ExpandableScreenshot({
   alt: string
   title: string
 }) {
+  const scrollScope = useRef<HTMLDivElement>(null)
   return (
     <Dialog.Root>
       <figure className="tour-screen">
@@ -160,6 +163,7 @@ function ExpandableScreenshot({
       <Dialog.Portal>
         <Dialog.Overlay className="tour-lightbox-overlay" />
         <Dialog.Content
+          ref={scrollScope}
           className="tour-lightbox"
           aria-describedby={`screen-${image}-description`}
         >
@@ -183,6 +187,7 @@ function ExpandableScreenshot({
           >
             <FeatureScreenshot image={image} alt={alt} />
           </div>
+          <BackToTop scope={scrollScope} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

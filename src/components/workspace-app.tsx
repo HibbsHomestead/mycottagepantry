@@ -1,3 +1,4 @@
+import { SupportHelper } from './support-helper'
 import { ProductionRun } from './production-run'
 import { InventoryCounts } from './inventory-counts'
 import {
@@ -124,7 +125,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { BakeryArt } from '@/components/bakery-art'
 import { demoData } from '@/lib/demo'
 import { reportRows, parseCsv } from '@/lib/reports'
 import {
@@ -5317,54 +5317,7 @@ export function WorkspaceApp() {
               />
             </>
           )}
-          {modal === 'help' && (
-            <>
-              <div className="help-art">
-                <BakeryArt />
-              </div>
-              <a
-                className="btn primary"
-                href={'/support#context=' + encodeURIComponent('/oven#' + page)}
-              >
-                Get help <ArrowRight size={16} />
-              </a>
-              <p>
-                Private tickets and replies with platform support. Do not send
-                passwords, API keys or payment-card details.
-              </p>
-              <h3>From a 25-lb bag to a profitable batch.</h3>
-              <ol className="help-steps">
-                <li>
-                  <strong>Stock your pantry.</strong> Enter package quantities
-                  and prices. Unit math is shown at every step.
-                </li>
-                <li>
-                  <strong>Cost your recipes.</strong> Add ingredients, labor,
-                  and overhead to see what each batch really costs.
-                </li>
-                <li>
-                  <strong>Price with confidence.</strong> Connect products, add
-                  packaging, and check your margins.
-                </li>
-                <li>
-                  <strong>Make something good.</strong> Plan production,
-                  complete a batch, and let the ledger track stock.
-                </li>
-                <li>
-                  <strong>Finish thoughtfully.</strong> Review label information
-                  and keep sales and expenses in order.
-                </li>
-              </ol>
-              <Btn
-                onClick={() => {
-                  setModal(null)
-                  go('Pantry')
-                }}
-              >
-                Explore your pantry <ArrowRight size={16} />
-              </Btn>
-            </>
-          )}
+          {modal === 'help' && <SupportHelper />}
         </DialogContent>
       </Dialog>
       {previewProduct && (

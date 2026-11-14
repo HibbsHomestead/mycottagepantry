@@ -15,6 +15,7 @@ export const launchPricing = {
     {
       id: 'free',
       assignable: true,
+      stripeLiveApproved: false,
       publication: 'draft',
       name: 'Free',
       monthlyUsd: 0,
@@ -35,6 +36,7 @@ export const launchPricing = {
     {
       id: 'mixing-bowl',
       assignable: true,
+      stripeLiveApproved: true,
       publication: 'draft',
       name: 'Mixing Bowl',
       monthlyUsd: 10,
@@ -56,6 +58,7 @@ export const launchPricing = {
     {
       id: 'bakers-bench',
       assignable: true,
+      stripeLiveApproved: true,
       publication: 'draft',
       name: 'Baker’s Bench',
       monthlyUsd: 20,
@@ -74,6 +77,7 @@ export const launchPricing = {
     {
       id: 'cottage-kitchen',
       assignable: true,
+      stripeLiveApproved: true,
       publication: 'draft',
       name: 'Cottage Kitchen',
       monthlyUsd: 30,
@@ -94,8 +98,9 @@ export const launchPricing = {
     },
     {
       id: 'cottage-mercantile',
-      /** Comparison approval does not enable public paid signup or checkout. */
-      assignable: false,
+      /** Internal assignment approved; public signup and live checkout remain separately gated. */
+      assignable: true,
+      stripeLiveApproved: false,
       publication: 'unpublished_draft',
       name: 'Cottage Mercantile',
       monthlyUsd: 40,
