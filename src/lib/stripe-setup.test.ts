@@ -5,15 +5,17 @@ const f = vi.hoisted(() => ({
   request: vi.fn(),
   validate: vi.fn(),
   hostedKey: '',
+  signing: '',
 }))
 vi.mock('../../netlify/lib/runtime-environment', () => ({
   deploymentRuntime: () => ({ context: f.context }),
   serverEnvironment: () => f.hostedKey,
 }))
 vi.mock('../../netlify/lib/stripe-provider', () => ({
-  openStripe: () => ({ key: 'fixture', signing: '' }),
+  openStripe: () => ({ key: 'fixture', signing: f.signing }),
   sealStripe: () => 'encrypted',
-  stripeEndpoint: () => 'https://mycottagepantry.com/api/stripe/live/webhook',
+  stripeEndpoint: (e: string) =>
+    `https://mycottagepantry.com/api/stripe/${e}/webhook`,
   stripeRequest: f.request,
   validatedPrice: f.validate,
   stripeEventsRequired: ['invoice.paid'],
@@ -25,6 +27,7 @@ afterEach(() => {
   vi.clearAllMocks()
   f.context = 'production'
   f.hostedKey = ''
+  f.signing = ''
 })
 
 it.each([true, false])(
@@ -124,4 +127,136 @@ it('reuses prices, stores webhook secret encrypted, and leaves activation and si
       /customer|subscription|checkout/.test(p),
     ),
   ).toBe(false)
+})
+
+it.each([
+  {
+    url: 'https://mycottagepantry.com/api/stripe/live/webhook',
+    livemode: true,
+    status: 'enabled',
+  },
+  {
+    url: 'https://mycottagepantry.com/api/stripe/live/webhook',
+    livemode: false,
+    status: 'enabled',
+  },
+  {
+    url: 'https://mycottagepantry.com/api/stripe/test/webhook',
+    livemode: true,
+    status: 'enabled',
+  },
+  {
+    url: 'https://mycottagepantry.com/api/stripe/test/webhook',
+    livemode: false,
+    status: 'disabled',
+  },
+])(
+  'rejects a manual webhook secret without a matching enabled destination: %j',
+  async (destination) => {
+    f.signing = 'whsec_fixture'
+    f.request.mockImplementation(async (_key: string, path: string) => {
+      if (path === '/account') return { id: 'acct_fixture' }
+      if (path.startsWith('/webhook_endpoints?')) return { data: [destination] }
+      throw new Error('Unexpected resource write')
+    })
+    const c = { query: vi.fn() }
+    await expect(
+      setupStripeBilling(
+        c,
+        {
+          ciphertext: 'encrypted',
+          validated_at: new Date(),
+          account_id: 'acct_fixture',
+        },
+        'test',
+      ),
+    ).rejects.toMatchObject({ code: 'WEBHOOK_DESTINATION_REQUIRED' })
+    expect(c.query).not.toHaveBeenCalled()
+    expect(f.request.mock.calls.every((call) => !call[2])).toBe(true)
+  },
+)
+
+it('finds a manual destination on a later page, retains its secret and explains manual delivery verification', async () => {
+  f.signing = 'whsec_fixture'
+  f.request.mockImplementation(async (_key: string, path: string) => {
+    if (path === '/account') return { id: 'acct_fixture' }
+    if (path === '/webhook_endpoints?limit=100')
+      return {
+        data: [
+          {
+            id: 'we_other',
+            url: 'https://example.invalid',
+            livemode: false,
+            status: 'enabled',
+          },
+        ],
+        has_more: true,
+      }
+    if (path === '/webhook_endpoints?limit=100&starting_after=we_other')
+      return {
+        data: [
+          {
+            id: 'we_manual',
+            url: 'https://mycottagepantry.com/api/stripe/test/webhook',
+            livemode: false,
+            status: 'enabled',
+            enabled_events: ['invoice.paid'],
+          },
+        ],
+        has_more: false,
+      }
+    if (path.startsWith('/prices?')) return { data: [{ id: 'price_fixture' }] }
+    if (path === '/billing_portal/configurations')
+      return { id: 'bpc_fixture', valid: true }
+    throw new Error('Unexpected resource')
+  })
+  f.validate.mockResolvedValue({ product: { id: 'prod_fixture' } })
+  const c = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+  await setupStripeBilling(
+    c,
+    {
+      ciphertext: 'encrypted',
+      validated_at: new Date(),
+      account_id: 'acct_fixture',
+    },
+    'test',
+  )
+  expect(c.query.mock.calls[0][1][2]).toMatchObject({
+    webhookEndpoint: 'we_manual',
+    webhookDeliveryCheck: 'manual',
+  })
+  expect(
+    f.request.mock.calls.some(([, path]) => path === '/webhook_endpoints'),
+  ).toBe(false)
+  expect(JSON.stringify(c.query.mock.calls)).not.toContain(f.signing)
+})
+
+it('reports missing subscription events before creating resources for a manual destination', async () => {
+  f.signing = 'whsec_fixture'
+  f.request.mockImplementation(async (_key: string, path: string) => {
+    if (path === '/account') return { id: 'acct_fixture' }
+    if (path === '/webhook_endpoints/we_manual')
+      return {
+        id: 'we_manual',
+        url: 'https://mycottagepantry.com/api/stripe/test/webhook',
+        livemode: false,
+        status: 'enabled',
+        enabled_events: ['product.updated'],
+      }
+    throw new Error('Unexpected resource')
+  })
+  const c = { query: vi.fn() }
+  await expect(
+    setupStripeBilling(
+      c,
+      {
+        ciphertext: 'encrypted',
+        validated_at: new Date(),
+        account_id: 'acct_fixture',
+        configuration: { webhookEndpoint: 'we_manual' },
+      },
+      'test',
+    ),
+  ).rejects.toMatchObject({ code: 'WEBHOOK_EVENTS_REQUIRED' })
+  expect(c.query).not.toHaveBeenCalled()
 })

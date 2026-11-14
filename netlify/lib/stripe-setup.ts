@@ -51,6 +51,61 @@ export async function setupStripeBilling(
       'The credential no longer matches the saved account.',
     )
   const configuration = { ...row.configuration }
+  // A manually entered secret is not proof that a destination exists in this
+  // environment. Never replace it silently or count a LIVE endpoint as TEST.
+  if (credentials.signing) {
+    let destination: AdminMetadata | undefined
+    if (configuration.webhookEndpoint) {
+      destination = await stripeRequest(
+        key,
+        '/webhook_endpoints/' + configuration.webhookEndpoint,
+      )
+    } else {
+      let after = ''
+      do {
+        const page = await stripeRequest(
+          key,
+          '/webhook_endpoints?limit=100' +
+            (after ? '&starting_after=' + after : ''),
+        )
+        destination = page.data?.find(
+          (item: AdminMetadata) =>
+            item.url === endpoint &&
+            item.livemode === (e === 'live') &&
+            item.status === 'enabled',
+        )
+        const last = page.data?.at(-1)?.id
+        after =
+          !destination && page.has_more && last && last !== after ? last : ''
+      } while (after)
+    }
+    if (
+      !destination ||
+      destination.url !== endpoint ||
+      destination.livemode !== (e === 'live') ||
+      destination.status !== 'enabled'
+    )
+      throw new AdminError(
+        409,
+        'WEBHOOK_DESTINATION_REQUIRED',
+        `No enabled ${e.toUpperCase()} webhook destination matches this site's endpoint. Create the destination in the same Stripe environment as the saved API key and save its matching signing secret, then retry setup.`,
+      )
+    const enabled = destination.enabled_events || []
+    if (
+      !enabled.includes('*') &&
+      stripeEventsRequired.some((event) => !enabled.includes(event))
+    )
+      throw new AdminError(
+        409,
+        'WEBHOOK_EVENTS_REQUIRED',
+        `The ${e.toUpperCase()} webhook destination is missing required billing events. Add the events listed in Webhook setup, then retry.`,
+      )
+    configuration.webhookEndpoint = destination.id
+    configuration.webhookDeliveryCheck =
+      enabled.includes('*') || enabled.includes('product.updated')
+        ? 'requested'
+        : 'manual'
+  }
   const mappings: AdminMetadata = { ...configuration.mappings }
   for (const plan of launchPricing.plans.filter((p) => p.monthlyUsd > 0)) {
     if (!planBillable(plan.id)) continue
@@ -141,6 +196,7 @@ export async function setupStripeBilling(
       )
     credentials.signing = webhook.secret
     configuration.webhookEndpoint = webhook.id
+    configuration.webhookDeliveryCheck = 'requested'
   }
   configuration.mappings = mappings
   configuration.policy = {
@@ -162,7 +218,10 @@ export async function setupStripeBilling(
   )
   // Stripe sends the actual signed event asynchronously. Only the webhook handler
   // can record successful delivery; a local setup action cannot manufacture it.
-  if (configuration.webhookEndpoint) {
+  if (
+    configuration.webhookEndpoint &&
+    configuration.webhookDeliveryCheck !== 'manual'
+  ) {
     const first = Object.values(mappings)[0] as AdminMetadata | undefined
     if (first) {
       const price = await validatedPrice(

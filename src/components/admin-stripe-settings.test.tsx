@@ -228,3 +228,106 @@ it('explains confirmation failures next to save and submits webhook-only updates
     screen.getByText(/Credentials saved securely for LIVE/),
   ).toBeInTheDocument()
 })
+
+it('allows setup with saved TEST credentials before a separate connection test', async () => {
+  const data = {
+    encryptionReady: true,
+    rows: [
+      {
+        environment: 'test',
+        fingerprint: 'sha256:fixture',
+        validated_at: null,
+      },
+    ],
+  }
+  const request = vi.fn().mockResolvedValue(data)
+  render(<AdminStripeSettings data={data} request={request} />)
+  const setup = screen.getByRole('button', { name: 'Set up TEST billing' })
+  expect(setup).toBeEnabled()
+  expect(setup).toHaveAccessibleDescription(
+    /separate connection test is not required/,
+  )
+  await userEvent.click(setup)
+  expect(request).toHaveBeenCalledWith('action=stripe', {
+    environment: 'test',
+    operation: 'setup',
+  })
+})
+
+it('saves entered TEST credentials with explicit confirmation before setup and clears them even if setup fails', async () => {
+  const data = { encryptionReady: true, rows: [] }
+  const saved = {
+    encryptionReady: true,
+    rows: [
+      {
+        environment: 'test',
+        fingerprint: 'sha256:fixture',
+        validated_at: null,
+      },
+    ],
+  }
+  const request = vi
+    .fn()
+    .mockResolvedValueOnce(saved)
+    .mockRejectedValueOnce(
+      new Error('The TEST webhook destination is missing.'),
+    )
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={data} request={request} />)
+  const setup = screen.getByRole('button', { name: 'Set up TEST billing' })
+  expect(setup).toBeDisabled()
+  expect(setup).toHaveAccessibleDescription(/Enter a TEST secret API key/)
+  const key = screen.getByLabelText('Stripe secret API key')
+  const signing = screen.getByLabelText(
+    'Webhook signing secret (optional for automatic setup)',
+  )
+  await user.type(key, 'sk_test_ui_fixture')
+  await user.type(signing, 'whsec_ui_fixture')
+  expect(setup).toBeEnabled()
+  await user.click(setup)
+  expect(request).not.toHaveBeenCalled()
+  expect(
+    screen.getByText(/Your entered credentials must be saved first/),
+  ).toHaveTextContent('SAVE TEST')
+  await user.type(screen.getByLabelText('Action confirmation'), 'SAVE TEST')
+  await user.click(setup)
+  await waitFor(() =>
+    expect(
+      screen.getByText('The TEST webhook destination is missing.'),
+    ).toBeInTheDocument(),
+  )
+  expect(request.mock.calls).toEqual([
+    [
+      'action=stripe',
+      {
+        environment: 'test',
+        operation: 'save',
+        key: 'sk_test_ui_fixture',
+        signing: 'whsec_ui_fixture',
+        confirmation: 'SAVE TEST',
+      },
+    ],
+    ['action=stripe', { environment: 'test', operation: 'setup' }],
+  ])
+  expect(key).toHaveValue('')
+  expect(signing).toHaveValue('')
+  expect(setup).toBeEnabled()
+  expect(setup).toHaveAccessibleDescription(/saved TEST credentials/)
+})
+
+it('explains encrypted storage gating without enabling setup', () => {
+  render(
+    <AdminStripeSettings
+      data={{
+        encryptionReady: false,
+        rows: [{ environment: 'test', fingerprint: 'sha256:fixture' }],
+      }}
+      request={vi.fn()}
+    />,
+  )
+  const setup = screen.getByRole('button', { name: 'Set up TEST billing' })
+  expect(setup).toBeDisabled()
+  expect(setup).toHaveAccessibleDescription(
+    /blocked until encrypted storage is ready/,
+  )
+})
