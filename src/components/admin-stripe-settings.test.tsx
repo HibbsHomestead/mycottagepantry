@@ -57,7 +57,7 @@ it('reflects refreshed API readiness and refreshed parent data without exposing 
   )
   expect(screen.getByText(/ROOT_MISSING/)).toBeInTheDocument()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Refresh storage status' }),
+    screen.getByRole('button', { name: 'Refresh connection status' }),
   )
   await waitFor(() =>
     expect(
@@ -81,4 +81,115 @@ it('reflects refreshed API readiness and refreshed parent data without exposing 
   expect(
     screen.getByRole('button', { name: 'Save credentials' }),
   ).toBeDisabled()
+})
+
+it('opens the saved LIVE account and distinguishes its connection from checkout availability', async () => {
+  render(
+    <AdminStripeSettings
+      data={{
+        encryptionReady: true,
+        rows: [
+          {
+            environment: 'live',
+            account_id: 'acct_fixture',
+            account_name: 'Cottage Pantry',
+            fingerprint: 'sha256:fixture',
+            validated_at: '2026-11-14T08:00:00Z',
+            checkout_enabled: false,
+          },
+        ],
+      }}
+      request={vi.fn()}
+    />,
+  )
+  expect(screen.getByLabelText('Environment')).toHaveValue('live')
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'LIVE Stripe: Connected',
+  )
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'TEST Stripe: No account connected',
+  )
+  expect(screen.getByText(/New checkout:/)).toHaveTextContent('Disabled')
+  expect(screen.getByText(/LIVE account: Cottage Pantry/)).toBeInTheDocument()
+  await userEvent.selectOptions(screen.getByLabelText('Environment'), 'test')
+  expect(screen.getByLabelText('Environment')).toHaveValue('test')
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'LIVE Stripe: Connected',
+  )
+})
+
+it('chooses LIVE when connection data arrives after the initial render and preserves an explicit environment selection', async () => {
+  const request = vi.fn()
+  const { rerender } = render(
+    <AdminStripeSettings data={{}} request={request} />,
+  )
+  const data = {
+    rows: [{ environment: 'live', fingerprint: 'sha256:fixture' }],
+  }
+  rerender(<AdminStripeSettings data={data} request={request} />)
+  expect(screen.getByLabelText('Environment')).toHaveValue('live')
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'Credentials saved. Test connection to verify.',
+  )
+  await userEvent.selectOptions(screen.getByLabelText('Environment'), 'test')
+  rerender(<AdminStripeSettings data={{ ...data }} request={request} />)
+  expect(screen.getByLabelText('Environment')).toHaveValue('test')
+})
+
+it('shows billing setup failures alongside the verified LIVE connection and retries in LIVE', async () => {
+  const data = {
+    encryptionReady: true,
+    rows: [
+      {
+        environment: 'live',
+        account_id: 'acct_fixture',
+        validated_at: '2026-11-14T08:00:00Z',
+        configuration: { setupError: 'BILLING_SETUP_INCOMPLETE' },
+      },
+    ],
+    connectionErrors: { test: 'STRIPE_CONNECTION_UNAVAILABLE' },
+  }
+  const request = vi.fn().mockResolvedValue(data)
+  render(<AdminStripeSettings data={data} request={request} />)
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'LIVE Stripe: Connected',
+  )
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'TEST Stripe: Status unavailable.',
+  )
+  expect(screen.getByRole('alert')).toHaveTextContent(
+    'Billing setup is incomplete',
+  )
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Set up LIVE billing' }),
+  )
+  expect(request).toHaveBeenCalledWith('action=stripe', {
+    environment: 'live',
+    operation: 'setup',
+  })
+})
+
+it('never labels a failed or unverified LIVE connection as connected', () => {
+  render(
+    <AdminStripeSettings
+      data={{
+        rows: [
+          {
+            environment: 'live',
+            account_id: 'acct_fixture',
+            fingerprint: 'sha256:fixture',
+            validated_at: '2026-11-14T08:00:00Z',
+            configuration: { apiError: 'CONNECTION_TEST_FAILED' },
+          },
+        ],
+      }}
+      request={vi.fn()}
+    />,
+  )
+  expect(screen.getByLabelText('Stripe account connections')).toHaveTextContent(
+    'LIVE Stripe: Connection test failed',
+  )
+  expect(
+    screen.getByLabelText('Stripe account connections'),
+  ).not.toHaveTextContent('LIVE Stripe: Connected')
 })

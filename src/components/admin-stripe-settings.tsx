@@ -11,7 +11,7 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       initial: AdminMetadata
       data: AdminMetadata
     } | null>(null),
-    [environment, setEnvironment] = useState('test'),
+    [selectedEnvironment, setEnvironment] = useState<string | null>(null),
     [key, setKey] = useState(''),
     [signing, setSigning] = useState(''),
     [confirmation, setConfirmation] = useState(''),
@@ -24,6 +24,16 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     [review, setReview] = useState(''),
     [search, setSearch] = useState('')
   const data = update?.initial === initial ? update.data : initial
+  const liveRow = data?.rows?.find(
+    (r: AdminMetadata) => r.environment === 'live',
+  )
+  const hasLiveConnection = !!(
+    liveRow?.fingerprint ||
+    liveRow?.validated_at ||
+    data?.connectionErrors?.live
+  )
+  const environment =
+    selectedEnvironment ?? (hasLiveConnection ? 'live' : 'test')
   const row =
       data?.rows?.find((r: AdminMetadata) => r.environment === environment) ||
       {},
@@ -73,6 +83,16 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
   }
   const dt = (v: unknown) =>
     v ? new Date(String(v)).toLocaleString() : 'Not verified'
+  function connectionStatus(mode: string) {
+    const saved = data?.rows?.find((r: AdminMetadata) => r.environment === mode)
+    if (data?.connectionErrors?.[mode])
+      return 'Status unavailable. Refresh to retry.'
+    if (saved?.configuration?.apiError) return 'Connection test failed'
+    if (saved?.validated_at && saved.account_id) return 'Connected'
+    if (saved?.fingerprint)
+      return 'Credentials saved. Test connection to verify.'
+    return 'No account connected'
+  }
   const checks = [
     [
       'Test API connection',
@@ -149,6 +169,14 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         Cottage Pantry software subscriptions. Business Square sales connections
         remain separate.
       </p>
+      <div role="status" aria-label="Stripe account connections">
+        <p>
+          <strong>LIVE Stripe:</strong> {connectionStatus('live')}
+        </p>
+        <p>
+          <strong>TEST Stripe:</strong> {connectionStatus('test')}
+        </p>
+      </div>
       <label>
         Environment
         <select
@@ -168,10 +196,33 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         </select>
       </label>
       <p>
-        <strong>{row.account_name || 'No validated account'}</strong> ·{' '}
-        {row.account_id || 'Unconnected'} ·{' '}
+        <strong>
+          {environment.toUpperCase()} account:{' '}
+          {row.account_name || 'No validated account'}
+        </strong>{' '}
+        · {row.account_id || 'No verified account ID'} ·{' '}
         {row.fingerprint || 'No saved credential'}
       </p>
+      {data?.connectionErrors?.[environment] && (
+        <p role="alert">
+          {environment.toUpperCase()} connection status could not be loaded.
+          Refresh connection status to retry. Check the credentials and API
+          permissions for this environment if the problem continues.
+        </p>
+      )}
+      {config.setupError && (
+        <p role="alert">
+          Billing setup is incomplete for {environment.toUpperCase()}. Select
+          Set up {environment.toUpperCase()} billing to retry the prices, portal
+          and webhook setup.
+        </p>
+      )}
+      {row.validated_at && !config.apiError && (
+        <p>
+          Account connection is verified. Webhook delivery and new checkout
+          availability have separate statuses below.
+        </p>
+      )}
       <p>
         Credentials configured securely in hosting are connected and set up
         automatically on the trusted deployed site. Set up billing creates the
@@ -223,7 +274,7 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           </p>
         )}
       <button disabled={busy} onClick={refreshStorage}>
-        Refresh storage status
+        Refresh connection status
       </button>
       <details>
         <summary>Credentials · save or rotate</summary>
