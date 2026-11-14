@@ -4,14 +4,13 @@ import {
   launchPricing,
   planIncludes,
   planUserLabel,
+  planVisible,
   type FeatureId,
   type PlanId,
 } from '@/lib/launch-plans'
 import { signupPlanHref } from '@/lib/signup-plan'
 
-const publicPlans = launchPricing.plans.filter(
-  (p) => String(p.publication) !== 'unpublished_draft',
-)
+const publicPlans = launchPricing.plans.filter((p) => planVisible(p.id))
 
 const copy: Record<
   PlanId,
@@ -198,9 +197,10 @@ export function PricingComparison() {
                 )}
                 {plan.id === 'cottage-mercantile' && (
                   <p>
-                    New team member setup awaits confirmation of the user limit.
-                    Product-import and automatic receipt-reading allowances are
-                    undecided; automatic reading is not offered here.
+                    Six total users, including the owner. Invitations and member
+                    administration are Coming soon. Product-import and automatic
+                    receipt-reading allowances are undecided; automatic reading
+                    is not offered here.
                   </p>
                 )}
               </div>
@@ -211,7 +211,7 @@ export function PricingComparison() {
                     : plan.id === 'free'
                       ? 'Account registration only'
                       : plan.id === 'cottage-mercantile'
-                        ? 'In development — not available for purchase'
+                        ? 'Visible for comparison · not yet available for purchase'
                         : 'Not yet available for purchase'}
                 </p>
                 <a

@@ -2,7 +2,12 @@ import { useAccountAccess } from '@/lib/account-access-client'
 import { AccountAccessStatus } from './account-access-status'
 import { PublicSite } from './public-site'
 import { signupSteps } from '@/lib/registration'
-import { launchPricing, planUserLabel, type PlanId } from '@/lib/launch-plans'
+import {
+  launchPricing,
+  planVisible,
+  planUserLabel,
+  type PlanId,
+} from '@/lib/launch-plans'
 import { signupPlan, signupPlanHref } from '@/lib/signup-plan'
 import { signupPlanRequest } from '@/lib/signup-plan-client'
 import { useSyncExternalStore, useState, type FormEvent } from 'react'
@@ -119,7 +124,7 @@ export function SignupPage() {
               <fieldset className="signup-plan-choice">
                 <legend>Choose your intended plan</legend>
                 {launchPricing.plans
-                  .filter((p) => String(p.publication) !== 'unpublished_draft')
+                  .filter((p) => planVisible(p.id))
                   .map((p) => (
                     <label key={p.id} className="check-label">
                       <input

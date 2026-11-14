@@ -836,8 +836,8 @@ function AdminView({
             <section className="admin-panel" key={p.id}>
               <Badge>
                 {p.publication === 'unpublished_draft'
-                  ? 'Unpublished draft · not assignable'
-                  : 'Existing draft tier'}
+                  ? 'Hidden from public plan selection'
+                  : 'Visible in public plan selection'}
               </Badge>
               <h2>{p.name}</h2>
               <p className="admin-plan-price">
@@ -849,6 +849,20 @@ function AdminView({
                   ? 'Team user limit awaiting confirmation'
                   : `${p.users} total ${p.users === 1 ? 'user' : 'users'}, including the owner`}
               </p>
+              <p>
+                Internal assignment: {p.assignable ? 'approved' : 'unavailable'}
+                .
+              </p>
+              {p.monthlyUsd > 0 && (
+                <p>
+                  Sandbox purchase: approved, subject to Stripe setup. Live
+                  purchase:{' '}
+                  {p.stripeLiveApproved
+                    ? 'tier approved; activation remains separate'
+                    : 'business approval required'}
+                  .
+                </p>
+              )}
               <ul>
                 {p.highlights.map((v: string) => (
                   <li key={v}>{v}</li>

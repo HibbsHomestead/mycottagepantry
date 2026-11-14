@@ -6,6 +6,131 @@ const w = () => {
   for (const k of Object.keys(w)) if (k !== 'settings') w[k] = []
   return w
 }
+it('explains four posted receipts using original dates and canonical expense and inventory records', () => {
+  const data = w()
+  data.receipt_extractions = [
+    {
+      id: 'booth',
+      name: 'Booth receipt',
+      date: '2026-07-26',
+      status: 'posted',
+      total: 25,
+    },
+    {
+      id: 'space',
+      name: 'Space receipt',
+      date: '2026-07-25',
+      status: 'posted',
+      extractionStatus: 'needs_review',
+      total: 50.54,
+    },
+    {
+      id: 'electric',
+      name: 'Space and electricity',
+      date: '2026-07-25',
+      status: 'posted',
+      extractionStatus: 'partial',
+      total: 61.78,
+    },
+    {
+      id: 'sugar',
+      name: 'Sugar receipt',
+      date: '2026-11-10',
+      status: 'posted',
+      extractionStatus: 'partial',
+      total: 20.41,
+    },
+    {
+      id: 'draft',
+      name: 'Unread document',
+      date: '2026-08-19',
+      status: 'draft',
+      extractionStatus: 'failed',
+    },
+    {
+      id: 'cancelled',
+      name: 'Cancelled document',
+      date: '2026-07-30',
+      status: 'cancelled',
+      total: 102,
+    },
+  ]
+  data.expenses = [
+    {
+      id: 'e1',
+      name: 'Booth',
+      date: '2026-07-26',
+      amount: 25,
+      receiptId: 'booth',
+      transactionId: 't1',
+    },
+    {
+      id: 'e2',
+      name: 'Space',
+      date: '2026-07-25',
+      amount: 50.54,
+      receiptId: 'space',
+      transactionId: 't2',
+    },
+    {
+      id: 'e3',
+      name: 'Space',
+      date: '2026-07-25',
+      amount: 50.55,
+      receiptId: 'electric',
+      transactionId: 't3',
+    },
+    {
+      id: 'e4',
+      name: 'Electricity',
+      date: '2026-07-25',
+      amount: 11.23,
+      receiptId: 'electric',
+      transactionId: 't3',
+    },
+  ]
+  data.finance_transactions = data.receipt_extractions
+    .filter((r) => r.status === 'posted')
+    .map((r, i) => ({
+      id: 't' + (i + 1),
+      name: r.name,
+      kind: 'receipt',
+      date: r.date,
+      receiptId: r.id,
+      amount: r.total,
+      status: 'posted',
+      lineSnapshots:
+        r.id === 'sugar'
+          ? [{ decision: 'inventory', postedAmount: 20.41 }]
+          : [],
+    }))
+  const original = structuredClone(data)
+  const november = financeDashboard(data, '2026-11-01', '2026-11-14')
+  expect(november.expenses.value).toBe(0)
+  expect(november.expenses.records).toHaveLength(0)
+  expect(november.outsidePeriod).toHaveLength(3)
+  expect(
+    november.receiptRecords.find((r) => r.receipt.id === 'sugar'),
+  ).toMatchObject({
+    contributes: false,
+    withinPeriod: true,
+    inventoryAmount: 20.41,
+    reason: expect.stringContaining('asset'),
+  })
+  const year = financeDashboard(data, '2026-01-01', '2026-11-14')
+  expect(year.expenses.value).toBe(137.32)
+  expect(year.expenses.records).toHaveLength(4)
+  expect(year.income.value).toBe(0)
+  expect(year.difference).toBe(-137.32)
+  expect(year.receiptRecords.filter((r) => r.contributes)).toHaveLength(3)
+  expect(
+    year.receiptRecords.find((r) => r.receipt.id === 'draft'),
+  ).toMatchObject({ awaitingReview: true, contributes: false })
+  expect(
+    year.receiptRecords.find((r) => r.receipt.id === 'cancelled')?.reason,
+  ).toContain('Cancelled')
+  expect(data).toEqual(original)
+})
 it('reconciles signed sales, tax, refunds, fees, bills and reversals without summing payouts, payments or linked receipt headers', () => {
   const data = w()
   data.sales = [

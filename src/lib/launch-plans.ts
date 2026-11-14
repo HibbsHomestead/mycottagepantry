@@ -98,10 +98,10 @@ export const launchPricing = {
     },
     {
       id: 'cottage-mercantile',
-      /** Internal assignment approved; public signup and live checkout remain separately gated. */
+      /** Public comparison and plan selection are approved; live checkout stays gated. */
       assignable: true,
       stripeLiveApproved: false,
-      publication: 'unpublished_draft',
+      publication: 'published',
       name: 'Cottage Mercantile',
       monthlyUsd: 40,
       users: 6,
@@ -125,7 +125,12 @@ export const launchPricing = {
 export type PlanId = (typeof launchPricing.plans)[number]['id']
 export type FeatureStatus =
   'implemented' | 'needs_refinement' | 'planned' | 'launch_review'
-export type PlanPublication = 'draft' | 'unpublished_draft'
+export type PlanPublication = 'draft' | 'unpublished_draft' | 'published'
+/** Visibility and saved signup preferences never authorize a purchase. */
+export function planVisible(plan: PlanId) {
+  const tier = launchPricing.plans.find((p) => p.id === plan)
+  return !!tier && (tier.publication as PlanPublication) !== 'unpublished_draft'
+}
 /** Plans that may appear in billing rows, signup drafts and grants (matches database constraints). */
 export function planAssignable(plan: PlanId) {
   return launchPricing.plans.some((p) => p.id === plan && p.assignable)

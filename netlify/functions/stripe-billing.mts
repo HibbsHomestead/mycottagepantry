@@ -1,6 +1,6 @@
 import { adminTransaction } from '../lib/platform-admin-core'
 import { launchPricing } from '../../src/lib/launch-plans'
-import { stripeSettings } from '../lib/stripe-provider'
+import { stripeSettings, stripeTierPurchasable } from '../lib/stripe-provider'
 import { z, ZodError } from 'zod'
 import {
   registrationActor,
@@ -43,7 +43,10 @@ export default async (request: Request) => {
           .filter(
             (p) =>
               p.assignable &&
-              p.users !== null &&
+              stripeTierPurchasable(p.id, 'live') &&
+              settings.configuration?.mappings?.[p.id]?.verifiedAt &&
+              settings.configuration?.mappings?.[p.id]?.account ===
+                settings.account_id &&
               settings.configuration?.mappings?.[p.id]?.purchase,
           )
           .map((p) => p.id)

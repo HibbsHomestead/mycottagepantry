@@ -159,6 +159,8 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
             setSigning('')
             setConfirmation('')
             setMessage('')
+            setPrice('')
+            setPurchase(false)
           }}
         >
           <option value="test">TEST</option>
@@ -344,12 +346,21 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
                 ? 'User allowance unresolved'
                 : `${tier.users} users`}{' '}
               · internal {tier.assignable ? 'available' : 'blocked'} ·{' '}
-              {config.mappings?.[tier.id]?.purchase
-                ? 'purchase approved'
-                : 'purchase disabled'}
+              {tier.monthlyUsd === 0
+                ? 'no checkout required'
+                : environment === 'live' && !tier.stripeLiveApproved
+                  ? 'live tier approval required'
+                  : `${environment.toUpperCase()} tier approved`}
               <br />
               <small>
-                {config.mappings?.[tier.id]?.price || 'Missing mapping'}
+                {tier.monthlyUsd > 0 &&
+                  (config.mappings?.[tier.id]?.price ||
+                    'Missing validated recurring Price mapping')}
+                {tier.monthlyUsd > 0 &&
+                  config.mappings?.[tier.id]?.price &&
+                  (config.mappings[tier.id].purchase
+                    ? ' · mapped purchase enabled; provider activation is separate'
+                    : ' · mapped purchase disabled')}
               </small>
             </p>
           ))}
@@ -374,9 +385,15 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           <input
             type="checkbox"
             checked={purchase}
+            disabled={
+              environment === 'live' &&
+              !data?.tiers?.find((tier: AdminMetadata) => tier.id === plan)
+                ?.stripeLiveApproved
+            }
             onChange={(e) => setPurchase(e.target.checked)}
           />{' '}
-          Approve purchase availability for this mapped tier
+          Approve {environment.toUpperCase()} purchase availability for this
+          mapped tier
         </label>
         <button
           disabled={busy}
@@ -384,6 +401,15 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         >
           Validate and save mapping
         </button>
+        {environment === 'live' && plan === 'cottage-mercantile' && (
+          <p role="status">
+            Cottage Mercantile · $40 USD/month · six total users, including the
+            owner: live launch approval is required before mapped live purchases
+            can be authorized. This approval does not enable checkout; provider
+            activation and completed sandbox evidence remain separate. Public
+            visibility and TEST mapping need no further tier approval.
+          </p>
+        )}
       </details>
       <details>
         <summary>Required policies and activation review</summary>

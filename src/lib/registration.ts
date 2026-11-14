@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { launchPricing, type PlanId } from './launch-plans'
+import { launchPricing, planVisible, type PlanId } from './launch-plans'
 
 export const registrationReadiness = (policyReady: boolean) => ({
   publicSignup: true,
@@ -12,8 +12,7 @@ export const registrationReadiness = (policyReady: boolean) => ({
 export function selectedPlan(value: unknown): PlanId {
   // Public selection stays separate from approved internal assignment.
   return launchPricing.plans.some(
-    (p) =>
-      p.id === value && p.assignable && p.publication !== 'unpublished_draft',
+    (p) => p.id === value && p.assignable && planVisible(p.id),
   )
     ? (value as PlanId)
     : 'free'

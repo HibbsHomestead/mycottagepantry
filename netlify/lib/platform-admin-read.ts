@@ -293,7 +293,7 @@ export async function readAdministration(
       pricing: launchPricing,
       features: launchFeatures,
       assignments,
-      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes five users plus the owner (six total), with all paid tiers approved for Stripe test checkout. Internal assignments remain separate from test purchase approval; Mercantile live purchase and internal assignment remain blocked pending launch review.',
+      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes five users plus the owner (six total). Public comparison, plan selection and internal assignment are approved. All paid tiers are approved for Stripe test checkout, subject to validated provider setup and Price mappings. Mercantile live purchase approval is still required; visibility does not enable live charges.',
     }
   }
   if (input.section === 'billing') {
