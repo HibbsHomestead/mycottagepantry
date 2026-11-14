@@ -6,7 +6,7 @@ import {
   planMonthlyCents,
   planBillable,
 } from '../../src/lib/launch-plans'
-import { deploymentRuntime } from './runtime-environment'
+import { deploymentRuntime, serverEnvironment } from './runtime-environment'
 import {
   openStripe,
   sealStripe,
@@ -154,6 +154,15 @@ export async function setupStripeBilling(
   }
   delete configuration.apiError
   delete configuration.setupError
+  delete configuration.hostedLaunchReady
+  if (
+    e === 'live' &&
+    key === serverEnvironment('STRIPE_LIVE_SECRET_KEY') &&
+    account.charges_enabled === true &&
+    account.details_submitted === true &&
+    !configuration.launchDisabled
+  )
+    configuration.hostedLaunchReady = true
   await c.query(
     'UPDATE stripe_provider_settings SET ciphertext=$2,configuration=$3,updated_at=NOW() WHERE environment=$1',
     [e, sealStripe(credentials, e), configuration],
@@ -178,4 +187,22 @@ export async function setupStripeBilling(
       )
     }
   }
+}
+
+/** Only signed delivery plus completed, server-owned setup can activate launch. */
+export async function activateHostedStripe(c: Pick<AdminClient, 'query'>) {
+  if (deploymentRuntime().context !== 'production') return
+  await c.query(`UPDATE stripe_provider_settings
+    SET checkout_enabled=true,updated_at=NOW()
+    WHERE environment='live' AND validated_at IS NOT NULL
+      AND webhook_verified_at IS NOT NULL
+      AND configuration->>'hostedLaunchReady'='true'
+      AND COALESCE(configuration->>'launchDisabled','false') <> 'true'
+      AND NOT (configuration ? 'apiError')
+      AND NOT (configuration ? 'setupError')
+      AND configuration->'policy'->>'portal' IS NOT NULL
+      AND EXISTS (SELECT 1 FROM jsonb_each(configuration->'mappings') AS m
+        WHERE m.value->>'purchase'='true'
+          AND m.value->>'account'=account_id
+          AND m.value->>'verifiedAt' IS NOT NULL)`)
 }

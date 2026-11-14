@@ -54,11 +54,20 @@ export function stripeEncryptionStatus() {
   const nodeRoot = process.env.STRIPE_BILLING_ENCRYPTION_KEY
   const selected = netlifyRoot ?? nodeRoot
   const status = rootState(selected)
+  // Some managed deployments omit the dedicated root while delivering the
+  // server-only API credential. HKDF can safely derive a separate storage key.
+  // Only recover an absent root; never silently replace a malformed one.
+  const credentialFallback =
+    status === 'missing' &&
+    /^sk_live_[A-Za-z0-9]{20,}$/.test(
+      serverEnvironment('STRIPE_LIVE_SECRET_KEY'),
+    )
   return {
-    ready: status === 'valid',
+    ready: status === 'valid' || credentialFallback,
     status,
-    source:
-      netlifyRoot !== undefined
+    source: credentialFallback
+      ? 'live_credential'
+      : netlifyRoot !== undefined
         ? 'netlify'
         : nodeRoot !== undefined
           ? 'node'

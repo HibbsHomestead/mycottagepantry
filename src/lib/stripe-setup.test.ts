@@ -4,9 +4,11 @@ const f = vi.hoisted(() => ({
   context: 'production',
   request: vi.fn(),
   validate: vi.fn(),
+  hostedKey: '',
 }))
 vi.mock('../../netlify/lib/runtime-environment', () => ({
   deploymentRuntime: () => ({ context: f.context }),
+  serverEnvironment: () => f.hostedKey,
 }))
 vi.mock('../../netlify/lib/stripe-provider', () => ({
   openStripe: () => ({ key: 'fixture', signing: '' }),
@@ -22,7 +24,46 @@ import { setupStripeBilling } from '../../netlify/lib/stripe-setup'
 afterEach(() => {
   vi.clearAllMocks()
   f.context = 'production'
+  f.hostedKey = ''
 })
+
+it.each([true, false])(
+  'requires charge capability before marking hosted launch ready (%s)',
+  async (chargesEnabled) => {
+    f.hostedKey = 'fixture'
+    f.request.mockImplementation(async (_key: string, path: string) => {
+      if (path === '/account')
+        return {
+          id: 'acct_fixture',
+          charges_enabled: chargesEnabled,
+          details_submitted: true,
+        }
+      if (path.startsWith('/prices?'))
+        return { data: [{ id: 'price_fixture' }] }
+      if (path === '/billing_portal/configurations')
+        return { id: 'bpc_fixture', valid: true }
+      if (path === '/webhook_endpoints')
+        return { id: 'we_fixture', secret: 'whsec_fixture' }
+      if (path.startsWith('/products/')) return {}
+      throw new Error('Unexpected resource')
+    })
+    f.validate.mockResolvedValue({ product: { id: 'prod_fixture' } })
+    const c = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+    await setupStripeBilling(
+      c,
+      {
+        ciphertext: 'encrypted',
+        validated_at: new Date(),
+        account_id: 'acct_fixture',
+        configuration: { hostedLaunchReady: true },
+      },
+      'live',
+    )
+    expect(c.query.mock.calls[0][1][2].hostedLaunchReady === true).toBe(
+      chargesEnabled,
+    )
+  },
+)
 it('blocks live resource writes on previews and refuses changed accounts', async () => {
   const c = { query: vi.fn(), release: vi.fn() }
   const row = {
