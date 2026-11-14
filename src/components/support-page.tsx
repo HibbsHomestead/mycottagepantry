@@ -62,17 +62,7 @@ function SupportFrame({
   staff: boolean
   children: ReactNode
 }) {
-  return staff ? (
-    <div className="public-site admin-support-site">
-      <header className="admin-support-header">
-        <a href="/admin">Cottage Pantry · Administration</a>
-        <span>Restricted support inbox</span>
-      </header>
-      {children}
-    </div>
-  ) : (
-    <PublicSite>{children}</PublicSite>
-  )
+  return staff ? children : <PublicSite>{children}</PublicSite>
 }
 export function SupportPage({ staff = false }: { staff?: boolean }) {
   const [access, setAccess] = useState<{
@@ -332,10 +322,12 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   return (
     <SupportFrame staff={staff}>
       <section className="support-shell">
-        <a className="public-text-link" href={staff ? '/admin' : '/oven'}>
-          <ArrowLeft size={16} />
-          {staff ? 'Administration' : 'Open oven'}
-        </a>
+        {!staff && (
+          <a className="public-text-link" href="/oven">
+            <ArrowLeft size={16} />
+            Open oven
+          </a>
+        )}
         <header className="support-heading">
           <div>
             <p className="public-eyebrow">
@@ -381,7 +373,6 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                   Notification settings
                 </button>
               )}
-              {staff && <a href="/admin">Administration</a>}
             </div>
           )}
         </header>

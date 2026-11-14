@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { StrictMode } from 'react'
+import { StrictMode, type ComponentProps } from 'react'
 const sdk = vi.hoisted(() => ({
   handleAuthCallback: vi.fn(),
   updateUser: vi.fn(),
@@ -9,6 +9,7 @@ const sdk = vi.hoisted(() => ({
 vi.mock('@netlify/identity', () => sdk)
 const runtime = vi.hoisted(() => ({
   search: '?section=overview',
+  pathname: '/admin',
   authenticated: false,
   pendingStage: '',
   loginError: '',
@@ -16,7 +17,14 @@ const runtime = vi.hoisted(() => ({
   calls: [] as string[],
 }))
 vi.mock('@tanstack/react-router', () => ({
-  useRouterState: () => ({ searchStr: runtime.search }),
+  useRouterState: () => ({
+    searchStr: runtime.search,
+    pathname: runtime.pathname,
+  }),
+  Link: ({ to, ...props }: ComponentProps<'a'> & { to: string }) => (
+    <a href={to} {...props} />
+  ),
+  Outlet: () => <div>Authorized support page</div>,
 }))
 vi.mock('./label-studio', () => ({
   LabelCanvas: () => <svg aria-label="Stock label preview" />,
@@ -43,6 +51,7 @@ beforeEach(() => {
     .mockResolvedValue({ id: 'test-assertion' } as never)
   Object.assign(runtime, {
     search: '?section=overview',
+    pathname: '/admin',
     authenticated: false,
     pendingStage: '',
     loginError: '',
@@ -119,6 +128,39 @@ it('renders the separate administration brand and never loads customer data whil
   expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
   expect(runtime.calls.every((c) => c.includes('action=session'))).toBe(true)
   expect(screen.queryByText('Customer accounts')).not.toBeInTheDocument()
+})
+
+it('keeps support in the shared shell without requesting unrelated administration records', async () => {
+  runtime.authenticated = true
+  runtime.pathname = '/platform-support'
+  render(<AdminPortal />)
+  expect(await screen.findByText('Authorized support page')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Support inbox' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  expect(screen.getByRole('link', { name: /^Overview$/ })).not.toHaveAttribute(
+    'aria-current',
+  )
+  expect(screen.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  expect(runtime.calls).toEqual(['/api/admin?action=session'])
+  expect(
+    screen.queryByRole('button', { name: /^Sign in$/ }),
+  ).not.toBeInTheDocument()
+})
+
+it('checks direct support navigation before exposing support content', async () => {
+  runtime.pathname = '/platform-support'
+  render(<AdminPortal />)
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Checking administrator session',
+  )
+  expect(
+    screen.queryByRole('heading', { name: 'Cottage Pantry Admin' }),
+  ).not.toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: /^Sign in$/ })).toBeVisible()
+  expect(screen.queryByText('Authorized support page')).not.toBeInTheDocument()
+  expect(runtime.calls).toEqual(['/api/admin?action=session'])
 })
 it('shows real metric definitions and unavailable monitoring without inventing revenue or trends', async () => {
   runtime.authenticated = true

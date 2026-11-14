@@ -285,20 +285,96 @@
   }
 }
 
-.admin-support-header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem max(1rem, calc((100vw - 1200px) / 2));
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
+/* Staff support inherits the persistent admin shell, including its mobile nav. */
+.admin-main-support {
+  --primary: var(--admin-purple);
+  --foreground: var(--admin-ink);
+  --muted: var(--admin-muted);
+  --border: var(--admin-line);
+  --radius-panel: 10px;
+  --radius-control: 6px;
+  --control-height: 36px;
+  max-width: none;
 }
-.admin-support-header a {
+.admin-main-support .support-shell {
+  max-width: none;
+  padding: 0;
+}
+.admin-main-support .support-heading {
+  gap: 16px;
+  margin: 0 0 20px;
+}
+.admin-main-support .support-heading h1 {
+  font-size: 32px;
+  margin: 10px 0;
+}
+.admin-main-support .support-heading p {
+  margin: 0;
+  font-size: 13px;
+}
+.admin-main-support .support-heading .public-eyebrow {
+  color: var(--admin-purple);
+  font-size: 9px;
   font-weight: 700;
-  color: var(--primary);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
-.admin-support-site .support-helper {
-  margin-block: 1rem;
+.admin-main-support .support-grid {
+  grid-template-columns: minmax(230px, 0.8fr) minmax(0, 2fr);
+  gap: 16px;
+}
+.admin-main-support .support-panel {
+  padding: 18px;
+}
+.admin-main-support .support-panel h2 {
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+.admin-main-support .support-panel p {
+  font-size: 13px;
+}
+.admin-main-support .support-field {
+  gap: 6px;
+  margin: 12px 0;
+}
+.admin-main-support .support-field :is(select, textarea) {
+  padding: 9px 10px;
+  font-size: 12px;
+}
+.admin-main-support .support-actions {
+  gap: 8px;
+}
+.admin-main-support .support-list ul {
+  margin: 14px 0;
+}
+.admin-main-support .support-list li button {
+  gap: 5px;
+  padding: 12px 10px;
+}
+.admin-main-support .support-messages {
+  margin: 18px 0;
+  gap: 12px;
+}
+.admin-main-support .support-message {
+  padding: 14px;
+}
+.admin-main-support .support-helper {
+  margin-block: 12px;
+}
+.admin-main-support .support-settings {
+  max-width: none;
+}
+@media (max-width: 1050px) {
+  .admin-main-support .support-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-main-support .support-list {
+    max-height: 420px;
+    overflow-y: auto;
+  }
+}
+@media (max-width: 760px) {
+  .admin-main-support .support-heading h1 {
+    font-size: 27px;
+  }
 }

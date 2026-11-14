@@ -102,6 +102,15 @@ test('requester can submit, reopen and reply at desktop and phone sizes without 
 test('platform inbox exposes private notes only through its authorized API view', async ({
   page,
 }) => {
+  await page.route('**/api/admin?action=session', (route) =>
+    route.fulfill({
+      json: {
+        stage: 'authenticated',
+        role: 'admin',
+        identityId: 'fixture-admin',
+      },
+    }),
+  )
   const id = '20000000-0000-4000-8000-000000000001'
   const ticket = {
     id,

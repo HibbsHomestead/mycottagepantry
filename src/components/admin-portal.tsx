@@ -4,7 +4,7 @@ import { AdminBusinessAccess } from './admin-business-access'
 import { AdminCatalog } from './admin-catalog'
 import { AdminRegistrationPolicies } from './admin-registration-policies'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { useRouterState } from '@tanstack/react-router'
+import { Link, Outlet, useRouterState } from '@tanstack/react-router'
 import {
   Activity,
   ArrowLeft,
@@ -20,6 +20,7 @@ import {
   Users,
   CircleCheck,
   LockKeyhole,
+  MessageCircle,
 } from 'lucide-react'
 import { systemLabelTemplates } from '@/lib/label-studio'
 import { LabelCanvas } from './label-studio'
@@ -196,10 +197,13 @@ function ActivityTable({
 
 export function AdminPortal() {
   const location = useRouterState({ select: (s) => s.location })
+  const support = location.pathname === '/platform-support'
   const params = new URLSearchParams(location.searchStr)
   const section =
     sections.find((s) => s[0] === params.get('section'))?.[0] || 'overview'
-  const title = sections.find((s) => s[0] === section)![1]
+  const title = support
+    ? 'Support inbox'
+    : sections.find((s) => s[0] === section)![1]
   const [session, setSession] = useState<AdminSession | null>(null)
   const [data, setData] = useState<AdminMetadata | null>(null)
   const [loadedQuery, setLoadedQuery] = useState('')
@@ -269,7 +273,8 @@ export function AdminPortal() {
   const queryString = query.toString()
   useEffect(() => {
     let active = true
-    if (recoveryCallback || session?.stage !== 'authenticated') return
+    if (support || recoveryCallback || session?.stage !== 'authenticated')
+      return
     adminRequest(queryString)
       .then((value) => {
         if (active) {
@@ -288,7 +293,7 @@ export function AdminPortal() {
     return () => {
       active = false
     }
-  }, [queryString, session?.stage, refresh, recoveryCallback])
+  }, [support, queryString, session?.stage, refresh, recoveryCallback])
   async function signIn(event: FormEvent) {
     event.preventDefault()
     setBusy(true)
@@ -336,31 +341,34 @@ export function AdminPortal() {
   return (
     <div className="cp-admin">
       <aside className="admin-sidebar">
-        <a className="admin-brand" href="/admin">
+        <Link className="admin-brand" to="/admin">
           <span className="admin-brand-mark">
             <ShieldCheck size={23} />
           </span>
           <span>
             Cottage Pantry<strong>Admin</strong>
           </span>
-        </a>
+        </Link>
         <p className="admin-nav-label">PLATFORM CONTROL</p>
         <nav aria-label="Administration sections">
           {sections.map(([id, name, Icon]) => (
-            <a
-              href={href(id)}
+            <Link
+              to={href(id)}
               key={id}
-              aria-current={section === id ? 'page' : undefined}
+              aria-current={!support && section === id ? 'page' : undefined}
             >
               <Icon size={18} />
               <span>{name}</span>
-            </a>
+            </Link>
           ))}
           {authenticated && (
-            <a href="/platform-support">
-              <BookOpen size={18} />
+            <Link
+              to="/platform-support"
+              aria-current={support ? 'page' : undefined}
+            >
+              <MessageCircle size={18} />
               <span>Support inbox</span>
-            </a>
+            </Link>
           )}
         </nav>
         <div className="admin-sidebar-footer">
@@ -387,8 +395,12 @@ export function AdminPortal() {
             )}
           </div>
         </header>
-        <main className="admin-main">
-          {!authenticated ? (
+        <main className={`admin-main${support ? ' admin-main-support' : ''}`}>
+          {!session && !recoveryCallback ? (
+            <div className="admin-loading" role="status">
+              Checking administrator session…
+            </div>
+          ) : !authenticated ? (
             <section className="admin-auth">
               <span className="admin-auth-icon">
                 <LogIn size={32} />
@@ -425,10 +437,6 @@ export function AdminPortal() {
                     setError('')
                   }}
                 />
-              ) : !session ? (
-                <div className="admin-loading" role="status">
-                  Checking administrator session…
-                </div>
               ) : (
                 <form
                   onSubmit={recovering ? recoverPassword : signIn}
@@ -491,63 +499,70 @@ export function AdminPortal() {
             </section>
           ) : (
             <>
-              <div className="admin-page-heading">
-                <div>
-                  <p className="admin-eyebrow">
-                    COTTAGE PANTRY / ADMINISTRATION
-                  </p>
-                  <h1>{title}</h1>
-                  <p>
-                    {
-                      {
-                        overview:
-                          'A factual view of the platform, grounded in recorded data.',
-                        customers:
-                          'Customer account and Oven metadata. Business records stay private.',
-                        plans:
-                          'Existing plan definitions and the access rules actually in effect.',
-                        billing:
-                          'Platform subscriptions, separate from customer seller connections.',
-                        operations:
-                          'Recorded processing evidence and honest gaps in monitoring.',
-                        content:
-                          'The stock label catalogue, without touching customer copies.',
-                        audit: 'Who accessed the platform and what happened.',
-                      }[section]
-                    }
-                  </p>
-                </div>
-                <button
-                  className="admin-secondary"
-                  onClick={() => {
-                    setData(null)
-                    setRefresh((r) => r + 1)
-                  }}
-                >
-                  Refresh records
-                </button>
-              </div>
-              {error && (
-                <p className="admin-error" role="alert">
-                  {error}
-                </p>
-              )}
-              {(!data || loadedQuery !== queryString) && !error ? (
-                <div className="admin-loading" role="status">
-                  <span />
-                  Loading authorized records…
-                </div>
+              {support ? (
+                <Outlet />
               ) : (
-                data &&
-                loadedQuery === queryString && (
-                  <AdminView
-                    section={section}
-                    data={data}
-                    params={params}
-                    template={template}
-                    setTemplate={setTemplate}
-                  />
-                )
+                <>
+                  <div className="admin-page-heading">
+                    <div>
+                      <p className="admin-eyebrow">
+                        COTTAGE PANTRY / ADMINISTRATION
+                      </p>
+                      <h1>{title}</h1>
+                      <p>
+                        {
+                          {
+                            overview:
+                              'A factual view of the platform, grounded in recorded data.',
+                            customers:
+                              'Customer account and Oven metadata. Business records stay private.',
+                            plans:
+                              'Existing plan definitions and the access rules actually in effect.',
+                            billing:
+                              'Platform subscriptions, separate from customer seller connections.',
+                            operations:
+                              'Recorded processing evidence and honest gaps in monitoring.',
+                            content:
+                              'The stock label catalogue, without touching customer copies.',
+                            audit:
+                              'Who accessed the platform and what happened.',
+                          }[section]
+                        }
+                      </p>
+                    </div>
+                    <button
+                      className="admin-secondary"
+                      onClick={() => {
+                        setData(null)
+                        setRefresh((r) => r + 1)
+                      }}
+                    >
+                      Refresh records
+                    </button>
+                  </div>
+                  {error && (
+                    <p className="admin-error" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  {(!data || loadedQuery !== queryString) && !error ? (
+                    <div className="admin-loading" role="status">
+                      <span />
+                      Loading authorized records…
+                    </div>
+                  ) : (
+                    data &&
+                    loadedQuery === queryString && (
+                      <AdminView
+                        section={section}
+                        data={data}
+                        params={params}
+                        template={template}
+                        setTemplate={setTemplate}
+                      />
+                    )
+                  )}
+                </>
               )}
               <footer className="admin-page-footer">
                 <CircleCheck size={14} />
