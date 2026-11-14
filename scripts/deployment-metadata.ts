@@ -14,7 +14,7 @@ export function publicDeploymentMetadata(env: NodeJS.ProcessEnv) {
   )
     return null
   const review =
-    /^https:\/\/deploy-preview-([0-9]+)--mycottagepantry\.netlify\.app$/.exec(
+    /^https:\/\/((?:deploy-preview-[0-9]+|agent-[a-f0-9]{24}))--mycottagepantry\.netlify\.app$/.exec(
       env.DEPLOY_PRIME_URL || '',
     )
   return {
@@ -23,7 +23,7 @@ export function publicDeploymentMetadata(env: NodeJS.ProcessEnv) {
     context: env.CONTEXT!,
     previewOrigin:
       env.CONTEXT === 'deploy-preview' && review
-        ? `https://deploy-preview-${review[1]}--mycottagepantry.netlify.app`
+        ? `https://${review[1]}--mycottagepantry.netlify.app`
         : '',
   }
 }

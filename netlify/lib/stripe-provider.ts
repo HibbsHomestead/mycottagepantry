@@ -3,6 +3,7 @@ import {
   createDecipheriv,
   createHash,
   createHmac,
+  hkdfSync,
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto'
@@ -19,6 +20,7 @@ import {
   serverEnvironment as env,
   deploymentRuntime,
   stripeEncryptionStatus,
+  stripeCredentialRoot,
 } from './runtime-environment'
 
 export type StripeEnvironment = 'test' | 'live'
@@ -78,7 +80,12 @@ function root() {
       'ENCRYPTION_SETUP_REQUIRED',
       'Protected Stripe encryption storage needs hosting setup. No credentials were saved.',
     )
-  return Buffer.from(env('STRIPE_BILLING_ENCRYPTION_KEY'), 'hex')
+  const value = env('STRIPE_BILLING_ENCRYPTION_KEY')
+  return stripeCredentialRoot(value)
+    ? Buffer.from(
+        hkdfSync('sha256', value, '', 'cottage-stripe:storage-root:v1', 32),
+      )
+    : Buffer.from(value, 'hex')
 }
 export function sealStripe(value: unknown, binding: string) {
   const iv = randomBytes(12),
@@ -123,7 +130,7 @@ export async function stripeRequest(
   idempotency?: string,
 ): Promise<AdminMetadata> {
   if (
-    !/^\/[a-z_]+(?:\/[A-Za-z0-9_]+)*(?:\?[a-z_]+=[A-Za-z0-9_]+(?:&[a-z_]+=[A-Za-z0-9_]+)*)?$/.test(
+    !/^\/[a-z_]+(?:\/[A-Za-z0-9_]+)*(?:\?[a-z_]+(?:\[\])?=[A-Za-z0-9_]+(?:&[a-z_]+(?:\[\])?=[A-Za-z0-9_]+)*)?$/.test(
       path,
     )
   )
@@ -164,14 +171,80 @@ export async function stripeSettings(
   e: StripeEnvironment,
   lock = false,
 ) {
-  return (
-    await c.query(
-      'SELECT * FROM stripe_provider_settings WHERE environment=$1' +
-        (lock ? ' FOR UPDATE' : ''),
-      [e],
+  const read = async (locked = lock) =>
+    (
+      await c.query(
+        'SELECT * FROM stripe_provider_settings WHERE environment=$1' +
+          (locked ? ' FOR UPDATE' : ''),
+        [e],
+      )
+    ).rows[0]
+  let row = await read()
+  if (
+    row?.ciphertext ||
+    row?.configuration?.hostingImportDisabled ||
+    !stripeEncryptionReady()
+  )
+    return row
+  const configured = env(`STRIPE_${e.toUpperCase()}_SECRET_KEY`)
+  const legacy = env('STRIPE_BILLING_ENCRYPTION_KEY')
+  const key =
+    configured ||
+    (stripeCredentialRoot(legacy) && keyMatches(legacy, e) ? legacy : '')
+  if (!key || !keyMatches(key, e)) return row
+  // Serialize imports and preserve existing account bindings and explicit disconnections.
+  await c.query(
+    'INSERT INTO stripe_provider_settings(environment) VALUES($1) ON CONFLICT DO NOTHING',
+    [e],
+  )
+  row = await read(true)
+  if (row.ciphertext || row.configuration?.hostingImportDisabled) return row
+  const account = await stripeRequest(key, '/account')
+  if (row.account_id && row.account_id !== account.id)
+    throw new AdminError(
+      409,
+      'ACCOUNT_CHANGED',
+      'The hosting credential belongs to another Stripe account. Existing account links were preserved.',
     )
-  ).rows[0]
+  for (const path of [
+    '/prices?limit=1',
+    '/subscriptions?limit=1',
+    '/checkout/sessions?limit=1',
+    '/invoices?limit=1',
+    '/billing_portal/configurations?limit=1',
+  ])
+    await stripeRequest(key, path)
+  const signing = env(`STRIPE_${e.toUpperCase()}_WEBHOOK_SECRET`)
+  if (signing && !/^whsec_[A-Za-z0-9]+$/.test(signing))
+    throw new AdminError(
+      503,
+      'SIGNING_FORMAT',
+      'The configured webhook signing secret has an invalid format.',
+    )
+  await c.query(
+    'UPDATE stripe_provider_settings SET ciphertext=$2,fingerprint=$3,account_id=$4,account_name=$5,validated_at=NOW(),checkout_enabled=false,updated_at=NOW() WHERE environment=$1',
+    [
+      e,
+      sealStripe({ key, signing }, e),
+      'sha256:' + createHash('sha256').update(key).digest('hex').slice(0, 12),
+      account.id,
+      account.business_profile?.name ||
+        account.settings?.dashboard?.display_name ||
+        account.id,
+    ],
+  )
+  row = await read()
+  // Hosting configuration authorizes a one-time bootstrap on the trusted deployed
+  // environment. The row lock serializes concurrent requests; clients cannot
+  // choose credentials, destinations, prices, or activation through this path.
+  if (stripeEndpoint(e)) {
+    const { setupStripeBilling } = await import('./stripe-setup')
+    await setupStripeBilling(c, row, e)
+    row = await read()
+  }
+  return row
 }
+
 export function verifyStripeSignature(
   raw: string,
   header: string,
@@ -241,6 +314,8 @@ export async function validatedPrice(
 }
 export async function stripeAdminView(c: AdminClient) {
   const encryptionStatus = stripeEncryptionStatus()
+  await stripeSettings(c, 'test')
+  await stripeSettings(c, 'live')
   const rows = (
     await c.query(
       'SELECT environment,fingerprint,account_id,account_name,validated_at,webhook_verified_at,checkout_enabled,configuration,updated_at FROM stripe_provider_settings ORDER BY environment',
@@ -288,6 +363,7 @@ export async function stripeAdminAction(
     .object({
       environment: z.enum(['test', 'live']),
       operation: z.enum([
+        'setup',
         'save',
         'rotate',
         'test',
@@ -326,7 +402,10 @@ export async function stripeAdminAction(
   )
   const row = await stripeSettings(c, e, true),
     config = row.configuration || {}
-  if (input.operation === 'save' || input.operation === 'rotate') {
+  if (input.operation === 'setup') {
+    const { setupStripeBilling } = await import('./stripe-setup')
+    await setupStripeBilling(c, row, e)
+  } else if (input.operation === 'save' || input.operation === 'rotate') {
     if (new URL(request.url).protocol !== 'https:')
       throw new AdminError(
         403,
@@ -512,7 +591,7 @@ export async function stripeAdminAction(
         )
       ).rows[0]
       if (
-        env('CONTEXT') !== 'production' ||
+        deploymentRuntime().context !== 'production' ||
         !input.subscriberReview ||
         input.subscriberReview.length < 20 ||
         !test.checkout ||
@@ -556,7 +635,7 @@ export async function stripeAdminAction(
       )
     await c.query(
       'UPDATE stripe_provider_settings SET ciphertext=NULL,fingerprint=NULL,validated_at=NULL,webhook_verified_at=NULL,checkout_enabled=false,configuration=$2 WHERE environment=$1',
-      [e, {}],
+      [e, { hostingImportDisabled: true }],
     )
   } else if (input.operation === 'retry') {
     const event = (
