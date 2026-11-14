@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { AdminPortal } from '@/components/admin-portal'
 
-export const Route = createFileRoute('/admin')({
-  component: AdminPortal,
+export const Route = createFileRoute('/_admin/admin')({
+  // The persistent parent renders the administration views and shared shell.
+  component: () => null,
   headers: () => ({
     'Cache-Control': 'private, no-store',
     'Netlify-CDN-Cache-Control': 'no-store',

@@ -10,14 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminRouteImport } from './routes/_admin'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as OvenRouteImport } from './routes/oven'
 import { Route as PlatformRegistrationRouteImport } from './routes/platform-registration'
-import { Route as PlatformSupportRouteImport } from './routes/platform-support'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RecoverRouteImport } from './routes/recover'
@@ -27,6 +26,8 @@ import { Route as SupportRouteImport } from './routes/support'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
+import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
+import { Route as AdminPlatformSupportRouteImport } from './routes/_admin.platform-support'
 import { Route as OvenBillingRouteImport } from './routes/oven_.billing'
 import { Route as WorkspaceBillingRouteImport } from './routes/workspace_.billing'
 
@@ -36,8 +37,7 @@ const IndexRoute = IndexRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
+  id: '/_admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeaturesRoute = FeaturesRouteImport.update({
@@ -68,11 +68,6 @@ const OvenRoute = OvenRouteImport.update({
 const PlatformRegistrationRoute = PlatformRegistrationRouteImport.update({
   id: '/platform-registration',
   path: '/platform-registration',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlatformSupportRoute = PlatformSupportRouteImport.update({
-  id: '/platform-support',
-  path: '/platform-support',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -120,6 +115,16 @@ const WorkspaceRoute = WorkspaceRouteImport.update({
   path: '/workspace',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAdminRoute = AdminAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPlatformSupportRoute = AdminPlatformSupportRouteImport.update({
+  id: '/platform-support',
+  path: '/platform-support',
+  getParentRoute: () => AdminRoute,
+} as any)
 const OvenBillingRoute = OvenBillingRouteImport.update({
   id: '/oven_/billing',
   path: '/oven/billing',
@@ -133,14 +138,12 @@ const WorkspaceBillingRoute = WorkspaceBillingRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/oven': typeof OvenRoute
   '/platform-registration': typeof PlatformRegistrationRoute
-  '/platform-support': typeof PlatformSupportRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
@@ -150,19 +153,19 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/workspace': typeof WorkspaceRoute
+  '/admin': typeof AdminAdminRoute
+  '/platform-support': typeof AdminPlatformSupportRoute
   '/oven/billing': typeof OvenBillingRoute
   '/workspace/billing': typeof WorkspaceBillingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/oven': typeof OvenRoute
   '/platform-registration': typeof PlatformRegistrationRoute
-  '/platform-support': typeof PlatformSupportRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
@@ -172,20 +175,21 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/workspace': typeof WorkspaceRoute
+  '/admin': typeof AdminAdminRoute
+  '/platform-support': typeof AdminPlatformSupportRoute
   '/oven/billing': typeof OvenBillingRoute
   '/workspace/billing': typeof WorkspaceBillingRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/_admin': typeof AdminRouteWithChildren
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
   '/onboarding': typeof OnboardingRoute
   '/oven': typeof OvenRoute
   '/platform-registration': typeof PlatformRegistrationRoute
-  '/platform-support': typeof PlatformSupportRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/recover': typeof RecoverRoute
@@ -195,6 +199,8 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/workspace': typeof WorkspaceRoute
+  '/_admin/admin': typeof AdminAdminRoute
+  '/_admin/platform-support': typeof AdminPlatformSupportRoute
   '/oven_/billing': typeof OvenBillingRoute
   '/workspace_/billing': typeof WorkspaceBillingRoute
 }
@@ -202,14 +208,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/features'
     | '/help'
     | '/login'
     | '/onboarding'
     | '/oven'
     | '/platform-registration'
-    | '/platform-support'
     | '/pricing'
     | '/privacy'
     | '/recover'
@@ -219,19 +223,19 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/workspace'
+    | '/admin'
+    | '/platform-support'
     | '/oven/billing'
     | '/workspace/billing'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/features'
     | '/help'
     | '/login'
     | '/onboarding'
     | '/oven'
     | '/platform-registration'
-    | '/platform-support'
     | '/pricing'
     | '/privacy'
     | '/recover'
@@ -241,19 +245,20 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/workspace'
+    | '/admin'
+    | '/platform-support'
     | '/oven/billing'
     | '/workspace/billing'
   id:
     | '__root__'
     | '/'
-    | '/admin'
+    | '/_admin'
     | '/features'
     | '/help'
     | '/login'
     | '/onboarding'
     | '/oven'
     | '/platform-registration'
-    | '/platform-support'
     | '/pricing'
     | '/privacy'
     | '/recover'
@@ -263,20 +268,21 @@ export interface FileRouteTypes {
     | '/terms'
     | '/verify-email'
     | '/workspace'
+    | '/_admin/admin'
+    | '/_admin/platform-support'
     | '/oven_/billing'
     | '/workspace_/billing'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   FeaturesRoute: typeof FeaturesRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
   OnboardingRoute: typeof OnboardingRoute
   OvenRoute: typeof OvenRoute
   PlatformRegistrationRoute: typeof PlatformRegistrationRoute
-  PlatformSupportRoute: typeof PlatformSupportRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   RecoverRoute: typeof RecoverRoute
@@ -299,10 +305,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
+    '/_admin': {
+      id: '/_admin'
+      path: ''
+      fullPath: '/'
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -346,13 +352,6 @@ declare module '@tanstack/react-router' {
       path: '/platform-registration'
       fullPath: '/platform-registration'
       preLoaderRoute: typeof PlatformRegistrationRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/platform-support': {
-      id: '/platform-support'
-      path: '/platform-support'
-      fullPath: '/platform-support'
-      preLoaderRoute: typeof PlatformSupportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -418,6 +417,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_admin/admin': {
+      id: '/_admin/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminAdminRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/_admin/platform-support': {
+      id: '/_admin/platform-support'
+      path: '/platform-support'
+      fullPath: '/platform-support'
+      preLoaderRoute: typeof AdminPlatformSupportRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/oven_/billing': {
       id: '/oven_/billing'
       path: '/oven/billing'
@@ -435,16 +448,27 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminAdminRoute: typeof AdminAdminRoute
+  AdminPlatformSupportRoute: typeof AdminPlatformSupportRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAdminRoute: AdminAdminRoute,
+  AdminPlatformSupportRoute: AdminPlatformSupportRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   FeaturesRoute: FeaturesRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
   OnboardingRoute: OnboardingRoute,
   OvenRoute: OvenRoute,
   PlatformRegistrationRoute: PlatformRegistrationRoute,
-  PlatformSupportRoute: PlatformSupportRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   RecoverRoute: RecoverRoute,
