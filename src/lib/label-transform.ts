@@ -65,6 +65,27 @@ export function rotateAboutCenter(
   return { x: round(c.x - v.x), y: round(c.y - v.y), rotation: next }
 }
 
+/** Lines run from (0, 0) to (width, height), before the element rotation. */
+export function elementAngle(
+  e: Pick<LabelElement, 'type' | 'width' | 'height' | 'rotation'>,
+) {
+  return e.type === 'line'
+    ? e.rotation + (Math.atan2(e.height, e.width) * 180) / Math.PI
+    : e.rotation
+}
+
+/** Set the visible angle, preserving a line's exact midpoint and length.
+ * Do not round the compensating rotation: 0.1° rounding leaves a visible slope.
+ * The positive bounding box remains valid for existing save/resize/output code.
+ */
+export function setElementAngle(e: LabelElement, angle: number) {
+  if (e.type !== 'line') return rotateAboutCenter(e, angle)
+  const center = elementCenter(e)
+  const rotation = angle - (Math.atan2(e.height, e.width) * 180) / Math.PI
+  const offset = rotateVector({ x: e.width / 2, y: e.height / 2 }, rotation)
+  return { x: center.x - offset.x, y: center.y - offset.y, rotation }
+}
+
 /** Angle, in label degrees, of the rotation handle direction for a pointer. */
 export function pointerAngle(e: Box, p: Point) {
   const c = elementCenter(e)

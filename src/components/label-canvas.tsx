@@ -14,6 +14,7 @@ import {
 } from '../lib/label-studio'
 import {
   elementCenter,
+  elementAngle,
   rotateVector,
   resizeHandles,
   handlePosition,
@@ -51,20 +52,33 @@ function SelectionOverlay({
       data-selection-overlay={e.id}
     >
       <g transform={`translate(${e.x} ${e.y}) rotate(${e.rotation})`}>
-        <rect
-          width={e.width}
-          height={e.height}
-          fill="none"
-          stroke={color}
-          strokeWidth={stroke}
-          strokeDasharray={e.locked ? `${4 * px} ${3 * px}` : undefined}
-          pointerEvents="none"
-        />
+        {e.type === 'line' ? (
+          <line
+            x1={0}
+            y1={0}
+            x2={e.width}
+            y2={e.height}
+            stroke={color}
+            strokeWidth={stroke}
+            strokeDasharray={e.locked ? `${4 * px} ${3 * px}` : undefined}
+            pointerEvents="none"
+          />
+        ) : (
+          <rect
+            width={e.width}
+            height={e.height}
+            fill="none"
+            stroke={color}
+            strokeWidth={stroke}
+            strokeDasharray={e.locked ? `${4 * px} ${3 * px}` : undefined}
+            pointerEvents="none"
+          />
+        )}
         {!e.locked && (
           <>
             <line
               x1={e.width / 2}
-              y1={0}
+              y1={e.type === 'line' ? e.height / 2 : 0}
               x2={e.width / 2}
               y2={-stem}
               stroke={color}
@@ -91,40 +105,42 @@ function SelectionOverlay({
                 strokeWidth={stroke}
               />
             </g>
-            {resizeHandles.map((h) => {
-              const at = handlePosition(h, e.width, e.height),
-                corner = cornerHandle(h)
-              return (
-                <g
-                  key={h}
-                  data-handle={h}
-                  style={{ cursor: resizeCursor(h, e.rotation) }}
-                >
-                  <rect
-                    x={at.x - hit / 2}
-                    y={at.y - hit / 2}
-                    width={hit}
-                    height={hit}
-                    fill="transparent"
-                  />
-                  <rect
-                    x={at.x - handle / 2}
-                    y={at.y - (corner ? handle : handle * 0.7) / 2}
-                    width={handle}
-                    height={corner ? handle : handle * 0.7}
-                    rx={corner ? 0 : handle * 0.3}
-                    transform={
-                      h === 'e' || h === 'w'
-                        ? `rotate(90 ${at.x} ${at.y})`
-                        : undefined
-                    }
-                    fill="#fff"
-                    stroke={color}
-                    strokeWidth={stroke}
-                  />
-                </g>
-              )
-            })}
+            {resizeHandles
+              .filter((h) => e.type !== 'line' || h === 'nw' || h === 'se')
+              .map((h) => {
+                const at = handlePosition(h, e.width, e.height),
+                  corner = cornerHandle(h)
+                return (
+                  <g
+                    key={h}
+                    data-handle={h}
+                    style={{ cursor: resizeCursor(h, e.rotation) }}
+                  >
+                    <rect
+                      x={at.x - hit / 2}
+                      y={at.y - hit / 2}
+                      width={hit}
+                      height={hit}
+                      fill="transparent"
+                    />
+                    <rect
+                      x={at.x - handle / 2}
+                      y={at.y - (corner ? handle : handle * 0.7) / 2}
+                      width={handle}
+                      height={corner ? handle : handle * 0.7}
+                      rx={corner ? 0 : handle * 0.3}
+                      transform={
+                        h === 'e' || h === 'w'
+                          ? `rotate(90 ${at.x} ${at.y})`
+                          : undefined
+                      }
+                      fill="#fff"
+                      stroke={color}
+                      strokeWidth={stroke}
+                    />
+                  </g>
+                )
+              })}
           </>
         )}
       </g>
@@ -149,7 +165,7 @@ function SelectionOverlay({
             fill="#fff"
             data-rotation-readout="true"
           >
-            {Math.round(e.rotation)}°
+            {Math.round(elementAngle(e) * 10) / 10}°
           </text>
         </g>
       )}

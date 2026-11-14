@@ -1429,52 +1429,55 @@ export function IngredientDetail({
                 item={i}
                 assets={w.graphic_assets}
                 photoDetails={
-                  <section
-                    aria-label="Recipe usage"
-                    className="ingredient-section ingredient-section-wide"
-                  >
-                    <h3>Recipe usage</h3>
-                    {usage.length ? (
-                      usage.map((r) => (
-                        <button
-                          key={r.id}
-                          className="text-button"
-                          onClick={() => open('recipe-detail', r)}
-                        >
-                          {r.name}
-                        </button>
-                      ))
-                    ) : (
-                      <p>
-                        No recipes use this{' '}
-                        {packaging ? 'packaging' : 'ingredient'} yet.
-                      </p>
+                  <>
+                    <section
+                      aria-label="Recipe usage"
+                      className="ingredient-section ingredient-section-wide"
+                    >
+                      <h3>Recipe usage</h3>
+                      {usage.length ? (
+                        usage.map((r) => (
+                          <button
+                            key={r.id}
+                            className="text-button"
+                            onClick={() => open('recipe-detail', r)}
+                          >
+                            {r.name}
+                          </button>
+                        ))
+                      ) : (
+                        <p>
+                          No recipes use this{' '}
+                          {packaging ? 'packaging' : 'ingredient'} yet.
+                        </p>
+                      )}
+                    </section>
+                    {!hasPurchasePackage(i) && (
+                      <div className="ingredient-purchase-notice">
+                        <p className="warning-text">
+                          Purchase package details not set.
+                        </p>
+                        {canEdit && (
+                          <button className="text-button" onClick={edit}>
+                            Add purchase details
+                          </button>
+                        )}
+                      </div>
                     )}
-                  </section>
+                  </>
                 }
               >
                 <IngredientCostCards ingredient={i} />
-                {!hasPurchasePackage(i) && (
-                  <div>
-                    <p className="warning-text">
-                      Purchase package details not set.
-                    </p>
-                    {canEdit && (
-                      <button className="text-button" onClick={edit}>
-                        Add purchase details
-                      </button>
-                    )}
-                  </div>
-                )}
                 <details
                   className="calculation-box ingredient-detail-card"
                   id="ingredient-conversions"
                 >
                   <summary>How this is calculated</summary>
-                  <PackageSummary
-                    ingredient={i}
-                    onAdd={canEdit ? edit : undefined}
-                  />
+                  <p>
+                    Package price ÷ package amount = package unit cost.
+                    Inventory value is shown in Inventory.
+                  </p>
+                  {hasPurchasePackage(i) && <PackageSummary ingredient={i} />}
                   <p>
                     Storage unit: {storage} · Default recipe unit:{' '}
                     {i.recipeUnit || storage}. Current unit costs use the saved

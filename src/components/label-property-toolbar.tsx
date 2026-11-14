@@ -14,9 +14,10 @@ import {
   RotateCcw,
   BringToFront,
   SendToBack,
+  Minus,
 } from 'lucide-react'
 import type { LabelElement } from '@/lib/label-studio'
-import { rotateAboutCenter } from '@/lib/label-transform'
+import { elementAngle, setElementAngle } from '@/lib/label-transform'
 
 /** Keep incomplete numeric entry local; only valid values reach the document. */
 function CompactNumber({
@@ -309,13 +310,13 @@ export function LabelGeometryToolbar({
       </div>
       <div className="studio-numeric-row studio-angle-row">
         <CompactNumber
-          label="Rotation (°)"
+          label={element.type === 'line' ? 'Line angle (°)' : 'Rotation (°)'}
           shortLabel="Angle"
           unit="°"
-          value={element.rotation}
+          value={elementAngle(element)}
           min={-360}
           max={360}
-          onChange={(angle) => onPatch(rotateAboutCenter(element, angle))}
+          onChange={(angle) => onPatch(setElementAngle(element, angle))}
         />
         <CompactNumber
           label="Opacity"
@@ -328,11 +329,17 @@ export function LabelGeometryToolbar({
       </div>
       <div className="studio-tool-row">
         <StudioToolButton
-          label="Reset rotation to 0°"
-          disabled={!element.rotation}
-          onClick={() => onPatch(rotateAboutCenter(element, 0))}
+          label={
+            element.type === 'line' ? 'Make horizontal' : 'Reset rotation to 0°'
+          }
+          disabled={!elementAngle(element)}
+          onClick={() => onPatch(setElementAngle(element, 0))}
         >
-          <RotateCcw size={16} />
+          {element.type === 'line' ? (
+            <Minus size={16} />
+          ) : (
+            <RotateCcw size={16} />
+          )}
         </StudioToolButton>
         <div
           className="studio-tool-group"

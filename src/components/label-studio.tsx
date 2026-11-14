@@ -90,10 +90,11 @@ import {
 } from '@/lib/label-studio'
 import {
   keepsAspect,
+  elementAngle,
+  setElementAngle,
   normalizeAngle,
   pointerAngle,
   resizeElement,
-  rotateAboutCenter,
   snapAngle,
   type ResizeHandle,
 } from '@/lib/label-transform'
@@ -2368,10 +2369,10 @@ export function LabelStudio({
                     let patch: Partial<LabelElement> | null = null
                     if (move.mode === 'rotate') {
                       const raw =
-                        original.rotation +
+                        elementAngle(original) +
                         pointerAngle(original, point) -
                         move.angle
-                      patch = rotateAboutCenter(
+                      patch = setElementAngle(
                         original,
                         angleSnap !== event.shiftKey
                           ? snapAngle(raw)
