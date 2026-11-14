@@ -20,6 +20,10 @@ import { browserPrint } from '@/lib/label-browser-print'
 import { bridgeConnected, directPrint } from '@/lib/qz-bridge'
 import { printerSize, type PrinterProfile } from '@/lib/label-printers'
 import { LabelColorPicker } from './label-color-picker'
+import {
+  LabelTextToolbar,
+  LabelGeometryToolbar,
+} from './label-property-toolbar'
 import { recentColorList, type LabelColor } from '@/lib/label-colors'
 import { downloadLabel } from '@/lib/label-client-export'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -122,6 +126,20 @@ const sections = [
   'Print & Export',
   'Label Settings',
 ]
+function textFontName(element: LabelElement, range?: [number, number]) {
+  if (element.binding || !element.textRuns?.length) return element.font
+  let offset = 0
+  const fonts = new Set(
+    element.textRuns
+      .filter((run) => {
+        const start = offset
+        offset += run.text.length
+        return !range || (start < range[1] && offset > range[0])
+      })
+      .map((run) => run.font),
+  )
+  return fonts.size > 1 ? 'Mixed fonts' : [...fonts][0] || element.font
+}
 function Control({
   label,
   children,
@@ -1012,6 +1030,14 @@ export function LabelStudio({
         e.preventDefault()
         redo()
       }
+      // Arrow keys and Space belong to focused inspector controls and menus.
+      // Using them must not nudge or delete the active canvas element.
+      if (
+        (e.target as HTMLElement).closest(
+          'button,summary,[role="menuitem"],[role="radio"],[role="slider"]',
+        )
+      )
+        return
       if (mod && e.key.toLowerCase() === 'c' && element) {
         e.preventDefault()
         clipboard.current = structuredClone(element)
@@ -1270,6 +1296,8 @@ export function LabelStudio({
     opacity: number,
     apply: (d: LabelDocument, c: LabelColor) => LabelDocument,
     allowNone = false,
+    textToolbar = false,
+    disabled = false,
   ) {
     // Color callbacks edit a layout. Route both live preview and Apply to the
     // selected side, just as change() does for the other layout controls.
@@ -1291,6 +1319,8 @@ export function LabelStudio({
         label={label}
         value={{ hex: value, opacity }}
         allowNone={allowNone}
+        textToolbar={textToolbar}
+        disabled={disabled}
         documentColors={documentColors}
         recent={recentColors}
         brand={
@@ -1350,8 +1380,9 @@ export function LabelStudio({
     key: 'color' | 'fill',
     opacityKey: 'colorOpacity' | 'fillOpacity',
     allowNone = false,
+    textToolbar = false,
   ) {
-    if (!element || element.locked) return null
+    if (!element || (element.locked && !textToolbar)) return null
     const id = element.id
     return color(
       label,
@@ -1364,6 +1395,8 @@ export function LabelStudio({
         ),
       }),
       allowNone,
+      textToolbar,
+      element.locked || (textToolbar && element.type !== 'text'),
     )
   }
   const { printerProfiles, selectedPrinter } = printerSelection(
@@ -2444,58 +2477,144 @@ export function LabelStudio({
                 <h3>{element ? 'Element settings' : 'Label setup'}</h3>
               </div>
               {element ? (
-                <div className="studio-inspector-fields">
-                  <p className="studio-small-note">
-                    {element.binding
-                      ? 'Product-linked / dynamic · ' + element.binding
-                      : element.type === 'text'
-                        ? 'Manually entered text'
-                        : element.type}
-                    {element.locked ? ' · locked' : ''}
-                  </p>
-                  <div className="studio-actions">
-                    <button
-                      className="icon-button"
-                      aria-label="Duplicate element"
-                      onClick={duplicate}
-                    >
-                      <Copy size={17} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label="Delete element"
-                      disabled={element.locked}
-                      onClick={() => {
-                        change({
-                          elements: editorDoc.elements.filter(
-                            (e) => e.id !== selected,
-                          ),
-                        })
-                        setSelected('')
-                      }}
-                    >
-                      <Trash2 size={17} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label={
-                        element.locked ? 'Unlock element' : 'Lock element'
-                      }
-                      onClick={() =>
-                        change({
-                          elements: editorDoc.elements.map((e) =>
-                            e.id === selected ? { ...e, locked: !e.locked } : e,
-                          ),
-                        })
-                      }
-                    >
-                      {element.locked ? (
-                        <LockKeyhole size={17} />
-                      ) : (
-                        <UnlockKeyhole size={17} />
-                      )}
-                    </button>
+                <div className="studio-inspector-fields studio-element-fields">
+                  <div className="studio-selection-heading">
+                    <p className="studio-small-note" title={element.binding}>
+                      {element.binding
+                        ? 'Linked text / artwork'
+                        : element.type === 'text'
+                          ? 'Manually entered text'
+                          : element.type}
+                      {element.locked ? ' · locked' : ''}
+                    </p>
+                    <div className="studio-actions">
+                      <button
+                        className="icon-button"
+                        aria-label="Duplicate element"
+                        title="Duplicate element"
+                        onClick={duplicate}
+                      >
+                        <Copy size={17} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        aria-label="Delete element"
+                        title="Delete element"
+                        disabled={element.locked}
+                        onClick={() => {
+                          change({
+                            elements: editorDoc.elements.filter(
+                              (e) => e.id !== selected,
+                            ),
+                          })
+                          setSelected('')
+                        }}
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        aria-label={
+                          element.locked ? 'Unlock element' : 'Lock element'
+                        }
+                        title={
+                          element.locked ? 'Unlock element' : 'Lock element'
+                        }
+                        onClick={() =>
+                          change({
+                            elements: editorDoc.elements.map((e) =>
+                              e.id === selected
+                                ? { ...e, locked: !e.locked }
+                                : e,
+                            ),
+                          })
+                        }
+                      >
+                        {element.locked ? (
+                          <LockKeyhole size={17} />
+                        ) : (
+                          <UnlockKeyhole size={17} />
+                        )}
+                      </button>
+                    </div>
                   </div>
+                  <LabelTextToolbar
+                    key={`text-${element.id}`}
+                    element={element}
+                    onPatch={patchElement}
+                    supportsBold={
+                      !!availableFonts
+                        .find((f) => f.name === element.font)
+                        ?.weights.includes(700)
+                    }
+                    fontPicker={
+                      <FontPicker
+                        onUploadRequest={() => setSection('Brand Kit')}
+                        customFonts={customFonts}
+                        compact
+                        displayValue={textFontName(element)}
+                        value={element.font}
+                        disabled={element.locked || element.type !== 'text'}
+                        preview={elementText(element, data)}
+                        preferences={w.settings[0].currentFontPreferences}
+                        onPreferences={
+                          canEdit ? saveFontPreferences : undefined
+                        }
+                        onChange={(font) =>
+                          patchElement({
+                            font,
+                            ...(!element.binding && element.textRuns
+                              ? {
+                                  textRuns: applySelectionFont(
+                                    element,
+                                    0,
+                                    element.text.length,
+                                    font,
+                                  ),
+                                }
+                              : {}),
+                            bold:
+                              element.bold &&
+                              !!availableFonts
+                                .find((f) => f.name === font)
+                                ?.weights.includes(700),
+                          })
+                        }
+                      />
+                    }
+                    colorPicker={elementColor(
+                      'Text color',
+                      'color',
+                      'colorOpacity',
+                      false,
+                      true,
+                    )}
+                  />
+                  <LabelGeometryToolbar
+                    key={`geometry-${element.id}`}
+                    element={element}
+                    onPatch={patchElement}
+                    atFront={editorDoc.elements.at(-1)?.id === selected}
+                    atBack={editorDoc.elements[0]?.id === selected}
+                    onLayer={(layer) =>
+                      change({
+                        elements:
+                          layer === 'front'
+                            ? [
+                                ...editorDoc.elements.filter(
+                                  (e) => e.id !== selected,
+                                ),
+                                element,
+                              ]
+                            : [
+                                element,
+                                ...editorDoc.elements.filter(
+                                  (e) => e.id !== selected,
+                                ),
+                              ],
+                      })
+                    }
+                  />
                   {element.type === 'text' && (
                     <>
                       <Control label="Data binding">
@@ -2537,213 +2656,6 @@ export function LabelStudio({
                             }
                           />
                         </Control>
-                      )}
-                      {!element.binding && (
-                        <div
-                          className="studio-field"
-                          role="group"
-                          aria-label="Font for selected text"
-                        >
-                          <span>Font for selected text</span>
-                          <small>
-                            Select a word or range in Text, then choose its
-                            font. Each text run retains its own font when saved.
-                          </small>
-                          <FontPicker
-                            value={element.font}
-                            customFonts={customFonts}
-                            disabled={
-                              element.locked ||
-                              textSelection[1] <= textSelection[0]
-                            }
-                            preview={element.text.slice(...textSelection)}
-                            onUploadRequest={() => setSection('Brand Kit')}
-                            onChange={(font) => {
-                              try {
-                                patchElement({
-                                  textRuns: applySelectionFont(
-                                    element,
-                                    ...textSelection,
-                                    font,
-                                  ),
-                                })
-                              } catch (e) {
-                                setError((e as Error).message)
-                              }
-                            }}
-                          />
-                        </div>
-                      )}
-                      <Control label="Font pairing">
-                        <small>
-                          For two-font product names, add Label main name and
-                          Label product type as separate dynamic elements. Each
-                          keeps its own typography. Missing parts appear in
-                          Label Check.
-                        </small>
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            const pairing = fontPairings.find(
-                              (p) => p.name === e.target.value,
-                            )
-                            if (pairing)
-                              change({
-                                elements: applyFontPairing(
-                                  editorDoc.elements,
-                                  pairing,
-                                ),
-                              })
-                          }}
-                        >
-                          <option value="">
-                            Apply a pairing · locked elements stay unchanged
-                          </option>
-                          {fontPairings.map((p) => (
-                            <option key={p.name}>{p.name}</option>
-                          ))}
-                        </select>
-                      </Control>
-                      <div className="studio-field">
-                        <span>Font</span>
-                        <FontPicker
-                          onUploadRequest={() => setSection('Brand Kit')}
-                          customFonts={customFonts}
-                          value={element.font}
-                          disabled={element.locked}
-                          preview={elementText(element, data)}
-                          preferences={w.settings[0].currentFontPreferences}
-                          onPreferences={
-                            canEdit ? saveFontPreferences : undefined
-                          }
-                          onChange={(font) =>
-                            patchElement({
-                              font,
-                              bold:
-                                element.bold &&
-                                !!availableFonts
-                                  .find((f) => f.name === font)
-                                  ?.weights.includes(700),
-                            })
-                          }
-                        />
-                      </div>
-                      <button
-                        className="text-button"
-                        disabled={element.locked}
-                        onClick={() => {
-                          let size = element.fontSize
-                          while (
-                            size > 7 &&
-                            labelTextLines({ ...element, fontSize: size }, data)
-                              .length *
-                              size *
-                              element.lineHeight >
-                              element.height
-                          )
-                            size = Math.max(7, size - 0.5)
-                          patchElement({ fontSize: size })
-                        }}
-                      >
-                        Fit text to box (minimum 7 pt)
-                      </button>
-                      <div className="studio-two">
-                        {number(
-                          'Size (pt)',
-                          element.fontSize,
-                          (v) => patchElement({ fontSize: v }),
-                          1,
-                          300,
-                        )}
-                        {number(
-                          'Line height',
-                          element.lineHeight,
-                          (v) => patchElement({ lineHeight: v }),
-                          0.5,
-                          4,
-                        )}
-                      </div>
-                      <div className="studio-format">
-                        {(['bold', 'italic', 'underline'] as const).map((k) => (
-                          <button
-                            key={k}
-                            disabled={
-                              k === 'bold' &&
-                              !availableFonts
-                                .find((f) => f.name === element.font)
-                                ?.weights.includes(700)
-                            }
-                            title={
-                              k === 'bold' &&
-                              !availableFonts
-                                .find((f) => f.name === element.font)
-                                ?.weights.includes(700)
-                                ? 'This font has one print weight'
-                                : k
-                            }
-                            aria-pressed={element[k]}
-                            onClick={() => patchElement({ [k]: !element[k] })}
-                          >
-                            {k === 'bold' ? (
-                              <b>B</b>
-                            ) : k === 'italic' ? (
-                              <i>I</i>
-                            ) : (
-                              <u>U</u>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <Control label="Alignment">
-                        <select
-                          value={element.align}
-                          onChange={(e) =>
-                            patchElement({
-                              align: e.target.value as LabelElement['align'],
-                            })
-                          }
-                        >
-                          {['left', 'center', 'right'].map((t) => (
-                            <option key={t}>{t}</option>
-                          ))}
-                        </select>
-                      </Control>
-                      <Control label="Text case">
-                        <select
-                          value={element.textCase}
-                          onChange={(e) =>
-                            patchElement({
-                              textCase: e.target
-                                .value as LabelElement['textCase'],
-                            })
-                          }
-                        >
-                          {['none', 'upper', 'lower', 'title'].map((t) => (
-                            <option key={t}>{t}</option>
-                          ))}
-                        </select>
-                      </Control>
-                      <Control label="Vertical alignment">
-                        <select
-                          value={element.vertical}
-                          onChange={(e) =>
-                            patchElement({
-                              vertical: e.target
-                                .value as LabelElement['vertical'],
-                            })
-                          }
-                        >
-                          {['top', 'middle', 'bottom'].map((t) => (
-                            <option key={t}>{t}</option>
-                          ))}
-                        </select>
-                      </Control>
-                      {number(
-                        'Letter spacing (pt)',
-                        element.letterSpacing,
-                        (v) => patchElement({ letterSpacing: v }),
-                        -2,
-                        20,
                       )}
                     </>
                   )}
@@ -2834,143 +2746,161 @@ export function LabelStudio({
                     </>
                   )}
                   {element.type !== 'image' &&
+                    element.type !== 'text' &&
                     elementColor(
-                      element.type === 'text'
-                        ? 'Text color'
-                        : element.type === 'illustration'
-                          ? 'Vector stroke color'
-                          : 'Stroke / border color',
+                      element.type === 'illustration'
+                        ? 'Vector stroke color'
+                        : 'Stroke / border color',
                       'color',
                       'colorOpacity',
                     )}
-                  {['shape', 'text'].includes(element.type) &&
-                    elementColor(
-                      element.type === 'text'
-                        ? 'Text background'
-                        : 'Shape fill',
-                      'fill',
-                      'fillOpacity',
-                      true,
-                    )}
-                  <details>
-                    <summary>Position, size & layers</summary>
-                    <div className="studio-two">
-                      {number(
-                        'X (pt)',
-                        element.x,
-                        (v) => patchElement({ x: v }),
-                        -1000,
+                  {element.type === 'shape' &&
+                    elementColor('Shape fill', 'fill', 'fillOpacity', true)}
+                  <details className="studio-advanced">
+                    <summary>Advanced</summary>
+                    <div className="studio-advanced-fields">
+                      {element.type === 'text' && (
+                        <>
+                          {!element.binding && (
+                            <div
+                              className="studio-field"
+                              role="group"
+                              aria-label="Font for selected text"
+                            >
+                              <span>Font for selected text</span>
+                              <small>
+                                Select a word or range in Text to change its
+                                font.
+                              </small>
+                              <FontPicker
+                                value={element.font}
+                                displayValue={textFontName(
+                                  element,
+                                  textSelection,
+                                )}
+                                customFonts={customFonts}
+                                disabled={
+                                  element.locked ||
+                                  textSelection[1] <= textSelection[0]
+                                }
+                                preview={element.text.slice(...textSelection)}
+                                onUploadRequest={() => setSection('Brand Kit')}
+                                onChange={(font) => {
+                                  try {
+                                    patchElement({
+                                      textRuns: applySelectionFont(
+                                        element,
+                                        ...textSelection,
+                                        font,
+                                      ),
+                                    })
+                                  } catch (e) {
+                                    setError((e as Error).message)
+                                  }
+                                }}
+                              />
+                            </div>
+                          )}
+                          <Control label="Font pairing">
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                const pairing = fontPairings.find(
+                                  (p) => p.name === e.target.value,
+                                )
+                                if (pairing)
+                                  change({
+                                    elements: applyFontPairing(
+                                      editorDoc.elements,
+                                      pairing,
+                                    ),
+                                  })
+                              }}
+                            >
+                              <option value="">
+                                Apply a pairing · locked elements stay unchanged
+                              </option>
+                              {fontPairings.map((p) => (
+                                <option key={p.name}>{p.name}</option>
+                              ))}
+                            </select>
+                          </Control>
+                          <button
+                            className="text-button"
+                            disabled={element.locked}
+                            onClick={() => {
+                              let size = element.fontSize
+                              while (
+                                size > 7 &&
+                                labelTextLines(
+                                  { ...element, fontSize: size },
+                                  data,
+                                ).length *
+                                  size *
+                                  element.lineHeight >
+                                  element.height
+                              )
+                                size = Math.max(7, size - 0.5)
+                              patchElement({ fontSize: size })
+                            }}
+                          >
+                            Fit text to box (minimum 7 pt)
+                          </button>
+                          {elementColor(
+                            'Text background',
+                            'fill',
+                            'fillOpacity',
+                            true,
+                          )}
+                        </>
                       )}
-                      {number(
-                        'Y (pt)',
-                        element.y,
-                        (v) => patchElement({ y: v }),
-                        -1000,
-                      )}
-                      {number(
-                        'Width (pt)',
-                        element.width,
-                        (v) => patchElement({ width: v }),
-                        1,
-                      )}
-                      {number(
-                        'Height (pt)',
-                        element.height,
-                        (v) => patchElement({ height: v }),
-                        1,
-                      )}
-                      {number(
-                        'Rotation (°)',
-                        element.rotation,
-                        // Typed angles pivot around the element's center,
-                        // matching the on-canvas rotation handle.
-                        (v) =>
-                          Number.isFinite(v) &&
-                          Math.abs(v) <= 360 &&
-                          patchElement(rotateAboutCenter(element, v)),
-                        -360,
-                        360,
-                      )}
-                      {number(
-                        'Opacity',
-                        element.opacity,
-                        (v) => patchElement({ opacity: v }),
-                        0,
-                        1,
-                      )}
+                      <Control label="Group ID (same ID moves together)">
+                        <input
+                          disabled={element.locked}
+                          value={element.groupId || ''}
+                          onChange={(e) =>
+                            patchElement({
+                              groupId: e.target.value || undefined,
+                            })
+                          }
+                        />
+                      </Control>
+                      <Control label="Show element">
+                        <select
+                          disabled={element.locked}
+                          value={element.condition || 'always'}
+                          onChange={(e) =>
+                            patchElement({
+                              condition: e.target
+                                .value as LabelElement['condition'],
+                            })
+                          }
+                        >
+                          <option value="always">Always</option>
+                          <option value="nonempty">
+                            When field has a value
+                          </option>
+                          <option value="allergens">
+                            When allergens are declared
+                          </option>
+                          <option value="batch">
+                            When a batch is selected
+                          </option>
+                        </select>
+                      </Control>
+                      <details>
+                        <summary>Editor help</summary>
+                        <p className="studio-small-note">
+                          Drag to move; use edge handles to resize and the round
+                          handle to rotate. Images and icons keep their
+                          proportions. Hold Shift to resize freely or toggle
+                          angle snapping. Elements with the same Group ID move
+                          together. Use separate Label main name and Label
+                          product type fields for font pairings.
+                        </p>
+                      </details>
                     </div>
-                    <button
-                      className="btn secondary"
-                      disabled={element.locked || !element.rotation}
-                      onClick={() =>
-                        patchElement(rotateAboutCenter(element, 0))
-                      }
-                    >
-                      Reset rotation to 0°
-                    </button>
-                    <p className="studio-transform-hint">
-                      Drag the element to move it, a handle to resize it, or the
-                      round handle above it to rotate. Images and icons keep
-                      their proportions; hold Shift to resize freely or to
-                      toggle angle snapping.
-                    </p>
-                    <button
-                      className="btn secondary"
-                      onClick={() =>
-                        change({
-                          elements: [
-                            ...editorDoc.elements.filter(
-                              (e) => e.id !== selected,
-                            ),
-                            element,
-                          ],
-                        })
-                      }
-                    >
-                      Bring to front
-                    </button>
-                    <button
-                      className="btn secondary"
-                      onClick={() =>
-                        change({
-                          elements: [
-                            element,
-                            ...editorDoc.elements.filter(
-                              (e) => e.id !== selected,
-                            ),
-                          ],
-                        })
-                      }
-                    >
-                      Send to back
-                    </button>
-                    <Control label="Group ID (same ID moves together)">
-                      <input
-                        value={element.groupId || ''}
-                        onChange={(e) =>
-                          patchElement({ groupId: e.target.value || undefined })
-                        }
-                      />
-                    </Control>
                   </details>
-                  <Control label="Show element">
-                    <select
-                      value={element.condition || 'always'}
-                      onChange={(e) =>
-                        patchElement({
-                          condition: e.target
-                            .value as LabelElement['condition'],
-                        })
-                      }
-                    >
-                      <option value="always">Always</option>
-                      <option value="nonempty">When field has a value</option>
-                      <option value="allergens">
-                        When allergens are declared
-                      </option>
-                      <option value="batch">When a batch is selected</option>
-                    </select>
-                  </Control>
                   <button
                     className="text-button"
                     onClick={() => setSelected('')}

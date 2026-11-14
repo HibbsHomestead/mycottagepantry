@@ -44,6 +44,8 @@ export function LabelColorPicker({
   onPreview,
   onApply,
   onCancel,
+  textToolbar = false,
+  disabled = false,
 }: {
   label: string
   value: LabelColor
@@ -57,6 +59,8 @@ export function LabelColorPicker({
   onPreview: (v: LabelColor) => void
   onApply: (v: LabelColor) => void
   onCancel: () => void
+  textToolbar?: boolean
+  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false),
     [draft, setDraft] = useState(value),
@@ -141,7 +145,7 @@ export function LabelColorPicker({
     )
   }
   return (
-    <div className="color-control">
+    <div className={`color-control${textToolbar ? ' color-text-toolbar' : ''}`}>
       <span className="color-control-label">{label}</span>
       <div className="color-compact">
         <Popover.Root
@@ -155,15 +159,24 @@ export function LabelColorPicker({
           <Popover.Trigger asChild>
             <button
               type="button"
+              disabled={disabled}
               aria-label={`Choose ${label.toLowerCase()}`}
               title={
-                value.hex === 'transparent'
-                  ? 'No fill'
-                  : `${value.hex} · ${value.opacity * 100}%`
+                textToolbar
+                  ? `${label}: ${value.hex} · ${value.opacity * 100}%`
+                  : value.hex === 'transparent'
+                    ? 'No fill'
+                    : `${value.hex} · ${value.opacity * 100}%`
               }
               className={`checker color-trigger ${value.hex === 'transparent' ? 'no-fill' : ''}`}
             >
-              <span style={preview(value)} />
+              {textToolbar ? (
+                <span className="studio-text-color-symbol" aria-hidden="true">
+                  A<span style={preview(value)} />
+                </span>
+              ) : (
+                <span style={preview(value)} />
+              )}
             </button>
           </Popover.Trigger>
           <Popover.Portal>
@@ -473,33 +486,39 @@ export function LabelColorPicker({
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-        <input
-          aria-label={`${label} HEX`}
-          value={compact}
-          onChange={(e) => {
-            setCompact(e.target.value)
-            const hex = parseHex(e.target.value)
-            if (hex) onApply({ ...value, hex })
-          }}
-          onBlur={() => setCompact(value.hex)}
-          spellCheck={false}
-        />
-        <label className="compact-opacity">
-          <input
-            aria-label={`${label} opacity percent`}
-            type="number"
-            min="0"
-            max="100"
-            step="0.1"
-            value={Number((value.opacity * 100).toFixed(2))}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              if (e.target.value !== '' && n >= 0 && n <= 100)
-                onApply({ ...value, opacity: n / 100 })
-            }}
-          />
-          %
-        </label>
+        {!textToolbar && (
+          <>
+            <input
+              disabled={disabled}
+              aria-label={`${label} HEX`}
+              value={compact}
+              onChange={(e) => {
+                setCompact(e.target.value)
+                const hex = parseHex(e.target.value)
+                if (hex) onApply({ ...value, hex })
+              }}
+              onBlur={() => setCompact(value.hex)}
+              spellCheck={false}
+            />
+            <label className="compact-opacity">
+              <input
+                disabled={disabled}
+                aria-label={`${label} opacity percent`}
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={Number((value.opacity * 100).toFixed(2))}
+                onChange={(e) => {
+                  const n = Number(e.target.value)
+                  if (e.target.value !== '' && n >= 0 && n <= 100)
+                    onApply({ ...value, opacity: n / 100 })
+                }}
+              />
+              %
+            </label>
+          </>
+        )}
       </div>
     </div>
   )

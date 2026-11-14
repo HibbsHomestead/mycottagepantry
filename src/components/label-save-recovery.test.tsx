@@ -303,9 +303,7 @@ it('resets inherited template filters when opening My Labels and shows a tagless
   const user = userEvent.setup()
   await user.selectOptions(screen.getByLabelText('Style filter'), 'Farmhouse')
   await user.click(screen.getByRole('button', { name: 'Labels' }))
-  expect(
-    screen.getByRole('button', { name: /^Edit / }),
-  ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^Edit / })).toBeInTheDocument()
   expect(screen.getByLabelText('Style filter')).toHaveValue('All styles')
 })
 it('retries after a committed save loses its response without creating another revision or label', async () => {
@@ -460,4 +458,113 @@ it('applies a different font to a selected static word and preserves the text ru
     ['Homestyle White ', 'DM Sans'],
     ['Bread', 'Lora'],
   ])
+})
+
+it('round-trips compact formatting, precise geometry and layer order through save and reopen', async () => {
+  const api = setup(),
+    app = render(<api.App />),
+    user = await open()
+  const initial = structuredClone(api.workspace().label_templates[0])
+  await user.click(screen.getByRole('button', { name: 'Layers' }))
+  await user.click(screen.getByRole('button', { name: 'recipe.ingredients' }))
+  const overlay = () =>
+    document.querySelector(
+      `[data-selection-overlay="${initial.elements[0].id}"]`,
+    )
+  expect(screen.getByLabelText('Rotation (°)')).toHaveValue(180)
+  expect(screen.getByLabelText('Opacity')).toHaveValue(100)
+  await user.click(screen.getByRole('button', { name: 'Bold' }))
+  await user.click(screen.getByRole('button', { name: 'Italic' }))
+  await user.click(screen.getByRole('button', { name: 'Underline' }))
+  await user.click(screen.getByRole('button', { name: 'Align right' }))
+  await user.click(screen.getByRole('button', { name: 'Align bottom' }))
+  await user.selectOptions(screen.getByLabelText('Text case'), 'upper')
+  for (const [label, value] of [
+    ['Size (pt)', '11.375'],
+    ['Line height', '1.45'],
+    ['Letter spacing (pt)', '-0.125'],
+    ['X (pt)', '-12.375'],
+    ['Y (pt)', '83.0625'],
+    ['Width (pt)', '174.875'],
+    ['Height (pt)', '57.25'],
+    ['Opacity', '37.125'],
+  ])
+    fireEvent.change(screen.getByLabelText(label), { target: { value } })
+  expect(overlay()).not.toBeNull()
+  // Keyboard operation of a toolbar button does not nudge the active element.
+  screen.getByRole('button', { name: 'Bold' }).focus()
+  await user.keyboard('{ArrowRight}')
+  expect(screen.getByLabelText('X (pt)')).toHaveValue(-12.375)
+  await user.click(screen.getByRole('button', { name: 'Choose text color' }))
+  fireEvent.change(screen.getByLabelText('Picker HEX'), {
+    target: { value: '#123abc' },
+  })
+  await user.keyboard('{Escape}')
+  await user.click(screen.getByRole('button', { name: 'Choose text color' }))
+  fireEvent.change(screen.getByLabelText('Picker HEX'), {
+    target: { value: '#476b46' },
+  })
+  await user.click(screen.getByRole('button', { name: 'Apply' }))
+  expect(
+    screen.getByRole('button', { name: 'Choose text color' }),
+  ).toHaveAttribute('title', 'Text color: #476b46 · 100%')
+  await user.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(
+    screen.getByRole('button', { name: 'Choose text color' }),
+  ).toHaveAttribute('title', `Text color: ${initial.elements[0].color} · 100%`)
+  await user.click(screen.getByRole('button', { name: 'Redo' }))
+  await user.click(screen.getByRole('button', { name: 'Bring to front' }))
+  expect(screen.getByRole('button', { name: 'Bring to front' })).toBeDisabled()
+  expect(overlay()).not.toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await screen.findByText(/^Saved ·/)
+  const saved = api.workspace().label_templates[0]
+  expect(saved.width).toBe(initial.width)
+  expect(saved.height).toBe(initial.height)
+  expect(saved.elements.slice(0, 2)).toEqual(initial.elements.slice(1))
+  expect(saved.elements[2]).toEqual({
+    ...initial.elements[0],
+    bold: true,
+    italic: true,
+    underline: true,
+    align: 'right',
+    vertical: 'bottom',
+    textCase: 'upper',
+    fontSize: 11.375,
+    lineHeight: 1.45,
+    letterSpacing: -0.125,
+    color: '#476b46',
+    colorOpacity: 1,
+    x: -12.375,
+    y: 83.0625,
+    width: 174.875,
+    height: 57.25,
+    opacity: 0.37125,
+  })
+  app.unmount()
+  render(<api.App />)
+  await open()
+  await user.click(screen.getByRole('button', { name: 'Layers' }))
+  await user.click(screen.getByRole('button', { name: 'recipe.ingredients' }))
+  for (const name of [
+    'Bold',
+    'Italic',
+    'Underline',
+    'Align right',
+    'Align bottom',
+  ])
+    expect(screen.getByRole('button', { name })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  expect(screen.getByLabelText('Text case')).toHaveValue('upper')
+  expect(screen.getByLabelText('Letter spacing (pt)')).toHaveValue(-0.125)
+  expect(screen.getByLabelText('Opacity')).toHaveValue(37.125)
+  expect(screen.getByLabelText('Rotation (°)')).toHaveValue(180)
+  await user.click(
+    screen.getByRole('button', { name: 'Export editable recovery file' }),
+  )
+  expect(labelContent(state.snapshots.at(-1)!.document)).toBe(
+    labelContent(saved as LabelDocument),
+  )
 })

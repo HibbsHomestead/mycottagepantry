@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Star, Search, Check } from 'lucide-react'
+import { Star, Search, Check, ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from './ui/popover'
 import {
   labelFonts,
@@ -83,6 +83,8 @@ export function FontPicker({
   preferences: savedPreferences = { favorites: [], recent: [] },
   onPreferences,
   disabled = false,
+  compact = false,
+  displayValue,
 }: {
   value: string
   customFonts?: LabelFont[]
@@ -92,6 +94,8 @@ export function FontPicker({
   preferences?: FontPreferences
   onPreferences?: (p: FontPreferences) => void
   disabled?: boolean
+  compact?: boolean
+  displayValue?: string
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
@@ -169,12 +173,17 @@ export function FontPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="font-picker-trigger"
+          className={`font-picker-trigger${compact ? ' font-picker-compact' : ''}`}
           disabled={disabled}
-          aria-label={`Font: ${value}`}
+          aria-label={`Font: ${displayValue || value}`}
+          title={`Font family: ${displayValue || value}`}
         >
-          {value}
-          <span>Browse fonts</span>
+          <span className="font-picker-value">{displayValue || value}</span>
+          {compact ? (
+            <ChevronDown size={12} aria-hidden="true" />
+          ) : (
+            <span>Browse fonts</span>
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent
