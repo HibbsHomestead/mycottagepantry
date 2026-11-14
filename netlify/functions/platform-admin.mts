@@ -1,6 +1,14 @@
 import { reconcileSupportBilling } from '../lib/support-billing-recovery'
 import { adminMembership, adminIdentityStatus } from '../lib/admin-memberships'
-import { stripeAdminAction, stripeAdminView } from '../lib/stripe-provider'
+import {
+  stripeAdminAction,
+  stripeAdminView,
+  stripeEndpoint,
+} from '../lib/stripe-provider'
+import {
+  deploymentRuntime,
+  stripeEncryptionStatus,
+} from '../lib/runtime-environment'
 import { handleAdminAccess } from '../lib/admin-access'
 import { handleAdminCatalog } from '../lib/catalog-admin'
 import { handleRegistrationPolicies } from '../lib/registration-policies'
@@ -77,6 +85,22 @@ export default async (request: Request, context: Context) => {
     await requireRate(clientAddress(context), 'gateway', 240, 60)
     const url = new URL(request.url)
     const action = url.searchParams.get('action')
+    if (
+      request.method === 'GET' &&
+      (action === 'stripe' || url.searchParams.get('section') === 'billing') &&
+      deploymentRuntime().context === 'deploy-preview'
+    ) {
+      // Private hosting logs let operators verify injection without an admin
+      // session. The public response still passes every existing auth check.
+      console.info(
+        'stripe_runtime_status_v2',
+        JSON.stringify({
+          deployment: context.deploy?.id,
+          encryption: stripeEncryptionStatus(),
+          previewWebhookReady: !!stripeEndpoint('test'),
+        }),
+      )
+    }
     if (request.method === 'POST' && action === 'password-recovery') {
       const { email } = z
         .object({ email: z.email().max(254) })

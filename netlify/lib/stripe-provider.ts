@@ -15,6 +15,11 @@ import {
   planBillable,
 } from '../../src/lib/launch-plans'
 import { limitedBody } from './support-core'
+import {
+  serverEnvironment as env,
+  deploymentRuntime,
+  stripeEncryptionStatus,
+} from './runtime-environment'
 
 export type StripeEnvironment = 'test' | 'live'
 /** All paid tiers are owner-approved for testing; live rollout remains separate. */
@@ -52,22 +57,18 @@ export const stripeEventsRequired = [
   'invoice.payment_failed',
 ]
 export function stripeEndpoint(e: StripeEnvironment) {
-  if (e === 'test' && env('CONTEXT') === 'deploy-preview') {
-    const origin = env('DEPLOY_PRIME_URL')
-    return /^https:\/\/deploy-preview-[0-9]+--mycottagepantry\.netlify\.app$/.test(
-      origin,
-    )
-      ? origin + '/api/stripe/test/webhook'
+  const { context, previewOrigin } = deploymentRuntime()
+  if (context === 'deploy-preview') {
+    return e === 'test' && previewOrigin
+      ? previewOrigin + '/api/stripe/test/webhook'
       : ''
   }
-  return `https://mycottagepantry.com/api/stripe/${e}/webhook`
+  return context === 'production'
+    ? `https://mycottagepantry.com/api/stripe/${e}/webhook`
+    : ''
 }
-// Node Functions receive configured secrets through process.env. Keep support
-// for Netlify.env without treating an explicitly empty value as a usable key.
-const env = (name: string) =>
-  globalThis.Netlify?.env?.get(name) ?? process.env[name] ?? ''
 export function stripeEncryptionReady() {
-  return /^[a-f\d]{64}$/i.test(env('STRIPE_BILLING_ENCRYPTION_KEY'))
+  return stripeEncryptionStatus().ready
 }
 function root() {
   if (!stripeEncryptionReady())
@@ -238,6 +239,7 @@ export async function validatedPrice(
   return price
 }
 export async function stripeAdminView(c: AdminClient) {
+  const encryptionStatus = stripeEncryptionStatus()
   const rows = (
     await c.query(
       'SELECT environment,fingerprint,account_id,account_name,validated_at,webhook_verified_at,checkout_enabled,configuration,updated_at FROM stripe_provider_settings ORDER BY environment',
@@ -257,7 +259,8 @@ export async function stripeAdminView(c: AdminClient) {
     rows,
     events,
     evidence,
-    encryptionReady: stripeEncryptionReady(),
+    encryptionReady: encryptionStatus.ready,
+    encryptionStatus,
     eventsRequired: stripeEventsRequired,
     endpoints: { test: stripeEndpoint('test'), live: stripeEndpoint('live') },
     tiers: launchPricing.plans,

@@ -899,6 +899,44 @@ it('projects only safe customer detail, masks subscription references, and does 
   expect(data.accountStatus).toContain('No global account-status')
   expect(data.integrations[0].recorded_status).toBe('disconnected')
 })
+it('returns the same nonsecret storage status in Stripe and billing responses', async () => {
+  const root =
+    randomUUID().replaceAll('-', '') + randomUUID().replaceAll('-', '')
+  runtime.env.STRIPE_BILLING_ENCRYPTION_KEY = root
+  await session()
+  const stripe = await handler(
+    request('action=stripe', undefined, { token }),
+    context,
+  )
+  expect(stripe.status).toBe(200)
+  const stripeText = await stripe.text()
+  expect(stripeText).not.toContain(root)
+  const stripeData = JSON.parse(stripeText)
+  expect(stripeData.encryptionReady).toBe(true)
+  expect(stripeData.encryptionStatus).toMatchObject({
+    ready: true,
+    status: 'valid',
+    source: 'netlify',
+  })
+  const billing = await handler(
+    request('section=billing', undefined, { token }),
+    context,
+  )
+  expect(billing.status).toBe(200)
+  const billingText = await billing.text()
+  expect(billingText).not.toContain(root)
+  expect(JSON.parse(billingText).stripe.encryptionStatus).toEqual(
+    stripeData.encryptionStatus,
+  )
+  runtime.env.STRIPE_BILLING_ENCRYPTION_KEY = 'malformed'
+  const refreshed = await handler(
+    request('action=stripe', undefined, { token }),
+    context,
+  )
+  const refreshedData = await refreshed.json()
+  expect(refreshedData.encryptionReady).toBe(false)
+  expect(refreshedData.encryptionStatus.status).toBe('invalid_format')
+})
 it('keeps checkout gated and reports no successful production sync without evidence', async () => {
   await session()
   const billing = await handler(

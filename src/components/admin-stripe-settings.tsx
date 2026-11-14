@@ -7,7 +7,10 @@ type Props = {
   request: (query: string, body?: unknown) => Promise<AdminMetadata>
 }
 export function AdminStripeSettings({ data: initial, request }: Props) {
-  const [data, setData] = useState(initial),
+  const [update, setUpdate] = useState<{
+      initial: AdminMetadata
+      data: AdminMetadata
+    } | null>(null),
     [environment, setEnvironment] = useState('test'),
     [key, setKey] = useState(''),
     [signing, setSigning] = useState(''),
@@ -20,6 +23,7 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     [portal, setPortal] = useState(''),
     [review, setReview] = useState(''),
     [search, setSearch] = useState('')
+  const data = update?.initial === initial ? update.data : initial
   const row =
       data?.rows?.find((r: AdminMetadata) => r.environment === environment) ||
       {},
@@ -35,7 +39,7 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         operation,
         ...extra,
       })
-      setData(result)
+      setUpdate({ initial, data: result })
       setMessage(
         operation === 'test' &&
           result.rows?.find((r: AdminMetadata) => r.environment === environment)
@@ -50,6 +54,17 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         setSigning('')
       }
       setConfirmation('')
+    } catch (error) {
+      setMessage((error as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function refreshStorage() {
+    setBusy(true)
+    setMessage('')
+    try {
+      setUpdate({ initial, data: await request('action=stripe') })
     } catch (error) {
       setMessage((error as Error).message)
     } finally {
@@ -173,6 +188,19 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           No plaintext fallback is available.
         </p>
       )}
+      {!data?.encryptionReady && data?.encryptionStatus && (
+        <p>
+          Storage diagnostic:{' '}
+          {data.encryptionStatus.status === 'missing'
+            ? 'ROOT_MISSING'
+            : data.encryptionStatus.status === 'empty'
+              ? 'ROOT_EMPTY'
+              : 'ROOT_INVALID_FORMAT'}
+        </p>
+      )}
+      <button disabled={busy} onClick={refreshStorage}>
+        Refresh storage status
+      </button>
       <details>
         <summary>Credentials · save or rotate</summary>
         <p>
