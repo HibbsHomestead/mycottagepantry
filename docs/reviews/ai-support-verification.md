@@ -1,0 +1,21 @@
+# AI support and administrator inbox verification
+
+The restricted inbox used the existing platform portal session and enabled administrator grant rather than requiring a customer login cookie. Signed-out sessions received administrator sign-in with a safe return path; unauthorized accounts received access denied; temporary restoration/list failures retained a retry path. Customer support remained separate.
+
+The assistants had separate customer/admin audiences, forced database row policies, server-authorized tool allowlists, per-call identity and scope checks, and content-free outcome records. Business tools returned permitted recorded metadata and diagnostic counts, without inventory contents, payment references or credentials. Billing recovery required a scoped proposal, explicit human confirmation and fresh MFA. Its result distinguished a verified reconciliation timestamp from an unverified outcome and never established that the reported issue was fixed.
+
+The exact question, “How do I change an ingredient to a craft material?”, was checked against the saved-item validator and Add Item interface. Saved Item Type remained fixed, including without stock. The helper explained Inventory → Add Item → Item Type → Craft Material, linked the relevant in-app guide, preserved the original ingredient's recipe/ledger/history references, and described the absence of automatic stock/history transfer. It did not recommend deletion or duplicate opening stock. Follow-up retrieval retained the question's context.
+
+## Completed checks
+
+- 128 focused local tests passed across the support, assistant, administrator, component and related recovery coverage. A final 74-test administrator/helper rerun also passed after strengthening the portal-only private-chat assertion and consent wording.
+- Three bounded live OpenAI checks passed through the configured Gateway: an inventory workflow answer; the exact item-type question and its no-stock/recipe/history follow-up; and real model tool calling against a synthetic, allowlisted status response. No additional credential was required.
+- Twelve Chromium checks passed at phone, tablet and desktop widths (390/820/1440) using `tests/support.spec.ts`, `tests/admin-support-ui.spec.ts` and `tests/shared-compact-ui.spec.ts`. They covered conversation lists, opening threads, replies, internal-note distinction, status changes, reload, mobile helper/escalation, reviewed drafts and policy confirmation.
+- Server tests exercised all migrations in an isolated PostgreSQL emulator under a non-superuser role with forced row policies. They covered authorized portal-only access, signed-out/expired/non-admin denial, membership revocation, role-limited metadata, cross-business access, customer exclusion from private admin chats (including the same Identity user), private notes/screenshots, escalation into the inbox, deletion/retention, quotas, unsupported actions, replay prevention and uncertain recovery.
+- TypeScript, targeted lint and whitespace checks passed. Repeat schema generation reported no changes. Only the new `20261206010000_assistant_tools` migration and matching snapshot were added; applied migrations remained unchanged. No build command was run.
+
+## Boundaries and publication
+
+Browser inbox transports, Identity, private screenshot storage and billing-provider recovery responses used deterministic fixtures. Database tests exercised real handler/tool authorization and SQL policies, but did not establish deployed Identity sessions, actual Blob ACLs or live billing recovery. No real customer records, stock, payments or subscriptions were changed. The live AI tool test used synthetic metadata, not customer account details. No production administrator credentials were available for authenticated deployed checks.
+
+Read-only production checks still returned the earlier release: the admin page loaded, while its signed-out staff API returned the old generic customer-login error. These checks did not verify the new implementation. The managed build, migration application, publication and authenticated checks of the resulting deployed admin route remained pending after this editing run. Deployment success was not inferred from local tests.

@@ -76,6 +76,19 @@ export type SupportAiConversation = {
   id: string
   messages: SupportAiMessage[]
   diagnostics: ReturnType<typeof sanitizeSupportDiagnostics>
+  contextTicketId?: string | null
   ticketId?: string | null
   expiresAt: string
+}
+
+export type SupportAiAction = {
+  id: string
+  conversation_id: string
+  tool: string
+  status: string
+  updated_at: string
+}
+// Reference API token estimate only; Gateway/hosting charges and provider rate changes are separate.
+export function supportTokenEstimate(input: number, output: number) {
+  return (input * 0.4 + output * 1.6) / 1_000_000
 }

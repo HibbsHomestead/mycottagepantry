@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 const api = vi.hoisted(() => ({
@@ -17,6 +17,8 @@ vi.mock('@/lib/support-client', () => ({
       retentionDays: 30,
     },
     usage: [],
+    conversations: [],
+    actions: [],
   })),
   supportRequest: api.request,
   supportPost: api.post,
@@ -147,4 +149,82 @@ it('renders customer text as text and clearly distinguishes private notes in the
       expect.objectContaining({ internal: true }),
     ),
   )
+})
+
+it('uses admin sign-in and returns to the selected inbox thread for a signed-out session', async () => {
+  window.history.replaceState(null, '', '/platform-support#ticket=' + ticket.id)
+  api.request.mockRejectedValue(
+    Object.assign(
+      new Error('Sign in with your platform administrator account.'),
+      { status: 401 },
+    ),
+  )
+  render(<SupportPage staff />)
+  expect(
+    await screen.findByRole('link', { name: 'Admin sign-in' }),
+  ).toHaveAttribute(
+    'href',
+    '/admin?returnTo=%2Fplatform-support%23ticket%3D' + ticket.id,
+  )
+  expect(screen.queryByRole('link', { name: 'Log in' })).not.toBeInTheDocument()
+  expect(api.post).not.toHaveBeenCalled()
+})
+it('shows access denied for an authenticated account without platform permission', async () => {
+  api.request.mockRejectedValue(
+    Object.assign(new Error('Platform support permission is required.'), {
+      status: 403,
+    }),
+  )
+  render(<SupportPage staff />)
+  expect(await screen.findByText(/Access denied/)).toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Admin sign-in' }),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Log in' })).not.toBeInTheDocument()
+  expect(api.post).not.toHaveBeenCalled()
+})
+it('retries a failed inbox restoration without claiming the user is signed out', async () => {
+  api.request.mockRejectedValueOnce(
+    Object.assign(new Error('Database connection unavailable.'), {
+      status: 503,
+    }),
+  )
+  render(<SupportPage staff />)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Database connection unavailable',
+  )
+  expect(
+    screen.queryByRole('link', { name: 'Admin sign-in' }),
+  ).not.toBeInTheDocument()
+  api.request.mockResolvedValue({ staff: true, admin: true })
+  api.post.mockResolvedValue({ tickets: [ticket], hasMore: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Retry loading' }))
+  expect(
+    await screen.findByRole('button', { name: /Help with a recipe/ }),
+  ).toBeInTheDocument()
+})
+it('keeps authorization and retries a list failure, preserving reply drafts during session refresh', async () => {
+  window.history.replaceState(null, '', '/platform-support#ticket=' + ticket.id)
+  api.request.mockImplementation(async (path: string) =>
+    path.includes('ticket=') ? detail : { staff: true, admin: true },
+  )
+  api.post.mockRejectedValueOnce(
+    Object.assign(new Error('Inbox read failed.'), { status: 503 }),
+  )
+  render(<SupportPage staff />)
+  expect(await screen.findByText('Inbox read failed.')).toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Admin sign-in' }),
+  ).not.toBeInTheDocument()
+  api.post.mockResolvedValue({ tickets: [ticket], hasMore: false })
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh inbox' }))
+  const input = await screen.findByLabelText('Reply in Cottage Pantry')
+  await userEvent.type(input, 'Keep my draft')
+  fireEvent(window, new Event('focus'))
+  await waitFor(() =>
+    expect(
+      api.request.mock.calls.filter((c) => !c[0].includes('ticket=')).length,
+    ).toBeGreaterThan(1),
+  )
+  expect(input).toHaveValue('Keep my draft')
 })

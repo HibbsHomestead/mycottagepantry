@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactElement, type ReactNode } from 'react'
 import {
   ScanBarcode,
   PackagePlus,
@@ -24,6 +24,7 @@ import {
   DialogDescription,
 } from './ui/dialog'
 import { countQuantity } from '@/lib/inventory-count'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import './inventory-tools.css'
 import { PantryPhoto } from './pantry-photo'
 import {
@@ -32,12 +33,40 @@ import {
   packageText,
 } from '@/lib/inventory-browse'
 
+export type InventoryLabelSelection = {
+  active: boolean
+  selected: string[]
+  onChange: (id: string, checked: boolean) => void
+  onSelectAll: (ids: string[]) => void
+  onClear: () => void
+  onDone: () => void
+  onPrint: () => void
+}
+
+function ActionTip({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactElement
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function InventoryTools({
   workspace,
   role,
   open,
   mutate,
   refresh,
+  children,
 }: {
   workspace: Workspace
   role: string
@@ -48,9 +77,13 @@ export function InventoryTools({
     data: Record<string, any>,
   ) => Promise<void>
   refresh: () => Promise<void>
+  children: (controls: {
+    actions: ReactNode
+    labelSelection: InventoryLabelSelection
+  }) => ReactNode
 }) {
   const items = workspace.ingredients,
-    sessions = (workspace.inventory_counts || []).filter(s => s.version !== 2)
+    sessions = (workspace.inventory_counts || []).filter((s) => s.version !== 2)
   const [scanner, setScanner] = useState(false),
     [mode, setMode] = useState<'find' | 'receive' | 'count'>('find'),
     [code, setCode] = useState(''),
@@ -59,6 +92,7 @@ export function InventoryTools({
     [resultOpen, setResultOpen] = useState(false),
     [error, setError] = useState(''),
     [selected, setSelected] = useState<string[]>([]),
+    [selecting, setSelecting] = useState(false),
     [labelItems, setLabelItems] = useState<Item[] | null>(null),
     [locationLabels, setLocationLabels] = useState(false),
     [countOpen, setCountOpen] = useState(false),
@@ -117,7 +151,9 @@ export function InventoryTools({
     setResultOpen(false)
     if (mode === 'find')
       open(
-        match.item.workflow === 'resale' ? 'product-detail' : 'ingredient-detail',
+        match.item.workflow === 'resale'
+          ? 'product-detail'
+          : 'ingredient-detail',
         match.item,
       )
     else if (mode === 'receive') {
@@ -142,12 +178,19 @@ export function InventoryTools({
     setMode(next)
     setScanner(true)
   }
-  return (
-    <>
-      <div
-        className="inventory-tool-actions inventory-primary-actions"
-        aria-label="Inventory scanning and labels"
-      >
+  const selectedItems = items.filter((i) => selected.includes(i.id))
+  function printSelected() {
+    if (!selectedItems.length) return
+    setLocationLabels(false)
+    setLabelItems(selectedItems)
+  }
+  const actions = (
+    <div
+      className="inventory-tool-actions inventory-primary-actions"
+      role="group"
+      aria-label="Inventory scanning and labels"
+    >
+      <ActionTip label="Scan barcode">
         <button
           className="btn secondary"
           aria-label="Scan barcode"
@@ -159,8 +202,10 @@ export function InventoryTools({
             Scan
           </span>
         </button>
-        {canStock && (
-          <>
+      </ActionTip>
+      {canStock && (
+        <>
+          <ActionTip label="Scan to receive">
             <button
               className="btn secondary"
               aria-label="Scan to receive"
@@ -175,6 +220,8 @@ export function InventoryTools({
                 Receive
               </span>
             </button>
+          </ActionTip>
+          <ActionTip label="Rapid barcode counts">
             <a
               className="btn secondary"
               aria-label="Rapid barcode counts"
@@ -194,6 +241,8 @@ export function InventoryTools({
                 Rapid count
               </span>
             </a>
+          </ActionTip>
+          <ActionTip label="Inventory count sessions">
             <button
               className="btn secondary"
               aria-label="Inventory count sessions"
@@ -213,27 +262,41 @@ export function InventoryTools({
                 Count sessions
               </span>
             </button>
-          </>
-        )}
+          </ActionTip>
+        </>
+      )}
+      <ActionTip
+        label={
+          selectedItems.length
+            ? `Print shelf/bin labels (${selectedItems.length})`
+            : 'Print shelf/bin labels · select items'
+        }
+      >
         <button
           className="btn secondary"
-          aria-label={`Print shelf/bin labels (${selected.length})`}
-          onClick={() => (
-            setLocationLabels(false),
-            setLabelItems(items.filter((i) => selected.includes(i.id)))
-          )}
-          disabled={!selected.length}
+          aria-label={`Print shelf/bin labels (${selectedItems.length})`}
+          aria-expanded={selecting}
+          onClick={() => {
+            setSelecting(true)
+            if (selectedItems.length) printSelected()
+          }}
         >
-          <Printer className="inventory-action-icon" aria-hidden="true" />
+          <span className="inventory-action-symbol" aria-hidden="true">
+            <Printer className="inventory-action-icon" aria-hidden="true" />
+            <span className="inventory-action-badge">
+              {selectedItems.length}
+            </span>
+          </span>
           <span className="inventory-action-full">
-            Print shelf/bin labels ({selected.length})
+            Print shelf/bin labels ({selectedItems.length})
           </span>
           <span className="inventory-action-short" aria-hidden="true">
-            Shelf labels{' '}
-            <span className="inventory-action-badge">{selected.length}</span>
+            Shelf labels
           </span>
         </button>
-        {items.some((i) => i.storageLocation) && (
+      </ActionTip>
+      {items.some((i) => i.storageLocation) && (
+        <ActionTip label="Location labels">
           <button
             className="btn secondary"
             aria-label="Location labels"
@@ -248,38 +311,30 @@ export function InventoryTools({
               Locations
             </span>
           </button>
-        )}
-      </div>
-      <details>
-        <summary>Select inventory items for shelf/bin labels</summary>
-        <div className="inventory-tool-actions">
-          <button
-            className="btn secondary"
-            onClick={() => setSelected(items.slice(0, 100).map((i) => i.id))}
-          >
-            Select up to 100
-          </button>
-          <button className="btn secondary" onClick={() => setSelected([])}>
-            Clear selection
-          </button>
-        </div>
-        {items.map((i) => (
-          <label className="check-label" key={i.id}>
-            <input
-              type="checkbox"
-              checked={selected.includes(i.id)}
-              onChange={(e) =>
-                setSelected((s) =>
-                  e.target.checked
-                    ? [...s, i.id].slice(0, 100)
-                    : s.filter((id) => id !== i.id),
-                )
-              }
-            />
-            {i.name}
-          </label>
-        ))}
-      </details>
+        </ActionTip>
+      )}
+    </div>
+  )
+  return (
+    <>
+      {children({
+        actions,
+        labelSelection: {
+          active: selecting,
+          selected: selectedItems.map((i) => i.id),
+          onChange: (id, checked) =>
+            setSelected((s) =>
+              checked
+                ? [...new Set([...s, id])]
+                : s.filter((value) => value !== id),
+            ),
+          onSelectAll: (ids) =>
+            setSelected((s) => [...new Set([...s, ...ids])]),
+          onClear: () => setSelected([]),
+          onDone: () => setSelecting(false),
+          onPrint: printSelected,
+        },
+      })}
       {error && !countOpen && !resultOpen && (
         <p role="alert" className="warning-text">
           {error}
@@ -298,7 +353,10 @@ export function InventoryTools({
         />
       )}
       <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-        <DialogContent presentation="inventory" className="inventory-tool-dialog">
+        <DialogContent
+          presentation="inventory"
+          className="inventory-tool-dialog"
+        >
           <DialogTitle>
             {matches.length ? 'Review barcode match' : 'Unknown barcode'}
           </DialogTitle>
@@ -424,7 +482,10 @@ export function InventoryTools({
         </DialogContent>
       </Dialog>
       <Dialog open={countOpen} onOpenChange={setCountOpen}>
-        <DialogContent presentation="inventory" className="inventory-tool-dialog">
+        <DialogContent
+          presentation="inventory"
+          className="inventory-tool-dialog"
+        >
           <DialogTitle>Inventory count session</DialogTitle>
           <DialogDescription>
             Count actual stock on hand, including partial packages. Saving count

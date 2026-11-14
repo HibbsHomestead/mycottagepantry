@@ -29,13 +29,32 @@ vi.mock('@netlify/identity', () => ({
 vi.mock('@netlify/database', () => ({
   getDatabase: () => ({ pool: runtime.pool }),
 }))
-// Support workflow unit tests assume an already verified MFA middleware result.
-// Real origin/session/MFA denial is covered by platform-admin.test.ts.
-vi.mock('../../netlify/lib/platform-admin-legacy', () => ({
-  requireLegacyAdmin: vi.fn(async () => {
-    if (runtime.denyLegacy) throw new Error('MFA required')
-  }),
-}))
+// Handler tests isolate portal authentication; the real host-only portal session is
+// exercised separately in platform-admin.test.ts with the applied database policies.
+vi.mock('../../netlify/lib/support-core', async (original) => {
+  const core = await original<typeof import('../../netlify/lib/support-core')>()
+  return {
+    ...core,
+    supportAdminActor: async () => {
+      if (runtime.denyLegacy)
+        throw new core.SupportError(403, 'Administrator verification required')
+      const user = runtime.session && runtime.identities[runtime.session]
+      if (!user) throw new core.SupportError(401, 'Admin sign-in required')
+      const staff =
+        user.roles.includes('platform_admin') ||
+        user.roles.includes('platform_support')
+      if (!staff || !user.confirmedAt)
+        throw new core.SupportError(403, 'Platform permission required')
+      return {
+        id: user.id,
+        email: user.email,
+        staff,
+        admin: user.roles.includes('platform_admin'),
+        portal: true as const,
+      }
+    },
+  }
+})
 vi.mock('../../netlify/lib/support-ai-provider', () => ({
   supportAnswer: vi.fn(async () => {
     if (runtime.providerHook) await runtime.providerHook()
@@ -136,6 +155,12 @@ beforeAll(async () => {
     ),
   )
   await db.exec(
+    await readFile(
+      'netlify/database/migrations/20261206010000_assistant_tools/migration.sql',
+      'utf8',
+    ),
+  )
+  await db.exec(
     'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO support_test; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO support_test;',
   )
   // Serialize pool connections over the embedded engine. Production uses PostgreSQL row/advisory locks.
@@ -174,7 +199,7 @@ beforeEach(async () => {
   await db.exec(
     'TRUNCATE support_tickets,support_messages,support_attachments,support_outbox,support_delivery_events,support_audit CASCADE; UPDATE support_settings SET recipient=NULL,pending_recipient=NULL,recipient_verified_at=NULL,from_address=NULL,reply_to=NULL,enabled=false,version=1;',
   )
-  await db.exec('TRUNCATE support_ai_conversations,support_ai_usage;')
+  await db.exec('TRUNCATE support_ai_conversations,support_ai_usage CASCADE;')
   await db.query("UPDATE support_ai_policy SET data=$1 WHERE id='platform'", [
     JSON.stringify({
       enabled: true,
@@ -323,6 +348,7 @@ it('keeps internal notes and their screenshots out of every customer response an
         email: 'support-owner@example.test',
         staff: true,
         admin: true,
+        portal: true,
       },
       (c) =>
         c.query(
@@ -920,13 +946,17 @@ it('rejects unconsented input, forged business IDs and non-MFA AI administration
     retentionDays: 1,
   }
   runtime.session = 'support-owner'
-  expect((await ai({ action: 'policy', policy })).status).toBe(403)
+  expect((await ai({ action: 'policy', policy, consent: true })).status).toBe(
+    403,
+  )
   runtime.denyLegacy = true
   expect(
-    (await ai({ action: 'policy', policy }, true)).status,
+    (await ai({ action: 'policy', policy, consent: true }, true)).status,
   ).toBeGreaterThanOrEqual(400)
   runtime.denyLegacy = false
-  expect((await ai({ action: 'policy', policy }, true)).status).toBe(200)
+  expect(
+    (await ai({ action: 'policy', policy, consent: true }, true)).status,
+  ).toBe(200)
   runtime.session = 'maker-a'
   expect(
     (await ai({ action: 'chat', message: 'Inventory', consent: true })).status,
@@ -1098,4 +1128,28 @@ it('settles usage if another tab deletes the conversation while the provider is 
   expect(
     (await db.query('SELECT * FROM support_ai_conversations')).rows,
   ).toHaveLength(0)
+})
+
+it('rejects unsupported mutations and customer recovery confirmation before any business action', async () => {
+  for (const action of [
+    'convert_item',
+    'delete_ingredient',
+    'reconcile_billing',
+  ]) {
+    expect((await ai({ action, consent: true })).status).toBe(400)
+  }
+  expect(
+    (
+      await ai({
+        action: 'confirm',
+        actionId: randomUUID(),
+        confirmation: 'RECONCILE',
+      })
+    ).status,
+  ).toBe(403)
+  expect(
+    runtime.queries.some((q) =>
+      /UPDATE (ingredients|ledger|workspace_billing)/i.test(q),
+    ),
+  ).toBe(false)
 })

@@ -1,3 +1,5 @@
+import { assistantTools } from './support-ai-tools'
+import { confirmAssistantAction } from './support-ai-confirm'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { selectedWorkspace } from './verified-session'
@@ -56,6 +58,8 @@ const view = (r: ChatRow) => ({
   diagnostics: r.diagnostics,
   ticketId: r.ticket_id,
   expiresAt: r.expires_at,
+  contextTicketId: (r as ChatRow & { context_ticket_id?: string })
+    .context_ticket_id,
 })
 async function policy(c: SupportClient) {
   return supportAiPolicySchema.parse(
@@ -68,11 +72,12 @@ async function ownConversation(
   actor: SupportActor,
   id: string,
   business: string | null,
+  staff = false,
 ) {
   const r = (
     await c.query(
-      'SELECT * FROM support_ai_conversations WHERE id=$1 AND requester_id=$2 AND business_id IS NOT DISTINCT FROM $3::uuid AND expires_at>now() FOR UPDATE',
-      [id, actor.id, business],
+      'SELECT * FROM support_ai_conversations WHERE id=$1 AND requester_id=$2 AND business_id IS NOT DISTINCT FROM $3::uuid AND audience=$4 AND expires_at>now() FOR UPDATE',
+      [id, actor.id, business, staff ? 'admin' : 'customer'],
     )
   ).rows[0]
   if (!r) throw new SupportError(404, 'Conversation not found in this oven.')
@@ -140,16 +145,33 @@ export async function handleSupportAi(
               "SELECT date_trunc('day',created_at) AS day,count(*)::int AS requests,count(*) FILTER (WHERE status='failed')::int AS failures,sum(input_tokens)::int AS input_tokens,sum(output_tokens)::int AS output_tokens FROM support_ai_usage WHERE created_at>now()-interval '30 days' GROUP BY 1 ORDER BY 1 DESC",
             )
           ).rows
-          return { policy: p, usage }
+          const conversations = (
+            await c.query(
+              "SELECT * FROM support_ai_conversations WHERE requester_id=$1 AND audience='admin' AND expires_at>now() ORDER BY updated_at DESC LIMIT 20",
+              [actor.id],
+            )
+          ).rows
+          const actions = (
+            await c.query(
+              "SELECT a.id,a.conversation_id,a.tool,a.status,a.updated_at FROM support_ai_actions a JOIN support_ai_conversations c ON c.id=a.conversation_id WHERE a.actor_id=$1 AND c.audience='admin' AND c.expires_at>now() ORDER BY a.created_at DESC LIMIT 60",
+              [actor.id],
+            )
+          ).rows
+          return {
+            policy: p,
+            usage,
+            conversations: conversations.map(view),
+            actions,
+          }
         }
-        const business = await businessScope(c, actor, req)
+        const business = staff ? null : await businessScope(c, actor, req)
         await c.query(
           'DELETE FROM support_ai_conversations WHERE requester_id=$1 AND expires_at<=now()',
           [actor.id],
         )
         const rows = (
           await c.query(
-            'SELECT * FROM support_ai_conversations WHERE requester_id=$1 AND business_id IS NOT DISTINCT FROM $2::uuid AND expires_at>now() ORDER BY updated_at DESC LIMIT 20',
+            "SELECT * FROM support_ai_conversations WHERE requester_id=$1 AND audience='customer' AND business_id IS NOT DISTINCT FROM $2::uuid AND expires_at>now() ORDER BY updated_at DESC LIMIT 20",
             [actor.id, business],
           )
         ).rows
@@ -160,18 +182,41 @@ export async function handleSupportAi(
     throw new SupportError(405, 'Use GET or POST for support.')
   const input = z
     .object({
-      action: z.enum(['chat', 'delete', 'escalate', 'summarize', 'policy']),
+      action: z.enum([
+        'chat',
+        'delete',
+        'escalate',
+        'summarize',
+        'policy',
+        'confirm',
+      ]),
       conversationId: z.uuid().optional(),
       requestId: z.uuid().optional(),
       message: z.string().trim().min(1).max(2000).optional(),
       summary: z.string().trim().min(3).max(1500).optional(),
       consent: z.literal(true).optional(),
       diagnostics: z.unknown().optional(),
+      contextConsent: z.boolean().optional(),
+      actionId: z.uuid().optional(),
+      confirmation: z.literal('RECONCILE').optional(),
       ticketId: z.uuid().optional(),
       policy: supportAiPolicySchema.optional(),
     })
     .strict()
     .parse(JSON.parse((await limitedBody(req, 30000)).toString()))
+  if (input.action === 'confirm') {
+    if (!staff)
+      throw new SupportError(
+        403,
+        'Recovery requires the platform-admin assistant.',
+      )
+    return response(
+      await confirmAssistantAction(req, {
+        actionId: input.actionId,
+        confirmation: input.confirmation,
+      }),
+    )
+  }
   if (input.action === 'policy') {
     if (!staff)
       throw new SupportError(
@@ -179,6 +224,8 @@ export async function handleSupportAi(
         'Open the verified admin support inbox to change AI settings.',
       )
     requireSupportAdmin(actor)
+    if (!input.consent)
+      throw new SupportError(400, 'Confirm the reviewed usage policy.')
     if (!input.policy) throw new SupportError(400, 'Review the usage policy.')
     return response(
       await supportTransaction(actor, async (c) => {
@@ -196,8 +243,8 @@ export async function handleSupportAi(
       await supportTransaction(actor, async (c) => {
         if (!input.conversationId)
           throw new SupportError(400, 'Choose a conversation.')
-        const business = await businessScope(c, actor, req)
-        await ownConversation(c, actor, input.conversationId, business)
+        const business = staff ? null : await businessScope(c, actor, req)
+        await ownConversation(c, actor, input.conversationId, business, staff)
         await c.query(
           'DELETE FROM support_ai_conversations WHERE id=$1 AND requester_id=$2',
           [input.conversationId, actor.id],
@@ -205,12 +252,17 @@ export async function handleSupportAi(
         return { deleted: true }
       }),
     )
+  if (input.action === 'escalate' && staff)
+    throw new SupportError(
+      403,
+      'Private administrator conversations cannot be attached to customer tickets.',
+    )
   if (input.action === 'escalate')
     return response(
       await supportTransaction(actor, async (c) => {
         if (!input.conversationId || !input.summary)
           throw new SupportError(400, 'Review an issue summary first.')
-        const business = await businessScope(c, actor, req)
+        const business = staff ? null : await businessScope(c, actor, req)
         const chat = await ownConversation(
           c,
           actor,
@@ -218,6 +270,15 @@ export async function handleSupportAi(
           business,
         )
         if (chat.ticket_id) return { ticketId: chat.ticket_id }
+        if (input.diagnostics !== undefined)
+          await c.query(
+            'UPDATE support_ai_conversations SET diagnostics=$1 WHERE id=$2 AND requester_id=$3',
+            [
+              JSON.stringify(sanitizeSupportDiagnostics(input.diagnostics)),
+              chat.id,
+              actor.id,
+            ],
+          )
         const ticket = await createTicket(c, actor, {
           subject: 'AI help: ' + redactSupportText(input.summary).slice(0, 130),
           category: 'Question',
@@ -238,10 +299,14 @@ export async function handleSupportAi(
         return { ticketId: ticket.ticket.id }
       }),
     )
+  if (!staff && input.ticketId)
+    throw new SupportError(
+      403,
+      'Customer chats cannot select a support ticket context.',
+    )
   const requestId = input.requestId || randomUUID()
   const reserved = await supportTransaction(actor, async (c) => {
-    const business =
-      input.action === 'summarize' ? null : await businessScope(c, actor, req)
+    const business = staff ? null : await businessScope(c, actor, req)
     if (input.action === 'summarize') {
       if (!staff || !input.ticketId)
         throw new SupportError(
@@ -251,7 +316,7 @@ export async function handleSupportAi(
       const t = await getTicket(c, actor, input.ticketId, true)
       const chat = (
         await c.query(
-          'SELECT messages FROM support_ai_conversations WHERE ticket_id=$1 AND expires_at>now()',
+          "SELECT messages FROM support_ai_conversations WHERE ticket_id=$1 AND audience='customer' AND expires_at>now()",
           [t.id],
         )
       ).rows[0]
@@ -270,6 +335,8 @@ export async function handleSupportAi(
       const at = new Date().toISOString()
       return {
         admin: true,
+        suggestion: true,
+        id: undefined,
         messages: [
           {
             role: 'user' as const,
@@ -308,9 +375,19 @@ export async function handleSupportAi(
         'Review the AI data notice and enter your question.',
       )
     const id = input.conversationId || randomUUID()
+    if (staff && input.ticketId) await getTicket(c, actor, input.ticketId, true)
     const chat = input.conversationId
-      ? await ownConversation(c, actor, id, business)
+      ? await ownConversation(c, actor, id, business, staff)
       : null
+    if (
+      staff &&
+      chat &&
+      (chat.context_ticket_id || null) !== (input.ticketId || null)
+    )
+      throw new SupportError(
+        409,
+        'Start a new private conversation for a different ticket.',
+      )
     if (chat?.pending_id && Date.now() - Date.parse(chat.updated_at) < 60000)
       throw new SupportError(
         409,
@@ -347,7 +424,7 @@ export async function handleSupportAi(
       )
     else
       await c.query(
-        "INSERT INTO support_ai_conversations(id,requester_id,business_id,messages,diagnostics,pending_id,expires_at) VALUES($1,$2,$3,$4,$5,$6,now()+$7*interval '1 day')",
+        "INSERT INTO support_ai_conversations(id,requester_id,business_id,messages,diagnostics,pending_id,expires_at,audience,context_ticket_id) VALUES($1,$2,$3,$4,$5,$6,now()+$7*interval '1 day',$8,$9)",
         [
           id,
           actor.id,
@@ -356,28 +433,51 @@ export async function handleSupportAi(
           JSON.stringify(diagnostics),
           requestId,
           p.retentionDays,
+          staff ? 'admin' : 'customer',
+          staff ? input.ticketId || null : null,
         ],
       )
-    return { id, messages, admin: false }
+    return { id, messages, admin: staff, suggestion: false }
   })
   let answer: Awaited<ReturnType<typeof supportAnswer>> | undefined
+  let failedInputTokens = 0,
+    failedOutputTokens = 0
   try {
-    answer = await supportAnswer(reserved.messages, reserved.admin)
-  } catch {
-    /* Sanitized provider failure; no automatic retry. */
+    answer = await supportAnswer(
+      reserved.messages,
+      reserved.admin,
+      reserved.id
+        ? assistantTools(req, reserved.id, staff, !!input.contextConsent)
+        : undefined,
+    )
+  } catch (error) {
+    const usage = error as { inputTokens?: unknown; outputTokens?: unknown }
+    failedInputTokens =
+      typeof usage.inputTokens === 'number' &&
+      Number.isSafeInteger(usage.inputTokens) &&
+      usage.inputTokens >= 0
+        ? usage.inputTokens
+        : 0
+    failedOutputTokens =
+      typeof usage.outputTokens === 'number' &&
+      Number.isSafeInteger(usage.outputTokens) &&
+      usage.outputTokens >= 0
+        ? usage.outputTokens
+        : 0
+    /* Preserve known token totals; never expose the provider error or retry. */
   }
   const settled = await supportTransaction(actor, async (c) => {
     await c.query(
       'UPDATE support_ai_usage SET status=$1,input_tokens=$2,output_tokens=$3 WHERE id=$4 AND requester_id=$5',
       [
         answer ? 'success' : 'failed',
-        answer?.inputTokens || 0,
-        answer?.outputTokens || 0,
+        answer?.inputTokens || failedInputTokens,
+        answer?.outputTokens || failedOutputTokens,
         requestId,
         actor.id,
       ],
     )
-    if (reserved.admin)
+    if (reserved.suggestion)
       return {
         suggestion:
           answer?.text ||
@@ -408,7 +508,15 @@ export async function handleSupportAi(
         [JSON.stringify(messages), reserved.id, actor.id],
       )
     ).rows[0]
-    return { conversation: view(updated), providerFailed: !answer }
+    const actions = staff
+      ? (
+          await c.query(
+            'SELECT id,conversation_id,tool,status,updated_at FROM support_ai_actions WHERE conversation_id=$1 AND actor_id=$2 ORDER BY created_at DESC LIMIT 30',
+            [reserved.id, actor.id],
+          )
+        ).rows
+      : []
+    return { conversation: view(updated), providerFailed: !answer, actions }
   })
   if ('gone' in settled)
     return Response.json(

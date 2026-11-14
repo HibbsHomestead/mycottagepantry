@@ -1,7 +1,8 @@
 import { barcodeMatches } from '@/lib/barcodes'
 import { PantryPhoto } from './pantry-photo'
 import { pantryDisplayUnit, precise, stockStatus } from '@/lib/ingredients'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import type { InventoryLabelSelection } from './inventory-tools'
 import {
   sortIngredients,
   validPantrySort,
@@ -56,7 +57,11 @@ export function PantryInventory({
   savedView,
   onView,
   typeFilter,
+  actions,
+  labelSelection,
 }: {
+  actions?: ReactNode
+  labelSelection?: InventoryLabelSelection
   typeFilter?: string
   assets?: Item[]
   savedView?: 'cards' | 'table'
@@ -156,6 +161,19 @@ export function PantryInventory({
                     : true,
     )
   const rows = sortIngredients(filtered, sort)
+  function selectionCheckbox(i: Item) {
+    if (!labelSelection?.active) return null
+    return (
+      <label className="inventory-item-selection">
+        <input
+          type="checkbox"
+          checked={labelSelection.selected.includes(i.id)}
+          onChange={(e) => labelSelection.onChange(i.id, e.target.checked)}
+        />
+        <span className="sr-only">Select {i.name} for shelf/bin labels</span>
+      </label>
+    )
+  }
   return (
     <div className="pantry-v2">
       <div className="pantry-summary">
@@ -181,29 +199,32 @@ export function PantryInventory({
           </span>
         </span>
       </div>
-      <div className="inventory-tabs" aria-label="Pantry views">
-        {(typeFilter === undefined
-          ? tabs
-          : ['All items', 'Low stock', 'Expiring soon']
-        ).map((t) => (
-          <button
-            key={t}
-            aria-pressed={
-              filter === t || (t === 'All items' && filter === typeFilter)
-            }
-            className={
-              filter === t || (t === 'All items' && filter === typeFilter)
-                ? 'active'
-                : ''
-            }
-            onClick={() =>
-              setFilter(t === 'All items' && typeFilter ? typeFilter : t)
-            }
-          >
-            {t}
-            {t === 'Low stock' && low.length > 0 && <span>{low.length}</span>}
-          </button>
-        ))}
+      <div className="inventory-filter-actions">
+        <div className="inventory-tabs" aria-label="Pantry views">
+          {(typeFilter === undefined
+            ? tabs
+            : ['All items', 'Low stock', 'Expiring soon']
+          ).map((t) => (
+            <button
+              key={t}
+              aria-pressed={
+                filter === t || (t === 'All items' && filter === typeFilter)
+              }
+              className={
+                filter === t || (t === 'All items' && filter === typeFilter)
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setFilter(t === 'All items' && typeFilter ? typeFilter : t)
+              }
+            >
+              {t}
+              {t === 'Low stock' && low.length > 0 && <span>{low.length}</span>}
+            </button>
+          ))}
+        </div>
+        {actions}
       </div>
       <div className="toolbar">
         <div
@@ -278,6 +299,41 @@ export function PantryInventory({
         </button>
         <span className="muted item-count">{rows.length} items</span>
       </div>
+      {labelSelection?.active && (
+        <div
+          className="inventory-label-selection"
+          role="group"
+          aria-label="Shelf/bin label selection"
+        >
+          <span role="status">
+            {labelSelection.selected.length} selected for labels
+          </span>
+          <button
+            className="btn secondary"
+            disabled={!rows.length}
+            onClick={() => labelSelection.onSelectAll(rows.map((i) => i.id))}
+          >
+            Select all filtered items
+          </button>
+          <button
+            className="btn secondary"
+            disabled={!labelSelection.selected.length}
+            onClick={labelSelection.onClear}
+          >
+            Clear selection
+          </button>
+          <button
+            className="btn secondary"
+            disabled={!labelSelection.selected.length}
+            onClick={labelSelection.onPrint}
+          >
+            Print selected labels
+          </button>
+          <button className="btn secondary" onClick={labelSelection.onDone}>
+            Done
+          </button>
+        </div>
+      )}
       <p className="muted table-note">
         Quantity, cost and reorder sorts group weight, volume, length and count;
         compatible units normalize to g, ml or each. Missing values appear last.
@@ -299,6 +355,7 @@ export function PantryInventory({
                 aria-label={i.name}
               >
                 <div className="pantry-card-top">
+                  {selectionCheckbox(i)}
                   <span className={`status ${stockTone(status)}`}>
                     {status}
                   </span>
@@ -510,15 +567,18 @@ export function PantryInventory({
                   return (
                     <tr key={i.id}>
                       <td data-label="Item">
-                        <button
-                          className="item-name"
-                          onClick={() => open('ingredient-detail', i)}
-                        >
-                          <PantryPhoto item={i} assets={assets} />
-                          <span>
-                            <strong>{i.name}</strong>
-                          </span>
-                        </button>
+                        <div className="inventory-item-heading">
+                          {selectionCheckbox(i)}
+                          <button
+                            className="item-name"
+                            onClick={() => open('ingredient-detail', i)}
+                          >
+                            <PantryPhoto item={i} assets={assets} />
+                            <span>
+                              <strong>{i.name}</strong>
+                            </span>
+                          </button>
+                        </div>
                         {warning && <p className="warning-text">{warning}</p>}
                       </td>
                       <td data-label="Category">{i.category || '—'}</td>

@@ -1,3 +1,5 @@
+import { AdminStepUp } from './admin-step-up'
+import { adminRequest } from '@/lib/admin-client'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { supportAiRequest } from '@/lib/support-client'
 import {
@@ -5,6 +7,7 @@ import {
   sanitizeSupportDiagnostics,
   type SupportAiConversation,
   type SupportAiMessage,
+  type SupportAiAction,
 } from '@/lib/support-ai'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import {
@@ -36,7 +39,7 @@ export function SupportTranscript({
                   <li key={a.id}>
                     <a
                       href={
-                        requesterLabel === 'Requester'
+                        requesterLabel !== 'You'
                           ? 'https://mycottagepantry.com' + a.href
                           : a.href
                       }
@@ -52,7 +55,14 @@ export function SupportTranscript({
     </ol>
   )
 }
-export function SupportHelper() {
+export function SupportHelper({
+  staff = false,
+  contextTicketId,
+}: { staff?: boolean; contextTicketId?: string } = {}) {
+  const [contextConsent, setContextConsent] = useState(false)
+  const [shareDiagnostics, setShareDiagnostics] = useState(false)
+  const [actions, setActions] = useState<SupportAiAction[]>([])
+  const [confirmedAction, setConfirmedAction] = useState('')
   const [chats, setChats] = useState<SupportAiConversation[]>([])
   const [id, setId] = useState(''),
     [draft, setDraft] = useState(''),
@@ -72,11 +82,18 @@ export function SupportHelper() {
   const chat = chats.find((c) => c.id === id)
   useEffect(() => {
     let active = true
-    supportAiRequest()
+    supportAiRequest(staff)
       .then((v) => {
         if (active) {
-          setChats(v.conversations)
-          setId(v.conversations[0]?.id || '')
+          const available = staff
+            ? v.conversations.filter(
+                (c: SupportAiConversation) =>
+                  (c.contextTicketId || undefined) === contextTicketId,
+              )
+            : v.conversations
+          setChats(available)
+          setId(available[0]?.id || '')
+          setActions(v.actions || [])
           setPolicy(v.policy)
           setReady(true)
         }
@@ -87,7 +104,7 @@ export function SupportHelper() {
     return () => {
       active = false
     }
-  }, [])
+  }, [staff, contextTicketId])
   useEffect(() => {
     if (chat?.messages.length)
       end.current?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
@@ -99,12 +116,14 @@ export function SupportHelper() {
     setError('')
     setNotice('')
     try {
-      const v = await supportAiRequest(false, {
+      const v = await supportAiRequest(staff, {
         action: 'chat',
         requestId: crypto.randomUUID(),
         conversationId: id || undefined,
         message: draft,
         consent: true,
+        contextConsent,
+        ...(staff ? { ticketId: contextTicketId } : {}),
         ...(attach ? { diagnostics } : {}),
       })
       setChats((old) => [
@@ -112,8 +131,10 @@ export function SupportHelper() {
         ...old.filter((c) => c.id !== v.conversation.id),
       ])
       setId(v.conversation.id)
+      setActions(v.actions || [])
       setDraft('')
       setAttach(false)
+      setContextConsent(false)
       if (v.providerFailed)
         setNotice(
           'AI reply unavailable. Your question is saved; Contact support remains available.',
@@ -130,13 +151,30 @@ export function SupportHelper() {
     setBusy(true)
     setError('')
     try {
-      const v = await supportAiRequest(false, {
+      const v = await supportAiRequest(staff, {
         action: 'escalate',
         conversationId: chat.id,
         summary,
+        diagnostics: shareDiagnostics
+          ? attach
+            ? diagnostics
+            : chat.diagnostics
+          : null,
       })
       setChats((old) =>
-        old.map((c) => (c.id === chat.id ? { ...c, ticketId: v.ticketId } : c)),
+        old.map((c) =>
+          c.id === chat.id
+            ? {
+                ...c,
+                ticketId: v.ticketId,
+                diagnostics: shareDiagnostics
+                  ? attach
+                    ? diagnostics
+                    : chat.diagnostics
+                  : null,
+              }
+            : c,
+        ),
       )
       setReview(false)
       setNotice(
@@ -153,7 +191,7 @@ export function SupportHelper() {
     setBusy(true)
     setError('')
     try {
-      await supportAiRequest(false, {
+      await supportAiRequest(staff, {
         action: 'delete',
         conversationId: chat.id,
       })
@@ -171,15 +209,23 @@ export function SupportHelper() {
     }
   }
   return (
-    <section className="support-helper" aria-label="AI support helper">
-      <h3>AI support helper</h3>
+    <section
+      className="support-helper"
+      aria-label={staff ? 'Private admin AI assistant' : 'AI support helper'}
+    >
+      <h3>{staff ? 'Private admin AI assistant' : 'AI support helper'}</h3>
       <p>
-        Short steps from Cottage Pantry’s help guides. AI can make mistakes and
-        cannot inspect or change your account, stock, billing, or permissions.
+        {staff
+          ? 'Private to your verified administrator account. Search support, inspect recorded account, billing and integration status, review sanitized diagnostics, and propose billing reconciliation for the selected ticket. Confirm recovery separately with administrator verification.'
+          : 'Practical steps from current app workflows. With your permission, check your verified account, current business, recorded plan/integration status allowed by your role, receipt attempt statuses and your label recovery count. AI can make mistakes; it cannot edit stock, item types, plans or permissions.'}
       </p>
       <div className="ai-toolbar">
-        <a href="/help">Help guides</a>
-        <a href="/support">Your tickets</a>
+        <a href={staff ? 'https://mycottagepantry.com/help' : '/help'}>
+          Help guides
+        </a>
+        <a href={staff ? '/platform-support' : '/support'}>
+          {staff ? 'Support inbox' : 'Your tickets'}
+        </a>
         {ready && (
           <button
             type="button"
@@ -225,21 +271,31 @@ export function SupportHelper() {
         <p>
           When you choose Send, your redacted messages and recent conversation
           are sent to OpenAI through Netlify AI Gateway with the relevant help
-          guides. The helper does not fetch or attach account records, inventory
-          or payment details. Diagnostic attachments are excluded from AI
-          requests. Avoid private details in messages. The provider processes
-          these messages under its service data policies.
+          guides. With status-sharing consent, only the listed account/business
+          metadata and permitted diagnostic counts are sent. Raw account
+          records, inventory and payment details are excluded. Diagnostic
+          attachments are excluded from AI requests. Avoid private details in
+          messages. The provider processes these messages under its service data
+          policies.
         </p>
         <p>
           Conversations and optional diagnostics are stored privately for{' '}
           {policy.retentionDays} days from creation. They become unavailable at
-          expiry and are deleted by the daily cleanup. Contact support shares
-          them and your reviewed summary with authorized support staff. Staff
-          can request AI summaries of your issue and public replies through the
-          same provider. Delete conversation removes that attachment, including
-          from a support request. The support ticket summary and staff replies
-          remain under the existing ticket record policy. Usage counts and token
-          totals contain no conversation text and expire after 30 days.
+          expiry and are deleted by the daily cleanup.{' '}
+          {staff
+            ? 'Private administrator chats never attach to customer tickets. '
+            : ''}
+          Contact support shares them and your reviewed summary with authorized
+          support staff. Staff can request AI summaries of your issue and public
+          replies through the same provider. Delete conversation removes that
+          attachment, including from a support request. The support ticket
+          summary and staff replies remain under the existing ticket record
+          policy. Usage counts and token totals contain no conversation text and
+          expire after 30 days. Requests set provider storage off. OpenAI may
+          retain abuse-monitoring logs for up to 30 days under its policy; zero
+          retention is not claimed. Status sharing sends only allowlisted
+          metadata when selected, with no credentials, private inventory,
+          payment details, files or raw logs.
         </p>
         <p>
           Up to {policy.userDaily} requests per person and{' '}
@@ -260,7 +316,10 @@ export function SupportHelper() {
       )}
       {chat && (
         <>
-          <SupportTranscript messages={chat.messages} />
+          <SupportTranscript
+            messages={chat.messages}
+            requesterLabel={staff ? 'Administrator' : 'You'}
+          />
           <div ref={end} />
           <small>Expires {new Date(chat.expiresAt).toLocaleDateString()}</small>
         </>
@@ -284,28 +343,45 @@ export function SupportHelper() {
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            I agree to send my messages to the AI provider as described above.
+            {staff
+              ? 'I agree to send my messages and permitted metadata for the selected support ticket to the AI provider as described above.'
+              : 'I agree to send my messages to the AI provider as described above.'}
           </label>
-          <label className="ai-check">
-            <input
-              type="checkbox"
-              checked={attach}
-              onChange={(e) => {
-                setAttach(e.target.checked)
-                if (e.target.checked)
-                  setDiagnostics(
-                    sanitizeSupportDiagnostics(
-                      latestInventoryErrorDetails() || {
-                        ...createInventoryErrorDetails(null),
-                        pathname:
-                          window.location.pathname + window.location.hash,
-                      },
-                    ),
-                  )
-              }}
-            />
-            Attach sanitized error details for support review
-          </label>
+          {!staff && (
+            <label className="ai-check">
+              <input
+                type="checkbox"
+                checked={contextConsent}
+                onChange={(e) => setContextConsent(e.target.checked)}
+              />
+              Allow authorized status checks for this question and share
+              sanitized results with the AI provider (verified sign-in, business
+              role, permitted plan/integration status, receipt attempt statuses
+              and my label recovery count).
+            </label>
+          )}
+          {!staff && (
+            <label className="ai-check">
+              <input
+                type="checkbox"
+                checked={attach}
+                onChange={(e) => {
+                  setAttach(e.target.checked)
+                  if (e.target.checked)
+                    setDiagnostics(
+                      sanitizeSupportDiagnostics(
+                        latestInventoryErrorDetails() || {
+                          ...createInventoryErrorDetails(null),
+                          pathname:
+                            window.location.pathname + window.location.hash,
+                        },
+                      ),
+                    )
+                }}
+              />
+              Attach sanitized error details for support review
+            </label>
+          )}
           {attach && (
             <details open>
               <summary>Review diagnostic attachment</summary>
@@ -326,23 +402,26 @@ export function SupportHelper() {
       )}
       {chat ? (
         <div className="ai-toolbar">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setSummary(
-                chat.messages
-                  .filter((m) => m.role === 'user')
-                  .map((m) => m.text)
-                  .join('\n')
-                  .slice(0, 1500),
-              )
-              setReview(true)
-              setDeleting(false)
-            }}
-          >
-            Contact support
-          </button>
+          {!staff && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setSummary(
+                  chat.messages
+                    .filter((m) => m.role === 'user')
+                    .map((m) => m.text)
+                    .join('\n')
+                    .slice(0, 1500),
+                )
+                setShareDiagnostics(!!(attach ? diagnostics : chat.diagnostics))
+                setReview(true)
+                setDeleting(false)
+              }}
+            >
+              Contact support
+            </button>
+          )}
           <button
             type="button"
             disabled={busy}
@@ -359,9 +438,85 @@ export function SupportHelper() {
             </a>
           )}
         </div>
-      ) : (
+      ) : !staff ? (
         <a href="/support">Contact support without AI</a>
-      )}
+      ) : null}
+      {staff &&
+        chat &&
+        actions
+          .filter(
+            (a) =>
+              a.conversation_id === chat.id && a.tool === 'reconcile_billing',
+          )
+          .map((a) => (
+            <div className="ai-notice" key={a.id}>
+              <strong>
+                Billing reconciliation · {a.status.replaceAll('_', ' ')}
+              </strong>
+              {a.status === 'proposed' && (
+                <>
+                  <p>
+                    Refresh billing from the linked provider for this ticket’s
+                    business. Effective access may change. This does not charge,
+                    create or cancel a subscription, or override a suspension.
+                  </p>
+                  <AdminStepUp request={adminRequest} />
+                  <label className="ai-check">
+                    <input
+                      type="checkbox"
+                      checked={confirmedAction === a.id}
+                      onChange={(e) =>
+                        setConfirmedAction(e.target.checked ? a.id : '')
+                      }
+                    />
+                    I reviewed this recovery and authorize reconciliation for
+                    the selected ticket’s business.
+                  </label>
+                  <button
+                    type="button"
+                    disabled={busy || confirmedAction !== a.id}
+                    onClick={async () => {
+                      setBusy(true)
+                      setError('')
+                      try {
+                        const v = await supportAiRequest(true, {
+                          action: 'confirm',
+                          actionId: a.id,
+                          confirmation: 'RECONCILE',
+                        })
+                        setNotice(v.message)
+                        setActions((old) =>
+                          old.map((row) =>
+                            row.id === a.id
+                              ? {
+                                  ...row,
+                                  status: v.verified
+                                    ? 'verified_success'
+                                    : 'unverified',
+                                }
+                              : row,
+                          ),
+                        )
+                        setConfirmedAction('')
+                      } catch (e) {
+                        setError((e as Error).message)
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Confirm billing recovery
+                  </button>
+                </>
+              )}
+              {a.status === 'unverified' && (
+                <p>
+                  Success is unverified. Review billing records before
+                  attempting another recovery.
+                </p>
+              )}
+            </div>
+          ))}
       {review && (
         <form onSubmit={escalate} aria-label="Review support request">
           <label>
@@ -375,11 +530,31 @@ export function SupportHelper() {
               onChange={(e) => setSummary(e.target.value)}
             />
           </label>
+          {!!(attach ? diagnostics : chat?.diagnostics) && (
+            <>
+              <label className="ai-check">
+                <input
+                  type="checkbox"
+                  checked={shareDiagnostics}
+                  onChange={(e) => setShareDiagnostics(e.target.checked)}
+                />
+                Include these sanitized diagnostics with my support request
+              </label>
+              <pre>
+                {JSON.stringify(
+                  attach ? diagnostics : chat?.diagnostics,
+                  null,
+                  2,
+                )}
+              </pre>
+            </>
+          )}
           <p>
             Review this summary before sharing it with support. The conversation
-            and any diagnostic attachment are included until deleted or expired.
-            Support staff may use AI to summarize your report and public replies
-            for review. Diagnostics are excluded from AI requests.
+            and the diagnostic attachment you approve are included until deleted
+            or expired. Support staff may use AI to summarize your report and
+            public replies for review. Diagnostics are excluded from AI
+            requests.
           </p>
           <div className="ai-toolbar">
             <button className="btn primary" disabled={busy}>

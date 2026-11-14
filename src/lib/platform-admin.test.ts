@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { PGlite } from '@electric-sql/pglite'
 import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
-import { createHash, generateKeyPairSync, sign } from 'node:crypto'
+import { randomUUID, createHash, generateKeyPairSync, sign } from 'node:crypto'
 import type { Context } from '@netlify/functions'
 const runtime = vi.hoisted(() => ({
   pool: null as any,
@@ -13,6 +13,7 @@ const runtime = vi.hoisted(() => ({
   identities: {} as Record<string, any>,
   env: {} as Record<string, string>,
   queries: [] as string[],
+  recoveryFails: false,
 }))
 vi.mock('@netlify/database', () => ({
   getDatabase: () => ({ pool: runtime.pool }),
@@ -36,6 +37,22 @@ vi.mock('../../netlify/lib/verified-session', async (importOriginal) => ({
   >()),
   verifiedSession: async () => runtime.identities[runtime.loginId],
 }))
+vi.mock('../../netlify/lib/support-billing-recovery', () => ({
+  reconcileSupportBilling: async (c: any, businessId: string) => {
+    if (runtime.recoveryFails) throw new Error('provider-secret-must-not-leak')
+    await c.query("SELECT set_config('app.billing_worker','true',true)")
+    await c.query(
+      'UPDATE workspace_billing SET last_reconciled_at=now() WHERE business_id=$1',
+      [businessId],
+    )
+  },
+}))
+import { assistantTools } from '../../netlify/lib/support-ai-tools'
+import { confirmAssistantAction } from '../../netlify/lib/support-ai-confirm'
+import {
+  supportActor,
+  supportTransaction,
+} from '../../netlify/lib/support-core'
 import { openSecret, totpCode } from '../../netlify/lib/platform-admin-totp'
 import handler from '../../netlify/functions/platform-admin.mts'
 import {
@@ -2730,4 +2747,232 @@ it('previews and appends manual access with audit without billing writes, and re
       )
     ).rows,
   ).toHaveLength(2)
+})
+
+function inboxRequest(query = '', body?: unknown, value = token) {
+  return new Request(origin + '/api/support?view=staff' + query, {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      'x-cp-admin': '1',
+      origin,
+      'content-type': 'application/json',
+      ...(value ? { cookie: `${adminCookie}=${value}` } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+}
+it('restores the portal-only admin inbox without a customer cookie and denies signed-out, expired and non-admin sessions', async () => {
+  await session(false)
+  const success = await support(inboxRequest())
+  expect(success.status).toBe(200)
+  expect(await success.json()).toEqual({ staff: true, admin: true })
+  expect((await support(inboxRequest('', undefined, ''))).status).toBe(401)
+  await database.query(
+    "UPDATE platform_sessions SET expires_at=now()-interval '1 minute'",
+  )
+  expect((await support(inboxRequest())).status).toBe(401)
+  runtime.loginId = 'customer-owner' // Even an Identity platform_admin role cannot grant a portal session.
+  expect((await support(inboxRequest('', undefined, ''))).status).toBe(403)
+  await database.query(
+    "UPDATE platform_admins SET enabled=false WHERE identity_id='platform-agent'",
+  )
+  await session(false, 'platform-agent', 'A'.repeat(43))
+  expect(
+    (await support(inboxRequest('', undefined, 'A'.repeat(43)))).status,
+  ).toBe(401)
+})
+async function assistantFixture(
+  audience: 'admin' | 'customer',
+  identity = 'platform-owner',
+) {
+  const ticket = randomUUID(),
+    chat = randomUUID()
+  await database.query(
+    "INSERT INTO support_tickets(id,requester_id,requester_email,workspace_id,subject,category,submission_key,diagnostics) VALUES($1,'customer-owner','fixture@example.invalid',$2,'Fixture support question','Question',$3,'{}')",
+    [ticket, oven, randomUUID()],
+  )
+  await database.query(
+    "INSERT INTO support_ai_conversations(id,requester_id,business_id,audience,context_ticket_id,messages,expires_at) VALUES($1,$2,$3,$4,$5,'[]',now()+interval '1 day')",
+    [
+      chat,
+      identity,
+      audience === 'customer' ? oven : null,
+      audience,
+      audience === 'admin' ? ticket : null,
+    ],
+  )
+  return { ticket, chat }
+}
+it('executes business-scoped diagnostic tools with role checks, consent, sanitized projections and immediate membership revocation', async () => {
+  runtime.loginId = 'customer-owner'
+  const { chat } = await assistantFixture('customer', 'customer-owner')
+  const req = new Request('https://mycottagepantry.com/api/support')
+  await expect(
+    assistantTools(req, chat, false, false).run('business_status', {}),
+  ).rejects.toThrow()
+  const tools = assistantTools(req, chat, false, true)
+  const result = await tools.run('business_status', {})
+  expect(JSON.stringify(result)).toContain('past_due')
+  expect(JSON.stringify(result)).not.toMatch(
+    /PRIVATE_|subscription-sensitive|customer-owner/,
+  )
+  const diagnostics = await tools.run('troubleshoot', {})
+  expect(JSON.stringify(diagnostics)).toContain('failed')
+  expect(JSON.stringify(diagnostics)).not.toContain('PRIVATE_')
+  await database.query(
+    "UPDATE users SET role='Production Staff' WHERE identity_id='customer-owner'",
+  )
+  expect(await tools.run('business_status', {})).toMatchObject({
+    billing: null,
+    billingPermission: false,
+  })
+  await database.query(
+    "UPDATE users SET active=false WHERE identity_id='customer-owner'",
+  )
+  await expect(tools.run('troubleshoot', {})).rejects.toThrow(/membership/)
+  await database.query(
+    "UPDATE users SET role='Owner',active=true WHERE identity_id='customer-owner'",
+  )
+  await expect(
+    tools.run('propose_billing_reconciliation', {}),
+  ).rejects.toThrow()
+  await expect(
+    tools.run('business_status', { businessId: other }),
+  ).rejects.toThrow()
+})
+it('keeps private admin chats out of customer requests and executes recovery only after a scoped proposal, MFA and confirmation', async () => {
+  await session(true)
+  const { chat } = await assistantFixture('admin')
+  const tools = assistantTools(inboxRequest(), chat, true, true)
+  const lookup = (await tools.run('support_lookup', {
+    query: 'Fixture support',
+  })) as { tickets: unknown[] }
+  expect(lookup.tickets.length).toBeGreaterThan(0)
+  expect(await tools.run('account_status', {})).toMatchObject({
+    subject: 'selected ticket requester',
+    role: 'Owner',
+    emailVerified: true,
+  })
+  const proposal = (await tools.run('propose_billing_reconciliation', {})) as {
+    actionId: string
+  }
+  expect(proposal.actionId).toBeTruthy()
+  await expect(
+    confirmAssistantAction(inboxRequest(), {
+      actionId: proposal.actionId,
+      confirmation: 'yes',
+    }),
+  ).rejects.toThrow()
+  runtime.loginId = 'customer-owner'
+  await expect(
+    assistantTools(
+      new Request('https://mycottagepantry.com/api/support'),
+      chat,
+      false,
+      true,
+    ).run('search_help', { question: 'inventory' }),
+  ).rejects.toThrow()
+  const response = await support(
+    new Request('https://mycottagepantry.com/api/support?ai=1', {
+      method: 'POST',
+      headers: {
+        origin: 'https://mycottagepantry.com',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'escalate',
+        conversationId: chat,
+        summary: 'Try to expose admin conversation',
+      }),
+    }),
+  )
+  expect(response.status).toBe(404)
+  runtime.loginId = 'platform-owner'
+  runtime.identities['platform-owner'].roles = ['platform_admin']
+  // RLS also denies private rows when Identity alone carries a platform role.
+  const customerActor = await supportActor()
+  const privateRows = await supportTransaction(customerActor, (c) =>
+    c.query('SELECT id FROM support_ai_conversations WHERE id=$1', [chat]),
+  )
+  expect(privateRows.rows).toHaveLength(0)
+  // The same person’s customer session still cannot see their private admin chat.
+  const customerView = await support(
+    new Request('https://mycottagepantry.com/api/support?ai=1'),
+  )
+  expect(
+    (await customerView.json()).conversations.some(
+      (c: { id: string }) => c.id === chat,
+    ),
+  ).toBe(false)
+  const deletePrivate = await support(
+    new Request('https://mycottagepantry.com/api/support?ai=1', {
+      method: 'POST',
+      headers: {
+        origin: 'https://mycottagepantry.com',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'delete', conversationId: chat }),
+    }),
+  )
+  expect(deletePrivate.status).toBe(404)
+  runtime.recoveryFails = false
+  const confirmed = await confirmAssistantAction(inboxRequest(), {
+    actionId: proposal.actionId,
+    confirmation: 'RECONCILE',
+  })
+  expect(confirmed.verified).toBe(true)
+  expect(confirmed.message).toContain('does not establish')
+  await expect(
+    confirmAssistantAction(inboxRequest(), {
+      actionId: proposal.actionId,
+      confirmation: 'RECONCILE',
+    }),
+  ).rejects.toThrow(/already attempted/)
+  expect(
+    (
+      await database.query(
+        'SELECT status FROM support_ai_actions WHERE id=$1',
+        [proposal.actionId],
+      )
+    ).rows[0],
+  ).toMatchObject({ status: 'verified_success' })
+})
+it('records uncertain recovery without claiming a fix and requires fresh MFA before consuming a proposal', async () => {
+  await session(false)
+  const { chat } = await assistantFixture('admin')
+  const proposal = (await assistantTools(inboxRequest(), chat, true, true).run(
+    'propose_billing_reconciliation',
+    {},
+  )) as { actionId: string }
+  await expect(
+    confirmAssistantAction(inboxRequest(), {
+      actionId: proposal.actionId,
+      confirmation: 'RECONCILE',
+    }),
+  ).rejects.toThrow(/authentication/)
+  expect(
+    (
+      await database.query(
+        'SELECT status FROM support_ai_actions WHERE id=$1',
+        [proposal.actionId],
+      )
+    ).rows[0],
+  ).toMatchObject({ status: 'proposed' })
+  await database.query('UPDATE platform_sessions SET mfa_at=now()')
+  runtime.recoveryFails = true
+  const result = await confirmAssistantAction(inboxRequest(), {
+    actionId: proposal.actionId,
+    confirmation: 'RECONCILE',
+  })
+  expect(result.verified).toBe(false)
+  expect(JSON.stringify(result)).not.toContain('provider-secret')
+  expect(
+    (
+      await database.query(
+        'SELECT status FROM support_ai_actions WHERE id=$1',
+        [proposal.actionId],
+      )
+    ).rows[0],
+  ).toMatchObject({ status: 'unverified' })
+  runtime.recoveryFails = false
 })

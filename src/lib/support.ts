@@ -81,6 +81,7 @@ export function safeSupportRoute(value?: string) {
     const pathname = url.pathname.replace(/^\/(workspace|studio)$/, '/oven')
     const path = [
       '/oven',
+      '/oven/billing',
       '/help',
       '/login',
       '/support',
