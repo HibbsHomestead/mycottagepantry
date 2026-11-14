@@ -193,3 +193,38 @@ it('never labels a failed or unverified LIVE connection as connected', () => {
     screen.getByLabelText('Stripe account connections'),
   ).not.toHaveTextContent('LIVE Stripe: Connected')
 })
+
+it('explains confirmation failures next to save and submits webhook-only updates', async () => {
+  const data = {
+    encryptionReady: true,
+    rows: [{ environment: 'live', fingerprint: 'sha256:fixture' }],
+  }
+  const request = vi.fn().mockResolvedValue(data)
+  const user = userEvent.setup()
+  render(<AdminStripeSettings data={data} request={request} />)
+  expect(
+    screen.getByLabelText('Stripe connection instructions'),
+  ).toHaveTextContent('step by step')
+  const signing = screen.getByLabelText(
+    'Webhook signing secret (optional for automatic setup)',
+  )
+  await user.type(signing, 'whsec_fixture')
+  await user.click(screen.getByRole('button', { name: 'Save credentials' }))
+  expect(request).not.toHaveBeenCalled()
+  expect(
+    screen.getByText(/Type SAVE LIVE in Action confirmation/),
+  ).toBeInTheDocument()
+  await user.type(screen.getByLabelText('Action confirmation'), 'SAVE LIVE')
+  await user.click(screen.getByRole('button', { name: 'Save credentials' }))
+  expect(request).toHaveBeenCalledWith('action=stripe', {
+    environment: 'live',
+    operation: 'save',
+    key: '',
+    signing: 'whsec_fixture',
+    confirmation: 'SAVE LIVE',
+  })
+  await waitFor(() => expect(signing).toHaveValue(''))
+  expect(
+    screen.getByText(/Credentials saved securely for LIVE/),
+  ).toBeInTheDocument()
+})

@@ -313,7 +313,12 @@ it('denies checkout to non-owner business members before looking up credentials'
     ),
   ).toBe(false)
 })
-it('returns masked metadata after credential save and audits only environment/action/tier', async () => {
+it('saves replacement credentials even when hosting import fails and returns only masked metadata', async () => {
+  vi.stubGlobal('Netlify', undefined)
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', root)
+  vi.stubEnv('STRIPE_TEST_SECRET_KEY', testKey)
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Unavailable')))
+
   const queries: { sql: string; params: unknown[] }[] = []
   const c = {
     release: vi.fn(),
@@ -363,6 +368,43 @@ it('returns masked metadata after credential save and audits only environment/ac
   )!
   expect(JSON.stringify(audit.params)).not.toContain(testKey)
   expect(JSON.stringify(audit.params)).not.toContain('whsec_fixture')
+})
+it('preserves account validation and mappings when saving only a webhook secret', async () => {
+  const mappings = { 'cottage-kitchen': { price: 'price_fixture' } }
+  const row = {
+    ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
+    configuration: { mappings, hostedLaunchReady: true },
+    validated_at: new Date().toISOString(),
+  }
+  const query = vi.fn(async (sql: string, params: unknown[] = []) => ({
+    rows:
+      sql.startsWith('SELECT * FROM stripe_provider_settings') && params.length
+        ? [row]
+        : [],
+  }))
+  await stripeAdminAction(
+    { query, release: vi.fn() },
+    new Request('https://admin.mycottagepantry.com/api/admin?action=stripe', {
+      method: 'POST',
+      body: JSON.stringify({
+        environment: 'test',
+        operation: 'save',
+        signing: ' whsec_fixture ',
+        confirmation: 'SAVE TEST',
+      }),
+    }),
+    { role: 'owner', mfa_at: new Date().toISOString() },
+    'fixture',
+  )
+  const update = query.mock.calls.find(([sql]) =>
+    sql.startsWith('UPDATE stripe_provider_settings'),
+  )!
+  expect(update[1]?.[4]).toBe(false)
+  expect(update[1]?.[3]).toEqual({ mappings })
+  expect(openStripe(String(update[1]?.[1]), 'test').signing).toBe(
+    'whsec_fixture',
+  )
+  expect(update[0]).toContain('webhook_verified_at=NULL,checkout_enabled=false')
 })
 it('approves the $40 six-user tier in test mode without enabling live purchase', async () => {
   expect(stripeTierPurchasable('cottage-mercantile', 'test')).toBe(true)

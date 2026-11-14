@@ -403,8 +403,8 @@ export async function stripeAdminAction(
         'disconnect',
         'retry',
       ]),
-      key: z.string().max(300).optional(),
-      signing: z.string().max(300).optional(),
+      key: z.string().trim().max(300).optional(),
+      signing: z.string().trim().max(300).optional(),
       plan: z.string().max(100).optional(),
       price: z.string().max(100).optional(),
       purchase: z.boolean().optional(),
@@ -429,7 +429,16 @@ export async function stripeAdminAction(
     'INSERT INTO stripe_provider_settings(environment) VALUES($1) ON CONFLICT DO NOTHING',
     [e],
   )
-  const row = await stripeSettings(c, e, true),
+  // A broken hosting import must not prevent an administrator saving a replacement.
+  const manualCredentials = ['save', 'rotate'].includes(input.operation)
+  const row = manualCredentials
+      ? (
+          await c.query(
+            'SELECT * FROM stripe_provider_settings WHERE environment=$1 FOR UPDATE',
+            [e],
+          )
+        ).rows[0]
+      : await stripeSettings(c, e, true),
     config = row.configuration || {}
   if (input.operation === 'setup') {
     const { setupStripeBilling } = await import('./stripe-setup')
@@ -448,7 +457,7 @@ export async function stripeAdminAction(
       throw new AdminError(
         409,
         'CONFIRMATION_REQUIRED',
-        'Confirm credential save or rotation.',
+        `Type ${input.operation === 'rotate' ? 'ROTATE' : 'SAVE'} ${e.toUpperCase()} in Action confirmation, then try again.`,
       )
     const old = row.ciphertext
       ? openStripe(row.ciphertext, e)
@@ -464,14 +473,22 @@ export async function stripeAdminAction(
         'KEY_ENVIRONMENT',
         'Credentials do not match the selected environment or expected format.',
       )
-    // Rotating API credentials clears validation and mappings; signing changes clear delivery evidence.
+    const keyChanged = key !== old.key
+    // Signing-only updates retain verified account and price mappings.
+    const nextConfig = {
+      ...config,
+      ...(keyChanged ? { apiError: null, mappings: {} } : {}),
+    }
+    delete nextConfig.hostedLaunchReady
+    // A signing change still requires new signed delivery and checkout activation.
     await c.query(
-      'UPDATE stripe_provider_settings SET ciphertext=$2,fingerprint=$3,validated_at=NULL,webhook_verified_at=NULL,checkout_enabled=false,configuration=$4,updated_at=NOW() WHERE environment=$1',
+      'UPDATE stripe_provider_settings SET ciphertext=$2,fingerprint=$3,validated_at=CASE WHEN $5 THEN NULL ELSE validated_at END,webhook_verified_at=NULL,checkout_enabled=false,configuration=$4,updated_at=NOW() WHERE environment=$1',
       [
         e,
         sealStripe({ key, signing }, e),
         'sha256:' + createHash('sha256').update(key).digest('hex').slice(0, 12),
-        { ...config, apiError: null, mappings: {} },
+        nextConfig,
+        keyChanged,
       ],
     )
   } else if (input.operation === 'test') {

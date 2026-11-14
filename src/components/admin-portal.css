@@ -953,7 +953,7 @@
   margin: 12px 0;
   font-weight: 600;
 }
-.stripe-settings input:not([type="checkbox"]),
+.stripe-settings input:not([type='checkbox']),
 .stripe-settings select,
 .stripe-settings textarea {
   display: block;
@@ -1025,4 +1025,28 @@
   .stripe-checklist div {
     gap: 8px;
   }
+}
+
+.stripe-setup-guide {
+  margin: 20px 0;
+  padding: 18px 22px;
+  border: 1px solid #d8cfe5;
+  border-left: 4px solid #78634b;
+  border-radius: 8px;
+  background: #fcfaf5;
+}
+.stripe-setup-guide h3 {
+  margin-top: 0;
+}
+.stripe-setup-guide ol {
+  padding-left: 22px;
+  margin-bottom: 0;
+}
+.stripe-setup-guide li {
+  padding: 7px 0 7px 5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.stripe-setup-guide a {
+  text-decoration: underline;
 }

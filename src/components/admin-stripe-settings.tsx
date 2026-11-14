@@ -41,6 +41,15 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     evidence =
       data?.evidence?.find((r: AdminMetadata) => r.environment === 'test') || {}
   async function act(operation: string, extra: AdminMetadata = {}) {
+    if (operation === 'save' || operation === 'rotate') {
+      const expected = `${operation === 'save' ? 'SAVE' : 'ROTATE'} ${environment.toUpperCase()}`
+      if (confirmation.trim() !== expected) {
+        setMessage(
+          `Type ${expected} in Action confirmation, then select ${operation === 'save' ? 'Save' : 'Rotate'} credentials.`,
+        )
+        return
+      }
+    }
     setBusy(true)
     setMessage('')
     try {
@@ -48,6 +57,9 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         environment,
         operation,
         ...extra,
+        ...(extra.confirmation !== undefined
+          ? { confirmation: confirmation.trim() }
+          : {}),
       })
       setUpdate({ initial, data: result })
       setMessage(
@@ -57,7 +69,11 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           ? 'API connection test failed. Check the account, permissions and environment. New checkout is disabled; existing coverage is preserved.'
           : operation === 'test'
             ? 'API read permissions validated. Checkout and portal write permissions still require real test flows.'
-            : 'Saved. Review setup evidence below.',
+            : operation === 'save' || operation === 'rotate'
+              ? `Credentials saved securely for ${environment.toUpperCase()}. Next: Test connection, then Set up ${environment.toUpperCase()} billing.`
+              : operation === 'setup'
+                ? 'Billing resources saved. Next: refresh connection status after Stripe delivers the signed webhook; check New checkout below.'
+                : 'Saved. Review setup evidence below.',
       )
       if (operation === 'save' || operation === 'rotate') {
         setKey('')
@@ -164,6 +180,73 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       aria-label="Stripe provider settings"
     >
       <h2>Provider settings · Stripe</h2>
+      <div
+        className="stripe-setup-guide"
+        aria-label="Stripe connection instructions"
+      >
+        <h3>Connect Stripe · step by step</h3>
+        <ol>
+          <li>
+            <strong>Verify your admin session.</strong> Open verification below
+            and verify your enrolled method before entering credentials.
+            Verification reloads this page. Sensitive changes require
+            verification within the last 10 minutes.
+          </li>
+          <li>
+            <strong>Choose Environment.</strong> Use LIVE to accept real
+            subscriptions, or TEST for a Stripe sandbox. Keys, webhook
+            destinations and signing secrets must all belong to the same
+            environment.
+          </li>
+          <li>
+            <strong>Save your secret API key.</strong> Open{' '}
+            <a
+              href="https://dashboard.stripe.com/apikeys"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Stripe API keys
+            </a>{' '}
+            in the matching account and environment. Enter its secret key below
+            (sk_live_ or sk_test_), type{' '}
+            <code>SAVE {environment.toUpperCase()}</code> in Action
+            confirmation, then select Save credentials. A publishable key (pk_)
+            cannot connect billing. Leave the webhook secret blank for automatic
+            setup.
+          </li>
+          <li>
+            <strong>Test connection.</strong> Select Test connection after
+            saving. Wait for the account name and verified API status. If it
+            fails, check the selected environment, key and Stripe permissions. A
+            restricted key must allow the billing resources used here; automatic
+            setup also needs product, price, portal configuration and webhook
+            write access.
+          </li>
+          <li>
+            <strong>Create billing resources.</strong> Select Set up{' '}
+            {environment.toUpperCase()} billing. This creates or reuses monthly
+            prices and the billing portal, creates a webhook when no signing
+            secret is saved, and stores its secret securely. LIVE setup runs on
+            the production site. No customer is charged by setup.
+          </li>
+          <li>
+            <strong>Verify webhook delivery.</strong> Refresh connection status
+            after Stripe sends the event. Webhook must show a verified date. For
+            an existing webhook, open Webhook setup below, register the
+            displayed endpoint and events in Stripe, reveal its signing secret
+            there, and save it here. Then send a signed event from Stripe and
+            refresh again.
+          </li>
+          <li>
+            <strong>Check subscription availability.</strong> API connected does
+            not mean checkout enabled. Check New checkout below. Hosted LIVE
+            setup can activate after account readiness and signed delivery pass;
+            otherwise complete Required policies and activation review and
+            follow any displayed error. TEST checkout and access evidence appear
+            in Setup checklist.
+          </li>
+        </ol>
+      </div>
       <AdminStepUp request={request} />
       <p>
         Cottage Pantry software subscriptions. Business Square sales connections
@@ -277,13 +360,13 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       <button disabled={busy} onClick={refreshStorage}>
         Refresh connection status
       </button>
-      <details>
+      <details open>
         <summary>Credentials · save or rotate</summary>
         <p>
           Hosted Checkout does not require a publishable key. Enter a secret or
-          supported restricted API key and the endpoint signing secret. Existing
-          values are never revealed. Rotating clears setup verification and
-          disables new checkout.
+          supported restricted API key. The endpoint signing secret is optional
+          for automatic setup. Existing values are never revealed. Rotating
+          clears setup verification and disables new checkout.
         </p>
         <label>
           Stripe secret API key
@@ -291,11 +374,12 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
             type="password"
             autoComplete="new-password"
             value={key}
+            spellCheck={false}
             onChange={(e) => setKey(e.target.value)}
           />
         </label>
         <label>
-          Webhook signing secret
+          Webhook signing secret (optional for automatic setup)
           <input
             type="password"
             autoComplete="new-password"
@@ -304,9 +388,9 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           />
         </label>
         <p>
-          Leave an input empty to retain its saved value. Sign out and
-          authenticate again if credential changes require recent
-          authentication.
+          Leave an input empty to retain its saved value. To save only a webhook
+          secret, keep the API key blank. Saving disables new checkout until
+          delivery and activation are verified again.
         </p>
       </details>
       <label>
@@ -317,16 +401,43 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           placeholder={`SAVE ${environment.toUpperCase()}`}
         />
       </label>
+      <p>
+        To save, type <code>SAVE {environment.toUpperCase()}</code> above.{' '}
+        {busy
+          ? 'Request in progress…'
+          : !data?.encryptionReady
+            ? 'Saving is blocked until encrypted storage is ready. Refresh connection status after hosting setup is corrected.'
+            : !key.trim() && !signing.trim()
+              ? 'Enter an API key or webhook signing secret to enable saving.'
+              : 'Credentials are ready to submit after confirmation.'}
+      </p>
+      {message && (
+        <p role="status" aria-live="polite">
+          {message}
+        </p>
+      )}
       <div className="button-row">
         <button
           disabled={busy || !data?.encryptionReady || (!key && !signing)}
-          onClick={() => act('save', { key, signing, confirmation })}
+          onClick={() =>
+            act('save', {
+              key: key.trim(),
+              signing: signing.trim(),
+              confirmation,
+            })
+          }
         >
           Save credentials
         </button>
         <button
           disabled={busy || !row.fingerprint || (!key && !signing)}
-          onClick={() => act('rotate', { key, signing, confirmation })}
+          onClick={() =>
+            act('rotate', {
+              key: key.trim(),
+              signing: signing.trim(),
+              confirmation,
+            })
+          }
         >
           Rotate credentials
         </button>
@@ -350,11 +461,21 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         disconnection. It never cancels external billing or removes verified
         paid coverage.
       </p>
-      <details>
+      <details open>
         <summary>Webhook setup</summary>
+        <p>
+          Automatic setup saves the webhook for you. Use these manual steps only
+          when managing an existing endpoint: add a destination in Stripe →
+          choose Your account → choose snapshot events → paste the endpoint
+          below → select the listed events → create the destination → reveal its
+          signing secret → paste it in the credential field above → type SAVE{' '}
+          {environment.toUpperCase()} → Save credentials → send a test delivery
+          in Stripe → Refresh connection status.
+        </p>
         {data?.apiVersion && (
           <p>
-            In your Stripe Sandbox, add a webhook destination for events from
+            In the selected Stripe environment, open Developers → Webhooks (or
+            Workbench → Webhooks) and add a webhook destination for events from
             your account using API version <code>{data.apiVersion}</code>. Use
             snapshot events and select every event listed below.
           </p>
@@ -579,7 +700,6 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           charges. Stripe also retries failed deliveries.
         </p>
       </details>
-      {message && <p role="status">{message}</p>}
     </section>
   )
 }
