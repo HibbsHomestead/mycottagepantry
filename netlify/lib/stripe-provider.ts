@@ -73,14 +73,18 @@ export function stripeEndpoint(e: StripeEnvironment) {
 export function stripeEncryptionReady() {
   return stripeEncryptionStatus().ready
 }
-function root() {
+function root(hostedCredential = false) {
   if (!stripeEncryptionReady())
     throw new AdminError(
       503,
       'ENCRYPTION_SETUP_REQUIRED',
       'Protected Stripe encryption storage needs hosting setup. No credentials were saved.',
     )
-  const value = env('STRIPE_BILLING_ENCRYPTION_KEY')
+  const value = env(
+    hostedCredential
+      ? 'STRIPE_LIVE_SECRET_KEY'
+      : 'STRIPE_BILLING_ENCRYPTION_KEY',
+  )
   return stripeCredentialRoot(value)
     ? Buffer.from(
         hkdfSync('sha256', value, '', 'cottage-stripe:storage-root:v1', 32),
@@ -88,15 +92,16 @@ function root() {
     : Buffer.from(value, 'hex')
 }
 export function sealStripe(value: unknown, binding: string) {
+  const hostedCredential = stripeEncryptionStatus().source === 'live_credential'
   const iv = randomBytes(12),
-    cipher = createCipheriv('aes-256-gcm', root(), iv)
+    cipher = createCipheriv('aes-256-gcm', root(hostedCredential), iv)
   cipher.setAAD(Buffer.from('cottage-stripe:v1:' + binding))
   const data = Buffer.concat([
     cipher.update(JSON.stringify(value), 'utf8'),
     cipher.final(),
   ])
   return [
-    'v1',
+    hostedCredential ? 'v2live' : 'v1',
     iv.toString('base64url'),
     cipher.getAuthTag().toString('base64url'),
     data.toString('base64url'),
@@ -104,10 +109,11 @@ export function sealStripe(value: unknown, binding: string) {
 }
 export function openStripe(value: string, binding: string) {
   const [v, iv, tag, data] = value.split('.')
-  if (v !== 'v1') throw new Error('Unsupported credential format')
+  if (v !== 'v1' && v !== 'v2live')
+    throw new Error('Unsupported credential format')
   const cipher = createDecipheriv(
     'aes-256-gcm',
-    root(),
+    root(v === 'v2live'),
     Buffer.from(iv, 'base64url'),
   )
   cipher.setAAD(Buffer.from('cottage-stripe:v1:' + binding))
@@ -634,7 +640,7 @@ export async function stripeAdminAction(
     )
   } else if (input.operation === 'disable') {
     await c.query(
-      'UPDATE stripe_provider_settings SET checkout_enabled=false WHERE environment=$1',
+      `UPDATE stripe_provider_settings SET checkout_enabled=false,configuration=configuration || '{"launchDisabled":true}'::jsonb WHERE environment=$1`,
       [e],
     )
   } else if (input.operation === 'disconnect') {

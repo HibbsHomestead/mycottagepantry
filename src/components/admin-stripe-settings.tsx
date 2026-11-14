@@ -226,8 +226,9 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       <p>
         Credentials configured securely in hosting are connected and set up
         automatically on the trusted deployed site. Set up billing creates the
-        approved monthly prices, billing portal and webhook. It does not charge
-        customers or enable checkout.
+        approved monthly prices, billing portal and webhook. Hosted LIVE billing
+        enables new subscriptions after account readiness and signed webhook
+        delivery are verified. Setup never charges a customer.
       </p>
       <button
         disabled={busy || !data?.encryptionReady || !row.validated_at}
@@ -377,8 +378,8 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           these events, then save its signing secret. Send an actual signed
           Stripe test event. Preview test endpoints use a stable preview alias;
           live endpoints always use the production domain. Saving a signing
-          secret does not verify delivery. No provider resources are created
-          automatically.
+          secret does not verify delivery. Automatic hosted setup creates these
+          resources and requests a real signed Stripe delivery.
         </p>
         <ul>
           {(data?.eventsRequired || []).map((event: string) => (

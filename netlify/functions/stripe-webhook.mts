@@ -6,6 +6,7 @@ import {
   verifyStripeSignature,
 } from '../lib/stripe-provider'
 import { processStripeEvent } from '../lib/stripe-subscriptions'
+import { activateHostedStripe } from '../lib/stripe-setup'
 export default async (request: Request) => {
   const headers = { 'Cache-Control': 'no-store' }
   if (request.method !== 'POST')
@@ -60,6 +61,7 @@ export default async (request: Request) => {
           'UPDATE stripe_provider_settings SET webhook_verified_at=NOW() WHERE environment=$1',
           [e],
         )
+        if (e === 'live') await activateHostedStripe(c)
         return 'ok'
       } catch {
         await c.query('ROLLBACK TO SAVEPOINT stripe_processing')
