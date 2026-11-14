@@ -312,6 +312,7 @@ export async function handleRecipeImport(req: Request, c: Context) {
           packagePrice: null,
           purchaseQuantity: null,
           needsCostSetup: true,
+          importNeedsReview: true,
           threshold: 0,
           conversions: [],
           allergens: [],

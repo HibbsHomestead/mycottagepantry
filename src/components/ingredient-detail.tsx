@@ -1,4 +1,9 @@
 import { IngredientPurchaseSetup } from './ingredient-purchase-setup'
+import { InventoryReviewNotice } from './inventory-review'
+import {
+  inventoryReviewReasons,
+  type InventoryReviewReason,
+} from '@/lib/inventory-review'
 import {
   applyPurchaseSetup,
   purchaseSetupView,
@@ -130,7 +135,9 @@ export function IngredientDetail({
   save,
   onWorkspace,
   initialEditing = false,
+  initialReviewSection,
 }: {
+  initialReviewSection?: InventoryReviewReason
   isOwner?: boolean
   initialEditing?: boolean
   ingredient: Item
@@ -167,12 +174,19 @@ export function IngredientDetail({
   const closeRef = useRef<HTMLButtonElement>(null)
   const discardRef = useRef<HTMLDivElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
+  const reviewFocus = useRef(initialReviewSection)
   useLayoutEffect(() => {
     returnFocus.current = document.activeElement as HTMLElement
   }, [])
   useLayoutEffect(() => {
-    if (initialEditing) edit()
-    else setEditing(false)
+    if (
+      canEdit &&
+      (initialEditing ||
+        (initialReviewSection && initialReviewSection !== 'import'))
+    ) {
+      edit()
+      if (initialReviewSection === 'conversion') setEditTab('conversions')
+    } else setEditing(false)
     setOfferEdit(null)
     setDirty(false)
     setDiscard(null)
@@ -184,6 +198,21 @@ export function IngredientDetail({
   }, [i.id])
   useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0
+    if (editing && reviewFocus.current) {
+      const label =
+        reviewFocus.current === 'conversion'
+          ? 'From unit'
+          : reviewFocus.current === 'cost'
+            ? 'Purchasing price'
+            : 'Purchasing package unit'
+      const field = contentRef.current?.querySelector<HTMLElement>(
+        `[aria-label="${label}"]`,
+      )
+      if (field) {
+        field.focus()
+        reviewFocus.current = undefined
+      }
+    }
   }, [editing, offerEdit])
   useLayoutEffect(() => {
     if (!discard) return
@@ -1452,16 +1481,30 @@ export function IngredientDetail({
                         </p>
                       )}
                     </section>
-                    {!hasPurchasePackage(i) && (
+                    {inventoryReviewReasons(i, w).length > 0 && (
                       <div className="ingredient-purchase-notice">
-                        <p className="warning-text">
-                          Purchase package details not set.
-                        </p>
-                        {canEdit && (
-                          <button className="text-button" onClick={edit}>
-                            Add purchase details
-                          </button>
+                        {!i.compoundRecipeId && !hasPurchasePackage(i) && (
+                          <p className="warning-text">
+                            Purchase package details not set.
+                          </p>
                         )}
+                        <InventoryReviewNotice
+                          item={i}
+                          workspace={w}
+                          canEdit={canEdit}
+                          busy={busy}
+                          onSetup={(reason) => {
+                            reviewFocus.current = reason
+                            edit()
+                            if (reason === 'conversion')
+                              setEditTab('conversions')
+                          }}
+                          onMarkReviewed={() =>
+                            void run('inventoryMarkReviewed', {
+                              confirmed: true,
+                            })
+                          }
+                        />
                       </div>
                     )}
                   </>

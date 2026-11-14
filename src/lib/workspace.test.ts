@@ -145,6 +145,46 @@ beforeEach(() => {
   }
   database.queries = []
 })
+it.each(['Production Staff', 'Read-only Accountant'])(
+  'denies imported-data review to %s without writing records',
+  async (role) => {
+    database.role = role
+    database.records.ingredients = [
+      {
+        id: 'imported',
+        name: 'Imported flour',
+        unit: 'g',
+        quantity: 0,
+        cost: 0,
+        importNeedsReview: true,
+      },
+    ]
+    const before = structuredClone(database.records)
+    expect(
+      (
+        await post('inventoryMarkReviewed', 'ingredients', {
+          id: 'imported',
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(400)
+    expect(database.records).toEqual(before)
+  },
+)
+it('rejects missing/foreign inventory review IDs and a non-inventory table', async () => {
+  for (const table of ['ingredients', 'products']) {
+    const result = await post('inventoryMarkReviewed', table, {
+      id: 'foreign-id',
+      confirmed: true,
+    })
+    expect(result.status).toBe(400)
+  }
+  expect(
+    database.queries.some((q) =>
+      /^INSERT INTO (ingredients|ledger|journals|activity)\(/.test(q.sql),
+    ),
+  ).toBe(false)
+})
 it('completes the purchase → conversion → recipe → packaging → batch → taxed sale → refund slice', async () => {
   let result = await post('save', 'ingredients', {
     id: 'flour',
