@@ -15,12 +15,16 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     [key, setKey] = useState(''),
     [signing, setSigning] = useState(''),
     [confirmation, setConfirmation] = useState(''),
+    [policyConfirmation, setPolicyConfirmation] = useState(''),
+    [checkoutConfirmation, setCheckoutConfirmation] = useState(''),
     [message, setMessage] = useState(''),
+    [feedbackOperation, setFeedbackOperation] = useState(''),
+    [messageIsError, setMessageIsError] = useState(false),
     [busy, setBusy] = useState(false),
     [plan, setPlan] = useState('cottage-kitchen'),
     [price, setPrice] = useState(''),
     [purchase, setPurchase] = useState(false),
-    [portal, setPortal] = useState(''),
+    [portal, setPortal] = useState<string | null>(null),
     [review, setReview] = useState(''),
     [search, setSearch] = useState('')
   const data = update?.initial === initial ? update.data : initial
@@ -46,12 +50,39 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
     row.validated_at ||
     key.trim()
   )
+  const portalConfiguration = portal ?? config.policy?.portal ?? ''
   async function act(operation: string, extra: AdminMetadata = {}) {
+    setFeedbackOperation(operation)
+    setMessageIsError(false)
+    if (operation === 'policy' || operation === 'enable') {
+      const expected =
+        operation === 'policy'
+          ? 'APPROVE POLICIES'
+          : `ENABLE ${environment.toUpperCase()} CHECKOUT`
+      if (extra.confirmation?.trim() !== expected) {
+        setMessageIsError(true)
+        setMessage(
+          `Type ${expected} in ${operation === 'policy' ? 'Policy approval confirmation' : `${environment.toUpperCase()} checkout confirmation`}, then try again.`,
+        )
+        return
+      }
+      if (
+        operation === 'policy' &&
+        !/^bpc_[A-Za-z0-9]+$/.test(extra.portalConfiguration?.trim() || '')
+      ) {
+        setMessageIsError(true)
+        setMessage(
+          'Enter the Stripe portal configuration ID beginning with bpc_ in Reviewed Stripe portal configuration ID. Put APPROVE POLICIES in Policy approval confirmation below it.',
+        )
+        return
+      }
+    }
     const saveBeforeAction =
       ['setup', 'test'].includes(operation) && enteredCredentials
     if (operation === 'save' || operation === 'rotate' || saveBeforeAction) {
       const expected = `${operation === 'rotate' ? 'ROTATE' : 'SAVE'} ${environment.toUpperCase()}`
       if (confirmation.trim() !== expected) {
+        setMessageIsError(true)
         setMessage(
           saveBeforeAction
             ? `Type ${expected} in Action confirmation, then select ${operation === 'setup' ? `Set up ${environment.toUpperCase()} billing` : 'Test connection'} again. Your entered credentials must be saved first.`
@@ -81,44 +112,57 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         operation,
         ...extra,
         ...(extra.confirmation !== undefined
-          ? { confirmation: confirmation.trim() }
+          ? { confirmation: extra.confirmation.trim() }
           : {}),
       })
       setUpdate({ initial, data: result })
+      const resultRow = result.rows?.find(
+        (r: AdminMetadata) => r.environment === environment,
+      )
       setMessage(
-        operation === 'test' &&
-          result.rows?.find((r: AdminMetadata) => r.environment === environment)
-            ?.configuration?.apiError
+        operation === 'test' && resultRow?.configuration?.apiError
           ? 'API connection test failed. Check the account, permissions and environment. New checkout is disabled; existing coverage is preserved.'
           : operation === 'test'
             ? 'API read permissions validated. Checkout and portal write permissions still require real test flows.'
             : operation === 'save' || operation === 'rotate'
               ? `Credentials saved securely for ${environment.toUpperCase()}. Next: Set up ${environment.toUpperCase()} billing to validate the account and create resources.`
               : operation === 'setup'
-                ? result.rows?.find(
-                    (r: AdminMetadata) => r.environment === environment,
-                  )?.configuration?.webhookDeliveryCheck === 'manual'
+                ? resultRow?.configuration?.webhookDeliveryCheck === 'manual'
                   ? 'Billing resources saved. Send a test event from the matching Stripe webhook destination, then refresh connection status to verify signed delivery.'
                   : 'Billing resources saved. Next: refresh connection status after Stripe delivers the signed webhook; check New checkout below.'
-                : 'Saved. Review setup evidence below.',
+                : operation === 'policy'
+                  ? `Policies approved for ${environment.toUpperCase()}. Next: enter ENABLE ${environment.toUpperCase()} CHECKOUT in the checkout confirmation below and confirm activation.`
+                  : operation === 'enable'
+                    ? resultRow?.checkout_enabled &&
+                      (environment === 'test' ||
+                        resultRow?.configuration?.liveCheckoutApprovedAt)
+                      ? `${environment.toUpperCase()} checkout is enabled. Open the designated ${environment === 'test' ? 'test ' : ''}business's billing page and refresh verified billing.`
+                      : 'Checkout remains disabled. Refresh connection status and review setup requirements.'
+                    : 'Saved. Review setup evidence below.',
       )
       if (operation === 'save' || operation === 'rotate') {
         setKey('')
         setSigning('')
       }
       setConfirmation('')
+      if (operation === 'policy') setPolicyConfirmation('')
+      if (operation === 'enable') setCheckoutConfirmation('')
     } catch (error) {
+      setMessageIsError(true)
       setMessage((error as Error).message)
     } finally {
       setBusy(false)
     }
   }
   async function refreshStorage() {
+    setFeedbackOperation('refresh')
+    setMessageIsError(false)
     setBusy(true)
     setMessage('')
     try {
       setUpdate({ initial, data: await request('action=stripe') })
     } catch (error) {
+      setMessageIsError(true)
       setMessage((error as Error).message)
     } finally {
       setBusy(false)
@@ -291,6 +335,10 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
             setKey('')
             setSigning('')
             setConfirmation('')
+            setPolicyConfirmation('')
+            setCheckoutConfirmation('')
+            setPortal(null)
+            setReview('')
             setMessage('')
             setPrice('')
             setPurchase(false)
@@ -447,8 +495,8 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
               ? 'Enter an API key or webhook signing secret to enable saving.'
               : 'Credentials are ready to submit after confirmation.'}
       </p>
-      {message && (
-        <p role="status" aria-live="polite">
+      {message && !['policy', 'enable'].includes(feedbackOperation) && (
+        <p role={messageIsError ? 'alert' : 'status'} aria-live="polite">
           {message}
         </p>
       )}
@@ -524,12 +572,17 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           <input readOnly value={data?.endpoints?.[environment] || ''} />
         </label>
         <button
-          onClick={() =>
+          onClick={() => {
+            setFeedbackOperation('copy')
+            setMessageIsError(false)
             navigator.clipboard
               .writeText(data?.endpoints?.[environment] || '')
               .then(() => setMessage('Endpoint copied.'))
-              .catch(() => setMessage('Select and copy the endpoint manually.'))
-          }
+              .catch(() => {
+                setMessageIsError(true)
+                setMessage('Select and copy the endpoint manually.')
+              })
+          }}
         >
           Copy endpoint
         </button>
@@ -638,6 +691,11 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       <details>
         <summary>Required policies and activation review</summary>
         <p>
+          {config.policy
+            ? `Policies are configured for ${environment.toUpperCase()}. Review the saved portal below; if the policy is unchanged, continue to checkout activation.`
+            : `Approve policies for ${environment.toUpperCase()} before activating checkout.`}
+        </p>
+        <p>
           Supported policy for explicit approval: no trials; access through
           verified paid coverage only; no additional failed-payment grace; no
           automated downgrades, plan changes or proration. Cancellation requires
@@ -648,16 +706,48 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         </p>
         <label>
           Reviewed Stripe portal configuration ID
-          <input value={portal} onChange={(e) => setPortal(e.target.value)} />
+          <input
+            value={portalConfiguration}
+            placeholder="bpc_…"
+            aria-describedby="stripe-portal-configuration-help"
+            onChange={(e) => setPortal(e.target.value)}
+          />
         </label>
+        <p id="stripe-portal-configuration-help">
+          Use the configuration ID from Stripe, beginning with bpc_. Setup fills
+          in the saved ID automatically. Enter the approval phrase in the
+          separate confirmation field below.
+        </p>
+        <label>
+          Policy approval confirmation
+          <input
+            value={policyConfirmation}
+            placeholder="APPROVE POLICIES"
+            aria-describedby="stripe-policy-confirmation-help"
+            onChange={(e) => setPolicyConfirmation(e.target.value)}
+          />
+        </label>
+        <p id="stripe-policy-confirmation-help">
+          Type APPROVE POLICIES here to approve the supported terms. Stripe tax
+          configuration and customer-facing billing terms also need your account
+          review.
+        </p>
         <button
           disabled={busy}
           onClick={() =>
-            act('policy', { portalConfiguration: portal, confirmation })
+            act('policy', {
+              portalConfiguration: portalConfiguration.trim(),
+              confirmation: policyConfirmation,
+            })
           }
         >
           Approve policies
         </button>
+        {message && feedbackOperation === 'policy' && (
+          <p role={messageIsError ? 'alert' : 'status'} aria-live="polite">
+            {message}
+          </p>
+        )}
         <p>
           For test checkout on production, explicitly designate a newly created
           disposable business using an existing Test manual grant. Do not
@@ -665,32 +755,52 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           also test against their own stable webhook alias. Production
           activation checks use evidence recorded in that deployment's database.
         </p>
+        {environment === 'live' && (
+          <label>
+            Existing subscriber review and activation decision
+            <textarea
+              value={review}
+              placeholder="Record the existing subscriber review and LIVE activation decision."
+              onChange={(e) => setReview(e.target.value)}
+            />
+          </label>
+        )}
         <p>
-          Type APPROVE POLICIES in Action confirmation to approve these terms.
-          Stripe tax configuration and customer-facing billing terms must also
-          receive your account review.
+          {environment === 'live'
+            ? 'Review authoritative live provider records and preserve existing subscribers and their webhooks. LIVE activation also requires verified TEST checkout, business access and portal return evidence.'
+            : 'TEST activation does not require a live subscriber review or a completed test payment. Complete the test payment, business access and portal return checks after enabling TEST checkout.'}{' '}
+          Activation enables new {environment.toUpperCase()} checkout; no
+          migration or charge is created.
         </p>
         <label>
-          Existing subscriber review and activation decision
-          <textarea
-            value={review}
-            onChange={(e) => setReview(e.target.value)}
+          {environment.toUpperCase()} checkout confirmation
+          <input
+            value={checkoutConfirmation}
+            placeholder={`ENABLE ${environment.toUpperCase()} CHECKOUT`}
+            aria-describedby="stripe-checkout-confirmation-help"
+            onChange={(e) => setCheckoutConfirmation(e.target.value)}
           />
         </label>
-        <p>
-          Confirm authoritative live provider records. Preserve existing
-          subscribers and their webhooks. Approval enables only new Stripe
-          checkout; no migration or charge is created. Type ENABLE{' '}
-          {environment.toUpperCase()} CHECKOUT in Action confirmation.
+        <p id="stripe-checkout-confirmation-help">
+          Type ENABLE {environment.toUpperCase()} CHECKOUT here, then select
+          Confirm checkout activation.
         </p>
         <button
           disabled={busy}
           onClick={() =>
-            act('enable', { confirmation, subscriberReview: review })
+            act('enable', {
+              confirmation: checkoutConfirmation,
+              ...(environment === 'live' ? { subscriberReview: review } : {}),
+            })
           }
         >
           Confirm checkout activation
         </button>
+        {message && feedbackOperation === 'enable' && (
+          <p role={messageIsError ? 'alert' : 'status'} aria-live="polite">
+            {message}
+          </p>
+        )}
       </details>
       <details open>
         <summary>Setup checklist</summary>

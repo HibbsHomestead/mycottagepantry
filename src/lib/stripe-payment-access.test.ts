@@ -676,6 +676,8 @@ it.each([false, true])(
         {
           role: 'owner',
           identity_id: 'fixture-admin',
+          verified_at: new Date().toISOString(),
+          verification_method: 'totp',
           mfa_at: new Date().toISOString(),
         },
         randomUUID(),
@@ -717,11 +719,13 @@ it('keeps administrator reverification required for TEST setup', async () => {
         setupRequest(),
         {
           role: 'owner',
+          verified_at: new Date(Date.now() - 11 * 60000).toISOString(),
+          verification_method: 'totp',
           mfa_at: new Date(Date.now() - 11 * 60000).toISOString(),
         },
         randomUUID(),
       ),
     ),
-  ).rejects.toMatchObject({ code: 'RECENT_AUTH_REQUIRED' })
+  ).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' })
   expect(transport).not.toHaveBeenCalled()
 })
