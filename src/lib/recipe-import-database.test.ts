@@ -5,6 +5,7 @@ import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import { parseRecipeText } from './recipe-import'
 import { costBreakdown, type Item } from './domain'
+import { inventoryReviewReasons } from './inventory-review'
 const runtime = vi.hoisted(() => ({ client: null as any, expired: false }))
 vi.mock('@netlify/database', () => ({
   getDatabase: () => ({ pool: { connect: async () => runtime.client } }),
@@ -104,6 +105,208 @@ beforeAll(async () => {
 }, 30000)
 afterAll(async () => {
   await db.close()
+})
+it('persists separate import confirmation and validated setup across reloads without stock or accounting writes', async () => {
+  const imported = await request(
+    {
+      action: 'import',
+      table: 'ingredients',
+      data: {
+        rows: [
+          {
+            id: 'inventory-review-reload',
+            name: 'Imported rye flour',
+            category: 'Imported — needs review',
+            usedAs: 'ingredient',
+            unit: 'g',
+            storageUnit: 'g',
+            recipeUnit: 'cup',
+            quantity: 0,
+            cost: 0,
+            currentCost: 0,
+            needsCostSetup: true,
+            threshold: 0,
+            conversions: [],
+            reviewed: false,
+          },
+        ],
+        reason: 'Disposable inventory review verification',
+      },
+    },
+    '',
+  )
+  expect(imported.status, imported.error).toBe(200)
+  const id = 'inventory-review-reload'
+  let saved = imported.workspace.ingredients.find((i: Item) => i.id === id)
+  const before = {
+    ledger: imported.workspace.ledger,
+    journals: imported.workspace.journals,
+  }
+  expect(inventoryReviewReasons(saved)).toEqual([
+    'import',
+    'purchase',
+    'cost',
+    'conversion',
+  ])
+  const unconfirmed = await request(
+    {
+      action: 'inventoryMarkReviewed',
+      table: 'ingredients',
+      data: { id, expectedUpdatedAt: saved.updatedAt },
+    },
+    '',
+  )
+  expect(unconfirmed.status).toBe(400)
+  const marked = await request(
+    {
+      action: 'inventoryMarkReviewed',
+      table: 'ingredients',
+      data: {
+        id,
+        expectedUpdatedAt: saved.updatedAt,
+        confirmed: true,
+        quantity: 900,
+        cost: 8,
+        needsCostSetup: false,
+        reviewed: true,
+      },
+    },
+    '',
+  )
+  expect(marked.status, marked.error).toBe(200)
+  expect(
+    (
+      await request(
+        {
+          action: 'inventoryMarkReviewed',
+          table: 'ingredients',
+          data: { id, expectedUpdatedAt: saved.updatedAt, confirmed: true },
+        },
+        '',
+      )
+    ).status,
+  ).toBe(400)
+  let fresh = (await request(undefined, '')).workspace
+  saved = fresh.ingredients.find((i: Item) => i.id === id)
+  expect(saved).toMatchObject({
+    importNeedsReview: false,
+    needsCostSetup: true,
+    quantity: 0,
+    cost: 0,
+    currentCost: 0,
+    reviewed: false,
+  })
+  expect(saved.importReviewedAt).toBeTruthy()
+  expect(inventoryReviewReasons(saved)).toEqual([
+    'purchase',
+    'cost',
+    'conversion',
+  ])
+  const failedFix = await request(
+    {
+      action: 'ingredientUpdate',
+      table: 'ingredients',
+      data: {
+        id,
+        expectedUpdatedAt: saved.updatedAt,
+        threshold: 0,
+        purchaseSetup: { packageUnit: 'bag', price: '', stockUnits: 500 },
+        purchaseSetupConfirmed: true,
+      },
+    },
+    '',
+  )
+  expect(failedFix.status).toBe(400)
+  expect(
+    inventoryReviewReasons(
+      (await request(undefined, '')).workspace.ingredients.find(
+        (i: Item) => i.id === id,
+      ),
+    ),
+  ).toEqual(['purchase', 'cost', 'conversion'])
+  const fixed = await request(
+    {
+      action: 'ingredientUpdate',
+      table: 'ingredients',
+      data: {
+        id,
+        expectedUpdatedAt: saved.updatedAt,
+        threshold: 0,
+        purchaseSetup: { packageUnit: 'bag', price: 4.75, stockUnits: 500 },
+        purchaseSetupConfirmed: true,
+        conversions: [
+          {
+            from: 'cup',
+            to: 'g',
+            amountFrom: 1,
+            amountTo: 120,
+            verified: true,
+          },
+        ],
+      },
+    },
+    '',
+  )
+  expect(fixed.status, fixed.error).toBe(200)
+  fresh = (await request(undefined, '')).workspace
+  saved = fresh.ingredients.find((i: Item) => i.id === id)
+  expect(saved).toMatchObject({
+    quantity: 0,
+    cost: 0,
+    currentCost: 4.75 / 500,
+    needsCostSetup: false,
+    reviewed: false,
+    importNeedsReview: false,
+  })
+  expect(inventoryReviewReasons(saved, fresh)).toEqual([])
+  expect({ ledger: fresh.ledger, journals: fresh.journals }).toEqual(before)
+})
+
+it('retains legacy imported-data review when setup is fixed and the category is changed', async () => {
+  await db.exec(`BEGIN; SET LOCAL app.business_id='${org}';`)
+  await db.query(
+    'INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5)',
+    [
+      'legacy-inventory-review',
+      org,
+      JSON.stringify({
+        id: 'legacy-inventory-review',
+        name: 'Legacy imported sugar',
+        category: 'Imported — needs review',
+        unit: 'g',
+        quantity: 0,
+        cost: 0,
+        needsCostSetup: true,
+      }),
+      0,
+      0,
+    ],
+  )
+  await db.exec('COMMIT')
+  const before = (await request(undefined, '')).workspace.ingredients.find(
+    (i: Item) => i.id === 'legacy-inventory-review',
+  )
+  const fixed = await request(
+    {
+      action: 'ingredientUpdate',
+      table: 'ingredients',
+      data: {
+        id: before.id,
+        expectedUpdatedAt: before.updatedAt,
+        categoryId: 'sugar-sweeteners',
+        threshold: 0,
+        purchaseSetup: { packageUnit: 'bag', price: 3.25, stockUnits: 750 },
+        purchaseSetupConfirmed: true,
+      },
+    },
+    '',
+  )
+  expect(fixed.status, fixed.error).toBe(200)
+  const fresh = (await request(undefined, '')).workspace.ingredients.find(
+    (i: Item) => i.id === before.id,
+  )
+  expect(fresh.category).toBe('Sugar & sweeteners')
+  expect(inventoryReviewReasons(fresh)).toEqual(['import'])
 })
 it('persists packaging category, units and costs through the oven API without assuming case contents', async () => {
   const data = {

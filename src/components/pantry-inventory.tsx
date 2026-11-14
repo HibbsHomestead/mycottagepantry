@@ -18,7 +18,12 @@ import {
   SlidersHorizontal,
   ArrowRight,
 } from 'lucide-react'
-import { convert, money, type Item } from '@/lib/domain'
+import { convert, money, type Item, type Workspace } from '@/lib/domain'
+import {
+  inventoryReviewReasons,
+  type InventoryReviewReason,
+} from '@/lib/inventory-review'
+import { InventoryReviewBadges } from './inventory-review'
 import { isFabric, supportsExpiry } from '@/lib/fabric'
 import {
   DropdownMenu,
@@ -42,6 +47,7 @@ const tabs = [
   'Supplies',
   'Craft materials',
   'Low stock',
+  'Needs review',
   'Expiring soon',
 ]
 export function PantryInventory({
@@ -59,7 +65,9 @@ export function PantryInventory({
   typeFilter,
   actions,
   labelSelection,
+  workspace,
 }: {
+  workspace?: Workspace
   actions?: ReactNode
   labelSelection?: InventoryLabelSelection
   typeFilter?: string
@@ -101,6 +109,19 @@ export function PantryInventory({
   ] as const
   const today = new Date().toISOString().slice(0, 10),
     next = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const reviewReasons = new Map(
+    ingredients.map((item) => [
+      item.id,
+      inventoryReviewReasons(item, workspace),
+    ]),
+  )
+  const needsReview = ingredients.filter(
+    (item) => reviewReasons.get(item.id)!.length > 0,
+  )
+  function openReview(item: Item, reason: InventoryReviewReason) {
+    if (isFabric(item) && reason !== 'import') open('ingredient-edit', item)
+    else open('ingredient-detail', { ...item, reviewSetup: reason })
+  }
   const low = ingredients.filter(
       (i) => i.trackInventory !== false && i.quantity <= i.threshold,
     ),
@@ -146,19 +167,21 @@ export function PantryInventory({
     .filter((i) =>
       filter === 'Low stock'
         ? low.includes(i)
-        : filter === 'Expiring soon'
-          ? expiring.includes(i)
-          : filter === 'Expired'
-            ? supportsExpiry(i) && i.expires && i.expires < today
-            : filter === 'Craft materials'
-              ? i.usedAs === 'material'
-              : filter === 'Ingredients'
-                ? i.usedAs === 'ingredient'
-                : filter === 'Packaging'
-                  ? i.usedAs === 'packaging'
-                  : filter === 'Supplies'
-                    ? i.usedAs === 'supply'
-                    : true,
+        : filter === 'Needs review'
+          ? needsReview.includes(i)
+          : filter === 'Expiring soon'
+            ? expiring.includes(i)
+            : filter === 'Expired'
+              ? supportsExpiry(i) && i.expires && i.expires < today
+              : filter === 'Craft materials'
+                ? i.usedAs === 'material'
+                : filter === 'Ingredients'
+                  ? i.usedAs === 'ingredient'
+                  : filter === 'Packaging'
+                    ? i.usedAs === 'packaging'
+                    : filter === 'Supplies'
+                      ? i.usedAs === 'supply'
+                      : true,
     )
   const rows = sortIngredients(filtered, sort)
   function selectionCheckbox(i: Item) {
@@ -203,7 +226,7 @@ export function PantryInventory({
         <div className="inventory-tabs" aria-label="Pantry views">
           {(typeFilter === undefined
             ? tabs
-            : ['All items', 'Low stock', 'Expiring soon']
+            : ['All items', 'Low stock', 'Needs review', 'Expiring soon']
           ).map((t) => (
             <button
               key={t}
@@ -220,6 +243,7 @@ export function PantryInventory({
               }
             >
               {t}
+              {t === 'Needs review' && ` (${needsReview.length})`}
               {t === 'Low stock' && low.length > 0 && <span>{low.length}</span>}
             </button>
           ))}
@@ -416,6 +440,10 @@ export function PantryInventory({
                   <p className="muted">
                     {[i.brand, i.category].filter(Boolean).join(' · ')}
                   </p>
+                  <InventoryReviewBadges
+                    reasons={reviewReasons.get(i.id)!}
+                    onSetup={(reason) => openReview(i, reason)}
+                  />
                   {warning && <p className="warning-text">{warning}</p>}
                   <dl>
                     <dt>On hand</dt>
@@ -482,22 +510,30 @@ export function PantryInventory({
           })}
           {!rows.length && (
             <div className="calm-empty">
-              <h3>No items match this view.</h3>
-              <p>Try another filter, or add a pantry item.</p>
-              <button
-                className="btn secondary"
-                onClick={() =>
-                  open(
-                    filter === 'Packaging'
-                      ? 'packaging'
-                      : filter === 'Craft materials'
-                        ? 'trade-material'
-                        : 'ingredient',
-                  )
-                }
-              >
-                Add Item
-              </button>
+              <h3>
+                {filter === 'Needs review' && !needsReview.length
+                  ? 'No items need review.'
+                  : 'No items match this view.'}
+              </h3>
+              {filter !== 'Needs review' || needsReview.length > 0 ? (
+                <>
+                  <p>Try another filter, or add a pantry item.</p>
+                  <button
+                    className="btn secondary"
+                    onClick={() =>
+                      open(
+                        filter === 'Packaging'
+                          ? 'packaging'
+                          : filter === 'Craft materials'
+                            ? 'trade-material'
+                            : 'ingredient',
+                      )
+                    }
+                  >
+                    Add Item
+                  </button>
+                </>
+              ) : null}
             </div>
           )}
         </div>
@@ -580,6 +616,10 @@ export function PantryInventory({
                           </button>
                         </div>
                         {warning && <p className="warning-text">{warning}</p>}
+                        <InventoryReviewBadges
+                          reasons={reviewReasons.get(i.id)!}
+                          onSetup={(reason) => openReview(i, reason)}
+                        />
                       </td>
                       <td data-label="Category">{i.category || '—'}</td>
                       <td data-label="On hand">
@@ -672,22 +712,30 @@ export function PantryInventory({
           {!rows.length && (
             <div className="calm-empty">
               <Package size={30} />
-              <h3>No items match this view.</h3>
-              <p>Try another filter, or add a pantry item.</p>
-              <button
-                className="btn secondary"
-                onClick={() =>
-                  open(
-                    filter === 'Packaging'
-                      ? 'packaging'
-                      : filter === 'Craft materials'
-                        ? 'trade-material'
-                        : 'ingredient',
-                  )
-                }
-              >
-                Add Item <ArrowRight size={16} />
-              </button>
+              <h3>
+                {filter === 'Needs review' && !needsReview.length
+                  ? 'No items need review.'
+                  : 'No items match this view.'}
+              </h3>
+              {filter !== 'Needs review' || needsReview.length > 0 ? (
+                <>
+                  <p>Try another filter, or add a pantry item.</p>
+                  <button
+                    className="btn secondary"
+                    onClick={() =>
+                      open(
+                        filter === 'Packaging'
+                          ? 'packaging'
+                          : filter === 'Craft materials'
+                            ? 'trade-material'
+                            : 'ingredient',
+                      )
+                    }
+                  >
+                    Add Item <ArrowRight size={16} />
+                  </button>
+                </>
+              ) : null}
             </div>
           )}
         </section>

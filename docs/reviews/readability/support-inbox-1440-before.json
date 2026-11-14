@@ -1,0 +1,411 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "15px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "admin-badge",
+      "text": "Operational access",
+      "size": "10px",
+      "color": "rgb(118, 91, 156)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "12.8px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "12.8px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "12.8px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "All statusesNewIn progressWaiting on customerResolved",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "NewIn progressWaiting on customerResolved",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "TIME",
+      "inputType": "",
+      "className": "",
+      "text": "11/14/2026, 4:12:00 AM",
+      "size": "11px",
+      "color": "rgb(114, 121, 138)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Where can I update the method for my sourdough recipe?",
+      "size": "13px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "13px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "TEXTAREA",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "file",
+      "className": "",
+      "text": "",
+      "size": "12px",
+      "color": "rgb(37, 42, 56)"
+    }
+  ],
+  "underMinimum": [
+    {
+      "text": "PLATFORM CONTROL",
+      "size": "9px"
+    },
+    {
+      "text": "Overview",
+      "size": "13px"
+    },
+    {
+      "text": "Customers",
+      "size": "13px"
+    },
+    {
+      "text": "Plans & Access",
+      "size": "13px"
+    },
+    {
+      "text": "Billing",
+      "size": "13px"
+    },
+    {
+      "text": "Operations",
+      "size": "13px"
+    },
+    {
+      "text": "Content",
+      "size": "13px"
+    },
+    {
+      "text": "Audit & Settings",
+      "size": "13px"
+    },
+    {
+      "text": "Support inbox",
+      "size": "13px"
+    },
+    {
+      "text": "Restricted administration",
+      "size": "11px"
+    },
+    {
+      "text": "Customer content stays private",
+      "size": "10px"
+    },
+    {
+      "text": "Cottage Pantry Admin",
+      "size": "12px"
+    },
+    {
+      "text": "Operational access",
+      "size": "10px"
+    },
+    {
+      "text": "Sign out",
+      "size": "12px"
+    },
+    {
+      "text": "Platform support · restricted",
+      "size": "10px"
+    },
+    {
+      "text": "Customer conversations and private internal notes.",
+      "size": "13px"
+    },
+    {
+      "text": "Search tickets",
+      "size": "12px"
+    },
+    {
+      "text": "Status",
+      "size": "13px"
+    },
+    {
+      "text": "#",
+      "size": "11px"
+    },
+    {
+      "text": "17",
+      "size": "11px"
+    },
+    {
+      "text": "·",
+      "size": "11px"
+    },
+    {
+      "text": "In progress",
+      "size": "11px"
+    },
+    {
+      "text": "demo-maker@example.test",
+      "size": "11px"
+    },
+    {
+      "text": "11/14/2026, 5:18:00 AM",
+      "size": "11px"
+    },
+    {
+      "text": "Ticket #",
+      "size": "10px"
+    },
+    {
+      "text": "17",
+      "size": "10px"
+    },
+    {
+      "text": "·",
+      "size": "10px"
+    },
+    {
+      "text": "Question",
+      "size": "10px"
+    },
+    {
+      "text": "In progress",
+      "size": "12px"
+    },
+    {
+      "text": "· Created",
+      "size": "13px"
+    },
+    {
+      "text": "11/14/2026, 4:12:00 AM",
+      "size": "13px"
+    },
+    {
+      "text": "Requester:",
+      "size": "12px"
+    },
+    {
+      "text": "demo-maker@example.test",
+      "size": "12px"
+    },
+    {
+      "text": "Oven:",
+      "size": "12px"
+    },
+    {
+      "text": "No active oven",
+      "size": "12px"
+    },
+    {
+      "text": "App:",
+      "size": "12px"
+    },
+    {
+      "text": "· Location:",
+      "size": "12px"
+    },
+    {
+      "text": "Ticket status",
+      "size": "13px"
+    },
+    {
+      "text": "Requester",
+      "size": "13px"
+    },
+    {
+      "text": "11/14/2026, 4:12:00 AM",
+      "size": "11px"
+    },
+    {
+      "text": "Where can I update the method for my sourdough recipe?",
+      "size": "13px"
+    },
+    {
+      "text": "Shares the reported summary, public replies, and any retained AI conversation wi",
+      "size": "13px"
+    },
+    {
+      "text": "The requester has not agreed to AI review. Use the conversation and guides manua",
+      "size": "13px"
+    },
+    {
+      "text": "Private internal note — never visible to the requester",
+      "size": "13px"
+    },
+    {
+      "text": "Reply in Cottage Pantry",
+      "size": "13px"
+    },
+    {
+      "text": "Do not include passwords, API keys or payment-card details.",
+      "size": "12px"
+    },
+    {
+      "text": "Optional screenshot",
+      "size": "13px"
+    },
+    {
+      "text": "PNG, JPEG or WebP · up to 2 MB and 4096 × 4096 pixels. Crop out private business",
+      "size": "12px"
+    },
+    {
+      "text": "Notification delivery · internal",
+      "size": "12px"
+    },
+    {
+      "text": "Read access is audited. Session expires",
+      "size": "9px"
+    },
+    {
+      "text": "1/1/2027, 12:00:00 AM",
+      "size": "9px"
+    },
+    {
+      "text": ".",
+      "size": "9px"
+    },
+    {
+      "text": "Administrator",
+      "size": "9px"
+    },
+    {
+      "text": "demo-admin",
+      "size": "9px"
+    }
+  ],
+  "clippedControls": [],
+  "ancestors": [
+    {
+      "tag": "MAIN",
+      "className": "admin-main admin-main-support",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "admin-workspace",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "cp-admin",
+      "fontSize": "14px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "BODY",
+      "className": "",
+      "fontSize": "15px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "HTML",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    }
+  ],
+  "pageOverflow": 0
+}

@@ -29,7 +29,7 @@
   gap: 4px;
 }
 .add-item-dialog [data-slot='dialog-description'] {
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 1.5;
 }
 .add-item-dialog form {
@@ -58,7 +58,7 @@
 }
 .add-item-tabs button {
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   border-bottom: 2px solid transparent;
 }
 .add-item-tabs button[data-state='active'] {
@@ -100,7 +100,7 @@
 .add-item-methods button {
   padding: 6px 14px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .add-item-methods button[aria-pressed='true'] {
   background: var(--card);
@@ -159,7 +159,7 @@
   gap: 5px;
 }
 .add-item-dialog .field > span {
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 1.4;
 }
 .add-item-dialog input,
@@ -167,7 +167,7 @@
 .add-item-dialog textarea {
   min-width: 0;
   max-width: 100%;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   min-height: 40px;
   padding: 8px 10px;
 }
@@ -225,7 +225,7 @@
 }
 .add-ingredient-lookups .product-import > .text-button {
   margin-block: 6px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .add-item-dialog .add-ingredient-lookups .barcode-match > input {
   flex: 0 0 18px;
@@ -299,7 +299,7 @@
   .add-item-dialog input,
   .add-item-dialog select,
   .add-item-dialog textarea {
-    font-size: 16px;
+    font-size: max(var(--interface-text-min, 0px), 16px);
   }
   .add-item-dialog .product-link-entry {
     grid-template-columns: minmax(0, 1fr);

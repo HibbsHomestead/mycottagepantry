@@ -9,7 +9,7 @@
   padding: 0;
   margin: 0 0 25px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .registration-steps li {
   display: flex;
@@ -68,7 +68,7 @@
 }
 .registration-plan small {
   display: block;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .registration-notice {
   padding: 16px;
@@ -83,7 +83,7 @@
 .registration-form label {
   display: grid;
   gap: 6px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   font-weight: 600;
 }
 .registration-form input,
@@ -131,7 +131,7 @@
   z-index: 1;
 }
 .registration-help {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   color: var(--muted);
 }
 .registration-checklist {
@@ -175,7 +175,7 @@
   }
   .registration-steps {
     gap: 8px 12px;
-    font-size: 11px;
+    font-size: max(var(--interface-text-min, 0px), 11px);
   }
   .registration-paper {
     padding: 22px 18px;
@@ -183,7 +183,7 @@
 }
 .signup-plan-scope {
   display: block;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 1.6;
 }
 .signup-plan-choice {

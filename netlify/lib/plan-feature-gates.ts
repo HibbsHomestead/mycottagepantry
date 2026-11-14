@@ -106,6 +106,9 @@ export function requestFeatures({
     case 'fabricUpdate':
       out.add('fabricInventory')
       break
+    case 'inventoryMarkReviewed':
+      out.add(isMaterial(target) ? 'fabricInventory' : 'inventory')
+      break
     case 'fabricRemnant':
       out.add('materialRemnants')
       break

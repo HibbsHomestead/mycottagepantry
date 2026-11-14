@@ -106,7 +106,7 @@
   [data-slot="dialog-content"] input,
   [data-slot="dialog-content"] select,
   [data-slot="dialog-content"] textarea {
-    font-size: 16px;
+    font-size: max(var(--interface-text-min, 0px), 16px);
   }
   .pantry-v2 button,
   .inventory-tool-actions button,
@@ -220,7 +220,7 @@
   border-radius: 999px;
   background: var(--primary);
   color: var(--primary-ink);
-  font-size: 10px;
+  font-size: max(var(--interface-text-min, 0px), 10px);
   line-height: 1.3;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -238,11 +238,11 @@
 }
 .inventory-label-selection > span {
   margin-right: auto;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   color: var(--primary);
 }
 .inventory-label-selection > .btn {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   padding: 7px 10px;
 }
 .inventory-item-selection {
@@ -292,7 +292,7 @@
     height: auto;
     padding: 10px 6px;
     border-radius: 12px;
-    font-size: 0.8125rem;
+    font-size: max(var(--interface-text-min, 0px), 0.8125rem);
     line-height: 1.25;
     white-space: normal;
     overflow-wrap: anywhere;

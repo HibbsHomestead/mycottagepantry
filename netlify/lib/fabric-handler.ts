@@ -202,6 +202,7 @@ export async function handleFabric(
         item.amountPerPackage = plan.amountPerPackage
         item.packagePrice = plan.packageCost
         item.currentCost = plan.baseUnitCost
+        item.needsCostSetup = false
       }
       await save('ingredients', item)
       await ctx.audit('Fabric details updated', item.name)
@@ -311,6 +312,7 @@ export async function handleFabric(
     item.cost =
       (item.quantity * item.cost + amount) / (item.quantity + quantity)
     item.currentCost = item.cost
+    item.needsCostSetup = false
     // A receipt's total quantity and price do not redefine a saved package/yard reference.
     if (item.amountPerPackage == null) {
       item.purchaseQuantity = number(

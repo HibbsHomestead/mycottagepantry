@@ -2,7 +2,7 @@
   min-width: 0;
   display: grid;
   gap: 0.75rem;
-  font-size: 0.875rem;
+  font-size: max(var(--interface-text-min, 0px), 0.875rem);
 }
 .support-helper :is(h3, p) {
   margin: 0;
@@ -45,7 +45,7 @@
   display: flex;
   gap: 0.5rem;
   align-items: flex-start;
-  font-size: 0.8rem;
+  font-size: max(var(--interface-text-min, 0px), 0.8rem);
   font-weight: 400;
 }
 .ai-check input {
@@ -53,7 +53,7 @@
   flex: 0 0 auto;
 }
 .support-helper details {
-  font-size: 0.8rem;
+  font-size: max(var(--interface-text-min, 0px), 0.8rem);
 }
 .support-helper summary {
   cursor: pointer;
@@ -70,7 +70,7 @@
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 0.75rem;
+  font-size: max(var(--interface-text-min, 0px), 0.75rem);
 }
 .ai-messages {
   list-style: none;
@@ -91,7 +91,7 @@
   margin-left: 1rem;
 }
 .ai-messages strong {
-  font-size: 0.75rem;
+  font-size: max(var(--interface-text-min, 0px), 0.75rem);
 }
 .ai-messages p {
   margin: 0.3rem 0 0;

@@ -1,4 +1,5 @@
 import { ProductLinkImport } from './product-link-import'
+import { InventoryReviewNotice } from './inventory-review'
 import { InventoryProductFields } from './inventory-product-fields'
 import { ovenToday } from '@/lib/oven-dates'
 import { useEffect, useRef, useState } from 'react'
@@ -37,7 +38,9 @@ export function FabricDialog({
   onWorkspace,
   close,
   onDirty,
+  onEdit,
 }: {
+  onEdit?: () => void
   kind: string
   item: Item
   workspace: Workspace
@@ -160,6 +163,36 @@ export function FabricDialog({
         </DialogHeader>
         {read ? (
           <>
+            <InventoryReviewNotice
+              item={item}
+              workspace={workspace}
+              canEdit={manager}
+              busy={busy}
+              onSetup={() => onEdit?.()}
+              onMarkReviewed={async () => {
+                if (lock.current) return
+                lock.current = true
+                setBusy(true)
+                setError('')
+                try {
+                  await mutate('inventoryMarkReviewed', 'ingredients', {
+                    id: item.id,
+                    expectedUpdatedAt: item.updatedAt,
+                    confirmed: true,
+                  })
+                } catch (e) {
+                  setError(
+                    e instanceof Error
+                      ? e.message
+                      : 'Review could not be saved.',
+                  )
+                } finally {
+                  lock.current = false
+                  setBusy(false)
+                }
+              }}
+            />
+            {error && <p role="alert">{error}</p>}
             <PantryPhoto
               className="pantry-edit-photo"
               item={item}
@@ -223,6 +256,11 @@ export function FabricDialog({
               </p>
             )}
             <p>{item.notes}</p>
+            {manager && onEdit && (
+              <button type="button" className="btn secondary" onClick={onEdit}>
+                Edit Material
+              </button>
+            )}
             <h3>Stock movement history</h3>
             <div className="table-wrap">
               <table>
