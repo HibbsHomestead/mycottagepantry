@@ -1,10 +1,13 @@
 // @vitest-environment node
 import { randomBytes } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
+import { PGlite } from '@electric-sql/pglite'
+import type { AdminMetadata } from './platform-admin-types'
 import {
   sealStripe,
   openStripe,
   stripeSettings,
+  stripeAdminView,
 } from '../../netlify/lib/stripe-provider'
 import { stripeEncryptionStatus } from '../../netlify/lib/runtime-environment'
 const bootstrap = vi.hoisted(() => vi.fn())
@@ -45,6 +48,109 @@ it.each([
     expect(transport).not.toHaveBeenCalled()
   },
 )
+
+async function connectionDatabase() {
+  const db = new PGlite()
+  await db.exec(`
+    CREATE TABLE stripe_provider_settings (
+      environment text PRIMARY KEY, ciphertext text, fingerprint text,
+      account_id text, account_name text, validated_at timestamptz,
+      webhook_verified_at timestamptz, checkout_enabled boolean DEFAULT false,
+      configuration jsonb DEFAULT '{}', updated_at timestamptz DEFAULT NOW()
+    );
+    CREATE TABLE stripe_events (
+      id text, environment text, kind text, status text, attempts int,
+      error_code text, received_at timestamptz, processed_at timestamptz
+    );
+    CREATE TABLE stripe_checkouts (
+      environment text, subscription_id text, access_verified_at timestamptz,
+      portal_launched_at timestamptz, reconciled_at timestamptz
+    );
+  `)
+  return {
+    db,
+    client: {
+      query: (sql: string, params?: unknown[]) =>
+        db.query<AdminMetadata>(sql, params),
+      release: () => {},
+    },
+  }
+}
+
+it.each(['provider', 'database'])(
+  'commits verified encrypted credentials when %s setup fails, with checkout still disabled',
+  async (failure) => {
+    vi.stubGlobal('Netlify', undefined)
+    vi.stubEnv('CONTEXT', 'production')
+    vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', randomBytes(32).toString('hex'))
+    const key = 'sk_live_' + randomBytes(24).toString('hex')
+    vi.stubEnv('STRIPE_LIVE_SECRET_KEY', key)
+    vi.stubEnv('STRIPE_LIVE_WEBHOOK_SECRET', '')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        Response.json(
+          url.endsWith('/account') ? { id: 'acct_fixture' } : { data: [] },
+        ),
+      ),
+    )
+    bootstrap.mockImplementationOnce(async (c) => {
+      if (failure === 'database') await c.query('SELECT missing_setup_column')
+      throw new Error('Private provider failure')
+    })
+    const { db, client } = await connectionDatabase()
+    try {
+      await client.query('BEGIN')
+      await stripeSettings(client, 'live')
+      await client.query('COMMIT')
+      const row = (await client.query('SELECT * FROM stripe_provider_settings'))
+        .rows[0]
+      expect(row.account_id).toBe('acct_fixture')
+      expect(row.validated_at).toBeTruthy()
+      expect(openStripe(row.ciphertext, 'live').key).toBe(key)
+      expect(row.configuration.setupError).toBe('BILLING_SETUP_INCOMPLETE')
+      expect(row.checkout_enabled).toBe(false)
+      expect(row.webhook_verified_at).toBeNull()
+      expect(JSON.stringify(row)).not.toContain(key)
+      expect(JSON.stringify(row)).not.toContain('Private provider failure')
+    } finally {
+      await db.close()
+    }
+  },
+)
+
+it('returns the saved LIVE connection when importing TEST credentials fails, without exposing credentials', async () => {
+  vi.stubGlobal('Netlify', undefined)
+  vi.stubEnv('STRIPE_BILLING_ENCRYPTION_KEY', randomBytes(32).toString('hex'))
+  const key = 'sk_test_' + randomBytes(24).toString('hex')
+  vi.stubEnv('STRIPE_TEST_SECRET_KEY', key)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(null, { status: 401 })),
+  )
+  const { db, client } = await connectionDatabase()
+  try {
+    await client.query(`INSERT INTO stripe_provider_settings
+      (environment, ciphertext, fingerprint, account_id, validated_at)
+      VALUES ('live', 'encrypted_fixture', 'sha256:fixture', 'acct_fixture', NOW())`)
+    await client.query('BEGIN')
+    const result = await stripeAdminView(client)
+    await client.query('COMMIT')
+    expect(result.rows).toHaveLength(1)
+    expect(result.rows[0].account_id).toBe('acct_fixture')
+    expect(result.connectionErrors).toEqual({
+      test: 'STRIPE_CONNECTION_UNAVAILABLE',
+    })
+    expect(JSON.stringify(result)).not.toContain(key)
+    expect(JSON.stringify(result)).not.toContain('encrypted_fixture')
+    expect(
+      (await client.query('SELECT environment FROM stripe_provider_settings'))
+        .rows,
+    ).toEqual([{ environment: 'live' }])
+  } finally {
+    await db.close()
+  }
+})
 it.each(['', 'production'])(
   'imports matching hosting credentials and bootstraps only trusted deployments (%s)',
   async (context) => {

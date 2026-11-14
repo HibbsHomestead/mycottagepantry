@@ -238,8 +238,20 @@ export async function stripeSettings(
   // environment. The row lock serializes concurrent requests; clients cannot
   // choose credentials, destinations, prices, or activation through this path.
   if (stripeEndpoint(e)) {
-    const { setupStripeBilling } = await import('./stripe-setup')
-    await setupStripeBilling(c, row, e)
+    // Resource setup must not roll back a successfully verified connection.
+    await c.query('SAVEPOINT stripe_hosting_setup')
+    try {
+      const { setupStripeBilling } = await import('./stripe-setup')
+      await setupStripeBilling(c, row, e)
+      await c.query('RELEASE SAVEPOINT stripe_hosting_setup')
+    } catch {
+      await c.query('ROLLBACK TO SAVEPOINT stripe_hosting_setup')
+      await c.query('RELEASE SAVEPOINT stripe_hosting_setup')
+      await c.query(
+        `UPDATE stripe_provider_settings SET configuration=configuration || '{"setupError":"BILLING_SETUP_INCOMPLETE"}'::jsonb WHERE environment=$1`,
+        [e],
+      )
+    }
     row = await read()
   }
   return row
@@ -314,8 +326,18 @@ export async function validatedPrice(
 }
 export async function stripeAdminView(c: AdminClient) {
   const encryptionStatus = stripeEncryptionStatus()
-  await stripeSettings(c, 'test')
-  await stripeSettings(c, 'live')
+  const connectionErrors: Partial<Record<StripeEnvironment, string>> = {}
+  // A rejected TEST credential must not hide the LIVE account (or vice versa).
+  for (const environment of ['test', 'live'] as const) {
+    await c.query('SAVEPOINT stripe_connection_status')
+    try {
+      await stripeSettings(c, environment)
+    } catch {
+      await c.query('ROLLBACK TO SAVEPOINT stripe_connection_status')
+      connectionErrors[environment] = 'STRIPE_CONNECTION_UNAVAILABLE'
+    }
+    await c.query('RELEASE SAVEPOINT stripe_connection_status')
+  }
   const rows = (
     await c.query(
       'SELECT environment,fingerprint,account_id,account_name,validated_at,webhook_verified_at,checkout_enabled,configuration,updated_at FROM stripe_provider_settings ORDER BY environment',
@@ -333,6 +355,7 @@ export async function stripeAdminView(c: AdminClient) {
   ).rows
   return {
     rows,
+    connectionErrors,
     events,
     evidence,
     encryptionReady: encryptionStatus.ready,

@@ -153,6 +153,7 @@ export async function setupStripeBilling(
     approvedAt: new Date().toISOString(),
   }
   delete configuration.apiError
+  delete configuration.setupError
   await c.query(
     'UPDATE stripe_provider_settings SET ciphertext=$2,configuration=$3,updated_at=NOW() WHERE environment=$1',
     [e, sealStripe(credentials, e), configuration],
