@@ -16,6 +16,8 @@ import {
   stripeSettings,
   stripeEndpoint,
   validatedPrice,
+  stripeTierPurchasable,
+  stripePortalMatchesPolicy,
   type StripeEnvironment,
 } from './stripe-provider'
 
@@ -104,10 +106,7 @@ export async function stripeOwnerView(
       plans: Object.entries(r.configuration.mappings || {})
         .filter(
           ([id, m]: [string, any]) =>
-            m.purchase &&
-            launchPricing.plans.some(
-              (p) => p.id === id && p.assignable && p.users !== null,
-            ),
+            m.purchase && stripeTierPurchasable(id, r.environment),
         )
         .map(([id]) => id),
     })),
@@ -157,8 +156,8 @@ export async function stripeCheckout(
     !row.webhook_verified_at ||
     !row.configuration?.policy ||
     !mapping?.purchase ||
-    !tier?.assignable ||
-    tier.users === null ||
+    !tier ||
+    !stripeTierPurchasable(input.plan, e) ||
     (e === 'test' && !testAllowed) ||
     !stripeEndpoint(e)
   )
@@ -506,12 +505,7 @@ export async function stripePortal(
     key,
     '/billing_portal/configurations/' + id,
   )
-  if (
-    !configuration.active ||
-    configuration.livemode !== (attempt.environment === 'live') ||
-    configuration.features?.subscription_update?.enabled ||
-    configuration.features?.subscription_cancel?.enabled
-  )
+  if (!stripePortalMatchesPolicy(configuration, attempt.environment))
     throw new RegistrationError(
       409,
       'PORTAL_POLICY_CHANGED',

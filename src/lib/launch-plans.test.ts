@@ -27,7 +27,7 @@ it('keeps approved paid prices, proposed Free, total seats and closed commercial
     ['Mixing Bowl', 10, 1],
     ['Baker’s Bench', 20, 1],
     ['Cottage Kitchen', 30, 2],
-    ['Cottage Mercantile', 40, null],
+    ['Cottage Mercantile', 40, 6],
   ])
   expect(
     launchPricing.plans.map((p) => [p.id, p.assignable, p.publication]),

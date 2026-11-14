@@ -17,6 +17,29 @@ import {
 import { limitedBody } from './support-core'
 
 export type StripeEnvironment = 'test' | 'live'
+/** All paid tiers are owner-approved for testing; live rollout remains separate. */
+export function stripeTierPurchasable(plan: unknown, e: StripeEnvironment) {
+  const tier = launchPricing.plans.find((p) => p.id === plan)
+  return (
+    !!tier &&
+    planBillable(plan) &&
+    tier.users !== null &&
+    (e === 'test' || tier.assignable)
+  )
+}
+export function stripePortalMatchesPolicy(
+  configuration: AdminMetadata,
+  e: StripeEnvironment,
+) {
+  return (
+    configuration.active === true &&
+    configuration.livemode === (e === 'live') &&
+    configuration.features?.payment_method_update?.enabled === true &&
+    configuration.features?.invoice_history?.enabled === true &&
+    configuration.features?.subscription_update?.enabled === false &&
+    configuration.features?.subscription_cancel?.enabled === false
+  )
+}
 export const stripeEventsRequired = [
   'checkout.session.completed',
   'checkout.session.async_payment_succeeded',
@@ -398,7 +421,7 @@ export async function stripeAdminAction(
     if (
       !plan ||
       plan.monthlyUsd === 0 ||
-      (input.purchase && (plan.users === null || !plan.assignable))
+      (input.purchase && !stripeTierPurchasable(input.plan, e))
     )
       throw new AdminError(
         409,
@@ -438,16 +461,11 @@ export async function stripeAdminAction(
       key,
       '/billing_portal/configurations/' + input.portalConfiguration,
     )
-    if (
-      !portal.active ||
-      portal.livemode !== (e === 'live') ||
-      portal.features?.subscription_update?.enabled ||
-      portal.features?.subscription_cancel?.enabled
-    )
+    if (!stripePortalMatchesPolicy(portal, e))
       throw new AdminError(
         409,
         'PORTAL_POLICY',
-        'Use an active portal configuration with plan changes and cancellation disabled until separately approved.',
+        'Use an active portal with payment-method updates and invoices enabled, and plan changes and cancellation disabled.',
       )
     config.policy = {
       trial: 'none',

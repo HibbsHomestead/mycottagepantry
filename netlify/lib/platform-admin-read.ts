@@ -293,7 +293,7 @@ export async function readAdministration(
       pricing: launchPricing,
       features: launchFeatures,
       assignments,
-      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes the intended full program; its user allowance is undecided. Internal assignments are managed per business, independently of public availability. Mercantile assignment remains blocked until its team allowance is configured.',
+      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes five users plus the owner (six total), with all paid tiers approved for Stripe test checkout. Internal assignments remain separate from test purchase approval; Mercantile live purchase and internal assignment remain blocked pending launch review.',
     }
   }
   if (input.section === 'billing') {

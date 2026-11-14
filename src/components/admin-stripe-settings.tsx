@@ -283,6 +283,12 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           exact tier ID. USD monthly licensed pricing must match the approved
           amount. Existing subscribers retain their linked price.
         </p>
+        <p>
+          All four paid tiers are approved for test checkout. Cottage Mercantile
+          includes five users plus the owner (six total); its live checkout
+          remains disabled pending launch review. Internal assignments are
+          separate from test purchase approval.
+        </p>
         <div className="stripe-tier-list">
           {(data?.tiers || []).map((tier: AdminMetadata) => (
             <p key={tier.id}>
