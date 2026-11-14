@@ -198,6 +198,16 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
               : 'ROOT_INVALID_FORMAT'}
         </p>
       )}
+      {!data?.encryptionReady &&
+        data?.encryptionStatus?.status === 'invalid_format' && (
+          <p>
+            The hosting encryption key is present but must contain exactly 64
+            hexadecimal characters. It is separate from your Stripe API key and
+            webhook signing secret. Correct it in this deployment’s hosting
+            settings, redeploy, then refresh storage status before entering
+            Stripe credentials.
+          </p>
+        )}
       <button disabled={busy} onClick={refreshStorage}>
         Refresh storage status
       </button>
@@ -276,6 +286,13 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
       </p>
       <details>
         <summary>Webhook setup</summary>
+        {data?.apiVersion && (
+          <p>
+            In your Stripe Sandbox, add a webhook destination for events from
+            your account using API version <code>{data.apiVersion}</code>. Use
+            snapshot events and select every event listed below.
+          </p>
+        )}
         <label>
           Stable webhook endpoint
           <input readOnly value={data?.endpoints?.[environment] || ''} />

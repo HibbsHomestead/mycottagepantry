@@ -22,6 +22,7 @@ import {
 } from './runtime-environment'
 
 export type StripeEnvironment = 'test' | 'live'
+export const stripeApiVersion = '2025-04-30.basil'
 /** All paid tiers are owner-approved for testing; live rollout remains separate. */
 export function stripeTierPurchasable(plan: unknown, e: StripeEnvironment) {
   const tier = launchPricing.plans.find((p) => p.id === plan)
@@ -135,7 +136,7 @@ export async function stripeRequest(
       signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: 'Bearer ' + key,
-        'Stripe-Version': '2025-04-30.basil',
+        'Stripe-Version': stripeApiVersion,
         ...(body
           ? { 'Content-Type': 'application/x-www-form-urlencoded' }
           : {}),
@@ -261,6 +262,7 @@ export async function stripeAdminView(c: AdminClient) {
     evidence,
     encryptionReady: encryptionStatus.ready,
     encryptionStatus,
+    apiVersion: stripeApiVersion,
     eventsRequired: stripeEventsRequired,
     endpoints: { test: stripeEndpoint('test'), live: stripeEndpoint('live') },
     tiers: launchPricing.plans,
