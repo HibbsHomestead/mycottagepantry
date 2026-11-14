@@ -60,7 +60,7 @@
 }
 .package-photo-grid input {
   max-width: 100%;
-  font-size: 0.8rem;
+  font-size: max(var(--interface-text-min, 0px), 0.8rem);
 }
 .package-photo-grid img {
   display: block;

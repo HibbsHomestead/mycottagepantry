@@ -192,13 +192,13 @@
   border-radius: 8px;
 }
 .product-import h4 {
-  font-size: 16px;
+  font-size: max(var(--interface-text-min, 0px), 16px);
   line-height: 1.5;
   margin: 0 0 4px;
   overflow-wrap: break-word;
 }
 .product-import p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.6;
   margin: 4px 0;
 }
@@ -221,7 +221,7 @@
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.6;
 }
 .product-import-value {
@@ -242,7 +242,7 @@
   align-items: baseline;
   gap: 6px;
   margin-top: 12px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .product-import-selection > span:first-child {
   margin-right: auto;
@@ -273,7 +273,7 @@
 .product-import .product-import-edit > summary {
   display: inline;
   padding: 0;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .product-import-edit textarea {
@@ -286,7 +286,7 @@
   gap: 6px 14px;
   align-items: baseline;
   margin-top: 16px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .product-import-footer {
   position: static;
@@ -310,7 +310,7 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 1.5;
   color: inherit;
 }
@@ -330,7 +330,7 @@
   display: grid;
   gap: 6px;
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .product-import input:not([type='checkbox']),
 .product-import select {
@@ -350,7 +350,7 @@
 }
 .product-import summary {
   cursor: pointer;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   line-height: 1.6;
 }
 .product-import .button-row {
@@ -373,7 +373,7 @@
 }
 .ingredient-save-error {
   flex: 1 1 100%;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   line-height: 1.5;
   margin: 0;
   color: var(--danger);

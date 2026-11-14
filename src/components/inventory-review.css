@@ -11,7 +11,7 @@
   padding: 3px 7px;
   background: var(--surface-soft);
   color: var(--foreground);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   line-height: 1.4;
   text-align: left;
 }
@@ -36,7 +36,7 @@ button.inventory-review-badge:focus-visible {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .inventory-import-review > span {
   flex: 1 1 240px;
@@ -47,5 +47,5 @@ button.inventory-review-badge:focus-visible {
 }
 .inventory-import-review .btn {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }

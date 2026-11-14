@@ -1,0 +1,194 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "dpr": 1,
+  "visualScale": 1,
+  "samples": [
+    {
+      "tag": "BODY",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(36, 39, 52)"
+    },
+    {
+      "tag": "SPAN",
+      "inputType": "",
+      "className": "admin-badge",
+      "text": "Operational access",
+      "size": "14px",
+      "color": "rgb(118, 91, 156)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "number",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "text",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "All statusesNewIn progressWaiting on customerResolved",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "SELECT",
+      "inputType": "",
+      "className": "",
+      "text": "NewIn progressWaiting on customerResolved",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "TIME",
+      "inputType": "",
+      "className": "",
+      "text": "11/14/2026, 4:12:00 AM",
+      "size": "14px",
+      "color": "rgb(96, 104, 121)"
+    },
+    {
+      "tag": "P",
+      "inputType": "",
+      "className": "",
+      "text": "Where can I update the method for my sourdough recipe?",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "checkbox",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "TEXTAREA",
+      "inputType": "",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    },
+    {
+      "tag": "INPUT",
+      "inputType": "file",
+      "className": "",
+      "text": "",
+      "size": "16px",
+      "color": "rgb(37, 42, 56)"
+    }
+  ],
+  "underMinimum": [],
+  "clippedControls": [],
+  "ancestors": [
+    {
+      "tag": "MAIN",
+      "className": "admin-main admin-main-support",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "admin-workspace",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "DIV",
+      "className": "cp-admin",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "BODY",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    },
+    {
+      "tag": "HTML",
+      "className": "",
+      "fontSize": "16px",
+      "zoom": "1",
+      "transform": "none"
+    }
+  ],
+  "pageOverflow": 0
+}

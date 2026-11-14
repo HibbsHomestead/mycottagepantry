@@ -15,6 +15,7 @@ import '../styles.css'
 import '../components/mobile-usability.css'
 import '../workspace.css'
 import '../surface-layout.css'
+import '../interface-typography.css'
 
 const siteName = 'Cottage Pantry | Your kitchen, in good order'
 const siteDescription =

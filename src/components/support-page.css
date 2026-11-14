@@ -49,14 +49,14 @@
   overflow-wrap: anywhere;
 }
 .support-panel p {
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .support-field {
   display: flex;
   flex-direction: column;
   gap: 7px;
   margin: 17px 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   font-weight: 600;
 }
 .support-field input,
@@ -93,7 +93,7 @@
   color: var(--primary);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .support-shell button:disabled {
   opacity: 0.6;
@@ -112,12 +112,12 @@
 .support-search label {
   display: grid;
   gap: 6px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   flex: 1;
   min-width: 0;
 }
 .support-search input {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .support-list ul {
   list-style: none;
@@ -144,11 +144,11 @@
 }
 .support-list li small,
 .support-list li span {
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   color: var(--muted);
 }
 .support-list li strong {
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
 }
 .support-alert,
 .support-warning {
@@ -159,7 +159,7 @@
   color: var(--warning);
 }
 .support-fine {
-  font-size: 12px !important;
+  font-size: max(var(--interface-text-min, 0px), 12px) !important;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -168,7 +168,7 @@
   color: var(--primary);
   padding: 5px 9px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .support-messages {
   list-style: none;
@@ -201,10 +201,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .support-message time {
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   color: var(--muted);
 }
 .support-message p {
@@ -214,7 +214,7 @@
 .support-message a {
   display: flex;
   gap: 7px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--primary);
   margin-top: 8px;
 }
@@ -222,7 +222,7 @@
   display: flex;
   align-items: start;
   gap: 9px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   margin: 20px 0;
 }
 .support-note-choice input {
@@ -242,14 +242,14 @@
   margin-top: 30px;
   padding: 16px;
   background: var(--surface-soft);
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .support-delivery summary {
   cursor: pointer;
   font-weight: 600;
 }
 .support-delivery p {
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .support-settings {
   max-width: 800px;
@@ -310,11 +310,11 @@
 }
 .admin-main-support .support-heading p {
   margin: 0;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .admin-main-support .support-heading .public-eyebrow {
   color: var(--admin-purple);
-  font-size: 9px;
+  font-size: max(var(--interface-text-min, 0px), 9px);
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -327,11 +327,11 @@
   padding: 18px;
 }
 .admin-main-support .support-panel h2 {
-  font-size: 17px;
+  font-size: max(var(--interface-heading-min, 0px), 17px);
   margin-bottom: 12px;
 }
 .admin-main-support .support-panel p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .admin-main-support .support-field {
   gap: 6px;
@@ -339,7 +339,7 @@
 }
 .admin-main-support .support-field :is(select, textarea) {
   padding: 9px 10px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
 }
 .admin-main-support .support-actions {
   gap: 8px;

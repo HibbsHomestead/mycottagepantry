@@ -20,7 +20,7 @@
   display: grid;
   justify-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .photo-box.pantry-photo .photo-box-empty svg {
   width: 24px;
@@ -49,7 +49,7 @@
 .photo-box-remove {
   bottom: 6px;
   right: 6px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   line-height: 1.2;
 }
 .photo-box-picker:focus-visible {
@@ -75,7 +75,7 @@
   padding: 5px;
   background: var(--card, white);
   text-align: center;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   pointer-events: none;
 }
 .photo-box-menu {
@@ -94,7 +94,7 @@
 .photo-box-menu [data-radix-collection-item] {
   padding: 9px 10px;
   border-radius: 5px;
-  font-size: 14px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
   overflow-wrap: anywhere;
   cursor: pointer;
 }
@@ -105,7 +105,7 @@
 }
 .photo-box-menu-label {
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: max(var(--interface-text-min, 0px), 12px);
   color: var(--muted);
 }
 .item-photo-control {
@@ -119,7 +119,7 @@
   height: 70px;
 }
 .artwork-photo-preview .photo-box-remove {
-  font-size: 10px;
+  font-size: max(var(--interface-text-min, 0px), 10px);
   min-height: 24px;
   padding: 3px;
   bottom: 2px;
@@ -136,7 +136,7 @@
 }
 .package-photo-preview .photo-box-remove {
   max-width: calc(100% - 8px);
-  font-size: 11px;
+  font-size: max(var(--interface-text-min, 0px), 11px);
   right: 4px;
   bottom: 4px;
 }

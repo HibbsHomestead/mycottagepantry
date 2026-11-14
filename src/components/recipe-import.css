@@ -81,7 +81,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   background: var(--surface-soft);
   padding: 16px;
   border-radius: 10px;
@@ -157,7 +157,7 @@
   padding-top: 10px;
 }
 .recipe-ingredient-cost p {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
   overflow-wrap: anywhere;
 }
 .recipe-ingredient-details summary,
@@ -216,7 +216,7 @@
   display: block;
 }
 .recipe-approval-status {
-  font-size: 13px;
+  font-size: max(var(--interface-text-min, 0px), 13px);
 }
 .recipe-approval-status ul {
   max-height: 110px;

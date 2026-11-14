@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cottage Pantry typography comparison</title>
+<style>
+  * { box-sizing: border-box } body { margin:0;background:#f5f6fa;color:#242734;font:16px/1.5 system-ui,sans-serif }
+  main { max-width:1700px;margin:auto;padding:24px } h1 { font-size:28px;margin:0 0 8px } p { margin:0 0 16px;color:#606879 }
+  .toolbar { display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:20px 0 12px } select,button {font:inherit;padding:8px 12px;border:1px solid #d6cede;border-radius:6px;background:white;color:#452c62}
+  button[aria-pressed=true] {background:#5c3a83;color:white} .frame {overflow:auto;border:1px solid #d6cede;background:white;border-radius:8px} img {display:block;max-width:100%;height:auto} a {color:#5c3a83}
+</style>
+<main>
+<h1>Cottage Pantry typography comparison</h1>
+<p>Each pair uses the same viewport and 100% browser zoom. Inventory reproduces the supplied screenshot’s 12 visible rows in isolated test data; production records, remaining rows, totals, and photos were not copied.</p>
+<div class="toolbar">
+<label for="screen">Screen</label>
+<select id="screen">
+<option value="inventory-1657">Inventory · 1657 × 1262</option>
+<option value="inventory-table-1657">Inventory table · full table crop</option>
+<option value="ingredient-popup-1657">Ingredient popup · 1657 × 1262</option>
+<option value="admin-billing-1440">Admin Billing · 1440 × 900</option>
+<option value="admin-billing-controls-1440">Billing controls · 1440 × 900</option>
+<option value="support-inbox-1440">Support inbox · 1440 × 900</option>
+<option value="product-popup-1440">Product popup · 1440 × 900</option>
+<option value="label-studio-1440">Label Studio controls · 1440 × 900</option>
+<option value="inventory-390">Phone Inventory · 390 × 900</option>
+<option value="ingredient-popup-390">Phone popup · 390 × 900</option>
+<option value="admin-billing-390">Phone Billing · 390 × 900</option>
+</select>
+<button id="before" aria-pressed="true">Before</button><button id="after" aria-pressed="false">After</button>
+<a id="original" href="inventory-1657-before.png" target="_blank">Open at original size</a>
+</div>
+<div class="frame"><img id="capture" src="inventory-1657-before.png" alt="Inventory before typography changes"></div>
+<p>Computed font sizes, contrast, verification, and limitations: <a href="verification.md">verification report</a>.</p>
+</main>
+<script>
+let phase='before';const screen=document.querySelector('#screen'),capture=document.querySelector('#capture');
+function update(){const file=screen.value+'-'+phase+'.png';capture.src=file;capture.alt=screen.selectedOptions[0].text+' — '+phase;document.querySelector('#original').href=file;for(const p of ['before','after'])document.querySelector('#'+p).setAttribute('aria-pressed',String(p===phase));}
+screen.addEventListener('change',update);for(const p of ['before','after'])document.querySelector('#'+p).addEventListener('click',()=>{phase=p;update()});
+</script>
+</html>
