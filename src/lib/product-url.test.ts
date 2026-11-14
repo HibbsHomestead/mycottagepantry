@@ -15,10 +15,17 @@ it('removes search refinements and store-result context from the reported ASIN',
     ),
   ).toBe('https://www.amazon.com/dp/B09V45JBKH')
 })
+it('removes the reported sponsored-search parameters while keeping the selected variant', () => {
+  expect(
+    normalizeProductUrl(
+      'https://www.amazon.com/dp/B0DRJXJ8HT?c=category-context&cv_ct_cx=search-context&s=sort-context&sbo=placement-context&ts_id=category&aref=ad-referral&sp_csd=ad-context&th=1',
+    ),
+  ).toBe('https://www.amazon.com/dp/B0DRJXJ8HT?th=1')
+})
 it('keeps offer, seller, quantity and variant choices while discarding tracking', () => {
   const url = new URL(
     normalizeProductUrl(
-      'http://amazon.com/gp/product/b0g4wlfmwv/ref=abc?th=1&psc=1&smid=SELLER&m=MERCHANT&offerListingID=selected%2Boffer&condition=used&quantity=2&unknownChoice=keep&tag=tracking&pd_rd_w=tracking&utm_source=search&refinements=search-filter&srs=store-results',
+      'http://amazon.com/gp/product/b0g4wlfmwv/ref=abc?th=1&psc=1&smid=SELLER&m=MERCHANT&offerListingID=selected%2Boffer&condition=used&quantity=2&unknownChoice=keep&tag=tracking&pd_rd_w=tracking&utm_source=search&refinements=search-filter&srs=store-results&C=category&CV_CT_CX=search&S=sort&SBO=placement&TS_ID=category&AREF=ad-referral&SP_CSD=ad-context',
     ),
   )
   expect(url.origin + url.pathname).toBe('https://www.amazon.com/dp/B0G4WLFMWV')

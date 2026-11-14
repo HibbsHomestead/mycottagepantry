@@ -89,38 +89,68 @@ it('normalizes the exact ASIN, backs off on 503 and extracts only the successful
     Array(2).fill('https://www.amazon.com/dp/B0G4WLFMWV'),
   )
 })
-it('cleans the reported search URL on every retry without parsing or following 503 error documents', async () => {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-  remote.replies = Array.from({ length: 3 }, () => ({
-    status: 503,
-    body: '<script>window.location.replace("https://www.amazon.com/error/500")</script><input id="ASIN" value="B09V45JBKH"><span id="productTitle">Error document metadata</span>',
-  }))
-  const check = expect(
-    fetchProductDetails(
+it.each([
+  {
+    requested:
       'https://www.amazon.com/dp/B09V45JBKH?refinements=example-filter&srs=example-search',
-    ),
-  ).rejects.toMatchObject({
-    diagnostics: {
-      stage: 'fetch',
-      normalizedUrl: 'https://www.amazon.com/dp/B09V45JBKH',
-      hops: [1, 2, 3].map((attempt) =>
-        expect.objectContaining({
-          attempt,
-          status: 503,
-          browserRedirect: {
-            url: 'https://www.amazon.com/error/500',
-            kind: 'error',
-          },
-        }),
-      ),
+    normalized: 'https://www.amazon.com/dp/B09V45JBKH',
+    asin: 'B09V45JBKH',
+  },
+  {
+    requested:
+      'https://www.amazon.com/dp/B0DRJXJ8HT?c=category-context&cv_ct_cx=search-context&s=sort-context&sbo=placement-context&ts_id=category&aref=ad-referral&sp_csd=ad-context&th=1',
+    normalized: 'https://www.amazon.com/dp/B0DRJXJ8HT?th=1',
+    asin: 'B0DRJXJ8HT',
+  },
+])(
+  'cleans $asin on every retry without parsing or following 503 error documents',
+  async ({ requested, normalized, asin }) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    remote.replies = Array.from({ length: 3 }, () => ({
+      status: 503,
+      body: `<script>window.location.replace("https://www.amazon.com/error/500")</script><input id="ASIN" value="${asin}"><span id="productTitle">Error document metadata</span>`,
+    }))
+    const check = expect(fetchProductDetails(requested)).rejects.toMatchObject({
+      diagnostics: {
+        stage: 'fetch',
+        normalizedUrl: normalized,
+        hops: [1, 2, 3].map((attempt) =>
+          expect.objectContaining({
+            attempt,
+            status: 503,
+            browserRedirect: {
+              url: 'https://www.amazon.com/error/500',
+              kind: 'error',
+            },
+          }),
+        ),
+      },
+    })
+    await vi.advanceTimersByTimeAsync(1500)
+    await check
+    expect(remote.requests).toHaveLength(3)
+    expect(remote.requests.map((request) => request.url)).toEqual(
+      Array(3).fill(normalized),
+    )
+  },
+)
+it('retrieves the reported ASIN with its selected variant after discarding advertising context', async () => {
+  const requested =
+    'https://www.amazon.com/dp/B0DRJXJ8HT?c=category-context&cv_ct_cx=search-context&s=sort-context&sbo=placement-context&ts_id=category&aref=ad-referral&sp_csd=ad-context&th=1'
+  remote.replies = [
+    {
+      body: '<input id="ASIN" value="B0DRJXJ8HT"><span id="productTitle">Selected product</span>',
     },
+  ]
+  const [product] = await fetchProductDetails(requested)
+  expect(remote.requests.map((request) => request.url)).toEqual([
+    'https://www.amazon.com/dp/B0DRJXJ8HT?th=1',
+  ])
+  expect(product).toMatchObject({
+    requestedUrl: requested,
+    sourceUrl: 'https://www.amazon.com/dp/B0DRJXJ8HT?th=1',
+    fields: { name: 'Selected product', retailerSku: 'B0DRJXJ8HT' },
   })
-  await vi.advanceTimersByTimeAsync(1500)
-  await check
-  expect(remote.requests).toHaveLength(3)
-  expect(remote.requests.map((request) => request.url)).toEqual(
-    Array(3).fill('https://www.amazon.com/dp/B09V45JBKH'),
-  )
 })
 it('honors a short Retry-After before retrying', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
