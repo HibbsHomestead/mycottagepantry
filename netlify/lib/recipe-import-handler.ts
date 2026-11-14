@@ -2,6 +2,10 @@ import { aiEnabled } from './feature-flags'
 import { parseCookBook } from '../../src/lib/cookbook'
 import { cookBookArchive } from './cookbook'
 import { randomUUID, createHash } from 'node:crypto'
+import {
+  assignRecipeCategory,
+  recipeCategories,
+} from '../../src/lib/recipe-categories'
 import { isDeepStrictEqual } from 'node:util'
 import { getStore } from '@netlify/blobs'
 import {
@@ -347,7 +351,10 @@ export async function handleRecipeImport(req: Request, c: Context) {
       id: recipeId,
       name: draft.title.trim(),
       description: draft.description,
-      category: 'Imported',
+      category: '',
+      recipeCategoryId: draft.recipeCategoryId,
+      importedCategory: draft.importedCategory,
+      categoryNeedsReview: !!draft.importedCategory && !draft.recipeCategoryId,
       yield: draft.yieldQuantity,
       yieldUnit: draft.yieldUnit,
       lines,
@@ -377,6 +384,7 @@ export async function handleRecipeImport(req: Request, c: Context) {
         body.duplicateDecision === 'version' ? body.targetRecipeId : null,
     }
     c.stage?.('recipe_write')
+    assignRecipeCategory(recipe, undefined, recipeCategories(state))
     await save('recipes', recipe)
     record.status = 'approved'
     record.recipeId = recipeId

@@ -1,6 +1,7 @@
 /** Classify text before interpreting any leading number as an ingredient amount. */
 export type SourceKind =
   | 'title'
+  | 'category'
   | 'source'
   | 'description'
   | 'yield'
@@ -89,6 +90,10 @@ export function classifyRecipeText(source: string): SourceBlock[] {
     const raw = rows[index],
       text = raw.trim()
     if (!text) continue
+    if (/^categor(?:y|ies)\s*:\s*\S/i.test(text)) {
+      push('category', text, '')
+      continue
+    }
     if (/^(?:notes?|tips?)\s*:\s*\S/i.test(text)) {
       push('note', text)
       continue

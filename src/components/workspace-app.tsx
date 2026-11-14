@@ -1,3 +1,12 @@
+import {
+  RecipeCategoryManager,
+  RecipeCategorySelect,
+} from './recipe-categories'
+import {
+  recipeCategories,
+  recipeCategory,
+  recipeCategoryLabel,
+} from '@/lib/recipe-categories'
 import { SupportHelper } from './support-helper'
 import { ProductionRun } from './production-run'
 import { InventoryCounts } from './inventory-counts'
@@ -304,6 +313,9 @@ export function WorkspaceApp() {
       ? state.products.find((p) => p.id === selectedRecord.id) || selectedRecord
       : selectedRecord
   const [componentPicker, setComponentPicker] = useState(false)
+  const [managingRecipeCategories, setManagingRecipeCategories] =
+    useState(false)
+  const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [draft, setDraft] = useState<Record<string, any>>({}),
     [lines, setLines] = useState<any[]>([])
   const [appearancePreview, setAppearancePreview] = useState<Appearance | null>(
@@ -436,6 +448,7 @@ export function WorkspaceApp() {
     products = state.products,
     batches = state.batches,
     business = state.settings[0]
+  const recipeCategoryOptions = recipeCategories(state)
   const recipeIngredients = [...ingredients]
   for (const line of lines) {
     if (
@@ -1044,7 +1057,9 @@ export function WorkspaceApp() {
             unit: business.measurements === 'metric' ? 'g' : 'lb',
             packagePrice: kind === 'ingredient' ? '' : 10.95,
             threshold: 5,
-            category: kind === 'product' ? '' : 'Flour & grains',
+            category: ['product', 'recipe'].includes(kind)
+              ? ''
+              : 'Flour & grains',
             ...(kind === 'product'
               ? {
                   workflow: 'food',
@@ -1812,75 +1827,114 @@ export function WorkspaceApp() {
                   Export
                 </Btn>
               </div>
+              <div className="toolbar">
+                <label className="field">
+                  <span>Filter by recipe category</span>
+                  <select
+                    aria-label="Filter by recipe category"
+                    value={recipeCategoryFilter}
+                    onChange={(e) => setRecipeCategoryFilter(e.target.value)}
+                  >
+                    <option value="all">All categories</option>
+                    <option value="uncategorized">Uncategorized</option>
+                    {recipeCategoryOptions.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.active ? '' : ' (archived)'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {ready && ['Owner', 'Manager'].includes(role) && (
+                  <Btn
+                    secondary
+                    onClick={() => setManagingRecipeCategories(true)}
+                  >
+                    Manage recipe categories
+                  </Btn>
+                )}
+              </div>
               <div className="recipe-grid">
-                {filtered(recipes).map((r) => {
-                  let cost = 0,
-                    warning = ''
-                  try {
-                    cost = recipeCost(r, ingredients)
-                  } catch (e) {
-                    warning = (e as Error).message
-                  }
-                  return (
-                    <button
-                      className="panel recipe-card"
-                      key={r.id}
-                      onClick={() => open('recipe-detail', r)}
-                    >
-                      <div className="recipe-cover">
-                        <PantryPhoto
-                          item={r}
-                          assets={state.graphic_assets}
-                          kind="recipe"
-                        />
-                        <span className="recipe-category">{r.category}</span>
-                      </div>
-                      <div className="recipe-card-body">
-                        <div className="recipe-card-title">
-                          <h2>{r.name}</h2>
-                          <ArrowUpRight size={17} />
-                        </div>
-                        <p>
-                          {r.description ||
-                            'A hardworking prep for your kitchen.'}
-                        </p>
-                        <div className="recipe-meta">
-                          <span>
-                            <CookingPot size={14} />
-                            {r.yield} {r.yieldUnit}
-                          </span>
-                          <span>
-                            <Clock3 size={14} />
-                            {r.laborMinutes} min
-                          </span>
-                        </div>
-                        <div className="recipe-cost">
-                          <span>
-                            <small>TOTAL BATCH COST</small>
-                            <strong>
-                              {warning
-                                ? warning.startsWith('Cost incomplete')
-                                  ? warning
-                                  : 'Review units'
-                                : money(cost)}
-                            </strong>
-                          </span>
-                          <span>
-                            <small>
-                              PER{' '}
-                              {r.yieldUnit === 'loaves'
-                                ? 'LOAF'
-                                : r.yieldUnit.toUpperCase()}
-                            </small>
-                            <strong>
-                              {warning ? '—' : money(cost / r.yield)}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-                    </button>
+                {filtered(recipes)
+                  .filter(
+                    (r) =>
+                      recipeCategoryFilter === 'all' ||
+                      (recipeCategoryFilter === 'uncategorized'
+                        ? !recipeCategory(r, recipeCategoryOptions)
+                        : recipeCategory(r, recipeCategoryOptions)?.id ===
+                          recipeCategoryFilter),
                   )
-                })}
+                  .map((r) => {
+                    let cost = 0,
+                      warning = ''
+                    try {
+                      cost = recipeCost(r, ingredients)
+                    } catch (e) {
+                      warning = (e as Error).message
+                    }
+                    return (
+                      <button
+                        className="panel recipe-card"
+                        key={r.id}
+                        onClick={() => open('recipe-detail', r)}
+                      >
+                        <div className="recipe-cover">
+                          <PantryPhoto
+                            item={r}
+                            assets={state.graphic_assets}
+                            kind="recipe"
+                            recipeCategories={recipeCategoryOptions}
+                          />
+                          <span className="recipe-category">
+                            {recipeCategoryLabel(r, recipeCategoryOptions)}
+                          </span>
+                        </div>
+                        <div className="recipe-card-body">
+                          <div className="recipe-card-title">
+                            <h2>{r.name}</h2>
+                            <ArrowUpRight size={17} />
+                          </div>
+                          <p>
+                            {r.description ||
+                              'A hardworking prep for your kitchen.'}
+                          </p>
+                          <div className="recipe-meta">
+                            <span>
+                              <CookingPot size={14} />
+                              {r.yield} {r.yieldUnit}
+                            </span>
+                            <span>
+                              <Clock3 size={14} />
+                              {r.laborMinutes} min
+                            </span>
+                          </div>
+                          <div className="recipe-cost">
+                            <span>
+                              <small>TOTAL BATCH COST</small>
+                              <strong>
+                                {warning
+                                  ? warning.startsWith('Cost incomplete')
+                                    ? warning
+                                    : 'Review units'
+                                  : money(cost)}
+                              </strong>
+                            </span>
+                            <span>
+                              <small>
+                                PER{' '}
+                                {r.yieldUnit === 'loaves'
+                                  ? 'LOAF'
+                                  : r.yieldUnit.toUpperCase()}
+                              </small>
+                              <strong>
+                                {warning ? '—' : money(cost / r.yield)}
+                              </strong>
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
               </div>
             </>
           )}
@@ -2832,6 +2886,20 @@ export function WorkspaceApp() {
           }}
         />
       )}
+      {managingRecipeCategories && (
+        <RecipeCategoryManager
+          workspace={state}
+          close={() => setManagingRecipeCategories(false)}
+          onSettings={(patch) =>
+            setState((w) => ({
+              ...w,
+              settings: w.settings.map((s, i) =>
+                i === 0 ? { ...s, ...patch } : s,
+              ),
+            }))
+          }
+        />
+      )}
       {modal === 'recipe-import' && (
         <RecipeImport
           workspace={state}
@@ -3620,6 +3688,8 @@ export function WorkspaceApp() {
                   {componentPicker && (
                     <RecipeComponentPicker
                       recipes={recipes}
+                      categories={recipeCategoryOptions}
+                      assets={state.graphic_assets}
                       parentId={draft.id}
                       close={() => setComponentPicker(false)}
                       select={(source) => {
@@ -3658,15 +3728,18 @@ export function WorkspaceApp() {
                     change={change}
                   />
                   <div className="form-grid">
-                    <Field label="Category">
-                      {select('category', [
-                        'Breads',
-                        'Cookies',
-                        'Pastries',
-                        'Cakes',
-                        'Preps & fillings',
-                      ])}
-                    </Field>
+                    <RecipeCategorySelect
+                      recipe={{
+                        ...draft,
+                        id: draft.id || 'preview',
+                        name: draft.name || 'Recipe',
+                      }}
+                      categories={recipeCategoryOptions}
+                      onChange={(category) => {
+                        change('recipeCategoryId', category?.id || '')
+                        change('category', category?.name || '')
+                      }}
+                    />
                     <Field label="Description">{input('description')}</Field>
                     <Field label="Batch yield">
                       {input('yield', 'number')}
@@ -4877,7 +4950,9 @@ export function WorkspaceApp() {
           {modal === 'recipe-detail' && selected && (
             <RecipeDetail
               key={selected.id}
-              recipe={selected}
+              recipe={
+                state.recipes.find((r) => r.id === selected.id) || selected
+              }
               workspace={state}
               ready={ready}
               canEdit={ready && ['Owner', 'Manager'].includes(role)}
@@ -5236,8 +5311,16 @@ export function WorkspaceApp() {
                   )
                   .map((i) => (
                     <button key={i.id} onClick={() => open(i.kind, i)}>
-                      {i.kind === 'ingredient-detail' ? (
-                        <PantryPhoto item={i} assets={state.graphic_assets} />
+                      {i.kind === 'ingredient-detail' ||
+                      i.kind === 'recipe-detail' ? (
+                        <PantryPhoto
+                          item={i}
+                          assets={state.graphic_assets}
+                          kind={
+                            i.kind === 'recipe-detail' ? 'recipe' : 'pantry'
+                          }
+                          recipeCategories={recipeCategoryOptions}
+                        />
                       ) : (
                         <Search size={16} />
                       )}

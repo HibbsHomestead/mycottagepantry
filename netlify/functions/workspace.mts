@@ -42,6 +42,12 @@ import {
   returnFinishedSale,
 } from '../lib/product-workflow-handler'
 import { handleProductCategories } from '../lib/product-category-handler'
+import { handleRecipeCategories } from '../lib/recipe-category-handler'
+import {
+  assignRecipeCategory,
+  recipeCategories,
+  recipeCategory,
+} from '../../src/lib/recipe-categories'
 import { tracksFinishedStock } from '../../src/lib/product-workflows'
 import { categoryTaxState } from '../../src/lib/product-categories'
 import { labelContent } from '../../src/lib/label-persistence'
@@ -1047,7 +1053,20 @@ export default async (req: Request, context: Context) => {
         actor: user?.id,
       })
     if (requestUrl.searchParams.has('productCategories')) {
-      return await handleProductCategories(req, { state, role, save, client })
+      return await handleProductCategories(req, {
+        state,
+        role,
+        save,
+        client,
+      })
+    }
+    if (requestUrl.searchParams.has('recipeCategories')) {
+      return await handleRecipeCategories(req, {
+        state,
+        role,
+        save,
+        client,
+      })
     }
     if (requestUrl.searchParams.has('productVendors')) {
       if (!['Owner', 'Manager'].includes(role))
@@ -3594,6 +3613,14 @@ export default async (req: Request, context: Context) => {
           name: String(data.name || '').trim(),
         }
         if (!item.name) throw new Error('A name is required.')
+        if (table === 'recipes') {
+          assignRecipeCategory(
+            item,
+            state.recipes.find((r) => r.id === item.id),
+            recipeCategories(state),
+          )
+          if (item.recipeCategoryId) item.categoryNeedsReview = false
+        }
         if (table === 'settings' && item.timezone) {
           try {
             new Intl.DateTimeFormat('en', { timeZone: item.timezone })
@@ -4000,6 +4027,8 @@ export default async (req: Request, context: Context) => {
             'productCategories',
             'categoryTaxMappings',
             'categoryConfigRevision',
+            'recipeCategories',
+            'recipeCategoryRevision',
           ])
             item[key] = state.settings[0]?.[key]
           if (item.taxRates) validateTaxRates(item.taxRates)
@@ -4860,6 +4889,25 @@ export default async (req: Request, context: Context) => {
                 reason: data.reason,
               })
           } else if (table === 'recipes') {
+            const categories = recipeCategories(state)
+            if (item.recipeCategoryId)
+              assignRecipeCategory(
+                item,
+                state.recipes.find((r) => r.id === item.id),
+                categories,
+              )
+            else if (item.category) {
+              const sourceCategory = String(item.category)
+              const resolved = recipeCategory(
+                { ...item, category: sourceCategory },
+                categories,
+              )
+              const matched = resolved?.active ? resolved : undefined
+              item.importedCategory = sourceCategory
+              item.recipeCategoryId = matched?.id || ''
+              item.category = matched?.name || ''
+              item.categoryNeedsReview = !matched
+            }
             item.yield = number(item.yield, 'Yield', 0.000001)
             item.laborMinutes = number(item.laborMinutes || 0, 'Labor')
             item.laborRate = number(item.laborRate ?? 18, 'Labor rate')

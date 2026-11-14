@@ -22,6 +22,8 @@ export const importLineSchema = z.object({
 })
 export const recipeDraftSchema = z.object({
   title: z.string().max(300).default(''),
+  importedCategory: z.string().max(2000).default(''),
+  recipeCategoryId: z.string().max(1200).default(''),
   description: z.string().max(6000).default(''),
   lines: z.array(importLineSchema).max(150).default([]),
   instructions: z.array(z.string().max(6000)).max(100).default([]),
@@ -164,6 +166,11 @@ export function parseRecipeText(text: string): RecipeDraft {
     switch (block.kind) {
       case 'title':
         draft.title = row
+        break
+      case 'category':
+        draft.importedCategory +=
+          (draft.importedCategory ? '; ' : '') +
+          row.replace(/^categor(?:y|ies)\s*:\s*/i, '')
         break
       case 'source': {
         const value = row.replace(/^Source(?: URL)?\s*:\s*/i, '')
@@ -333,6 +340,8 @@ export function reprocessRecipeDraft(
   ingredients: Item[],
 ) {
   const draft = parseRecipeText(source)
+  draft.recipeCategoryId = current.recipeCategoryId
+  if (!draft.importedCategory) draft.importedCategory = current.importedCategory
   const existing = [...current.lines, ...current.optionalAdditions]
   let preservedMatches = 0
   for (const line of [...draft.lines, ...draft.optionalAdditions]) {

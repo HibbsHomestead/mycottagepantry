@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import type { RecipeCategory } from '@/lib/recipe-categories'
+import { recipeCategoryLabel } from '@/lib/recipe-categories'
+import { PantryPhoto } from './pantry-photo'
 import { type Item, unitLabel } from '@/lib/domain'
 import {
   Dialog,
@@ -9,11 +12,15 @@ import {
 
 export function RecipeComponentPicker({
   recipes,
+  categories = [],
+  assets = [],
   parentId,
   select,
   close,
 }: {
   recipes: Item[]
+  categories?: RecipeCategory[]
+  assets?: Item[]
   parentId?: string
   select: (recipe: Item) => void
   close: () => void
@@ -53,7 +60,16 @@ export function RecipeComponentPicker({
                 className="btn secondary"
                 onClick={() => select(r)}
               >
-                <span>{r.name}</span>
+                <PantryPhoto
+                  item={r}
+                  assets={assets}
+                  kind="recipe"
+                  recipeCategories={categories}
+                />
+                <span>
+                  {r.name}
+                  <small>{recipeCategoryLabel(r, categories)}</small>
+                </span>
                 <small>
                   Finished yield: {r.yield} {unitLabel(r.yieldUnit)}
                 </small>

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { RecipeCategorySelect } from './recipe-categories'
+import { recipeCategories } from '@/lib/recipe-categories'
 import { X, Plus, Upload, FileText, Link, ArrowLeft } from 'lucide-react'
 import {
   Dialog,
@@ -768,6 +770,25 @@ export function RecipeImport({
                       <section>
                         <h3>Recipe details</h3>
                         {field('Recipe title', 'title')}
+                        {draft.importedCategory && (
+                          <p className="form-hint">
+                            Imported category: {draft.importedCategory}. Review
+                            and choose a category, or keep this recipe
+                            uncategorized for later review.
+                          </p>
+                        )}
+                        <RecipeCategorySelect
+                          recipe={{
+                            id: 'import-preview',
+                            name: draft.title,
+                            recipeCategoryId: draft.recipeCategoryId,
+                          }}
+                          categories={recipeCategories(workspace)}
+                          disabled={busy || !canEdit}
+                          onChange={(category) =>
+                            edit({ recipeCategoryId: category?.id || '' })
+                          }
+                        />
                         {field('Description', 'description')}
                         {field('Source URL', 'sourceUrl')}
                         {field('Author', 'author')}
