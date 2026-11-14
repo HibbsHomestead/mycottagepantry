@@ -764,6 +764,7 @@ export function WorkspaceApp() {
           'pantrySort',
           'pantryView',
           'ingredientUpdate',
+          'inventoryMarkReviewed',
           'ingredientOffer',
           'productRecipeLink',
         ].includes(action) &&
@@ -1703,6 +1704,7 @@ export function WorkspaceApp() {
                   >
                     {({ actions, labelSelection }) => (
                       <PantryInventory
+                        workspace={state}
                         actions={actions}
                         labelSelection={labelSelection}
                         ingredients={
@@ -2840,10 +2842,11 @@ export function WorkspaceApp() {
         <FabricDialog
           key={`${modal}-${selected.id}`}
           kind={modal}
-          item={selected}
+          item={state.ingredients.find((i) => i.id === selected.id) || selected}
           workspace={state}
           role={role}
           mutate={mutate}
+          onEdit={() => open('fabric-edit', selected)}
           onWorkspace={setState}
           close={() => setModal(null)}
           onDirty={(dirty) => {
@@ -2943,6 +2946,7 @@ export function WorkspaceApp() {
         <IngredientDetail
           key={selected.id}
           initialEditing={selected.startEditing === true}
+          initialReviewSection={selected.reviewSetup}
           isOwner={role === 'Owner'}
           ingredient={ingredients.find((i) => i.id === selected.id) || selected}
           workspace={state}

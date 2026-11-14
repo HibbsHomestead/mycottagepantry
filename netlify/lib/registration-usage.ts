@@ -58,6 +58,7 @@ export function assertTestWorkspaceAction(
   const allowed = [
     'save',
     'ingredientUpdate',
+    'inventoryMarkReviewed',
     'ingredientOffer',
     'pantryView',
     'pantrySort',

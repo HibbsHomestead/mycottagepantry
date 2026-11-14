@@ -36,6 +36,7 @@ import {
 import { purchasableInventory } from '../../src/lib/purchased-inventory'
 import { ovenToday } from '../../src/lib/oven-dates'
 import { reviewedProductMetadata } from '../../src/lib/inventory-product'
+import { needsImportedDataReview } from '../../src/lib/inventory-review'
 import {
   handleProductWorkflow,
   consumeFinishedSale,
@@ -650,14 +651,6 @@ export default async (req: Request, context: Context) => {
             'Only USD oven reporting is supported. Historical amounts cannot be relabeled.',
           )
       }
-      if (
-        table === 'ingredients' &&
-        item.needsCostSetup &&
-        typeof item.currentCost === 'number' &&
-        Number.isFinite(item.currentCost) &&
-        item.currentCost >= 0
-      )
-        item.needsCostSetup = false
       if (table === 'products') {
         const stored = state.products.find((p) => p.id === item.id)
         if (item.labelAssignmentEdited === true)
@@ -2397,7 +2390,30 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Produce component products separately; kit production is unavailable.',
         )
-      if (action === 'receivedDateCorrection') {
+      if (action === 'inventoryMarkReviewed') {
+        if (table !== 'ingredients')
+          throw new Error('Choose an inventory item from this oven.')
+        const existing = state.ingredients.find((item) => item.id === data.id)
+        if (!existing)
+          throw new Error('This inventory item is unavailable in this oven.')
+        if (data.confirmed !== true)
+          throw new Error('Check the imported data before marking it reviewed.')
+        if (data.expectedUpdatedAt !== existing.updatedAt)
+          throw new Error(
+            'This item changed elsewhere. Reopen it before marking reviewed.',
+          )
+        if (needsImportedDataReview(existing)) {
+          await save('ingredients', {
+            ...existing,
+            importNeedsReview: false,
+            importReviewedAt: new Date().toISOString(),
+          })
+          await audit(
+            `${existing.name} imported data reviewed`,
+            'Imported data confirmation saved; setup issues, supplier/allergen review, stock and valuation preserved.',
+          )
+        }
+      } else if (action === 'receivedDateCorrection') {
         const settings = state.settings[0]
         const record = applyReceivedDateCorrections(
           state.ledger,
@@ -4240,6 +4256,8 @@ export default async (req: Request, context: Context) => {
             })
             if (opening.journal) await save('journals', opening.journal)
           }
+          if (needsImportedDataReview(existing))
+            updated.importNeedsReview = true
           await save('ingredients', updated)
           await audit(
             `${existing.name} updated`,
@@ -4874,6 +4892,8 @@ export default async (req: Request, context: Context) => {
             item.allergens = Array.isArray(item.allergens) ? item.allergens : []
             item.reviewed = item.reviewed === true
             item.usedAs = item.usedAs || 'ingredient'
+            item.importNeedsReview = true
+            item.importReviewedAt = null
             await save('ingredients', item)
             const delta = item.quantity - (existing?.quantity || 0)
             if (delta !== 0)

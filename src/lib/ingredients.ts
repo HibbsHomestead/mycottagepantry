@@ -411,10 +411,15 @@ export function updateIngredient(
       next.packagePrice !== Number(existing.packagePrice) ||
       JSON.stringify(next.conversions) !==
         JSON.stringify(existing.conversions || [])
-    if (referenceChanged || basis.changed) {
+    if (
+      referenceChanged ||
+      basis.changed ||
+      next.needsCostSetup ||
+      next.currentCost == null
+    ) {
       next.currentCost = calculated
-      next.needsCostSetup = false
     }
+    next.needsCostSetup = false
     if (basis.changed) next.cost = calculated
   }
   if (basis.changed && preserveMissingPackage)
