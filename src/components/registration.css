@@ -201,3 +201,78 @@
   margin-top: 5px;
   padding: 0;
 }
+
+/* Compact native radio cards keep keyboard selection and focus visible. */
+.signup-plan-choice {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 0;
+  padding: 0;
+  margin: 8px 0 0;
+  gap: 12px;
+}
+.signup-plan-choice legend {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.registration-form .signup-plan-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 400;
+  background: var(--card);
+}
+.signup-plan-card:has(:checked) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, white);
+}
+.signup-plan-card:focus-within {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+.signup-plan-choice input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+.signup-plan-name,
+.signup-plan-price {
+  display: block;
+  font-size: 18px;
+}
+.signup-plan-price {
+  margin: 4px 0 8px;
+  font-weight: 600;
+}
+.signup-plan-price > span {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.signup-plan-scope {
+  font-weight: 400;
+  line-height: 1.5;
+}
+.signup-plan-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.signup-plan-links a {
+  font-weight: 600;
+}
+.signup-payment-note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+@media (max-width: 580px) {
+  .signup-plan-choice {
+    grid-template-columns: 1fr;
+  }
+}

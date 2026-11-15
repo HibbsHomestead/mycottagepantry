@@ -439,10 +439,8 @@
   color: var(--muted);
 }
 
-/* One finance menu and a bounded workspace aligned to the right gutter. */
+/* One finance menu within the shared bounded application page. */
 main.finance-page {
-  margin-inline-start: auto;
-  margin-inline-end: 0;
   width: 100%;
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);

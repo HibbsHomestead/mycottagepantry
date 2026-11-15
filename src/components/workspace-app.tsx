@@ -1559,7 +1559,7 @@ export function WorkspaceApp() {
           </div>
         </header>
         <main
-          className={route.section === 'Finance' ? 'finance-page' : undefined}
+          className={`app-page${route.section === 'Finance' ? ' finance-page' : ''}`}
         >
           {route.section === 'Finance' &&
             ['Owner', 'Manager', 'Read-only Accountant'].includes(role) && (

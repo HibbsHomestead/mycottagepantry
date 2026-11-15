@@ -1322,3 +1322,50 @@ export const supportAiMeter = pgTable(
     index('support_ai_meter_date').on(t.createdAt),
   ],
 ).enableRLS()
+
+// Verified subscription payments are separate from access activation and use the
+// same tenant keys as Finance. Provider IDs are unique across businesses.
+export const subscriptionExpensePreferences = pgTable(
+  'subscription_expense_preferences',
+  {
+    businessId: uuid('business_id')
+      .primaryKey()
+      .references(() => businesses.id),
+    enabled: boolean().notNull().default(false),
+    category: text().notNull().default('Software'),
+    account: text().notNull().default(''),
+    enabledAt: timestamp('enabled_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedBy: text('updated_by').notNull(),
+  },
+)
+export const subscriptionExpensePayments = pgTable(
+  'subscription_expense_payments',
+  {
+    ...base(),
+    environment: text().notNull(),
+    providerId: text('provider_id').notNull(),
+    invoiceId: text('invoice_id').notNull(),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .references(() => stripeCheckouts.id),
+    transactionId: text('transaction_id'),
+  },
+  (t) => [
+    uniqueIndex('subscription_expense_org_id').on(t.businessId, t.id),
+    uniqueIndex('subscription_expense_provider').on(
+      t.environment,
+      t.providerId,
+    ),
+    foreignKey({
+      columns: [t.businessId, t.transactionId],
+      foreignColumns: [financeTransactions.businessId, financeTransactions.id],
+    }),
+    check(
+      'subscription_expense_environment',
+      sql`${t.environment} IN ('test','live')`,
+    ),
+  ],
+)

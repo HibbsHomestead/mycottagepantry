@@ -2342,3 +2342,9 @@ textarea,
 .sidebar .nav-item {
   text-decoration: none;
 }
+
+/* Shared outer alignment; sidebar offsets and responsive gutters stay on the shell. */
+.main-shell > main.app-page {
+  width: 100%;
+  margin-inline: 0;
+}

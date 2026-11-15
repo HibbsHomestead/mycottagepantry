@@ -873,7 +873,10 @@ export async function stripePortal(
   )
   return { url: session.url }
 }
-export async function processStripeEvent(c: AdminClient, event: any) {
+export async function processStripeEvent(
+  c: AdminClient,
+  event: any,
+): Promise<{ id: string; refundInvoiceId?: string }[] | void> {
   const row = await stripeSettings(c, event.environment),
     { key } = openStripe(row.ciphertext, event.environment)
   const current = await stripeRequest(key, '/events/' + event.id)
@@ -895,12 +898,33 @@ export async function processStripeEvent(c: AdminClient, event: any) {
     subscriptionId = customerId(
       object.parent?.subscription_details?.subscription || object.subscription,
     )
+  let refundAttempt: string | undefined
+  let refundInvoice: string | undefined
+  if (event.kind === 'charge.refunded' || event.kind.startsWith('refund.')) {
+    const chargeId =
+      event.kind === 'charge.refunded' ? object.id : customerId(object.charge)
+    const payment = (
+      await c.query(
+        'SELECT attempt_id,invoice_id FROM subscription_expense_payments WHERE environment=$1 AND provider_id=$2',
+        [event.environment, chargeId],
+      )
+    ).rows[0]
+    refundAttempt = payment?.attempt_id
+    refundInvoice = payment?.invoice_id
+  }
   let attempts = (
     await c.query(
       'SELECT * FROM stripe_checkouts WHERE environment=$1 AND (session_id=$2 OR subscription_id=$3) ORDER BY created_at DESC',
       [event.environment, sessionId || null, subscriptionId || null],
     )
   ).rows
+  if (refundAttempt)
+    attempts = (
+      await c.query(
+        'SELECT * FROM stripe_checkouts WHERE id=$1 AND environment=$2',
+        [refundAttempt, event.environment],
+      )
+    ).rows
   // Subscription events may arrive before checkout completion; retrieve sessions
   // with a server-owned pending attempt and reconcile only an exact session match.
   if (!attempts.length && subscriptionId) {
@@ -959,4 +983,8 @@ export async function processStripeEvent(c: AdminClient, event: any) {
     "UPDATE stripe_events SET status='processed',attempts=attempts+1,error_code=NULL,processed_at=NOW() WHERE id=$1",
     [event.id],
   )
+  return attempts.map((attempt) => ({
+    id: attempt.id,
+    refundInvoiceId: refundInvoice,
+  }))
 }
