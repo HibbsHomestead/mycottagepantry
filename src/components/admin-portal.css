@@ -6,7 +6,7 @@
   min-height: 100dvh;
   background: #f5f6fa;
   color: var(--admin-ink);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   font-size: max(var(--interface-body-min, 0px), 14px);
@@ -393,7 +393,7 @@
   line-height: 1.6;
   overflow-wrap: anywhere;
   color: #8a82a0;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-body);
   max-width: 280px;
 }
 .admin-empty {

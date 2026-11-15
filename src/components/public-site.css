@@ -1,9 +1,7 @@
 .public-site {
   background: var(--background);
   color: var(--foreground);
-  font:
-    16px/1.7 'DM Sans',
-    sans-serif;
+  font: 16px/1.7 var(--font-body);
   min-height: 100vh;
 }
 .public-site * {
@@ -95,8 +93,8 @@
 }
 .public-brand small {
   display: block;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 10px;
+  font-family: var(--font-body);
+  font-size: var(--text-caption, 14px);
   letter-spacing: 0.065em;
   margin-top: 4px;
   text-transform: uppercase;
@@ -166,7 +164,7 @@
   margin: 28px 0 16px;
 }
 .public-eyebrow {
-  font-size: 10px !important;
+  font-size: var(--text-caption, 14px) !important;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--primary);
@@ -180,7 +178,7 @@
   max-width: 650px;
 }
 .public-fine {
-  font-size: 12px !important;
+  font-size: var(--text-caption, 14px) !important;
   color: var(--muted);
   line-height: 1.7;
 }
@@ -240,7 +238,7 @@
   align-items: center;
   padding: 10px 13px;
   background: var(--surface-soft);
-  font-size: 9px;
+  font-size: var(--text-caption, 14px);
   color: var(--muted);
 }
 .browser-chrome i {
@@ -253,7 +251,7 @@
   margin: auto;
 }
 .hero-screen figcaption {
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   padding: 8px 14px;
   color: var(--muted);
   background: var(--card);
@@ -261,7 +259,7 @@
 .hero-note {
   margin-top: 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-caption, 14px);
   line-height: 1.6;
 }
 .public-workflow {
@@ -286,9 +284,7 @@
   font-weight: 600;
 }
 .workflow-chain small {
-  font:
-    10px 'DM Sans',
-    sans-serif;
+  font: var(--text-caption)/1.5 var(--font-body);
   color: var(--muted);
 }
 .workflow-chain svg {
@@ -297,7 +293,7 @@
   margin-left: 15px;
 }
 .public-workflow p:last-child {
-  font-size: 12px;
+  font-size: var(--text-caption, 14px);
   color: var(--muted);
   margin: 23px 0 0;
 }
@@ -322,7 +318,7 @@
   border-bottom: 1px solid var(--border);
 }
 .story-items article > span {
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--primary);
@@ -392,7 +388,7 @@
   background: var(--surface-soft);
 }
 .plan-caption {
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   min-height: 28px;
@@ -415,9 +411,7 @@
   margin-bottom: 5px;
 }
 .plan-price span {
-  font:
-    13px 'DM Sans',
-    sans-serif;
+  font: var(--text-caption)/1.5 var(--font-body);
   letter-spacing: 0;
 }
 .plan-users {
@@ -499,7 +493,7 @@
   color: var(--primary) !important;
 }
 .public-footer p {
-  font-size: 12px;
+  font-size: var(--text-caption, 14px);
   color: var(--muted);
   margin-top: 14px;
 }
@@ -509,7 +503,7 @@
   justify-content: end;
   gap: 22px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--text-caption, 14px);
 }
 .public-footer > .public-fine {
   grid-column: 1/-1;
@@ -577,7 +571,7 @@
 .registration-paper pre {
   max-width: 100%;
   overflow-x: auto;
-  font-size: 12px;
+  font-size: var(--text-caption, 14px);
   padding: 12px;
   background: var(--surface-soft);
   border-radius: var(--radius-control);
@@ -723,7 +717,7 @@
     margin: 20px 0 0;
   }
   .hero-note {
-    font-size: 13px;
+    font-size: var(--text-caption, 14px);
   }
   .public-actions {
     gap: 20px;
@@ -793,7 +787,7 @@
     min-height: 470px;
   }
   .public-site .public-eyebrow {
-    font-size: 9px !important;
+    font-size: var(--text-caption, 14px) !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -878,7 +872,7 @@
 }
 .tour-navigation small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   font-weight: 400;
 }
 .tour-section {
@@ -937,13 +931,13 @@
   font-size: 16px !important;
 }
 .tour-copy .tour-note {
-  font-size: 12px !important;
+  font-size: var(--text-caption, 14px) !important;
   line-height: 1.7;
 }
 .tour-availability {
   border-top: 1px solid var(--border);
   padding-top: 12px;
-  font-size: 11px;
+  font-size: var(--text-caption, 14px);
 }
 .tour-availability p {
   display: flex;
@@ -1000,12 +994,12 @@
   gap: 7px;
   padding: 9px;
   color: var(--primary);
-  font-size: 11px;
+  font-size: var(--text-caption, 14px);
   border-top: 1px solid var(--border);
   background: var(--surface-soft);
 }
 .tour-screen figcaption {
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   text-align: center;
   color: var(--muted);
   padding: 8px 3px 0;
@@ -1027,7 +1021,7 @@
   flex-direction: column;
   padding: 18px;
   color: var(--foreground);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   box-shadow: var(--shadow-panel);
 }
 .tour-lightbox-heading {
@@ -1045,7 +1039,7 @@
 }
 .tour-lightbox-heading p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-caption, 14px);
   color: var(--muted);
 }
 .tour-lightbox-heading button {
@@ -1110,7 +1104,7 @@
   margin: 0 0 12px;
 }
 .tour-connected li p {
-  font-size: 13px;
+  font-size: var(--text-caption, 14px);
   line-height: 1.75;
   color: var(--muted);
   margin-bottom: 0;
@@ -1145,7 +1139,7 @@
   font-weight: 600;
 }
 .tour-plan-summary small {
-  font-size: 11px;
+  font-size: var(--text-caption, 14px);
   font-weight: 400;
 }
 .tour-faq {
@@ -1279,7 +1273,7 @@
   background: color-mix(in srgb, var(--primary) 7%, var(--background));
 }
 .plan-card .public-eyebrow {
-  font-size: 11px;
+  font-size: var(--text-caption, 14px);
   letter-spacing: 0.08em;
   margin-bottom: 10px;
 }
@@ -1349,7 +1343,7 @@
 }
 .plan-details-table small {
   display: block;
-  font-size: 0.8rem;
+  font-size: var(--text-caption, 14px);
   font-weight: 400;
   margin-top: 0.4rem;
   line-height: 1.5;
@@ -1370,7 +1364,7 @@
 .feature-state-needs_refinement,
 .feature-state-planned,
 .feature-state-launch_review {
-  font-size: 0.85rem;
+  font-size: var(--text-caption, 14px);
 }
 .plan-card .plan-cta-note {
   margin: 12px 0 0;

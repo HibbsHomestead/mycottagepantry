@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Lora:wght@400;450;500;550;600&display=swap');
+/* Lora is retained only for existing printable product-label artwork. */
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;450;500;550;600&display=swap');
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @theme inline {
@@ -18,23 +19,35 @@
   --color-accent-foreground: var(--foreground);
   --color-destructive: var(--danger);
   --color-border: var(--border);
-  --color-input: var(--border);
+  --color-input: var(--border-control);
   --color-ring: var(--focus-ring, var(--primary));
   --radius-lg: 12px;
   --radius-md: 8px;
   --radius-sm: 6px;
-  --font-sans: 'DM Sans', sans-serif;
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-body);
 }
 :root {
   color-scheme: light;
-  --card-padding: 24px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --text-caption: 14px;
+  --text-body: 16px;
+  --text-card: 18px;
+  --text-section: 20px;
+  --text-page: 30px;
+  --card-padding: var(--space-6);
   --icon-text-gap: 16px;
-  --action-gap: 10px;
+  --action-gap: 12px;
   --section-gap: 24px;
-  --background: #f5f6fa;
-  --foreground: #242734;
+  --background: #f8fafc;
+  --foreground: #111827;
   --card: #ffffff;
-  --surface-soft: #f0f2f7;
+  --surface-soft: #f1f5f9;
   --primary: #5c3a83;
   --primary-ink: #ffffff;
   --primary-hover: #4d316e;
@@ -42,23 +55,24 @@
   --accent-soft: #f0edf4;
   --accent-border: #d6cede;
   --focus-ring: #5c3a83;
-  --border: #e1e5ed;
-  --muted: #606879;
+  --border: #e2e8f0;
+  --border-control: #7b8796;
+  --muted: #475569;
   --success: #226342;
   --success-bg: #edf6f2;
   --warning: #805309;
-  --warning-bg: #f0f2f7;
+  --warning-bg: #fffbeb;
   --danger: #a02b43;
   --danger-bg: #fbe4e9;
   --info: #27589e;
   --info-bg: #e6eefb;
   --sage: var(--accent-soft);
   --plum: var(--primary);
-  --font-body: 'DM Sans', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-heading: var(--font-body);
   --radius-control: 8px;
   --radius-panel: 12px;
-  --radius-dialog: 16px;
+  --radius-dialog: 12px;
   --control-height: 44px;
   --icon-size: 20px;
   --shadow-panel: 0 2px 8px #24273406;
@@ -480,7 +494,7 @@ main {
 .sun-mark {
   display: inline-block;
   color: var(--muted);
-  font-family: serif;
+  font-family: var(--font-body);
   font-size: 32px;
   vertical-align: middle;
   margin-left: 8px;

@@ -1,0 +1,692 @@
+[
+  {
+    "name": "dashboard",
+    "violations": [
+      {
+        "text": "Search",
+        "size": 14,
+        "font": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      }
+    ]
+  },
+  {
+    "name": "ingredient-editor",
+    "violations": [
+      {
+        "text": "Search",
+        "size": 14,
+        "font": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      }
+    ]
+  },
+  {
+    "name": "handmade-popup",
+    "violations": [
+      {
+        "text": "Search",
+        "size": 14,
+        "font": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      }
+    ]
+  },
+  {
+    "name": "finance-register",
+    "violations": [
+      {
+        "text": "Search",
+        "size": 14,
+        "font": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace"
+      },
+      {
+        "text": "YOUR BUSINESS, BALANCED",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Bookkeeping",
+        "size": 24,
+        "font": "Lora, serif"
+      },
+      {
+        "text": "Overview",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Register",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Accounts",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Mileage",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Reports",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Settings / Categories",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Receipt inbox ↗",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "COTTAGE PANTRY / FINANCE",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Register",
+        "size": 32,
+        "font": "Lora, serif"
+      },
+      {
+        "text": "A clear picture of your money, one line at a time.",
+        "size": 13,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "+ Money in",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "+ Money out",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Transfer",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Update period",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "This month",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "This quarter",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "This year",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Your checkbook",
+        "size": 18,
+        "font": "Lora, serif"
+      },
+      {
+        "text": "Import statement CSV",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Export CSV",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Scroll across the register to see balances, cleared status, and receip",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Date",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Payee / Customer",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Category",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Account",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Money in",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Money out",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Running balance",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Cleared",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Receipt",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Running balances include earlier activity in each account. Transfers a",
+        "size": 13,
+        "font": "\"DM Sans\", sans-serif"
+      }
+    ]
+  },
+  {
+    "name": "pricing",
+    "violations": [
+      {
+        "text": "A little order. A lot of possibility.",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Plans & pricing",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "A place for your business",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "A place for your business",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "A place for your business",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "A place for your business",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Make, stock & sell",
+        "size": 10,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Usage safeguards apply; proposed limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Usage safeguards apply; proposed limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Usage safeguards apply; proposed limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Usage safeguards apply; proposed limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Usage safeguards apply; proposed limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Proposed record limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Proposed record limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Proposed record limits are not active.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Variants are text fields on one product; no parent/child variant model",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Full customer refunds only; no partial refunds or return-to-vendor.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Receipt lines and vendor matching exist; purchase orders are a placeho",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Basic handmade/resale scope remains under review; full resale and cons",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Basic handmade/resale scope remains under review; full resale and cons",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Handmade only; resale excluded.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Proposed lower-tier basic scope so Mixing Bowl keeps selling handmade/",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Fabric is length-only (precut by count); other materials use verified ",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Fabric is length-only (precut by count); other materials use verified ",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Captured as package details on import only; no yarn stock handling.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Captured as package details on import only; no yarn stock handling.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Fabric color/pattern exist; dye lots are not recorded or consumed for ",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Fabric color/pattern exist; dye lots are not recorded or consumed for ",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Single free-text location; no location records or per-location quantit",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Single free-text location; no location records or per-location quantit",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Per-item ledger history and ingredient low-stock only; no material reo",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Per-item ledger history and ingredient low-stock only; no material reo",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Target margins exist; profitability report does not separate workflows",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Target margins exist; profitability report does not separate workflows",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Materials only. Review before saving; barcodes match existing records.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Review before saving; barcodes match existing records.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Manual matching for ingredients, packaging and materials; resale exclu",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Manual matching. Automatic receipt reading is not included.",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Partial",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Manual sales and exports are available; provider imports are unavailab",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Manual sales and exports are available; provider imports are unavailab",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Reports never filter by workflow; inventory valuation covers ingredien",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Coming soon",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Reports never filter by workflow; inventory valuation covers ingredien",
+        "size": 12.8,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Under review",
+        "size": 13.6,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Made for the business behind the baking.For cottage food makers & smal",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Features",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "View Plans",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Help & contact",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "Monthly plans in USD. View Plans for verified purchase availability an",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      },
+      {
+        "text": "View Plans",
+        "size": 12,
+        "font": "\"DM Sans\", sans-serif"
+      }
+    ]
+  }
+]

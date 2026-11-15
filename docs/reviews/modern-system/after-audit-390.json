@@ -1,0 +1,122 @@
+[
+  {
+    "name": "dashboard",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-assistant",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "ingredient-editor",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "handmade-popup",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "finance-register",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Recipes",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Products & Pricing",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Settings-Business details",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Settings-Appearance",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Inventory-All items",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Production-Batch planner",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-Reports",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "pricing",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-home",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-features",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-signup",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-login",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-help",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-privacy",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  },
+  {
+    "name": "audit-public-terms",
+    "violations": [],
+    "contrast": [],
+    "smallControls": []
+  }
+]

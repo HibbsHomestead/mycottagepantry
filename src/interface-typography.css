@@ -171,3 +171,63 @@
     padding-inline: 2px;
   }
 }
+
+/* Shared interface hierarchy; label canvas and printed artwork remain content. */
+@media screen {
+  :root {
+    font-size: 16px;
+  }
+  body {
+    font-size: var(--text-body);
+    line-height: 1.5;
+  }
+  :root :is(.page-heading h1, .dashboard-heading h1, .book-header h2) {
+    font-size: var(--text-page);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.25;
+  }
+  :root :is(.panel h2, .book-panel h3, .book-nav h2) {
+    font-size: var(--text-section);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  :root :is([data-slot='card-title'], .panel h3) {
+    font-size: var(--text-card);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  :root :is(.eyebrow, .book-eyebrow, .public-eyebrow) {
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+  :root :is(th, td) {
+    line-height: 1.5;
+  }
+  :root th {
+    text-transform: none;
+  }
+  :root :is(.book-panel, .book-stats article, [data-slot='card']) {
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-panel);
+  }
+  :root :is(.book-table th) {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  :root :is(input, textarea)::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+  :root .cp-admin {
+    --admin-muted: var(--muted);
+  }
+}
+
+/* Form boundaries remain visible against white and dark surfaces. */
+@media screen {
+  :root :is(input, select, textarea, [data-slot='select-trigger']) {
+    border-color: var(--border-control);
+  }
+}
