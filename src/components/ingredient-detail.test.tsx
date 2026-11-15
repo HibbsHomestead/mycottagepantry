@@ -369,6 +369,9 @@ it.each([false, true])(
         )
         hiddenSearch()
         expect(screen.getByLabelText('Purchasing price')).toBeVisible()
+        await user.click(
+          screen.getByText('Find product details', { selector: 'summary' }),
+        )
         expect(
           screen.getByRole('button', { name: 'Import details' }),
         ).toBeVisible()
@@ -453,9 +456,7 @@ it('opens Edit Item with incomplete units, preserves saved fields and cancels wi
     ingredient = pumpkinFixture()
   const original = JSON.stringify(ingredient)
   render(<IngredientDetail ingredient={ingredient} {...p} />)
-  await user.click(
-    screen.getByRole('button', { name: 'Edit Ingredient' }),
-  )
+  await user.click(screen.getByRole('button', { name: 'Edit Ingredient' }))
   expect(screen.getByLabelText('Name', { exact: true })).toHaveValue(
     'Pumpkin fixture',
   )
@@ -478,12 +479,8 @@ it('saves an explicitly verified fixture correction while preserving saved stock
     user = userEvent.setup(),
     ingredient = pumpkinFixture()
   render(<IngredientDetail ingredient={ingredient} {...p} />)
-  await user.click(
-    screen.getByRole('button', { name: 'Edit Ingredient' }),
-  )
-  await user.click(
-    screen.getByRole('button', { name: 'Unit Conversions' }),
-  )
+  await user.click(screen.getByRole('button', { name: 'Edit Ingredient' }))
+  await user.click(screen.getByRole('button', { name: 'Unit Conversions' }))
   await user.selectOptions(screen.getByLabelText('From unit'), 'can')
   await user.selectOptions(screen.getByLabelText('To unit'), 'each')
   await user.clear(screen.getByLabelText('From quantity'))

@@ -1,5 +1,5 @@
 import { handlePantryCategories } from '../lib/pantry-category-handler'
-import { assertSectionCategoryAssignment } from '../../src/lib/section-categories'
+import { assertSectionCategoryAssignment, pantryCategoryView } from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
@@ -575,7 +575,7 @@ export default async (req: Request, context: Context) => {
           workspace.settings[0],
         ),
         ingredients: workspace.ingredients.map((item) => ({
-          ...item,
+          ...pantryCategoryView(item, workspace),
           inventoryRevision: inventoryRevision(item, workspace.ledger),
         })),
         settings: workspace.settings.map((s) => {

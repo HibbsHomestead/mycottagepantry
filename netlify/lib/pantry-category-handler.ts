@@ -50,6 +50,14 @@ export async function handlePantryCategories(
           .trim()
           .replace(/\s+/g, ' '),
         needsReview: false,
+        previousNames:
+          previous &&
+          previous.name !==
+            String(input.category?.name || '')
+              .trim()
+              .replace(/\s+/g, ' ')
+            ? [...new Set([...(previous.previousNames || []), previous.name])]
+            : previous?.previousNames,
       })
       if (
         !['food-ingredients', 'packaging', 'handmade-materials'].includes(
