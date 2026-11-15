@@ -3,7 +3,8 @@ import {
   editableReceipt,
   receiptTotals,
   receiptLineCents,
-  receiptAllocations,
+  receiptBusinessAllocations,
+  receiptAllocationIssues,
   receiptLineIssues,
 } from '@/lib/receipt-totals'
 import { AddItemDialog } from './add-item-dialog'
@@ -61,6 +62,7 @@ import {
 } from '@/lib/finance'
 import './finance-workspace.css'
 const freshLine = () => ({
+  allocation: 'unreviewed',
   description: '',
   quantity: null,
   unit: '',
@@ -151,6 +153,7 @@ export function FinanceWorkspace({
 }) {
   const [tab, setTab] = useState('Consignors'),
     [receipt, setReceipt] = useState<Item | null>(null),
+    [needsReviewOnly, setNeedsReviewOnly] = useState(false),
     [localReceiptFile, setLocalReceiptFile] = useState<File | null>(null),
     [modal, setModal] = useState(''),
     [draft, setDraft] = useState<Record<string, any>>({}),
@@ -587,8 +590,15 @@ export function FinanceWorkspace({
               <div>
                 <h2>Receipt inbox</h2>
                 <p>
-                  {receipts.filter((r) => r.status === 'draft').length} drafts
-                  need your review
+                  <button
+                    className="btn secondary"
+                    aria-pressed={needsReviewOnly}
+                    onClick={() => setNeedsReviewOnly(!needsReviewOnly)}
+                  >
+                    {needsReviewOnly
+                      ? 'Show all receipts'
+                      : `Needs review (${receipts.filter((r) => r.status === 'draft').length})`}
+                  </button>
                 </p>
               </div>
             </div>
@@ -598,41 +608,44 @@ export function FinanceWorkspace({
               </p>
             ) : (
               <div className="finance-list">
-                {[...receipts].reverse().map((r) => (
-                  <button
-                    className="finance-list-row finance-list-row--receipt"
-                    key={r.id}
-                    onClick={() => {
-                      setError('')
-                      setReceipt(structuredClone(r))
-                    }}
-                  >
-                    <FileText />
-                    <span>
-                      <strong>{r.vendor || r.name}</strong>
-                      <small>
-                        {r.date || 'Date needs review'} ·{' '}
-                        {r.receiptNumber || receiptReadingLabel(r)}
-                      </small>
-                    </span>
-                    <strong>
-                      {r.total == null ? 'Not extracted' : money(r.total)}
-                    </strong>
-                    <span
-                      className={
-                        'badge ' +
-                        (r.status === 'posted' ? 'success' : 'warning')
-                      }
+                {[...receipts]
+                  .filter((r) => !needsReviewOnly || r.status === 'draft')
+                  .reverse()
+                  .map((r) => (
+                    <button
+                      className="finance-list-row finance-list-row--receipt"
+                      key={r.id}
+                      onClick={() => {
+                        setError('')
+                        setReceipt(structuredClone(r))
+                      }}
                     >
-                      {r.status === 'posted'
-                        ? '✓ Posted'
-                        : r.status === 'cancelled'
-                          ? 'Cancelled'
-                          : '! Draft'}
-                    </span>
-                    <ArrowRight size={17} />
-                  </button>
-                ))}
+                      <FileText />
+                      <span>
+                        <strong>{r.vendor || r.name}</strong>
+                        <small>
+                          {r.date || 'Date needs review'} ·{' '}
+                          {r.receiptNumber || receiptReadingLabel(r)}
+                        </small>
+                      </span>
+                      <strong>
+                        {r.total == null ? 'Not extracted' : money(r.total)}
+                      </strong>
+                      <span
+                        className={
+                          'badge ' +
+                          (r.status === 'posted' ? 'success' : 'warning')
+                        }
+                      >
+                        {r.status === 'posted'
+                          ? '✓ Posted'
+                          : r.status === 'cancelled'
+                            ? 'Cancelled'
+                            : '! Draft'}
+                      </span>
+                      <ArrowRight size={17} />
+                    </button>
+                  ))}
               </div>
             )}
             <p className="panel-note">
@@ -2083,8 +2096,10 @@ export function FinanceWorkspace({
               data,
               ['receiptPost', 'receiptCancel', 'receiptMatch'].includes(action),
             )
-            const next = result?.receipt_extractions.find(
-              (r) => r.id === data.id,
+            const next = result?.receipt_extractions.find((r) =>
+              action === 'receiptCorrect'
+                ? r.correctionOf === data.id
+                : r.id === data.id,
             )
             if (
               next &&
@@ -2258,6 +2273,9 @@ function ReceiptReview({
       ...editableReceipt(initial),
       receivedDate: initial.receivedDate || ovenToday(w.settings[0]),
     })),
+    [reviewTab, setReviewTab] = useState('details'),
+    [selectedLines, setSelectedLines] = useState<number[]>([]),
+    [correctionReason, setCorrectionReason] = useState(''),
     [active, setActive] = useState(-1),
     [needsOnly, setNeedsOnly] = useState(false),
     [confirming, setConfirming] = useState(false),
@@ -2330,7 +2348,23 @@ function ReceiptReview({
     setR((old) => ({
       ...old,
       lines: old.lines.map((l: any, n: number) =>
-        n === index ? { ...l, ...patch } : l,
+        n === index
+          ? {
+              ...l,
+              ...(Object.keys(patch).some(
+                (k) =>
+                  ![
+                    'stockQuantityConfirmed',
+                    'quantityAllocationConfirmed',
+                    'description',
+                    'category',
+                  ].includes(k),
+              )
+                ? { quantityAllocationConfirmed: false }
+                : {}),
+              ...patch,
+            }
+          : l,
       ),
     }))
   }
@@ -2344,26 +2378,32 @@ function ReceiptReview({
     setConfirming(false)
     setR({ ...r, [key]: v })
   }
-  const line = (index: number, key: string, v: any) => {
-    setConfirming(false)
-    setR({
-      ...r,
-      lines: lines.map((l: any, i: number) =>
-        i === index ? { ...l, [key]: v } : l,
-      ),
-    })
-  }
+  const line = (index: number, key: string, v: any) =>
+    patchLine(index, { [key]: v })
   const totals = receiptTotals(r)
-  const allocations = receiptAllocations(r)
+  const allocations = receiptBusinessAllocations(r)
+  const allocationErrors = receiptAllocationIssues(r)
   const unresolved = lines.filter(
     (l: Partial<Item>) => receiptLineIssues(l).length,
   ).length
   const amountFor = (decision: string) =>
     allocations
-      .filter((l) => l.decision === decision)
-      .reduce((n, l) => n + Math.round(l.postedAmount * 100), 0) / 100
+      .filter((l) =>
+        decision === 'personal'
+          ? l.allocation === 'personal' || l.allocation === 'split'
+          : l.allocation !== 'personal' && l.decision === decision,
+      )
+      .reduce(
+        (n, l) =>
+          n +
+          Math.round(
+            (decision === 'personal' ? l.excludedAmount : l.postedAmount) * 100,
+          ),
+        0,
+      ) / 100
   const canConfirm =
     !totals.errors.length &&
+    !allocationErrors.length &&
     !unresolved &&
     (totals.difference == null || totals.difference === 0) &&
     !!r.vendor &&
@@ -2461,6 +2501,45 @@ function ReceiptReview({
               </dd>
             </div>
           </dl>
+        </section>
+        <section
+          className="receipt-allocation-summary"
+          aria-label="Allocation summary"
+        >
+          <strong>
+            {closed
+              ? r.status === 'posted'
+                ? 'Posted'
+                : r.status
+              : canConfirm
+                ? 'Ready to post'
+                : 'Needs review'}
+          </strong>
+          <span>
+            Business {money(amountFor('expense') + amountFor('inventory'))}
+          </span>
+          <span>Personal / excluded {money(amountFor('personal'))}</span>
+          <span>
+            Original{' '}
+            {r.printedTotal == null || r.printedTotal === ''
+              ? 'total needed'
+              : money(Number(r.printedTotal))}{' '}
+            · Difference{' '}
+            {totals.difference == null ? '—' : money(totals.difference)}
+          </span>
+          <span>
+            Unallocated{' '}
+            {money(
+              allocations
+                .filter((l) => l.allocation === 'unreviewed')
+                .reduce((n, l) => n + l.fullAmount, 0),
+            )}
+          </span>
+          <p>
+            The full receipt, including excluded lines, is visible to everyone
+            authorized to view this receipt. Business allocation does not
+            determine tax deductibility.
+          </p>
         </section>
         <div className="receipt-review-grid">
           <section className="receipt-preview">
@@ -2566,1241 +2645,1513 @@ function ReceiptReview({
                 : ''}
             </small>
           </section>
-          <section className="receipt-fields">
-            {r.extractionMessage && (
-              <p className="finance-feedback">{r.extractionMessage}</p>
-            )}
-            {r.pendingExtraction && (
-              <div className="finance-feedback">
-                <strong>Review replacement values</strong>
-                <p>
-                  Your current entries stay in place until you explicitly apply
-                  the replacement. Saving a draft first preserves your
-                  corrections in history.
-                </p>
-                <p>
-                  New merchant: {r.pendingExtraction.vendor || 'Unreadable'} ·
-                  Date: {r.pendingExtraction.date || 'Unreadable'} · Printed
-                  total:{' '}
-                  {r.pendingExtraction.total == null
-                    ? 'Unreadable'
-                    : money(r.pendingExtraction.total)}{' '}
-                  · {r.pendingExtraction.lines?.length || 0} lines. Applying
-                  replaces current extracted fields; corrections remain in
-                  history.
-                </p>
-                <button
-                  className="btn secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void (async () => {
-                      const result = await onSave('receiptDraft', r)
-                      const saved = result?.receipt_extractions.find(
-                        (item: Item) => item.id === r.id,
-                      )
-                      if (saved)
-                        await onSave('receiptApplyExtraction', {
-                          id: r.id,
-                          updatedAt: saved.updatedAt,
-                        })
-                    })()
-                  }
-                >
-                  Apply replacement values
-                </button>
-                <button
-                  className="btn secondary"
-                  disabled={busy}
-                  onClick={() =>
-                    void (async () => {
-                      const result = await onSave('receiptDraft', r)
-                      if (result)
-                        await onSave('receiptDismissExtraction', { id: r.id })
-                    })()
-                  }
-                >
-                  Keep my edits
-                </button>
-              </div>
-            )}
-            <p role="status">{receiptReadingLabel(r)}</p>
-            {r.extractionStatus === 'upload_failed' && (
-              <p>
-                Your file is still available in this panel but has not been
-                saved.{' '}
-                <button
-                  className="btn secondary"
-                  disabled={busy}
-                  onClick={onRetryUpload}
-                >
-                  Retry upload
-                </button>
-              </p>
-            )}
-            {!closed && r.fileHash && r.id !== 'uploading' && (
-              <div className="button-row">
-                <button
-                  className="btn secondary"
-                  disabled={
-                    busy ||
-                    !canWrite ||
-                    w.settings[0]?.receiptReading?.enabled === false
-                  }
-                  onClick={() => void onSave('receiptExtract', r)}
-                >
-                  {['failed', 'not_configured', 'partial'].includes(
-                    r.extractionStatus,
-                  )
-                    ? 'Retry reading'
-                    : 'Read receipt again'}
-                </button>
-                <span>
-                  Manual entry stays available. Retrying preserves corrections.
-                </span>
-              </div>
-            )}
-            {w.settings[0]?.receiptReading?.enabled === false && (
-              <p>
-                Receipt reading is unavailable. Enter details manually; your
-                original is saved.
-              </p>
-            )}
-            {r.lastReadSummary && (
-              <p className="finance-feedback">
-                {r.lastReadSummary.pageCount} page(s) inspected ·{' '}
-                {r.lastReadSummary.processingMethod === 'embedded_text'
-                  ? 'Embedded text'
-                  : 'Text and document OCR'}
-                {r.lastReadSummary.unverifiedPages?.length
-                  ? ` · Review page(s) ${r.lastReadSummary.unverifiedPages.join(', ')}`
-                  : ''}
-                . {r.lastReadSummary.warnings?.join(' ')}
-              </p>
-            )}
-            <p>
-              Added at:{' '}
-              {ovenTimestamp(
-                r.addedAt || r.createdAt || r.history?.[0]?.at,
-                w.settings[0],
-              )}
-            </p>
-            <fieldset
-              disabled={closed || busy || r.id === 'uploading'}
-              className="receipt-metadata"
+          <section className={'receipt-fields receipt-tab-' + reviewTab}>
+            <div
+              className="button-row"
+              role="tablist"
+              aria-label="Receipt entries"
             >
-              <div className="finance-form-grid">
-                <Field label="Merchant">
-                  <input
-                    aria-label="Merchant"
-                    value={r.vendor || ''}
-                    enterKeyHint="next"
-                    onChange={(e) => update('vendor', e.target.value)}
-                  />
-                </Field>
-                <Field label="Receipt date">
-                  <input
-                    type="date"
-                    value={r.date || ''}
-                    onChange={(e) => update('date', e.target.value)}
-                  />
-                </Field>
-                <Field label="Tax treatment">
-                  <select
-                    value={r.taxTreatment || ''}
-                    onChange={(e) => update('taxTreatment', e.target.value)}
-                  >
-                    <option value="">Confirm tax treatment…</option>
-                    <option value="exclusive">Tax added to line amounts</option>
-                    <option value="inclusive">
-                      Tax already included in line amounts
-                    </option>
-                  </select>
-                </Field>
-                <Field label="Receipt tax ($)">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step=".01"
-                    aria-label="Receipt tax ($)"
-                    value={r.tax ?? ''}
-                    enterKeyHint="next"
-                    onChange={(e) => update('tax', e.target.value)}
-                  />
-                  <small>
-                    Enter 0 only when confirmed. Included tax is not added
-                    again.
-                  </small>
-                </Field>
-              </div>
-              <details className="receipt-adjustments">
-                <summary>Discounts, shipping & receipt details</summary>
-                <div className="finance-form-grid">
-                  {[
-                    [
-                      'receiptDiscount',
-                      'Additional receipt discount ($)',
-                      'number',
-                    ],
-                    ['otherCharges', 'Shipping / fees ($)', 'number'],
-                    [
-                      'printedTotal',
-                      'Printed / imported total ($, optional)',
-                      'number',
-                    ],
-                    ['adjustment', 'Rounding adjustment ($, signed)', 'number'],
-                    ['adjustmentReason', 'Rounding explanation', 'text'],
-                    ['receivedDate', 'Inventory received date', 'date'],
-                    ['receiptNumber', 'Receipt / invoice number', 'text'],
-                    [
-                      'currency',
-                      'Printed currency (ISO code, optional)',
-                      'text',
-                    ],
-                    ['method', 'Payment method', 'text'],
-                  ].map(([key, label, type]) => (
-                    <Field key={key} label={label}>
-                      <input
-                        type={type}
-                        inputMode={type === 'number' ? 'decimal' : undefined}
-                        enterKeyHint="next"
-                        step={type === 'number' ? '.01' : undefined}
-                        value={r[key] ?? ''}
-                        onChange={(e) => update(key, e.target.value)}
-                      />
-                    </Field>
-                  ))}
-                </div>
-                <p>
-                  Only enter discounts and fees that are not already reflected
-                  in the line amounts. Printed total is optional and used for
-                  reconciliation. Rounding is limited to five cents and requires
-                  an explanation.
-                </p>
-                {r.discounts != null && (
+              {['details', 'lines'].map((tab) => (
+                <button
+                  key={tab}
+                  className={
+                    'btn secondary ' + (reviewTab === tab ? 'active' : '')
+                  }
+                  role="tab"
+                  aria-selected={reviewTab === tab}
+                  id={`receipt-tab-${r.id}-${tab}`}
+                  aria-controls={`receipt-panel-${r.id}-${tab}`}
+                  data-review-tab={tab}
+                  tabIndex={reviewTab === tab ? 0 : -1}
+                  onKeyDown={(e) => {
+                    if (
+                      ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)
+                    ) {
+                      e.preventDefault()
+                      const next =
+                        e.key === 'Home'
+                          ? 'details'
+                          : e.key === 'End'
+                            ? 'lines'
+                            : tab === 'details'
+                              ? 'lines'
+                              : 'details'
+                      setReviewTab(next)
+                      e.currentTarget.parentElement
+                        ?.querySelector<HTMLButtonElement>(
+                          `[data-review-tab="${next}"]`,
+                        )
+                        ?.focus()
+                    }
+                  }}
+                  onClick={() => setReviewTab(tab)}
+                >
+                  {tab === 'details' ? 'Details' : 'Line Items'}
+                </button>
+              ))}
+            </div>
+            <div
+              role="tabpanel"
+              id={`receipt-panel-${r.id}-details`}
+              aria-labelledby={`receipt-tab-${r.id}-details`}
+              hidden={reviewTab !== 'details'}
+            >
+              {r.extractionMessage && (
+                <p className="finance-feedback">{r.extractionMessage}</p>
+              )}
+              {r.pendingExtraction && (
+                <div className="finance-feedback">
+                  <strong>Review replacement values</strong>
                   <p>
-                    Imported discount (already reflected):{' '}
-                    {money(Number(r.discounts))}.
+                    Your current entries stay in place until you explicitly
+                    apply the replacement. Saving a draft first preserves your
+                    corrections in history.
                   </p>
+                  <p>
+                    New merchant: {r.pendingExtraction.vendor || 'Unreadable'} ·
+                    Date: {r.pendingExtraction.date || 'Unreadable'} · Printed
+                    total:{' '}
+                    {r.pendingExtraction.total == null
+                      ? 'Unreadable'
+                      : money(r.pendingExtraction.total)}{' '}
+                    · {r.pendingExtraction.lines?.length || 0} lines. Applying
+                    replaces current extracted fields; corrections remain in
+                    history.
+                  </p>
+                  <button
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void (async () => {
+                        const result = await onSave('receiptDraft', r)
+                        const saved = result?.receipt_extractions.find(
+                          (item: Item) => item.id === r.id,
+                        )
+                        if (saved)
+                          await onSave('receiptApplyExtraction', {
+                            id: r.id,
+                            updatedAt: saved.updatedAt,
+                          })
+                      })()
+                    }
+                  >
+                    Apply replacement values
+                  </button>
+                  <button
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void (async () => {
+                        const result = await onSave('receiptDraft', r)
+                        if (result)
+                          await onSave('receiptDismissExtraction', { id: r.id })
+                      })()
+                    }
+                  >
+                    Keep my edits
+                  </button>
+                </div>
+              )}
+              <p role="status">{receiptReadingLabel(r)}</p>
+              {r.extractionStatus === 'upload_failed' && (
+                <p>
+                  Your file is still available in this panel but has not been
+                  saved.{' '}
+                  <button
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={onRetryUpload}
+                  >
+                    Retry upload
+                  </button>
+                </p>
+              )}
+              {!closed && r.fileHash && r.id !== 'uploading' && (
+                <div className="button-row">
+                  <button
+                    className="btn secondary"
+                    disabled={
+                      busy ||
+                      !canWrite ||
+                      w.settings[0]?.receiptReading?.enabled === false
+                    }
+                    onClick={() => void onSave('receiptExtract', r)}
+                  >
+                    {['failed', 'not_configured', 'partial'].includes(
+                      r.extractionStatus,
+                    )
+                      ? 'Retry reading'
+                      : 'Read receipt again'}
+                  </button>
+                  <span>
+                    Manual entry stays available. Retrying preserves
+                    corrections.
+                  </span>
+                </div>
+              )}
+              {w.settings[0]?.receiptReading?.enabled === false && (
+                <p>
+                  Receipt reading is unavailable. Enter details manually; your
+                  original is saved.
+                </p>
+              )}
+              {r.lastReadSummary && (
+                <p className="finance-feedback">
+                  {r.lastReadSummary.pageCount} page(s) inspected ·{' '}
+                  {r.lastReadSummary.processingMethod === 'embedded_text'
+                    ? 'Embedded text'
+                    : 'Text and document OCR'}
+                  {r.lastReadSummary.unverifiedPages?.length
+                    ? ` · Review page(s) ${r.lastReadSummary.unverifiedPages.join(', ')}`
+                    : ''}
+                  . {r.lastReadSummary.warnings?.join(' ')}
+                </p>
+              )}
+              <p>
+                Added at:{' '}
+                {ovenTimestamp(
+                  r.addedAt || r.createdAt || r.history?.[0]?.at,
+                  w.settings[0],
                 )}
-              </details>
-            </fieldset>
-            <div className="panel-heading">
-              <div>
-                <h3>Receipt lines</h3>
-                <p>Review one item at a time. Totals update as you edit.</p>
+              </p>
+              <fieldset
+                disabled={closed || busy || r.id === 'uploading'}
+                className="receipt-metadata"
+              >
+                <div className="finance-form-grid">
+                  <Field label="Merchant">
+                    <input
+                      aria-label="Merchant"
+                      value={r.vendor || ''}
+                      enterKeyHint="next"
+                      onChange={(e) => update('vendor', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Receipt date">
+                    <input
+                      type="date"
+                      value={r.date || ''}
+                      onChange={(e) => update('date', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Tax treatment">
+                    <select
+                      value={r.taxTreatment || ''}
+                      onChange={(e) => update('taxTreatment', e.target.value)}
+                    >
+                      <option value="">Confirm tax treatment…</option>
+                      <option value="exclusive">
+                        Tax added to line amounts
+                      </option>
+                      <option value="inclusive">
+                        Tax already included in line amounts
+                      </option>
+                    </select>
+                  </Field>
+                  <Field label="Receipt tax ($)">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step=".01"
+                      aria-label="Receipt tax ($)"
+                      value={r.tax ?? ''}
+                      enterKeyHint="next"
+                      onChange={(e) => update('tax', e.target.value)}
+                    />
+                    <small>
+                      Enter 0 only when confirmed. Included tax is not added
+                      again.
+                    </small>
+                  </Field>
+                </div>
+                <details className="receipt-adjustments">
+                  <summary>Discounts, shipping & receipt details</summary>
+                  <div className="finance-form-grid">
+                    {[
+                      [
+                        'receiptDiscount',
+                        'Additional receipt discount ($)',
+                        'number',
+                      ],
+                      ['otherCharges', 'Shipping / fees ($)', 'number'],
+                      [
+                        'printedTotal',
+                        'Printed / imported total ($, optional)',
+                        'number',
+                      ],
+                      [
+                        'adjustment',
+                        'Rounding adjustment ($, signed)',
+                        'number',
+                      ],
+                      ['adjustmentReason', 'Rounding explanation', 'text'],
+                      ['receivedDate', 'Inventory received date', 'date'],
+                      ['receiptNumber', 'Receipt / invoice number', 'text'],
+                      [
+                        'currency',
+                        'Printed currency (ISO code, optional)',
+                        'text',
+                      ],
+                      ['method', 'Payment method', 'text'],
+                    ].map(([key, label, type]) => (
+                      <Field key={key} label={label}>
+                        <input
+                          type={type}
+                          inputMode={type === 'number' ? 'decimal' : undefined}
+                          enterKeyHint="next"
+                          step={type === 'number' ? '.01' : undefined}
+                          value={r[key] ?? ''}
+                          onChange={(e) => update(key, e.target.value)}
+                        />
+                      </Field>
+                    ))}
+                  </div>
+                  <p>
+                    Only enter discounts and fees that are not already reflected
+                    in the line amounts. The original receipt total is required
+                    for reconciliation. Rounding is limited to five cents and
+                    requires an explanation.
+                  </p>
+                  {r.discounts != null && (
+                    <p>
+                      Imported discount (already reflected):{' '}
+                      {money(Number(r.discounts))}.
+                    </p>
+                  )}
+                </details>
+              </fieldset>
+            </div>
+            <div
+              role="tabpanel"
+              id={`receipt-panel-${r.id}-lines`}
+              aria-labelledby={`receipt-tab-${r.id}-lines`}
+              className="receipt-lines-panel"
+              hidden={reviewTab !== 'lines'}
+            >
+              <div className="panel-heading">
+                <div>
+                  <h3>Receipt lines</h3>
+                  <p>
+                    Review one item at a time. Totals update as you edit.
+                    Refunds use the existing purchase correction/reversal
+                    workflow; negative receipt lines cannot be posted here.
+                  </p>
+                </div>
+                {!closed && (
+                  <button
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setActive(lines.length)
+                      setNeedsOnly(false)
+                      update('lines', [...lines, freshLine()])
+                    }}
+                  >
+                    <Plus size={16} />
+                    Add line
+                  </button>
+                )}
               </div>
               {!closed && (
-                <button
-                  className="btn secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setActive(lines.length)
-                    setNeedsOnly(false)
-                    update('lines', [...lines, freshLine()])
-                  }}
-                >
-                  <Plus size={16} />
-                  Add line
-                </button>
-              )}
-            </div>
-            <div className="receipt-review-filters">
-              <button
-                className={'btn secondary ' + (needsOnly ? 'active' : '')}
-                onClick={() => {
-                  setNeedsOnly(true)
-                  setActive(
-                    lines.findIndex(
-                      (l: Partial<Item>) => receiptLineIssues(l).length,
-                    ),
-                  )
-                }}
-              >
-                Review needs attention ({unresolved})
-              </button>
-              <button
-                className="btn secondary"
-                onClick={() => setNeedsOnly(false)}
-              >
-                View / edit all items ({lines.length})
-              </button>
-            </div>
-            {lines.map(
-              (l: any, i: number) =>
-                (!needsOnly || receiptLineIssues(l).length || active === i) && (
-                  <div
-                    className={
-                      'receipt-line ' + (active === i ? 'selected' : '')
-                    }
-                    key={i}
-                  >
-                    <button
-                      className="receipt-row-summary"
-                      aria-expanded={active === i}
-                      aria-controls={'receipt-editor-' + i}
-                      onClick={() => setActive(active === i ? -1 : i)}
+                <>
+                  <p>
+                    Adjustments: proportional to line amounts by default. This
+                    is an allocation of actual receipt charges, not a sales-tax
+                    calculation. Use actual adjusted amounts for different item
+                    tax treatments.
+                  </p>
+                  <Field label="Tax, discount and fee allocation method">
+                    <select
+                      disabled={busy}
+                      value={r.adjustmentAllocation || 'proportional'}
+                      onChange={(e) =>
+                        update('adjustmentAllocation', e.target.value)
+                      }
                     >
-                      <span>
-                        <strong>{l.description || `Item ${i + 1}`}</strong>
-                        <small>
-                          {l.amountMode === 'quantity'
-                            ? `${l.printedQuantity || '—'} × ${l.unitPrice || '—'}`
-                            : l.printedQuantity
-                              ? `${l.printedQuantity} ${l.printedUnit || 'purchased'}`
-                              : 'Direct amount'}{' '}
-                          ·{' '}
-                          {l.decision === 'inventory'
-                            ? matchedItem(l)?.name || 'Inventory match needed'
-                            : l.decision === 'expense'
-                              ? l.category || 'Choose category'
-                              : l.decision === 'personal'
-                                ? 'Personal / excluded'
-                                : 'Choose use'}
-                        </small>
-                        <span
-                          className={
-                            'receipt-review-status ' +
-                            (receiptLineIssues(l).length ? 'needs-review' : '')
+                      <option value="proportional">
+                        Proportional to line amounts
+                      </option>
+                      <option value="manual">
+                        Actual / custom adjusted amount per line
+                      </option>
+                    </select>
+                  </Field>
+                  <div className="button-row">
+                    {[false, true].flatMap((selected) =>
+                      ['business', 'personal'].map((allocation) => (
+                        <button
+                          key={String(selected) + allocation}
+                          className="btn secondary"
+                          disabled={busy || (selected && !selectedLines.length)}
+                          onClick={() =>
+                            update(
+                              'lines',
+                              lines.map((l: any, i: number) =>
+                                selected && !selectedLines.includes(i)
+                                  ? l
+                                  : {
+                                      ...l,
+                                      allocation,
+                                      decision:
+                                        allocation === 'personal'
+                                          ? 'personal'
+                                          : l.decision === 'inventory'
+                                            ? 'inventory'
+                                            : 'expense',
+                                    },
+                              ),
+                            )
                           }
                         >
-                          {receiptLineIssues(l).join(' · ') ||
-                            'Ready for confirmation'}
-                        </span>
-                      </span>
-                      <span>
-                        <strong>
-                          {shownAmount(
-                            receiptLineCents(l) == null
-                              ? null
-                              : receiptLineCents(l)! / 100,
-                          )}
-                        </strong>
-                        <small>{active === i ? 'Done editing' : 'Edit'}</small>
-                      </span>
-                    </button>
-                    {active === i && (
-                      <div
-                        id={'receipt-editor-' + i}
-                        className="receipt-row-editor"
+                          Mark {selected ? 'selected' : 'all'}{' '}
+                          {allocation === 'business' ? 'Business' : 'Personal'}
+                        </button>
+                      )),
+                    )}
+                  </div>
+                  {!lines.length && (
+                    <p>
+                      No itemized lines were extracted. Add lines manually, or
+                      add one clearly described “Receipt-level allocation (not
+                      itemized)” line for the confirmed subtotal.
+                    </p>
+                  )}
+                </>
+              )}
+              <div className="receipt-review-filters">
+                <button
+                  className={'btn secondary ' + (needsOnly ? 'active' : '')}
+                  onClick={() => {
+                    setNeedsOnly(true)
+                    setActive(
+                      lines.findIndex(
+                        (l: Partial<Item>) => receiptLineIssues(l).length,
+                      ),
+                    )
+                  }}
+                >
+                  Review needs attention ({unresolved})
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => setNeedsOnly(false)}
+                >
+                  View / edit all items ({lines.length})
+                </button>
+              </div>
+              {lines.map(
+                (l: any, i: number) =>
+                  (!needsOnly ||
+                    receiptLineIssues(l).length ||
+                    active === i) && (
+                    <div
+                      className={
+                        'receipt-line ' + (active === i ? 'selected' : '')
+                      }
+                      key={i}
+                    >
+                      {!closed && (
+                        <label>
+                          <input
+                            type="checkbox"
+                            aria-label={'Select line ' + (i + 1)}
+                            checked={selectedLines.includes(i)}
+                            onChange={(e) =>
+                              setSelectedLines(
+                                e.target.checked
+                                  ? [...selectedLines, i]
+                                  : selectedLines.filter((n) => n !== i),
+                              )
+                            }
+                          />{' '}
+                          Select line {i + 1}
+                        </label>
+                      )}
+                      <button
+                        className="receipt-row-summary"
+                        aria-expanded={active === i}
+                        aria-controls={'receipt-editor-' + i}
+                        onClick={() => setActive(active === i ? -1 : i)}
                       >
-                        <div className="panel-heading">
-                          <button
-                            className="btn secondary"
-                            onClick={() => {
-                              setActive(i)
-                              viewReceipt()
-                            }}
+                        <span>
+                          <strong>{l.description || `Item ${i + 1}`}</strong>
+                          <small>
+                            {l.amountMode === 'quantity'
+                              ? `${l.printedQuantity || '—'} × ${l.unitPrice || '—'}`
+                              : l.printedQuantity
+                                ? `${l.printedQuantity} ${l.printedUnit || 'purchased'}`
+                                : 'Direct amount'}{' '}
+                            ·{' '}
+                            {l.decision === 'inventory'
+                              ? matchedItem(l)?.name || 'Inventory match needed'
+                              : l.decision === 'expense'
+                                ? l.category || 'Choose category'
+                                : l.decision === 'personal'
+                                  ? 'Personal / excluded'
+                                  : 'Choose use'}
+                          </small>
+                          <span
+                            className={
+                              'receipt-review-status ' +
+                              (receiptLineIssues(l).length
+                                ? 'needs-review'
+                                : '')
+                            }
                           >
-                            Line {i + 1} · show on receipt
-                          </button>
-                          {l.confidence != null && (
-                            <Badge confidence={l.confidence} />
-                          )}
-                          {!closed && (
+                            {receiptLineIssues(l).join(' · ') ||
+                              'Ready for confirmation'}
+                          </span>
+                        </span>
+                        <span>
+                          <strong>
+                            {shownAmount(
+                              receiptLineCents(l) == null
+                                ? null
+                                : receiptLineCents(l)! / 100,
+                            )}
+                          </strong>
+                          <small>
+                            {active === i ? 'Done editing' : 'Edit'}
+                          </small>
+                        </span>
+                      </button>
+                      {active === i && (
+                        <div
+                          id={'receipt-editor-' + i}
+                          className="receipt-row-editor"
+                        >
+                          <div className="panel-heading">
                             <button
                               className="btn secondary"
-                              disabled={busy}
                               onClick={() => {
-                                const half =
-                                  Math.round((receiptLineCents(l) ?? 0) / 2) /
-                                  100
-                                update(
-                                  'lines',
-                                  lines.flatMap((x: any, j: number) =>
-                                    j === i
-                                      ? [
-                                          {
-                                            ...x,
-                                            amount: half,
-                                            amountMode: 'direct',
-                                            enteredAmount: half,
-                                            lineDiscount: 0,
-                                            quantity:
-                                              x.quantity == null ||
-                                              x.quantity === ''
-                                                ? null
-                                                : Number(x.quantity) / 2,
-                                            stockQuantityConfirmed: false,
-                                          },
-                                          {
-                                            ...x,
-                                            amountMode: 'direct',
-                                            enteredAmount:
-                                              Math.round(
-                                                (Number(
-                                                  l.amountMode
-                                                    ? receiptLineCents(l)! / 100
-                                                    : l.amount,
-                                                ) -
-                                                  half) *
-                                                  100,
-                                              ) / 100,
-                                            lineDiscount: 0,
-                                            amount:
-                                              Math.round(
-                                                (Number(x.amount) - half) * 100,
-                                              ) / 100,
-                                            quantity:
-                                              x.quantity == null ||
-                                              x.quantity === ''
-                                                ? null
-                                                : Number(x.quantity) / 2,
-                                            stockQuantityConfirmed: false,
-                                            decision: '',
-                                          },
-                                        ]
-                                      : [x],
-                                  ),
-                                )
+                                setActive(i)
+                                viewReceipt()
                               }}
                             >
-                              Split line
+                              Line {i + 1} · show on receipt
                             </button>
-                          )}
-                          {!closed && (
-                            <button
-                              className="btn secondary"
-                              aria-label={'Remove line ' + (i + 1)}
-                              disabled={busy}
-                              onClick={() =>
-                                update(
-                                  'lines',
-                                  lines.filter((_: any, j: number) => j !== i),
-                                )
-                              }
-                            >
-                              <X size={16} />
-                            </button>
-                          )}
-                        </div>
-                        <div className="finance-form-grid">
-                          <Field label="Description">
-                            <input
-                              disabled={closed || busy || r.id === 'uploading'}
-                              value={l.description}
-                              onChange={(e) =>
-                                line(i, 'description', e.target.value)
-                              }
-                            />
-                          </Field>
-                          <Field label="How to enter the amount">
-                            <select
-                              disabled={closed || busy}
-                              value={l.amountMode || 'direct'}
-                              onChange={(e) =>
-                                patchLine(i, {
-                                  amountMode: e.target.value,
-                                  enteredAmount: l.enteredAmount ?? l.amount,
-                                  lineDiscount: l.lineDiscount ?? 0,
-                                })
-                              }
-                            >
-                              <option value="direct">Direct line amount</option>
-                              <option value="quantity">
-                                Quantity × unit price
-                              </option>
-                            </select>
-                          </Field>
-                          {l.amountMode === 'quantity' ? (
-                            <>
-                              <Field label="Quantity purchased">
+                            {l.confidence != null && (
+                              <Badge confidence={l.confidence} />
+                            )}
+                            {!closed && (
+                              <button
+                                className="btn secondary"
+                                disabled={busy}
+                                onClick={() => {
+                                  patchLine(i, {
+                                    allocation: 'split',
+                                    splitMethod: 'percent',
+                                    businessPercent: '',
+                                    quantityAllocationConfirmed: false,
+                                  })
+                                }}
+                              >
+                                Split line
+                              </button>
+                            )}
+                            {!closed && (
+                              <button
+                                className="btn secondary"
+                                aria-label={'Remove line ' + (i + 1)}
+                                disabled={busy}
+                                onClick={() =>
+                                  update(
+                                    'lines',
+                                    lines.filter(
+                                      (_: any, j: number) => j !== i,
+                                    ),
+                                  )
+                                }
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="finance-form-grid">
+                            <Field label="Description">
+                              <input
+                                disabled={
+                                  closed || busy || r.id === 'uploading'
+                                }
+                                value={l.description}
+                                onChange={(e) =>
+                                  line(i, 'description', e.target.value)
+                                }
+                              />
+                            </Field>
+                            <Field label="How to enter the amount">
+                              <select
+                                disabled={closed || busy}
+                                value={l.amountMode || 'direct'}
+                                onChange={(e) =>
+                                  patchLine(i, {
+                                    amountMode: e.target.value,
+                                    enteredAmount: l.enteredAmount ?? l.amount,
+                                    lineDiscount: l.lineDiscount ?? 0,
+                                  })
+                                }
+                              >
+                                <option value="direct">
+                                  Direct line amount
+                                </option>
+                                <option value="quantity">
+                                  Quantity × unit price
+                                </option>
+                              </select>
+                            </Field>
+                            {l.amountMode === 'quantity' ? (
+                              <>
+                                <Field label="Quantity purchased">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min="0"
+                                    step="any"
+                                    disabled={closed || busy}
+                                    value={l.printedQuantity ?? ''}
+                                    onChange={(e) =>
+                                      line(i, 'printedQuantity', e.target.value)
+                                    }
+                                    enterKeyHint="next"
+                                  />
+                                </Field>
+                                <Field label="Unit price ($)">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min="0"
+                                    step=".01"
+                                    disabled={closed || busy}
+                                    value={l.unitPrice ?? ''}
+                                    onChange={(e) =>
+                                      line(i, 'unitPrice', e.target.value)
+                                    }
+                                    enterKeyHint="next"
+                                  />
+                                </Field>
+                              </>
+                            ) : (
+                              <Field label="Direct line amount ($)">
                                 <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  min="0"
-                                  step="any"
-                                  disabled={closed || busy}
-                                  value={l.printedQuantity ?? ''}
-                                  onChange={(e) =>
-                                    line(i, 'printedQuantity', e.target.value)
-                                  }
-                                  enterKeyHint="next"
-                                />
-                              </Field>
-                              <Field label="Unit price ($)">
-                                <input
+                                  aria-label="Direct line amount ($)"
                                   type="number"
                                   inputMode="decimal"
                                   min="0"
                                   step=".01"
                                   disabled={closed || busy}
-                                  value={l.unitPrice ?? ''}
+                                  value={l.enteredAmount ?? l.amount ?? ''}
                                   onChange={(e) =>
-                                    line(i, 'unitPrice', e.target.value)
+                                    patchLine(i, {
+                                      amountMode: 'direct',
+                                      enteredAmount: e.target.value,
+                                    })
                                   }
                                   enterKeyHint="next"
                                 />
+                                <small>
+                                  The whole line amount, not a unit price.
+                                </small>
                               </Field>
-                            </>
-                          ) : (
-                            <Field label="Direct line amount ($)">
+                            )}
+                            <Field label="Additional line discount ($)">
                               <input
-                                aria-label="Direct line amount ($)"
                                 type="number"
                                 inputMode="decimal"
                                 min="0"
                                 step=".01"
                                 disabled={closed || busy}
-                                value={l.enteredAmount ?? l.amount ?? ''}
+                                value={l.lineDiscount ?? ''}
                                 onChange={(e) =>
                                   patchLine(i, {
-                                    amountMode: 'direct',
-                                    enteredAmount: e.target.value,
+                                    amountMode: l.amountMode || 'direct',
+                                    enteredAmount: l.enteredAmount ?? l.amount,
+                                    lineDiscount: e.target.value,
                                   })
                                 }
                                 enterKeyHint="next"
                               />
                               <small>
-                                The whole line amount, not a unit price.
+                                Leave blank if already included in the amount.
                               </small>
                             </Field>
-                          )}
-                          <Field label="Additional line discount ($)">
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min="0"
-                              step=".01"
-                              disabled={closed || busy}
-                              value={l.lineDiscount ?? ''}
-                              onChange={(e) =>
-                                patchLine(i, {
-                                  amountMode: l.amountMode || 'direct',
-                                  enteredAmount: l.enteredAmount ?? l.amount,
-                                  lineDiscount: e.target.value,
-                                })
-                              }
-                              enterKeyHint="next"
-                            />
-                            <small>
-                              Leave blank if already included in the amount.
-                            </small>
-                          </Field>
-                          <details className="finance-full">
-                            <summary>Printed package details</summary>
-                            <div className="finance-form-grid">
-                              <Field label="Printed purchase count">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="any"
-                                  disabled={closed || busy}
-                                  value={l.printedQuantity ?? ''}
-                                  onChange={(e) =>
-                                    line(i, 'printedQuantity', e.target.value)
-                                  }
-                                />
-                              </Field>
-                              <Field label="Purchasing package">
-                                <input
-                                  disabled={closed || busy}
-                                  value={l.printedUnit ?? ''}
-                                  onChange={(e) =>
-                                    line(i, 'printedUnit', e.target.value)
-                                  }
-                                />
-                              </Field>
-                            </div>
-                            {l.discounts != null && (
-                              <p>
-                                Imported line discount already reflected:{' '}
-                                {money(Number(l.discounts))}
-                              </p>
-                            )}
-                          </details>
-                          <Field label="What is this for?">
-                            <select
-                              disabled={closed || busy || r.id === 'uploading'}
-                              value={l.decision}
-                              onChange={(e) =>
-                                line(i, 'decision', e.target.value)
-                              }
-                            >
-                              <option value="">Review and choose…</option>
-                              <option value="inventory">
-                                Receive / match inventory item
-                              </option>
-                              <option value="expense">
-                                Other expense · exclude from inventory
-                              </option>
-                              <option value="personal">
-                                Personal / excluded (owner draw)
-                              </option>
-                            </select>
-                          </Field>
-                          {l.suggestedDecision && !closed && (
-                            <p>
-                              {l.suggestionSource === 'name'
-                                ? 'Suggested name match — review'
-                                : 'Previously confirmed match'}
-                              :{' '}
-                              {l.suggestedDecision === 'inventory'
-                                ? inventoryItems.find(
-                                    (x) => x.id === l.suggestedItemId,
-                                  )?.name
-                                : l.suggestedCategory}
-                              .{' '}
-                              <button
-                                className="btn secondary"
-                                onClick={() =>
-                                  setR({
-                                    ...r,
-                                    lines: lines.map((x: any, j: number) =>
-                                      j === i
-                                        ? {
-                                            ...x,
-                                            decision: l.suggestedDecision,
-                                            itemId: l.suggestedItemId,
-                                            itemTable:
-                                              l.suggestedItemTable ||
-                                              'ingredients',
-                                            category:
-                                              l.suggestedCategory || l.category,
-                                          }
-                                        : x,
-                                    ),
+                            <details className="finance-full">
+                              <summary>Printed package details</summary>
+                              <div className="finance-form-grid">
+                                <Field label="Printed purchase count">
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    disabled={closed || busy}
+                                    value={l.printedQuantity ?? ''}
+                                    onChange={(e) =>
+                                      line(i, 'printedQuantity', e.target.value)
+                                    }
+                                  />
+                                </Field>
+                                <Field label="Purchasing package">
+                                  <input
+                                    disabled={closed || busy}
+                                    value={l.printedUnit ?? ''}
+                                    onChange={(e) =>
+                                      line(i, 'printedUnit', e.target.value)
+                                    }
+                                  />
+                                </Field>
+                              </div>
+                              {l.discounts != null && (
+                                <p>
+                                  Imported line discount already reflected:{' '}
+                                  {money(Number(l.discounts))}
+                                </p>
+                              )}
+                            </details>
+                            <Field label="Allocation">
+                              <select
+                                disabled={closed || busy}
+                                value={
+                                  l.allocation ??
+                                  (l.decision === 'personal'
+                                    ? 'personal'
+                                    : ['inventory', 'expense'].includes(
+                                          l.decision,
+                                        )
+                                      ? 'business'
+                                      : 'unreviewed')
+                                }
+                                onChange={(e) =>
+                                  patchLine(i, {
+                                    allocation: e.target.value,
+                                    decision:
+                                      e.target.value === 'personal'
+                                        ? 'personal'
+                                        : l.decision === 'inventory'
+                                          ? 'inventory'
+                                          : e.target.value === 'unreviewed'
+                                            ? ''
+                                            : 'expense',
+                                    quantityAllocationConfirmed: false,
                                   })
                                 }
                               >
-                                Use suggestion
-                              </button>
-                            </p>
-                          )}
-                          {l.decision === 'inventory' && (
-                            <>
-                              <Field label="Search inventory items">
+                                <option value="unreviewed">Unreviewed</option>
+                                <option value="business">Business</option>
+                                <option value="personal">
+                                  Personal — exclude from business
+                                </option>
+                                <option value="split">Split</option>
+                              </select>
+                            </Field>
+                            {r.adjustmentAllocation === 'manual' && (
+                              <Field label="Adjusted line total including actual tax / discounts / fees">
                                 <input
+                                  type="number"
+                                  step=".01"
                                   disabled={closed || busy}
-                                  value={itemSearch[i] || ''}
+                                  value={l.adjustedAmount ?? ''}
                                   onChange={(e) =>
-                                    setItemSearch((old) => ({
-                                      ...old,
-                                      [i]: e.target.value,
-                                    }))
+                                    line(i, 'adjustedAmount', e.target.value)
                                   }
-                                  placeholder="Search name, variant, SKU or type"
                                 />
                               </Field>
-                              <Field label="Match inventory item">
-                                <select
-                                  aria-label="Match inventory item"
-                                  disabled={
-                                    closed || busy || r.id === 'uploading'
-                                  }
-                                  value={
-                                    l.createNew
-                                      ? 'new'
-                                      : l.itemId
-                                        ? `${l.itemTable || 'ingredients'}:${l.itemId}`
-                                        : ''
-                                  }
-                                  onChange={(e) => {
-                                    if (e.target.value === 'new') {
-                                      setCreatingLine(i)
-                                      return
+                            )}
+                            {l.allocation === 'split' && (
+                              <>
+                                <Field label="Financial allocation method">
+                                  <select
+                                    disabled={closed || busy}
+                                    value={l.splitMethod || 'percent'}
+                                    onChange={(e) =>
+                                      line(i, 'splitMethod', e.target.value)
                                     }
-                                    const chosen = inventoryItems.find(
-                                      (x) =>
-                                        `${x.itemTable}:${x.id}` ===
-                                        e.target.value,
-                                    )
-                                    patchLine(i, {
-                                      createNew: e.target.value === 'new',
-                                      itemCreationId: crypto.randomUUID(),
-                                      itemId: chosen?.id || '',
-                                      itemTable:
-                                        chosen?.itemTable || 'ingredients',
-                                      quantity: null,
-                                      stockQuantityConfirmed: false,
-                                      unit:
-                                        chosen?.storageUnit ||
-                                        chosen?.unit ||
-                                        '',
-                                      packageContentsConfirmed: false,
-                                    })
-                                  }}
-                                >
-                                  <option value="">
-                                    Choose an existing inventory item…
-                                  </option>
-                                  <option value="new">
-                                    Create new inventory item…
-                                  </option>
-                                  {inventoryGroups.map(({ kind, label }) => (
-                                    <optgroup key={kind} label={label}>
-                                      {inventoryItems
-                                        .filter(
-                                          (x) =>
-                                            x.inventoryKind === kind &&
-                                            (x.id === l.itemId ||
-                                              `${x.name} ${x.variant || ''} ${x.sku || ''} ${label}`
-                                                .toLowerCase()
-                                                .includes(
-                                                  (
-                                                    itemSearch[i] || ''
-                                                  ).toLowerCase(),
-                                                )),
-                                        )
-                                        .map((x) => (
-                                          <option
-                                            key={`${x.itemTable}:${x.id}`}
-                                            value={`${x.itemTable}:${x.id}`}
-                                          >
-                                            {x.name}
-                                            {x.variant ? ` · ${x.variant}` : ''}
-                                            {x.sku
-                                              ? ` · SKU ${x.sku}`
-                                              : ''} · {label}
-                                          </option>
-                                        ))}
-                                    </optgroup>
-                                  ))}
-                                  {l.itemId && !matchedItem(l) && (
-                                    <option
-                                      value={`${l.itemTable || 'ingredients'}:${l.itemId}`}
-                                    >
-                                      Saved item unavailable — reload the Oven
-                                      before posting
+                                  >
+                                    <option value="percent">
+                                      Business percentage
                                     </option>
-                                  )}
-                                </select>
-                              </Field>
-                              {!l.createNew && matchedItem(l) && !closed && (
-                                <details className="finance-full">
-                                  <summary>
-                                    Use saved supplier URL / update product
-                                    details
-                                  </summary>
-                                  <ProductLinkImport
-                                    settings={w.settings[0]}
-                                    draft={{
-                                      ...matchedItem(l),
-                                      ...l.productDetails,
-                                    }}
-                                    existing
-                                    onWorkspace={(updated) =>
-                                      onWorkspace?.(updated)
+                                    <option value="amount">
+                                      Business amount (including allocated
+                                      adjustments)
+                                    </option>
+                                  </select>
+                                </Field>
+                                <Field
+                                  label={
+                                    l.splitMethod === 'amount'
+                                      ? 'Business amount'
+                                      : 'Business percentage'
+                                  }
+                                >
+                                  <input
+                                    type="number"
+                                    step=".01"
+                                    disabled={closed || busy}
+                                    value={
+                                      (l.splitMethod === 'amount'
+                                        ? l.businessAmount
+                                        : l.businessPercent) ?? ''
                                     }
-                                    onBusyChange={setImportBusy}
-                                    apply={(patch) =>
+                                    onChange={(e) =>
                                       patchLine(i, {
-                                        productDetails: {
-                                          ...l.productDetails,
-                                          ...patch,
-                                        },
+                                        [l.splitMethod === 'amount'
+                                          ? 'businessAmount'
+                                          : 'businessPercent']: e.target.value,
+                                        quantityAllocationConfirmed: false,
                                       })
                                     }
                                   />
-                                </details>
-                              )}
-                              {l.createNew && (
-                                <>
-                                  <Field label="New item type">
-                                    <select
+                                </Field>
+                                <p className="finance-full">
+                                  Adjusted line{' '}
+                                  {money(allocations[i]?.fullAmount || 0)} ×
+                                  business percentage (or the entered business
+                                  amount) ={' '}
+                                  {money(allocations[i]?.postedAmount || 0)}{' '}
+                                  business;{' '}
+                                  {money(allocations[i]?.excludedAmount || 0)}{' '}
+                                  excluded. Original amount and printed quantity
+                                  stay intact. Stock uses only the separately
+                                  confirmed business quantity below.
+                                </p>
+                                {l.decision === 'inventory' && (
+                                  <label className="finance-full">
+                                    <input
+                                      type="checkbox"
                                       disabled={closed || busy}
-                                      value={l.usedAs || 'ingredient'}
+                                      checked={!!l.quantityAllocationConfirmed}
                                       onChange={(e) =>
-                                        patchLine(i, {
-                                          usedAs: e.target.value,
-                                          itemTable:
-                                            e.target.value === 'resale'
-                                              ? 'products'
-                                              : 'ingredients',
-                                          unit: '',
-                                          stockQuantityConfirmed: false,
-                                        })
+                                        line(
+                                          i,
+                                          'quantityAllocationConfirmed',
+                                          e.target.checked,
+                                        )
                                       }
-                                    >
-                                      {inventoryGroups.map(
-                                        ({ kind, label }) => (
-                                          <option key={kind} value={kind}>
-                                            {label}
-                                          </option>
-                                        ),
-                                      )}
-                                    </select>
-                                  </Field>
-                                  {!closed && (
-                                    <div className="finance-full">
-                                      <ProductLinkImport
-                                        settings={w.settings[0]}
-                                        draft={{
-                                          ...l,
-                                          name: l.description,
-                                          workflow:
-                                            l.usedAs === 'resale'
-                                              ? 'resale'
-                                              : undefined,
-                                        }}
-                                        onWorkspace={(updated) =>
-                                          onWorkspace?.(updated)
-                                        }
-                                        onBusyChange={setImportBusy}
-                                        apply={(patch) => {
-                                          const { name, ...details } = patch
-                                          patchLine(i, {
-                                            ...details,
-                                            ...(name
-                                              ? { description: name }
-                                              : {}),
-                                          })
-                                        }}
-                                      />
-                                      <InventoryProductFields
-                                        value={l}
-                                        change={(key, value) =>
-                                          line(i, key, value)
-                                        }
-                                      />
-                                    </div>
-                                  )}
-                                  {l.usedAs === 'resale' && (
-                                    <>
-                                      <Field label="Internal SKU (optional)">
-                                        <input
-                                          value={l.sku || ''}
-                                          disabled={closed || busy}
-                                          onChange={(e) =>
-                                            line(i, 'sku', e.target.value)
-                                          }
-                                        />
-                                      </Field>
-                                      <Field label="Retail selling price (optional; never inferred)">
-                                        <input
-                                          type="number"
-                                          value={l.retailPrice ?? ''}
-                                          disabled={closed || busy}
-                                          onChange={(e) =>
-                                            line(
-                                              i,
-                                              'retailPrice',
-                                              e.target.value,
-                                            )
-                                          }
-                                        />
-                                      </Field>
-                                    </>
-                                  )}
-                                  {l.usedAs === 'material' && (
-                                    <>
-                                      <Field label="Material type">
-                                        <select
-                                          value={l.materialType || 'other'}
-                                          disabled={closed || busy}
-                                          onChange={(e) =>
-                                            patchLine(i, {
-                                              materialType: e.target.value,
-                                              fabricTracking: 'length',
-                                              pieceMode: 'aggregate',
-                                            })
-                                          }
-                                        >
-                                          <option value="other">Other</option>
-                                          <option value="fabric">Fabric</option>
-                                          <option value="yarn">Yarn</option>
-                                        </select>
-                                      </Field>
-                                      {l.materialType === 'fabric' && (
-                                        <div className="finance-full">
-                                          <FabricFields
-                                            value={l}
-                                            change={(key, value) =>
-                                              line(i, key, value)
-                                            }
-                                          />
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                  <p className="finance-full">
-                                    Create an empty item and match it to this
-                                    line, or create it when confirming the
-                                    receipt. Other matches stay in this draft.
-                                    Stock is received only on confirmation.
-                                  </p>
-                                  {!closed && (
-                                    <button
-                                      className="btn secondary"
-                                      disabled={busy || importBusy}
-                                      onClick={() =>
-                                        void onSave('receiptCreateItem', {
-                                          ...r,
-                                          lineIndex: i,
-                                        })
-                                      }
-                                    >
-                                      Create item and match line
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                              {(l.itemTable === 'products' ||
-                                (l.createNew && l.usedAs === 'resale')) && (
-                                <>
-                                  {l.unit && l.unit !== 'each' && (
-                                    <>
-                                      <Field label="Items per purchase package">
-                                        <input
-                                          type="number"
-                                          min="1"
-                                          step="1"
-                                          disabled={closed || busy}
-                                          value={l.itemsPerUnit ?? ''}
-                                          onChange={(e) =>
-                                            patchLine(i, {
-                                              itemsPerUnit: e.target.value,
-                                              packageContentsConfirmed: false,
-                                            })
-                                          }
-                                        />
-                                      </Field>
-                                      <label className="finance-full">
-                                        <input
-                                          type="checkbox"
-                                          disabled={closed || busy}
-                                          checked={
-                                            l.packageContentsConfirmed === true
-                                          }
-                                          onChange={(e) =>
-                                            line(
-                                              i,
-                                              'packageContentsConfirmed',
-                                              e.target.checked,
-                                            )
-                                          }
-                                        />{' '}
-                                        I confirmed the items in each purchase
-                                        package.
-                                      </label>
-                                    </>
-                                  )}
-                                  <p className="finance-full" role="status">
-                                    {l.quantity || '—'}{' '}
-                                    {l.unit || 'purchase units'} ×{' '}
-                                    {l.unit === 'each'
-                                      ? 1
-                                      : l.itemsPerUnit || '—'}{' '}
-                                    items ={' '}
-                                    {l.quantity &&
-                                    (l.unit === 'each' || l.itemsPerUnit)
-                                      ? Number(l.quantity) *
-                                        (l.unit === 'each'
-                                          ? 1
-                                          : Number(l.itemsPerUnit))
-                                      : '—'}{' '}
-                                    sellable units. Retail selling price stays
-                                    unchanged.
-                                  </p>
-                                </>
-                              )}
-                              <Field label="Actual quantity received">
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="any"
-                                  enterKeyHint="next"
-                                  value={l.quantity ?? ''}
-                                  disabled={
-                                    closed || busy || r.id === 'uploading'
-                                  }
-                                  onChange={(e) =>
-                                    line(i, 'quantity', e.target.value)
-                                  }
-                                />
-                              </Field>
-                              <Field label="Unit received">
+                                    />{' '}
+                                    I confirmed the business quantity and
+                                    allocated cost correspond, including any
+                                    package conversion. No stock quantity is
+                                    inferred from the percentage.
+                                  </label>
+                                )}
+                              </>
+                            )}
+                            {l.decision !== 'personal' && (
+                              <Field label="Business recording">
                                 <select
-                                  value={l.unit}
                                   disabled={
                                     closed || busy || r.id === 'uploading'
                                   }
+                                  value={l.decision}
                                   onChange={(e) =>
-                                    line(i, 'unit', e.target.value)
+                                    line(i, 'decision', e.target.value)
                                   }
                                 >
-                                  <option value="">Confirm stock unit…</option>
-                                  {(l.itemTable === 'products' ||
-                                  (l.createNew && l.usedAs === 'resale')
-                                    ? ['each', 'pack', 'case', 'box', 'bundle']
-                                    : isFabric(l.createNew ? l : matchedItem(l))
-                                      ? [
-                                          ...fabricUnitOptions(
-                                            (l.createNew ? l : matchedItem(l))
-                                              ?.fabricTracking,
-                                          ),
-                                          ...((l.createNew ? l : matchedItem(l))
-                                            ?.fabricTracking === 'length'
-                                            ? ['bolt', 'roll']
-                                            : []),
-                                        ]
-                                      : Object.keys(
-                                          ingredientUnits(
-                                            w.ingredients.find(
-                                              (item) => item.id === l.itemId,
-                                            )?.conversions,
-                                          ),
-                                        )
-                                  ).map((u) => (
-                                    <option key={u} value={u}>
-                                      {unitLabel(u)}
-                                    </option>
-                                  ))}
+                                  <option value="">Review and choose…</option>
+                                  <option value="inventory">
+                                    Receive / match inventory item
+                                  </option>
+                                  <option value="expense">
+                                    Other expense · exclude from inventory
+                                  </option>
                                 </select>
                               </Field>
-                              {isFabric(l.createNew ? l : matchedItem(l)) && (
-                                <>
-                                  <p className="finance-full">
-                                    Fabric:{' '}
-                                    {
-                                      (l.createNew ? l : matchedItem(l))
-                                        ?.fabricWidth
-                                    }{' '}
-                                    {
-                                      (l.createNew ? l : matchedItem(l))
-                                        ?.widthUnit
-                                    }{' '}
-                                    wide. Different widths or separate pieces
-                                    need their own Craft Materials record before
-                                    matching.
-                                  </p>
-                                  {['bolt', 'roll'].includes(l.unit) && (
-                                    <>
-                                      <Field label="Usable length per bolt / roll">
-                                        <input
-                                          value={l.usableLength ?? ''}
-                                          disabled={closed || busy}
-                                          onChange={(e) =>
-                                            line(
-                                              i,
-                                              'usableLength',
-                                              e.target.value,
-                                            )
+                            )}
+                            {l.suggestedDecision && !closed && (
+                              <p>
+                                {l.suggestionSource === 'name'
+                                  ? 'Suggested name match — review'
+                                  : 'Previously confirmed match'}
+                                :{' '}
+                                {l.suggestedDecision === 'inventory'
+                                  ? inventoryItems.find(
+                                      (x) => x.id === l.suggestedItemId,
+                                    )?.name
+                                  : l.suggestedCategory}
+                                .{' '}
+                                <button
+                                  className="btn secondary"
+                                  onClick={() =>
+                                    setR({
+                                      ...r,
+                                      lines: lines.map((x: any, j: number) =>
+                                        j === i
+                                          ? {
+                                              ...x,
+                                              decision: l.suggestedDecision,
+                                              itemId: l.suggestedItemId,
+                                              itemTable:
+                                                l.suggestedItemTable ||
+                                                'ingredients',
+                                              category:
+                                                l.suggestedCategory ||
+                                                l.category,
+                                            }
+                                          : x,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  Use suggestion
+                                </button>
+                              </p>
+                            )}
+                            {l.decision === 'inventory' && (
+                              <>
+                                <Field label="Search inventory items">
+                                  <input
+                                    disabled={closed || busy}
+                                    value={itemSearch[i] || ''}
+                                    onChange={(e) =>
+                                      setItemSearch((old) => ({
+                                        ...old,
+                                        [i]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="Search name, variant, SKU or type"
+                                  />
+                                </Field>
+                                <Field label="Match inventory item">
+                                  <select
+                                    aria-label="Match inventory item"
+                                    disabled={
+                                      closed || busy || r.id === 'uploading'
+                                    }
+                                    value={
+                                      l.createNew
+                                        ? 'new'
+                                        : l.itemId
+                                          ? `${l.itemTable || 'ingredients'}:${l.itemId}`
+                                          : ''
+                                    }
+                                    onChange={(e) => {
+                                      if (e.target.value === 'new') {
+                                        setCreatingLine(i)
+                                        return
+                                      }
+                                      const chosen = inventoryItems.find(
+                                        (x) =>
+                                          `${x.itemTable}:${x.id}` ===
+                                          e.target.value,
+                                      )
+                                      patchLine(i, {
+                                        createNew: e.target.value === 'new',
+                                        itemCreationId: crypto.randomUUID(),
+                                        itemId: chosen?.id || '',
+                                        itemTable:
+                                          chosen?.itemTable || 'ingredients',
+                                        quantity: null,
+                                        stockQuantityConfirmed: false,
+                                        unit:
+                                          chosen?.storageUnit ||
+                                          chosen?.unit ||
+                                          '',
+                                        packageContentsConfirmed: false,
+                                      })
+                                    }}
+                                  >
+                                    <option value="">
+                                      Choose an existing inventory item…
+                                    </option>
+                                    <option value="new">
+                                      Create new inventory item…
+                                    </option>
+                                    {inventoryGroups.map(({ kind, label }) => (
+                                      <optgroup key={kind} label={label}>
+                                        {inventoryItems
+                                          .filter(
+                                            (x) =>
+                                              x.inventoryKind === kind &&
+                                              (x.id === l.itemId ||
+                                                `${x.name} ${x.variant || ''} ${x.sku || ''} ${label}`
+                                                  .toLowerCase()
+                                                  .includes(
+                                                    (
+                                                      itemSearch[i] || ''
+                                                    ).toLowerCase(),
+                                                  )),
+                                          )
+                                          .map((x) => (
+                                            <option
+                                              key={`${x.itemTable}:${x.id}`}
+                                              value={`${x.itemTable}:${x.id}`}
+                                            >
+                                              {x.name}
+                                              {x.variant
+                                                ? ` · ${x.variant}`
+                                                : ''}
+                                              {x.sku ? ` · SKU ${x.sku}` : ''} ·{' '}
+                                              {label}
+                                            </option>
+                                          ))}
+                                      </optgroup>
+                                    ))}
+                                    {l.itemId && !matchedItem(l) && (
+                                      <option
+                                        value={`${l.itemTable || 'ingredients'}:${l.itemId}`}
+                                      >
+                                        Saved item unavailable — reload the Oven
+                                        before posting
+                                      </option>
+                                    )}
+                                  </select>
+                                </Field>
+                                {!l.createNew && matchedItem(l) && !closed && (
+                                  <details className="finance-full">
+                                    <summary>
+                                      Use saved supplier URL / update product
+                                      details
+                                    </summary>
+                                    <ProductLinkImport
+                                      settings={w.settings[0]}
+                                      draft={{
+                                        ...matchedItem(l),
+                                        ...l.productDetails,
+                                      }}
+                                      existing
+                                      onWorkspace={(updated) =>
+                                        onWorkspace?.(updated)
+                                      }
+                                      onBusyChange={setImportBusy}
+                                      apply={(patch) =>
+                                        patchLine(i, {
+                                          productDetails: {
+                                            ...l.productDetails,
+                                            ...patch,
+                                          },
+                                        })
+                                      }
+                                    />
+                                  </details>
+                                )}
+                                {l.createNew && (
+                                  <>
+                                    <Field label="New item type">
+                                      <select
+                                        disabled={closed || busy}
+                                        value={l.usedAs || 'ingredient'}
+                                        onChange={(e) =>
+                                          patchLine(i, {
+                                            usedAs: e.target.value,
+                                            itemTable:
+                                              e.target.value === 'resale'
+                                                ? 'products'
+                                                : 'ingredients',
+                                            unit: '',
+                                            stockQuantityConfirmed: false,
+                                          })
+                                        }
+                                      >
+                                        {inventoryGroups.map(
+                                          ({ kind, label }) => (
+                                            <option key={kind} value={kind}>
+                                              {label}
+                                            </option>
+                                          ),
+                                        )}
+                                      </select>
+                                    </Field>
+                                    {!closed && (
+                                      <div className="finance-full">
+                                        <ProductLinkImport
+                                          settings={w.settings[0]}
+                                          draft={{
+                                            ...l,
+                                            name: l.description,
+                                            workflow:
+                                              l.usedAs === 'resale'
+                                                ? 'resale'
+                                                : undefined,
+                                          }}
+                                          onWorkspace={(updated) =>
+                                            onWorkspace?.(updated)
+                                          }
+                                          onBusyChange={setImportBusy}
+                                          apply={(patch) => {
+                                            const { name, ...details } = patch
+                                            patchLine(i, {
+                                              ...details,
+                                              ...(name
+                                                ? { description: name }
+                                                : {}),
+                                            })
+                                          }}
+                                        />
+                                        <InventoryProductFields
+                                          value={l}
+                                          change={(key, value) =>
+                                            line(i, key, value)
                                           }
                                         />
-                                      </Field>
-                                      <Field label="Usable length unit">
-                                        <select
-                                          value={l.usableLengthUnit || ''}
-                                          disabled={closed || busy}
-                                          onChange={(e) =>
-                                            line(
-                                              i,
-                                              'usableLengthUnit',
-                                              e.target.value,
-                                            )
-                                          }
-                                        >
-                                          <option value="">
-                                            Confirm length unit…
-                                          </option>
-                                          {fabricUnitOptions('length').map(
-                                            (u) => (
-                                              <option key={u}>{u}</option>
-                                            ),
-                                          )}
-                                        </select>
-                                      </Field>
-                                      <label className="finance-full">
-                                        <input
-                                          type="checkbox"
-                                          disabled={closed || busy}
-                                          checked={l.lengthConfirmed === true}
-                                          onChange={(e) =>
-                                            line(
-                                              i,
-                                              'lengthConfirmed',
-                                              e.target.checked,
-                                            )
-                                          }
-                                        />{' '}
-                                        I confirmed the usable length per bolt /
-                                        roll.
-                                      </label>
-                                    </>
-                                  )}
-                                </>
-                              )}
-                              <Field label="Lot (optional)">
-                                <input
-                                  value={l.lot || ''}
-                                  disabled={
-                                    closed || busy || r.id === 'uploading'
-                                  }
-                                  onChange={(e) =>
-                                    line(i, 'lot', e.target.value)
-                                  }
-                                />
-                              </Field>
-                              {supportsExpiry(
-                                l.createNew ? l : matchedItem(l),
-                              ) && (
-                                <Field label="Expiration (optional)">
+                                      </div>
+                                    )}
+                                    {l.usedAs === 'resale' && (
+                                      <>
+                                        <Field label="Internal SKU (optional)">
+                                          <input
+                                            value={l.sku || ''}
+                                            disabled={closed || busy}
+                                            onChange={(e) =>
+                                              line(i, 'sku', e.target.value)
+                                            }
+                                          />
+                                        </Field>
+                                        <Field label="Retail selling price (optional; never inferred)">
+                                          <input
+                                            type="number"
+                                            value={l.retailPrice ?? ''}
+                                            disabled={closed || busy}
+                                            onChange={(e) =>
+                                              line(
+                                                i,
+                                                'retailPrice',
+                                                e.target.value,
+                                              )
+                                            }
+                                          />
+                                        </Field>
+                                      </>
+                                    )}
+                                    {l.usedAs === 'material' && (
+                                      <>
+                                        <Field label="Material type">
+                                          <select
+                                            value={l.materialType || 'other'}
+                                            disabled={closed || busy}
+                                            onChange={(e) =>
+                                              patchLine(i, {
+                                                materialType: e.target.value,
+                                                fabricTracking: 'length',
+                                                pieceMode: 'aggregate',
+                                              })
+                                            }
+                                          >
+                                            <option value="other">Other</option>
+                                            <option value="fabric">
+                                              Fabric
+                                            </option>
+                                            <option value="yarn">Yarn</option>
+                                          </select>
+                                        </Field>
+                                        {l.materialType === 'fabric' && (
+                                          <div className="finance-full">
+                                            <FabricFields
+                                              value={l}
+                                              change={(key, value) =>
+                                                line(i, key, value)
+                                              }
+                                            />
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                    <p className="finance-full">
+                                      Create an empty item and match it to this
+                                      line, or create it when confirming the
+                                      receipt. Other matches stay in this draft.
+                                      Stock is received only on confirmation.
+                                    </p>
+                                    {!closed && (
+                                      <button
+                                        className="btn secondary"
+                                        disabled={busy || importBusy}
+                                        onClick={() =>
+                                          void onSave('receiptCreateItem', {
+                                            ...r,
+                                            lineIndex: i,
+                                          })
+                                        }
+                                      >
+                                        Create item and match line
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                {(l.itemTable === 'products' ||
+                                  (l.createNew && l.usedAs === 'resale')) && (
+                                  <>
+                                    {l.unit && l.unit !== 'each' && (
+                                      <>
+                                        <Field label="Items per purchase package">
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            disabled={closed || busy}
+                                            value={l.itemsPerUnit ?? ''}
+                                            onChange={(e) =>
+                                              patchLine(i, {
+                                                itemsPerUnit: e.target.value,
+                                                packageContentsConfirmed: false,
+                                              })
+                                            }
+                                          />
+                                        </Field>
+                                        <label className="finance-full">
+                                          <input
+                                            type="checkbox"
+                                            disabled={closed || busy}
+                                            checked={
+                                              l.packageContentsConfirmed ===
+                                              true
+                                            }
+                                            onChange={(e) =>
+                                              line(
+                                                i,
+                                                'packageContentsConfirmed',
+                                                e.target.checked,
+                                              )
+                                            }
+                                          />{' '}
+                                          I confirmed the items in each purchase
+                                          package.
+                                        </label>
+                                      </>
+                                    )}
+                                    <p className="finance-full" role="status">
+                                      {l.quantity || '—'}{' '}
+                                      {l.unit || 'purchase units'} ×{' '}
+                                      {l.unit === 'each'
+                                        ? 1
+                                        : l.itemsPerUnit || '—'}{' '}
+                                      items ={' '}
+                                      {l.quantity &&
+                                      (l.unit === 'each' || l.itemsPerUnit)
+                                        ? Number(l.quantity) *
+                                          (l.unit === 'each'
+                                            ? 1
+                                            : Number(l.itemsPerUnit))
+                                        : '—'}{' '}
+                                      sellable units. Retail selling price stays
+                                      unchanged.
+                                    </p>
+                                  </>
+                                )}
+                                <Field label="Business quantity received">
                                   <input
-                                    type="date"
-                                    value={l.expires || ''}
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    enterKeyHint="next"
+                                    value={l.quantity ?? ''}
                                     disabled={
                                       closed || busy || r.id === 'uploading'
                                     }
                                     onChange={(e) =>
-                                      line(i, 'expires', e.target.value)
+                                      line(i, 'quantity', e.target.value)
                                     }
                                   />
                                 </Field>
-                              )}
-                              <label className="finance-full">
-                                <input
-                                  type="checkbox"
+                                <Field label="Unit received">
+                                  <select
+                                    value={l.unit}
+                                    disabled={
+                                      closed || busy || r.id === 'uploading'
+                                    }
+                                    onChange={(e) =>
+                                      line(i, 'unit', e.target.value)
+                                    }
+                                  >
+                                    <option value="">
+                                      Confirm stock unit…
+                                    </option>
+                                    {(l.itemTable === 'products' ||
+                                    (l.createNew && l.usedAs === 'resale')
+                                      ? [
+                                          'each',
+                                          'pack',
+                                          'case',
+                                          'box',
+                                          'bundle',
+                                        ]
+                                      : isFabric(
+                                            l.createNew ? l : matchedItem(l),
+                                          )
+                                        ? [
+                                            ...fabricUnitOptions(
+                                              (l.createNew ? l : matchedItem(l))
+                                                ?.fabricTracking,
+                                            ),
+                                            ...((l.createNew
+                                              ? l
+                                              : matchedItem(l)
+                                            )?.fabricTracking === 'length'
+                                              ? ['bolt', 'roll']
+                                              : []),
+                                          ]
+                                        : Object.keys(
+                                            ingredientUnits(
+                                              w.ingredients.find(
+                                                (item) => item.id === l.itemId,
+                                              )?.conversions,
+                                            ),
+                                          )
+                                    ).map((u) => (
+                                      <option key={u} value={u}>
+                                        {unitLabel(u)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </Field>
+                                {isFabric(l.createNew ? l : matchedItem(l)) && (
+                                  <>
+                                    <p className="finance-full">
+                                      Fabric:{' '}
+                                      {
+                                        (l.createNew ? l : matchedItem(l))
+                                          ?.fabricWidth
+                                      }{' '}
+                                      {
+                                        (l.createNew ? l : matchedItem(l))
+                                          ?.widthUnit
+                                      }{' '}
+                                      wide. Different widths or separate pieces
+                                      need their own Craft Materials record
+                                      before matching.
+                                    </p>
+                                    {['bolt', 'roll'].includes(l.unit) && (
+                                      <>
+                                        <Field label="Usable length per bolt / roll">
+                                          <input
+                                            value={l.usableLength ?? ''}
+                                            disabled={closed || busy}
+                                            onChange={(e) =>
+                                              line(
+                                                i,
+                                                'usableLength',
+                                                e.target.value,
+                                              )
+                                            }
+                                          />
+                                        </Field>
+                                        <Field label="Usable length unit">
+                                          <select
+                                            value={l.usableLengthUnit || ''}
+                                            disabled={closed || busy}
+                                            onChange={(e) =>
+                                              line(
+                                                i,
+                                                'usableLengthUnit',
+                                                e.target.value,
+                                              )
+                                            }
+                                          >
+                                            <option value="">
+                                              Confirm length unit…
+                                            </option>
+                                            {fabricUnitOptions('length').map(
+                                              (u) => (
+                                                <option key={u}>{u}</option>
+                                              ),
+                                            )}
+                                          </select>
+                                        </Field>
+                                        <label className="finance-full">
+                                          <input
+                                            type="checkbox"
+                                            disabled={closed || busy}
+                                            checked={l.lengthConfirmed === true}
+                                            onChange={(e) =>
+                                              line(
+                                                i,
+                                                'lengthConfirmed',
+                                                e.target.checked,
+                                              )
+                                            }
+                                          />{' '}
+                                          I confirmed the usable length per bolt
+                                          / roll.
+                                        </label>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                                <Field label="Lot (optional)">
+                                  <input
+                                    value={l.lot || ''}
+                                    disabled={
+                                      closed || busy || r.id === 'uploading'
+                                    }
+                                    onChange={(e) =>
+                                      line(i, 'lot', e.target.value)
+                                    }
+                                  />
+                                </Field>
+                                {supportsExpiry(
+                                  l.createNew ? l : matchedItem(l),
+                                ) && (
+                                  <Field label="Expiration (optional)">
+                                    <input
+                                      type="date"
+                                      value={l.expires || ''}
+                                      disabled={
+                                        closed || busy || r.id === 'uploading'
+                                      }
+                                      onChange={(e) =>
+                                        line(i, 'expires', e.target.value)
+                                      }
+                                    />
+                                  </Field>
+                                )}
+                                <label className="finance-full">
+                                  <input
+                                    type="checkbox"
+                                    disabled={
+                                      closed || busy || r.id === 'uploading'
+                                    }
+                                    checked={!!l.stockQuantityConfirmed}
+                                    onChange={(e) =>
+                                      line(
+                                        i,
+                                        'stockQuantityConfirmed',
+                                        e.target.checked,
+                                      )
+                                    }
+                                  />{' '}
+                                  I confirmed the received quantity and stock
+                                  unit, including package contents where
+                                  applicable.
+                                </label>
+                                <p className="finance-full">
+                                  Use only the confirmed business quantity, not
+                                  the OCR package count. Tax and charges use the
+                                  visible allocation method. Current stock cost
+                                  uses a weighted average; prior costs stay in
+                                  history.
+                                </p>
+                              </>
+                            )}
+                            {l.decision === 'expense' && (
+                              <Field label="Expense category">
+                                <select
+                                  value={l.category}
                                   disabled={
                                     closed || busy || r.id === 'uploading'
                                   }
-                                  checked={!!l.stockQuantityConfirmed}
                                   onChange={(e) =>
-                                    line(
-                                      i,
-                                      'stockQuantityConfirmed',
-                                      e.target.checked,
-                                    )
+                                    line(i, 'category', e.target.value)
                                   }
-                                />{' '}
-                                I confirmed the received quantity and stock
-                                unit, including package contents where
-                                applicable.
-                              </label>
-                              <p className="finance-full">
-                                Use the actual purchased quantity, not the OCR
-                                package count. Receipt tax is allocated
-                                proportionally to line cost. Current stock cost
-                                uses a weighted average; prior costs stay in
-                                history.
-                              </p>
-                            </>
-                          )}
-                          {l.decision === 'expense' && (
-                            <Field label="Expense category">
-                              <select
-                                value={l.category}
-                                disabled={
-                                  closed || busy || r.id === 'uploading'
-                                }
-                                onChange={(e) =>
-                                  line(i, 'category', e.target.value)
-                                }
-                              >
-                                <option value="">Choose category…</option>
-                                {expenseCategories.map((c) => (
-                                  <option key={c}>{c}</option>
-                                ))}
-                              </select>
-                            </Field>
-                          )}
+                                >
+                                  <option value="">Choose category…</option>
+                                  {expenseCategories.map((c) => (
+                                    <option key={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </Field>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ),
-            )}
-            <details>
-              <summary>View calculation & history</summary>
-              {r.postedLines?.map((l: any, i: number) => (
-                <p key={i}>
-                  {l.description}: {money(l.postedAmount)} · allocated tax{' '}
-                  {money(l.taxShare)} · other charges{' '}
-                  {money(l.otherChargesShare ?? 0)}{' '}
-                  {l.normalizedQuantity
-                    ? `· received ${l.normalizedQuantity} base units · previous unit cost ${l.priorCost} → ${l.newCost}`
-                    : ''}
-                </p>
-              ))}
-              {r.history?.map((h: any, i: number) => (
-                <p key={i}>
-                  {h.action} · {h.at}
-                </p>
-              ))}
-            </details>
-            {!closed && purchaseCandidates.length > 0 && (
-              <div className="finance-feedback">
-                <strong>Possible existing purchase</strong>
-                <p>
-                  {purchaseCandidates
-                    .map((t) => `${t.name} · ${t.date} · ${money(t.amount)}`)
-                    .join('; ')}
-                  . Merchant, date and amount match. Review the evidence; attach
-                  below if this is the same purchase.
-                </p>
-              </div>
-            )}
-            {!closed && (
+                      )}
+                    </div>
+                  ),
+              )}
               <details>
-                <summary>Attach to an existing purchase instead</summary>
-                <p>
-                  This links the original receipt without changing inventory or
-                  posting another transaction. Your edits are saved before
-                  attachment.
-                </p>
-                <label>
-                  Existing purchase
-                  <select
-                    value={matchId}
-                    onChange={(e) => setMatchId(e.target.value)}
-                  >
-                    <option value="">Choose a purchase</option>
-                    {(w.finance_transactions || [])
-                      .filter(
-                        (t) =>
-                          ['expense', 'bill'].includes(t.kind) &&
-                          !t.reversedBy &&
-                          !t.receiptId,
-                      )
-                      .map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} · {t.date} · {money(t.amount)}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <button
-                  className="btn secondary"
-                  disabled={busy || !canWrite || !matchId}
-                  onClick={() =>
-                    void (async () => {
-                      const saved = await onSave('receiptDraft', r)
-                      if (saved)
-                        await onSave('receiptMatch', {
-                          id: r.id,
-                          transactionId: matchId,
-                        })
-                    })()
-                  }
-                >
-                  Confirm attachment only
-                </button>
-              </details>
-            )}
-            {duplicates.length > 0 && (
-              <div className="finance-feedback">
-                <strong>Possible duplicate receipt</strong>
-                {duplicates.map((d) => (
-                  <p key={d.id}>
-                    {d.vendor || d.name} · {d.date} · {money(d.total)} ·{' '}
-                    {d.status}
+                <summary>View calculation & history</summary>
+                {r.postedLines?.map((l: any, i: number) => (
+                  <p key={i}>
+                    {l.description}: {money(l.postedAmount)} · allocated tax{' '}
+                    {l.adjustmentAllocation === 'manual'
+                      ? 'included in custom cost'
+                      : money(l.taxShare || 0)}{' '}
+                    · other charges{' '}
+                    {l.adjustmentAllocation === 'manual'
+                      ? 'included in custom cost'
+                      : money(l.otherChargesShare ?? 0)}{' '}
+                    {l.normalizedQuantity
+                      ? `· received ${l.normalizedQuantity} base units · previous unit cost ${l.priorCost} → ${l.newCost}`
+                      : ''}
                   </p>
                 ))}
-                {!closed && (
+                {r.history?.map((h: any, i: number) => (
+                  <p key={i}>
+                    {h.action} · {h.at}
+                  </p>
+                ))}
+              </details>
+              {!closed && purchaseCandidates.length > 0 && (
+                <div className="finance-feedback">
+                  <strong>Possible existing purchase</strong>
+                  <p>
+                    {purchaseCandidates
+                      .map((t) => `${t.name} · ${t.date} · ${money(t.amount)}`)
+                      .join('; ')}
+                    . Merchant, date and amount match. Review the evidence;
+                    attach below if this is the same purchase.
+                  </p>
+                </div>
+              )}
+              {!closed && (
+                <details>
+                  <summary>Attach to an existing purchase instead</summary>
+                  <p>
+                    This links the original receipt without changing inventory
+                    or posting another transaction. The purchase must equal only
+                    the business allocation and cannot receive new stock. Your
+                    edits are saved before attachment.
+                  </p>
                   <label>
-                    <input
-                      type="checkbox"
-                      checked={!!r.duplicateReviewed}
-                      onChange={(e) =>
-                        update('duplicateReviewed', e.target.checked)
-                      }
-                    />{' '}
-                    I reviewed the merchant, date, amount and available document
-                    evidence. This is a separate purchase.
+                    Existing purchase
+                    <select
+                      value={matchId}
+                      onChange={(e) => setMatchId(e.target.value)}
+                    >
+                      <option value="">Choose a purchase</option>
+                      {(w.finance_transactions || [])
+                        .filter(
+                          (t) =>
+                            ['expense', 'bill'].includes(t.kind) &&
+                            !t.reversedBy &&
+                            !t.receiptId,
+                        )
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} · {t.date} · {money(t.amount)}
+                          </option>
+                        ))}
+                    </select>
                   </label>
-                )}
-              </div>
-            )}
+                  <button
+                    className="btn secondary"
+                    disabled={busy || !canWrite || !matchId}
+                    onClick={() =>
+                      void (async () => {
+                        const saved = await onSave('receiptDraft', r)
+                        if (saved)
+                          await onSave('receiptMatch', {
+                            id: r.id,
+                            transactionId: matchId,
+                          })
+                      })()
+                    }
+                  >
+                    Confirm attachment only
+                  </button>
+                </details>
+              )}
+              {duplicates.length > 0 && (
+                <div className="finance-feedback">
+                  <strong>Possible duplicate receipt</strong>
+                  {duplicates.map((d) => (
+                    <p key={d.id}>
+                      {d.vendor || d.name} · {d.date} · {money(d.total)} ·{' '}
+                      {d.status}
+                    </p>
+                  ))}
+                  {!closed && (
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!r.duplicateReviewed}
+                        onChange={(e) =>
+                          update('duplicateReviewed', e.target.checked)
+                        }
+                      />{' '}
+                      I reviewed the merchant, date, amount and available
+                      document evidence. This is a separate purchase.
+                    </label>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
         </div>
         {!closed && (
@@ -3842,6 +4193,11 @@ function ReceiptReview({
                 </div>
               ))}
             </dl>
+            {allocationErrors.map((e) => (
+              <p role="alert" key={e}>
+                {e}
+              </p>
+            ))}
             {!!totals.errors.length && (
               <ul>
                 {totals.errors.map((e) => (
@@ -3874,8 +4230,10 @@ function ReceiptReview({
               </p>
             )}
             <p>
-              This creates one new purchase transaction and records the payment
-              using the existing Cash account posting policy.
+              Only the business allocation records a purchase and payment
+              through the existing Cash account posting policy. An entirely
+              personal receipt creates no business transaction or stock
+              movement.
             </p>
             <dl>
               <div>
@@ -3887,7 +4245,7 @@ function ReceiptReview({
                 <dd>{money(amountFor('inventory'))}</dd>
               </div>
               <div>
-                <dt>Personal / excluded (owner draw)</dt>
+                <dt>Personal — excluded from business</dt>
                 <dd>{money(amountFor('personal'))}</dd>
               </div>
               <div>
@@ -3896,7 +4254,10 @@ function ReceiptReview({
               </div>
             </dl>
             {allocations
-              .filter((l) => l.decision === 'inventory')
+              .filter(
+                (l) =>
+                  l.decision === 'inventory' && l.allocation !== 'personal',
+              )
               .map((l, i) => (
                 <p key={i}>
                   Receive {l.quantity} {l.unit} ·{' '}
@@ -3918,6 +4279,32 @@ function ReceiptReview({
           <button className="btn secondary" disabled={busy} onClick={onClose}>
             Close
           </button>
+          {closed && r.status === 'posted' && (
+            <div>
+              <Field label="Correction reason">
+                <input
+                  value={correctionReason}
+                  onChange={(e) => setCorrectionReason(e.target.value)}
+                />
+              </Field>
+              <button
+                className="btn secondary"
+                disabled={busy || !canWrite || !correctionReason.trim()}
+                onClick={() =>
+                  void onSave('receiptCorrect', {
+                    id: r.id,
+                    reason: correctionReason,
+                  })
+                }
+              >
+                Reverse business postings & reopen review
+              </button>
+              <p>
+                Existing reversal checks apply, including available stock. The
+                original posting and review remain in the audit history.
+              </p>
+            </div>
+          )}
           {!closed && (
             <>
               <button

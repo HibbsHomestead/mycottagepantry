@@ -1272,3 +1272,172 @@ it('keeps stock, valuation, expenses and journal unchanged when a later line fai
     before.ingredients.find((i: Item) => i.id === 'flour'),
   )
 })
+it('persists mixed allocations, excludes personal postings, reverses and resumes without rewriting original evidence', async () => {
+  const created = await request('receiptManual', {})
+  const r = created.workspace.receipt_extractions.at(-1)
+  const data = {
+    id: r.id,
+    arithmeticVersion: 2,
+    allocationVersion: 1,
+    vendor: 'Disposable allocation mill',
+    date: '2026-11-15',
+    receivedDate: '2026-11-15',
+    currency: 'USD',
+    taxTreatment: 'exclusive',
+    tax: 2,
+    printedTotal: 22,
+    lines: [
+      {
+        description: 'Mixed supplies',
+        amount: 20,
+        allocation: 'split',
+        decision: 'expense',
+        category: 'Supplies expense',
+        splitMethod: 'percent',
+        businessPercent: 50,
+      },
+    ],
+  }
+  const before = created.workspace
+  expect((await request('receiptDraft', data)).status).toBe(200)
+  const posted = await request('receiptPost', { id: r.id })
+  expect(posted.status, posted.error).toBe(200)
+  expect(posted.workspace.expenses.at(-1)).toMatchObject({
+    amount: 11,
+    deductible: false,
+  })
+  expect(posted.workspace.finance_transactions.at(-1).amount).toBe(11)
+  expect(posted.workspace.ledger).toHaveLength(before.ledger.length)
+  expect(
+    posted.workspace.receipt_extractions.find((x: Item) => x.id === r.id),
+  ).toMatchObject({
+    total: 22,
+    printedTotal: 22,
+    excludedTotal: 11,
+    lines: data.lines,
+  })
+  const retry = await request('receiptPost', { id: r.id })
+  expect(retry.workspace.journals).toHaveLength(
+    posted.workspace.journals.length,
+  )
+  runtime.user = 'receipt-other'
+  expect(
+    (
+      await request('receiptCorrect', {
+        id: r.id,
+        reason: 'Cross-business attempt',
+      })
+    ).status,
+  ).toBe(400)
+  runtime.user = 'receipt-owner'
+  const corrected = await request('receiptCorrect', {
+    id: r.id,
+    reason: 'Review business use',
+  })
+  expect(corrected.status, corrected.error).toBe(200)
+  expect(corrected.workspace.expenses.at(-1).amount).toBe(-11)
+  const saved = corrected.workspace.receipt_extractions.find(
+    (x: Item) => x.correctionOf === r.id,
+  )
+  expect(saved.status).toBe('draft')
+  expect(saved.history.at(-1).previousReview.lines).toEqual(data.lines)
+  const excluded = await request('receiptPost', {
+    id: saved.id,
+    lines: [{ ...data.lines[0], allocation: 'personal', decision: 'personal' }],
+  })
+  expect(excluded.status, excluded.error).toBe(200)
+  expect(excluded.workspace.journals).toHaveLength(
+    corrected.workspace.journals.length,
+  )
+  expect(excluded.workspace.finance_transactions).toHaveLength(
+    corrected.workspace.finance_transactions.length,
+  )
+})
+it('retains protected originals across correction drafts and rejects duplicate uploads and read-only corrections', async () => {
+  const receipt = await upload()
+  const posted = await request('receiptPost', {
+    id: receipt.id,
+    arithmeticVersion: 2,
+    allocationVersion: 1,
+    vendor: 'Disposable source review',
+    date: '2026-11-15',
+    receivedDate: '2026-11-15',
+    currency: 'USD',
+    taxTreatment: 'exclusive',
+    tax: 0,
+    printedTotal: 12,
+    lines: [
+      {
+        description: 'Business supplies',
+        amount: 12,
+        decision: 'expense',
+        allocation: 'business',
+        category: 'Supplies expense',
+      },
+    ],
+  })
+  expect(posted.status, posted.error).toBe(200)
+  runtime.user = 'receipt-reader'
+  expect(
+    (
+      await request('receiptCorrect', {
+        id: receipt.id,
+        reason: 'Unauthorized',
+      })
+    ).status,
+  ).toBe(400)
+  runtime.user = 'receipt-owner'
+  const corrected = await request('receiptCorrect', {
+    id: receipt.id,
+    reason: 'Check use',
+  })
+  expect(corrected.status, corrected.error).toBe(200)
+  const draft = corrected.workspace.receipt_extractions.find(
+    (r: Item) => r.correctionOf === receipt.id,
+  )
+  expect(draft.sourceReceiptId).toBe(receipt.id)
+  const file = await handler(
+    new Request(
+      `https://receipt-test.invalid/api/workspace?receiptFile=${draft.id}&original=1`,
+    ),
+    context,
+  )
+  expect(file.status).toBe(200)
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const form = new FormData()
+  form.set(
+    'file',
+    new File([bytes], 'duplicate.pdf', { type: 'application/pdf' }),
+  )
+  const duplicate = await handler(
+    new Request('https://receipt-test.invalid/api/workspace?receiptUpload=1', {
+      method: 'POST',
+      body: form,
+    }),
+    context,
+  )
+  expect(duplicate.status).toBe(400)
+  const retry = await request('receiptCorrect', {
+    id: receipt.id,
+    reason: 'Retry',
+  })
+  expect(retry.status, retry.error).toBe(200)
+  expect(retry.workspace.journals).toHaveLength(
+    corrected.workspace.journals.length,
+  )
+  expect(
+    retry.workspace.receipt_extractions.filter(
+      (r: Item) => r.correctionOf === receipt.id,
+    ),
+  ).toHaveLength(1)
+  const reposted = await request('receiptPost', { id: draft.id })
+  expect(reposted.status, reposted.error).toBe(200)
+  runtime.user = 'receipt-other'
+  const denied = await handler(
+    new Request(
+      `https://receipt-test.invalid/api/workspace?receiptFile=${draft.id}&original=1`,
+    ),
+    context,
+  )
+  expect(denied.status).toBe(400)
+})

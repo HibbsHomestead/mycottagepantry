@@ -3,7 +3,12 @@ import { ovenToday } from './oven-dates'
 import { resaleReceivedQuantity } from './purchased-inventory'
 import { validateFabric } from './fabric'
 import { emptyReceiptValue, receiptReviewValues } from './receipt-document'
-import { receiptTotals, receiptAllocations } from './receipt-totals'
+import {
+  receiptTotals,
+  receiptAllocations,
+  receiptBusinessAllocations,
+  receiptAllocationIssues,
+} from './receipt-totals'
 import { fabricReceipt, isFabric, supportsExpiry } from './fabric'
 import {
   baseUnit,
@@ -173,9 +178,27 @@ export function consignmentMath(d: Record<string, any>) {
   }
 }
 export function duplicateReceipts(w: Workspace, r: Record<string, any>) {
+  const corrected = new Set<string>()
+  let parent = r.correctionOf
+  while (parent && !corrected.has(parent)) {
+    const source = w.receipt_extractions.find((x) => x.id === parent)
+    if (
+      !source ||
+      !(
+        source.businessTotal === 0 ||
+        w.finance_transactions?.some(
+          (t) => t.id === source.transactionId && t.reversedBy,
+        )
+      )
+    )
+      break
+    corrected.add(parent)
+    parent = source.correctionOf
+  }
   return (w.receipt_extractions || []).filter(
     (x) =>
       x.id !== r.id &&
+      !corrected.has(x.id) &&
       x.status !== 'cancelled' &&
       ((r.fileHash && x.fileHash === r.fileHash) ||
         (!emptyReceiptValue(r.total) &&
@@ -709,6 +732,52 @@ export function planFinance(
         })
     entry = journal(tx.name, when, lines)
     description = 'Financial activity recorded'
+  } else if (action === 'receiptCorrect') {
+    const old = owned(w, 'receipt_extractions', d.id)
+    if (old.status !== 'posted')
+      throw new Error('Only a posted receipt can be corrected.')
+    if (!text(d.reason)) throw new Error('Enter a correction reason.')
+    if (w.receipt_extractions.some((r) => r.correctionOf === old.id))
+      return { writes: [], description: 'Correction review already exists' }
+    if (old.transactionId) {
+      const transaction = owned(w, 'finance_transactions', old.transactionId)
+      if (!transaction.reversedBy) {
+        const reversal = planFinance(
+          w,
+          'financeReverse',
+          { id: transaction.id, reason: d.reason, date: d.date },
+          newId,
+        )
+        writes.push(...reversal.writes)
+        entry = reversal.journal
+      }
+    }
+    put('receipt_extractions', {
+      ...old,
+      id: newId(),
+      correctionOf: old.id,
+      sourceReceiptId: old.sourceReceiptId || old.id,
+      originalObjectKey: null,
+      previewObjectKey: null,
+      postedLines: null,
+      status: 'draft',
+      allocationVersion: 1,
+      transactionId: null,
+      journalId: null,
+      history: [
+        ...(old.history || []),
+        {
+          action: 'reversed and reopened for allocation review',
+          reason: text(d.reason),
+          at: new Date().toISOString(),
+          previousReview: structuredClone(receiptReviewValues(old)),
+          postedLines: old.postedLines,
+          transactionId: old.transactionId,
+        },
+      ],
+    })
+    description =
+      'Receipt business postings reversed; allocation review reopened'
   } else if (
     action === 'receiptCreateItem' ||
     action === 'receiptDraft' ||
@@ -779,9 +848,21 @@ export function planFinance(
     if (!Array.isArray(receipt.lines) || receipt.lines.length > 150)
       throw new Error('Use no more than 150 receipt lines.')
     // Versioned arithmetic is additive; historical receipt records retain their original semantics.
-    if (d.arithmeticVersion === 2 || old.arithmeticVersion === 2) {
-      for (const key of ['taxTreatment', 'receiptDiscount', 'printedTotal'])
+    if (
+      d.arithmeticVersion === 2 ||
+      old.arithmeticVersion === 2 ||
+      d.allocationVersion === 1 ||
+      old.allocationVersion === 1
+    ) {
+      for (const key of [
+        'taxTreatment',
+        'receiptDiscount',
+        'printedTotal',
+        'allocationVersion',
+        'adjustmentAllocation',
+      ])
         receipt[key] = Object.hasOwn(d, key) ? d[key] : old[key]
+      if (old.allocationVersion === 1) receipt.allocationVersion = 1
       receipt.arithmeticVersion = 2
       const calculated = receiptTotals(receipt)
       receipt.subtotal = calculated.subtotal
@@ -793,6 +874,11 @@ export function planFinance(
         }),
       )
       if (action === 'receiptPost') {
+        if (
+          receipt.allocationVersion === 1 &&
+          receiptAllocationIssues(receipt).length
+        )
+          throw new Error(receiptAllocationIssues(receipt).join('. '))
         if (calculated.errors.length)
           throw new Error(calculated.errors.join(' '))
         if (calculated.difference !== null && calculated.difference !== 0)
@@ -839,6 +925,14 @@ export function planFinance(
       })
     }
     if (action === 'receiptPost') {
+      if (
+        receipt.allocationVersion !== 1 &&
+        (receipt.adjustmentAllocation ||
+          receipt.lines.some((l: Item) => l.allocation || l.splitMethod))
+      )
+        throw new Error(
+          'Save and review the business allocation before posting.',
+        )
       if (old.extractionStatus === 'processing')
         throw new Error('Wait for extraction to finish before posting.')
       for (const key of ['subtotal', 'tax', 'total'])
@@ -924,7 +1018,11 @@ export function planFinance(
         allocatedCharges = 0
       const lineSnapshots: Record<string, any>[] = []
       const allocations =
-        receipt.arithmeticVersion === 2 ? receiptAllocations(receipt) : []
+        receipt.arithmeticVersion === 2
+          ? receipt.allocationVersion === 1
+            ? receiptBusinessAllocations(receipt)
+            : receiptAllocations(receipt)
+          : []
       for (const [index, l] of receipt.lines.entries()) {
         if (!text(l.description))
           throw new Error('Enter an item name for every receipt line.')
@@ -956,6 +1054,25 @@ export function planFinance(
         const amount =
           allocations[index]?.postedAmount ??
           roundMoney(Number(l.amount) + taxShare + otherChargesShare)
+        if (
+          receipt.allocationVersion === 1 &&
+          allocations[index]?.allocation === 'personal'
+        ) {
+          lineSnapshots.push({
+            ...l,
+            postedAmount: 0,
+            excludedAmount: allocations[index].fullAmount,
+            fullAmount: allocations[index].fullAmount,
+          })
+          continue
+        }
+        if (
+          receipt.allocationVersion === 1 &&
+          (amount < 0 || !['inventory', 'expense'].includes(l.decision))
+        )
+          throw new Error(
+            'Choose a business category or inventory match for the business allocation.',
+          )
         if (!['inventory', 'expense', 'personal'].includes(l.decision))
           throw new Error('Choose what to do with every receipt line.')
         if (l.decision === 'inventory') {
@@ -1111,7 +1228,10 @@ export function planFinance(
             inventory: false,
             receiptId: old.id,
             transactionId: id,
-            deductible: l.deductible !== false,
+            deductible:
+              receipt.allocationVersion === 1
+                ? l.deductible === true
+                : l.deductible !== false,
           })
           lines.push(debit(c, amount))
           put('vendor_matches', {
@@ -1136,7 +1256,7 @@ export function planFinance(
             postedAmount: amount,
           })
         } else {
-          lines.push(debit('Owner draws', amount))
+          // Personal use is supporting receipt evidence, never a business posting.
           lineSnapshots.push({
             ...l,
             taxShare: receipt.taxTreatment === 'inclusive' ? 0 : taxShare,
@@ -1148,30 +1268,65 @@ export function planFinance(
                       (receipt.taxTreatment === 'inclusive' ? 0 : taxShare),
                   )
                 : otherChargesShare,
-            postedAmount: amount,
+            postedAmount: 0,
+            excludedAmount: amount,
           })
         }
       }
+      if (receipt.allocationVersion === 1) {
+        lineSnapshots.forEach((snapshot, index) => {
+          const allocated = allocations[index]
+          const ratio = allocated.fullAmount
+            ? allocated.postedAmount / allocated.fullAmount
+            : 0
+          const base = roundMoney(Number(receipt.lines[index].amount) * ratio)
+          Object.assign(snapshot, {
+            fullAmount: allocated.fullAmount,
+            excludedAmount: allocated.excludedAmount,
+            adjustmentAllocation:
+              receipt.adjustmentAllocation || 'proportional',
+            businessBaseAmount: base,
+            taxShare:
+              receipt.adjustmentAllocation === 'manual'
+                ? null
+                : roundMoney((allocated.taxShare || 0) * ratio),
+          })
+          snapshot.otherChargesShare =
+            receipt.adjustmentAllocation === 'manual'
+              ? null
+              : roundMoney(allocated.postedAmount - base - snapshot.taxShare)
+        })
+      }
       for (const [key, item] of stock)
         put(key.startsWith('products:') ? 'products' : 'ingredients', item)
-      lines.push(credit('Cash', receipt.total))
-      entry = journal('Receipt: ' + receipt.vendor, receipt.date, lines)
-      put('finance_transactions', {
-        id,
-        name: receipt.vendor,
-        kind: 'receipt',
-        date: receipt.date,
-        amount: receipt.total,
-        receiptId: old.id,
-        status: 'posted',
-        journalId: entry.id,
-        lineSnapshots,
-      })
+      const businessTotal =
+        receipt.allocationVersion === 1
+          ? roundMoney(allocations.reduce((sum, l) => sum + l.postedAmount, 0))
+          : roundMoney(
+              lineSnapshots.reduce((sum, l) => sum + l.postedAmount, 0),
+            )
+      if (businessTotal > 0) {
+        lines.push(credit('Cash', businessTotal))
+        entry = journal('Receipt: ' + receipt.vendor, receipt.date, lines)
+        put('finance_transactions', {
+          id,
+          name: receipt.vendor,
+          kind: 'receipt',
+          date: receipt.date,
+          amount: businessTotal,
+          receiptId: old.id,
+          status: 'posted',
+          journalId: entry.id,
+          lineSnapshots,
+        })
+      }
+      receipt.businessTotal = businessTotal
+      receipt.excludedTotal = roundMoney(receipt.total - businessTotal)
       receipt.status = 'posted'
-      receipt.transactionId = id
-      receipt.journalId = entry.id
+      receipt.transactionId = businessTotal > 0 ? id : null
+      receipt.journalId = entry?.id
       receipt.postedLines = lineSnapshots
-      receipt.lines = lineSnapshots
+      if (receipt.allocationVersion !== 1) receipt.lines = lineSnapshots
       receipt.history.push(
         { action: 'confirmed', at: new Date().toISOString() },
         { action: 'posted', at: new Date().toISOString(), transactionId: id },
@@ -1205,6 +1360,7 @@ export function planFinance(
       let currentInventoryValue = 0,
         originalInventoryValue = 0
       for (const line of original.lineSnapshots || []) {
+        if (!line.postedAmount) continue
         if (line.decision === 'inventory') {
           const item = {
             ...(stock.get(
