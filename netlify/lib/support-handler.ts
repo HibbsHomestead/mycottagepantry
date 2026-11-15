@@ -43,6 +43,10 @@ async function detail(
   staff: boolean,
 ) {
   const ticket = await getTicket(c, actor, id, staff)
+  await c.query(
+    'UPDATE support_tickets SET reads=jsonb_set(reads,ARRAY[$2::text],to_jsonb(now()::text)) WHERE id=$1',
+    [id, actor.id],
+  )
   const { rows } = await c.query(
     "SELECT id,kind,body,author_id,created_at FROM support_messages WHERE ticket_id=$1 AND ($2::boolean OR kind<>'internal') ORDER BY created_at,id",
     [id, staff],
@@ -65,7 +69,51 @@ async function detail(
         errorCode: r.error_code,
       }))
     : undefined
+  let metadata = {}
+  if (staff) {
+    // Platform metadata access is limited to the authorized ticket's business.
+    await c.query("SELECT set_config('app.platform_gateway','true',true)")
+    try {
+      const business = ticket.workspace_id
+        ? (
+            await c.query('SELECT business_name FROM businesses WHERE id=$1', [
+              ticket.workspace_id,
+            ])
+          ).rows[0]
+        : null
+      const billing = ticket.workspace_id
+        ? (
+            await c.query(
+              'SELECT plan_id,status,source,last_reconciled_at FROM workspace_billing WHERE business_id=$1',
+              [ticket.workspace_id],
+            )
+          ).rows[0]
+        : null
+      ticket.business_name = business?.business_name
+      const staffOptions = (
+        await c.query(
+          "SELECT identity_id AS id FROM platform_admins WHERE enabled=true AND role IN ('owner','admin') ORDER BY identity_id LIMIT 100",
+        )
+      ).rows
+      metadata = {
+        staffOptions,
+        subscription:
+          billing &&
+          billing.last_reconciled_at &&
+          ['stripe_live', 'stripe_test', 'square'].includes(billing.source)
+            ? {
+                plan: billing.plan_id,
+                status: billing.status,
+                verifiedAt: billing.last_reconciled_at,
+              }
+            : null,
+      }
+    } finally {
+      await c.query("SELECT set_config('app.platform_gateway','false',true)")
+    }
+  }
   return {
+    ...metadata,
     ticket: ticketView(ticket, staff),
     aiConversation:
       (
@@ -371,7 +419,11 @@ export default async function supportHandler(req: Request) {
           if (staff) await supportAudit(c, actor, 'ticket_viewed', id)
           return value
         }
-        return { staff: actor.staff, admin: actor.admin }
+        return {
+          staff: actor.staff,
+          admin: actor.admin,
+          ...(staff ? { identityId: actor.id } : {}),
+        }
       }
       if (url.searchParams.has('upload'))
         return attachment(req, c, actor, staff, url)
@@ -399,20 +451,88 @@ export default async function supportHandler(req: Request) {
             status: z
               .enum([
                 'all',
+                'open',
                 ...(Object.keys(supportStatuses) as [string, ...string[]]),
               ])
               .default('all'),
+            assignment: z.enum(['all', 'unassigned', 'mine']).default('all'),
             offset: z.number().int().min(0).max(10000).default(0),
           })
           .parse(raw.data || {})
         const { rows } = await c.query(
-          "SELECT * FROM support_tickets WHERE ($1::boolean OR requester_id=$2) AND ($3='all' OR status=$3) AND ($4='' OR strpos(lower(subject),lower($4))>0 OR number::text=$4 OR ($1::boolean AND strpos(lower(requester_email),lower($4))>0)) ORDER BY updated_at DESC,id LIMIT 51 OFFSET $5",
-          [staff, actor.id, data.status, data.search, data.offset],
+          "SELECT t.*, EXISTS(SELECT 1 FROM support_messages m WHERE m.ticket_id=t.id AND m.author_id<>$2 AND ($1::boolean OR m.kind<>'internal') AND m.created_at>COALESCE((t.reads->>$2)::timestamptz,'epoch'::timestamptz)) AS unread FROM support_tickets t WHERE ($1::boolean OR requester_id=$2) AND ($3='all' OR status=$3 OR ($3='open' AND status IN ('new','in_progress'))) AND ($4='' OR strpos(lower(subject),lower($4))>0 OR number::text=$4 OR ($1::boolean AND strpos(lower(requester_email),lower($4))>0)) AND (NOT $1::boolean OR $6='all' OR ($6='unassigned' AND assignee IS NULL) OR ($6='mine' AND assignee=$2)) ORDER BY updated_at DESC,id LIMIT 51 OFFSET $5",
+          [
+            staff,
+            actor.id,
+            data.status,
+            data.search,
+            data.offset,
+            data.assignment,
+          ],
         )
+        if (staff && rows.length) {
+          await c.query("SELECT set_config('app.platform_gateway','true',true)")
+          const names = (
+            await c.query(
+              'SELECT id,business_name FROM businesses WHERE id=ANY($1::uuid[])',
+              [rows.map((t) => t.workspace_id).filter(Boolean)],
+            )
+          ).rows
+          await c.query(
+            "SELECT set_config('app.platform_gateway','false',true)",
+          )
+          for (const t of rows)
+            t.business_name = names.find(
+              (b) => b.id === t.workspace_id,
+            )?.business_name
+        }
         return {
           tickets: rows.slice(0, 50).map((t) => ticketView(t, staff)),
           hasMore: rows.length > 50,
         }
+      }
+      if (action === 'triage') {
+        requireSupportStaff(actor)
+        if (!staff)
+          throw new SupportError(403, 'Use the platform support inbox.')
+        const data = z
+          .object({
+            ticketId: uuid,
+            priority: z.enum(['low', 'normal', 'high', 'urgent']),
+            category: z.enum([
+              'Question',
+              'Bug',
+              'Account & billing',
+              'Feature request',
+            ]),
+            assignee: z.string().max(200).nullable(),
+          })
+          .strict()
+          .parse(raw.data)
+        const ticket = await getTicket(c, actor, data.ticketId, true, true)
+        if (data.assignee && data.assignee !== actor.id) {
+          await c.query("SELECT set_config('app.platform_gateway','true',true)")
+          const valid = (
+            await c.query(
+              "SELECT identity_id FROM platform_admins WHERE identity_id=$1 AND enabled=true AND role IN ('owner','admin')",
+              [data.assignee],
+            )
+          ).rows[0]
+          await c.query(
+            "SELECT set_config('app.platform_gateway','false',true)",
+          )
+          if (!valid)
+            throw new SupportError(
+              400,
+              'Choose an active platform administrator.',
+            )
+        }
+        await c.query(
+          'UPDATE support_tickets SET priority=$1,category=$2,assignee=$3,updated_at=now() WHERE id=$4',
+          [data.priority, data.category, data.assignee, ticket.id],
+        )
+        await supportAudit(c, actor, 'ticket_triaged', ticket.id)
+        return detail(c, actor, ticket.id, true)
       }
       if (action === 'status') {
         const data = z
@@ -423,6 +543,7 @@ export default async function supportHandler(req: Request) {
               'in_progress',
               'waiting_on_customer',
               'resolved',
+              'archived',
             ]),
           })
           .parse(raw.data)

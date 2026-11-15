@@ -303,6 +303,7 @@ export function PlanComparison() {
 }
 
 export function HelpPage() {
+  const [helpSearch, setHelpSearch] = useState('')
   return (
     <PublicSite>
       <section className="public-width public-page-intro">
@@ -318,13 +319,38 @@ export function HelpPage() {
       </section>
       <section className="public-width help-layout">
         <div>
-          {supportKnowledge.map((article) => (
-            <details id={article.id} key={article.id}>
-              <summary>{article.title}</summary>
-              <p>{article.text}</p>
-              <a href={article.href}>Open {article.title.toLowerCase()}</a>
-            </details>
-          ))}
+          <label className="support-field">
+            Search help articles
+            <input
+              type="search"
+              value={helpSearch}
+              onChange={(e) => setHelpSearch(e.target.value)}
+              placeholder="Recipes, billing, inventory…"
+            />
+          </label>
+          <p role="status">
+            {
+              supportKnowledge.filter((a) =>
+                (a.title + ' ' + a.text)
+                  .toLowerCase()
+                  .includes(helpSearch.toLowerCase()),
+              ).length
+            }{' '}
+            matching guides
+          </p>
+          {supportKnowledge
+            .filter((a) =>
+              (a.title + ' ' + a.text)
+                .toLowerCase()
+                .includes(helpSearch.toLowerCase()),
+            )
+            .map((article) => (
+              <details id={article.id} key={article.id}>
+                <summary>{article.title}</summary>
+                <p>{article.text}</p>
+                <a href={article.href}>Open {article.title.toLowerCase()}</a>
+              </details>
+            ))}
           {[
             [
               'How do recipe imports work?',

@@ -32,13 +32,7 @@ export function assistantTools(
   const names = [
     'search_help',
     ...(staff
-      ? [
-          'support_lookup',
-          'account_status',
-          'business_status',
-          'troubleshoot',
-          'propose_billing_reconciliation',
-        ]
+      ? ['support_lookup', 'account_status', 'business_status', 'troubleshoot']
       : contextConsent
         ? ['account_status', 'business_status', 'troubleshoot']
         : []),
@@ -197,28 +191,6 @@ export function assistantTools(
               asOf: new Date().toISOString(),
               limitation:
                 'Partial recorded evidence only; no files, item contents or raw errors. Product URL request history is unavailable. No changes made.',
-            }
-          } else if (name === 'propose_billing_reconciliation') {
-            if (!staff || !actor.admin)
-              throw new SupportError(403, 'Administrator permission required.')
-            const existing = (
-              await c.query(
-                "SELECT id FROM support_ai_actions WHERE conversation_id=$1 AND actor_id=$2 AND tool='reconcile_billing' AND status='proposed'",
-                [chat.id, actor.id],
-              )
-            ).rows[0]
-            const id = existing?.id || randomUUID()
-            if (!existing)
-              await c.query(
-                "INSERT INTO support_ai_actions(id,conversation_id,actor_id,tool,business_id,status) VALUES($1,$2,$3,'reconcile_billing',$4,'proposed')",
-                [id, chat.id, actor.id, business],
-              )
-            result = {
-              confirmationRequired: true,
-              actionId: id,
-              action: 'Reconcile verified billing',
-              explanation:
-                'Refresh recorded billing from the linked provider. This can update effective access. No charge, subscription creation, cancellation or suspension override. Review and confirm in the private assistant; fresh administrator MFA is required. Nothing has changed yet.',
             }
           }
         }

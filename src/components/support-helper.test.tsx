@@ -125,39 +125,28 @@ it('keeps the administrator experience private and binds questions to the select
     screen.queryByText('Attach sanitized error details for support review'),
   ).not.toBeInTheDocument()
 })
-it('requires reviewed confirmation for recovery and displays an unverified outcome honestly', async () => {
-  const action = {
-    id: 'action-one',
-    conversation_id: chat.id,
-    tool: 'reconcile_billing',
-    status: 'proposed',
-  }
+it('never exposes account-action controls from a support conversation, including older proposals', async () => {
   api.mockResolvedValueOnce({
     conversations: [chat],
     policy: supportAiDefaults,
-    actions: [action],
+    actions: [
+      {
+        id: 'old-action',
+        conversation_id: chat.id,
+        tool: 'reconcile_billing',
+        status: 'proposed',
+      },
+    ],
   })
   render(<SupportHelper staff />)
-  const confirm = await screen.findByRole('button', {
-    name: 'Confirm billing recovery',
-  })
-  expect(confirm).toBeDisabled()
-  expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
-  await userEvent.click(screen.getByLabelText(/I reviewed this recovery/))
-  api.mockResolvedValueOnce({
-    verified: false,
-    message: 'Recovery success could not be verified.',
-  })
-  await userEvent.click(confirm)
-  expect(api).toHaveBeenCalledWith(true, {
-    action: 'confirm',
-    actionId: action.id,
-    confirmation: 'RECONCILE',
-  })
-  expect(await screen.findByRole('status')).toHaveTextContent(
-    'could not be verified',
-  )
+  await screen.findByLabelText('Your app question')
   expect(
     screen.queryByRole('button', { name: 'Confirm billing recovery' }),
   ).not.toBeInTheDocument()
+  expect(
+    screen.getByText(
+      /Account actions are unavailable through support conversations/,
+    ),
+  ).toBeInTheDocument()
+  expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
 })

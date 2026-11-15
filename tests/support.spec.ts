@@ -24,6 +24,23 @@ test('requester can submit, reopen and reply at desktop and phone sizes without 
   await page.route('**/api/support**', async (route) => {
     const request = route.request(),
       url = new URL(request.url())
+    if (url.searchParams.has('ai'))
+      return route.fulfill({
+        json: {
+          policy: supportAiDefaults,
+          conversations: [],
+          actions: [],
+          usage: [],
+        },
+      })
+    if (url.searchParams.has('upload')) {
+      messages.at(-1).attachments = [
+        { id: '40000000-0000-4000-8000-000000000001', byteSize: 68 },
+      ]
+      return route.fulfill({
+        json: { attachmentId: '40000000-0000-4000-8000-000000000001' },
+      })
+    }
     if (request.method() === 'GET')
       return route.fulfill({
         json: url.searchParams.has('ticket')
@@ -81,6 +98,24 @@ test('requester can submit, reopen and reply at desktop and phone sizes without 
     page.getByRole('button', { name: 'Reopen ticket' }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Reopen ticket' }).click()
+  await page.setViewportSize({ width: 390, height: 960 })
+  await page
+    .getByLabel('Reply in Cottage Pantry', { exact: true })
+    .fill('Screenshot from my phone.')
+  await page
+    .getByLabel('Optional screenshot')
+    .setInputFiles({
+      name: 'screen.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0V8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    })
+  await page.getByRole('button', { name: 'Send reply', exact: true }).click()
+  await expect(
+    page.getByRole('link', { name: /Download screenshot/ }),
+  ).toBeVisible()
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 960 })
     await page.reload({ waitUntil: 'networkidle' })

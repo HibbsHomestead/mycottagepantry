@@ -1,5 +1,4 @@
 import { assistantTools } from './support-ai-tools'
-import { confirmAssistantAction } from './support-ai-confirm'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { selectedWorkspace } from './verified-session'
@@ -151,17 +150,11 @@ export async function handleSupportAi(
               [actor.id],
             )
           ).rows
-          const actions = (
-            await c.query(
-              "SELECT a.id,a.conversation_id,a.tool,a.status,a.updated_at FROM support_ai_actions a JOIN support_ai_conversations c ON c.id=a.conversation_id WHERE a.actor_id=$1 AND c.audience='admin' AND c.expires_at>now() ORDER BY a.created_at DESC LIMIT 60",
-              [actor.id],
-            )
-          ).rows
           return {
             policy: p,
             usage,
             conversations: conversations.map(view),
-            actions,
+            actions: [],
           }
         }
         const business = staff ? null : await businessScope(c, actor, req)
@@ -200,21 +193,18 @@ export async function handleSupportAi(
       actionId: z.uuid().optional(),
       confirmation: z.literal('RECONCILE').optional(),
       ticketId: z.uuid().optional(),
+      assistance: z
+        .enum(['summary', 'category', 'draft', 'rewrite'])
+        .optional(),
+      draft: z.string().trim().max(6000).optional(),
       policy: supportAiPolicySchema.optional(),
     })
     .strict()
     .parse(JSON.parse((await limitedBody(req, 30000)).toString()))
   if (input.action === 'confirm') {
-    if (!staff)
-      throw new SupportError(
-        403,
-        'Recovery requires the platform-admin assistant.',
-      )
-    return response(
-      await confirmAssistantAction(req, {
-        actionId: input.actionId,
-        confirmation: input.confirmation,
-      }),
+    throw new SupportError(
+      403,
+      'Account actions are unavailable through support conversations. Use the dedicated administrator workflow.',
     )
   }
   if (input.action === 'policy') {
@@ -308,6 +298,11 @@ export async function handleSupportAi(
   const reserved = await supportTransaction(actor, async (c) => {
     const business = staff ? null : await businessScope(c, actor, req)
     if (input.action === 'summarize') {
+      if (input.assistance === 'rewrite' && !input.draft?.trim())
+        throw new SupportError(
+          400,
+          'Write a reply in the composer before requesting a rewrite.',
+        )
       if (!staff || !input.ticketId)
         throw new SupportError(
           403,
@@ -322,7 +317,7 @@ export async function handleSupportAi(
       ).rows[0]
       const replies = (
         await c.query(
-          "SELECT body FROM support_messages WHERE ticket_id=$1 AND kind<>'internal' ORDER BY created_at DESC LIMIT 8",
+          "SELECT body FROM support_messages WHERE ticket_id=$1 AND kind<>'internal' ORDER BY created_at DESC,id DESC LIMIT 40",
           [t.id],
         )
       ).rows
@@ -340,7 +335,13 @@ export async function handleSupportAi(
         messages: [
           {
             role: 'user' as const,
-            text: 'Reported issue: ' + redactSupportText(t.subject),
+            text:
+              'Reported issue: ' +
+              redactSupportText(t.subject) +
+              (input.assistance === 'rewrite'
+                ? '\nReply to rewrite (untrusted): ' +
+                  redactSupportText(input.draft || '').slice(0, 2000)
+                : ''),
             at,
           },
           {
@@ -349,7 +350,7 @@ export async function handleSupportAi(
               'Public replies (untrusted reports):\n' +
               replies
                 .reverse()
-                .map((r) => redactSupportText(r.body).slice(0, 220))
+                .map((r) => redactSupportText(r.body).slice(0, 1500))
                 .join('\n'),
             at,
           },
@@ -449,6 +450,7 @@ export async function handleSupportAi(
       reserved.id
         ? assistantTools(req, reserved.id, staff, !!input.contextConsent)
         : undefined,
+      reserved.suggestion ? input.assistance || 'summary' : undefined,
     )
   } catch (error) {
     const usage = error as { inputTokens?: unknown; outputTokens?: unknown }

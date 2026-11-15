@@ -1,5 +1,3 @@
-import { AdminStepUp } from './admin-step-up'
-import { adminRequest } from '@/lib/admin-client'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { supportAiRequest } from '@/lib/support-client'
 import {
@@ -7,7 +5,6 @@ import {
   sanitizeSupportDiagnostics,
   type SupportAiConversation,
   type SupportAiMessage,
-  type SupportAiAction,
 } from '@/lib/support-ai'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import {
@@ -61,8 +58,6 @@ export function SupportHelper({
 }: { staff?: boolean; contextTicketId?: string } = {}) {
   const [contextConsent, setContextConsent] = useState(false)
   const [shareDiagnostics, setShareDiagnostics] = useState(false)
-  const [actions, setActions] = useState<SupportAiAction[]>([])
-  const [confirmedAction, setConfirmedAction] = useState('')
   const [chats, setChats] = useState<SupportAiConversation[]>([])
   const [id, setId] = useState(''),
     [draft, setDraft] = useState(''),
@@ -93,7 +88,6 @@ export function SupportHelper({
             : v.conversations
           setChats(available)
           setId(available[0]?.id || '')
-          setActions(v.actions || [])
           setPolicy(v.policy)
           setReady(true)
         }
@@ -131,7 +125,6 @@ export function SupportHelper({
         ...old.filter((c) => c.id !== v.conversation.id),
       ])
       setId(v.conversation.id)
-      setActions(v.actions || [])
       setDraft('')
       setAttach(false)
       setContextConsent(false)
@@ -216,7 +209,7 @@ export function SupportHelper({
       <h3>{staff ? 'Private admin AI assistant' : 'AI support helper'}</h3>
       <p>
         {staff
-          ? 'Private to your verified administrator account. Search support, inspect recorded account, billing and integration status, review sanitized diagnostics, and propose billing reconciliation for the selected ticket. Confirm recovery separately with administrator verification.'
+          ? 'Private to your verified administrator account. Search support, inspect recorded account, billing and integration status, review sanitized diagnostics, and review the selected ticket. Account actions are unavailable through support conversations.'
           : 'Practical steps from current app workflows. With your permission, check your verified account, current business, recorded plan/integration status allowed by your role, receipt attempt statuses and your label recovery count. AI can make mistakes; it cannot edit stock, item types, plans or permissions.'}
       </p>
       <div className="ai-toolbar">
@@ -441,82 +434,6 @@ export function SupportHelper({
       ) : !staff ? (
         <a href="/support">Contact support without AI</a>
       ) : null}
-      {staff &&
-        chat &&
-        actions
-          .filter(
-            (a) =>
-              a.conversation_id === chat.id && a.tool === 'reconcile_billing',
-          )
-          .map((a) => (
-            <div className="ai-notice" key={a.id}>
-              <strong>
-                Billing reconciliation · {a.status.replaceAll('_', ' ')}
-              </strong>
-              {a.status === 'proposed' && (
-                <>
-                  <p>
-                    Refresh billing from the linked provider for this ticket’s
-                    business. Effective access may change. This does not charge,
-                    create or cancel a subscription, or override a suspension.
-                  </p>
-                  <AdminStepUp request={adminRequest} />
-                  <label className="ai-check">
-                    <input
-                      type="checkbox"
-                      checked={confirmedAction === a.id}
-                      onChange={(e) =>
-                        setConfirmedAction(e.target.checked ? a.id : '')
-                      }
-                    />
-                    I reviewed this recovery and authorize reconciliation for
-                    the selected ticket’s business.
-                  </label>
-                  <button
-                    type="button"
-                    disabled={busy || confirmedAction !== a.id}
-                    onClick={async () => {
-                      setBusy(true)
-                      setError('')
-                      try {
-                        const v = await supportAiRequest(true, {
-                          action: 'confirm',
-                          actionId: a.id,
-                          confirmation: 'RECONCILE',
-                        })
-                        setNotice(v.message)
-                        setActions((old) =>
-                          old.map((row) =>
-                            row.id === a.id
-                              ? {
-                                  ...row,
-                                  status: v.verified
-                                    ? 'verified_success'
-                                    : 'unverified',
-                                }
-                              : row,
-                          ),
-                        )
-                        setConfirmedAction('')
-                      } catch (e) {
-                        setError((e as Error).message)
-                      } finally {
-                        setBusy(false)
-                      }
-                    }}
-                  >
-                    Confirm billing recovery
-                  </button>
-                </>
-              )}
-              {a.status === 'unverified' && (
-                <p>
-                  Success is unverified. Review billing records before
-                  attempting another recovery.
-                </p>
-              )}
-            </div>
-          ))}
       {review && (
         <form onSubmit={escalate} aria-label="Review support request">
           <label>

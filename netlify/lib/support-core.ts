@@ -162,10 +162,14 @@ export function ticketView(t: any, staff: boolean) {
     subject: t.subject,
     category: t.category,
     status: t.status,
+    unread: !!t.unread,
     createdAt: t.created_at,
     updatedAt: t.updated_at,
     ...(staff
       ? {
+          priority: t.priority,
+          assignee: t.assignee,
+          businessName: t.business_name || null,
           requesterEmail: t.requester_email,
           workspaceId: t.workspace_id,
           diagnostics: t.diagnostics,

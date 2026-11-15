@@ -161,6 +161,15 @@ beforeAll(async () => {
     ),
   )
   await db.exec(
+    await readFile(
+      'netlify/database/migrations/20261209010000_add_support_inbox/migration.sql',
+      'utf8',
+    ),
+  )
+  await db.exec(
+    "ALTER TABLE businesses ADD COLUMN business_name text DEFAULT 'Test bakery'; CREATE TABLE workspace_billing(business_id uuid,plan_id text,status text,source text,last_reconciled_at timestamptz); CREATE TABLE platform_admins(identity_id text,enabled boolean,role text);",
+  )
+  await db.exec(
     'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO support_test; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO support_test;',
   )
   // Serialize pool connections over the embedded engine. Production uses PostgreSQL row/advisory locks.
@@ -1056,41 +1065,56 @@ it('isolates the same requester’s conversations between selected verified busi
     await db.query('DELETE FROM businesses WHERE id=$1', [second])
   }
 })
-it('summarizes only consented support tickets and excludes private staff notes and diagnostics', async () => {
-  const plain = await create()
-  runtime.session = 'support-owner'
-  expect(
-    (await ai({ action: 'summarize', ticketId: plain.ticket.id }, true)).status,
-  ).toBe(403)
-  runtime.session = 'maker-a'
-  const result = await post('create', {
-    ...createData(),
-    aiReviewConsent: true,
-  })
-  const ticket = (await result.json()).ticket
-  runtime.session = 'support-owner'
-  await post(
-    'reply',
-    {
-      ticketId: ticket.id,
-      message: 'PRIVATE_NOTE_NEVER_SENT',
-      submissionKey: randomUUID(),
-      internal: true,
-    },
-    true,
-  )
-  vi.mocked(supportAnswer).mockClear()
-  const summary = await ai({ action: 'summarize', ticketId: ticket.id }, true)
-  expect(summary.status, runtime.errors.join(';')).toBe(200)
-  expect(JSON.stringify(vi.mocked(supportAnswer).mock.calls)).not.toContain(
-    'PRIVATE_NOTE_NEVER_SENT',
-  )
-  expect((await summary.json()).suggestion).toContain('Review')
-  expect(
-    (await db.query("SELECT * FROM support_messages WHERE kind='support'"))
-      .rows,
-  ).toHaveLength(0)
-})
+it.each(['summary', 'category', 'draft', 'rewrite'] as const)(
+  'prepares %s only for consented support tickets and excludes private staff notes and diagnostics',
+  async (assistance) => {
+    const plain = await create()
+    runtime.session = 'support-owner'
+    expect(
+      (await ai({ action: 'summarize', ticketId: plain.ticket.id }, true))
+        .status,
+    ).toBe(403)
+    runtime.session = 'maker-a'
+    const result = await post('create', {
+      ...createData(),
+      aiReviewConsent: true,
+    })
+    const ticket = (await result.json()).ticket
+    runtime.session = 'support-owner'
+    await post(
+      'reply',
+      {
+        ticketId: ticket.id,
+        message: 'PRIVATE_NOTE_NEVER_SENT',
+        submissionKey: randomUUID(),
+        internal: true,
+      },
+      true,
+    )
+    vi.mocked(supportAnswer).mockClear()
+    const summary = await ai(
+      {
+        action: 'summarize',
+        ticketId: ticket.id,
+        assistance,
+        ...(assistance === 'rewrite'
+          ? { draft: 'Please review the recipe method.' }
+          : {}),
+      },
+      true,
+    )
+    expect(summary.status, runtime.errors.join(';')).toBe(200)
+    expect(JSON.stringify(vi.mocked(supportAnswer).mock.calls)).not.toContain(
+      'PRIVATE_NOTE_NEVER_SENT',
+    )
+    expect(vi.mocked(supportAnswer).mock.calls[0][3]).toBe(assistance)
+    expect((await summary.json()).suggestion).toContain('Review')
+    expect(
+      (await db.query("SELECT * FROM support_messages WHERE kind='support'"))
+        .rows,
+    ).toHaveLength(0)
+  },
+)
 it('runs scheduled retention for inactive chats and content-free usage records', async () => {
   const data = await (
     await ai({ action: 'chat', message: 'inventory', consent: true })
@@ -1152,4 +1176,111 @@ it('rejects unsupported mutations and customer recovery confirmation before any 
       /UPDATE (ingredients|ledger|workspace_billing)/i.test(q),
     ),
   ).toBe(false)
+})
+
+it('runs persistent help desk triage, unread receipts, private notes, replies and archiving without AI', async () => {
+  runtime.providerFails = true
+  const created = await create()
+  const id = created.ticket.id
+  runtime.session = 'support-owner'
+  let inbox = await (
+    await post('list', { assignment: 'unassigned' }, true)
+  ).json()
+  expect(inbox.tickets[0]).toMatchObject({
+    id,
+    unread: true,
+    priority: 'normal',
+    assignee: null,
+  })
+  expect((await get('view=staff&ticket=' + id)).status).toBe(200)
+  inbox = await (await post('list', {}, true)).json()
+  expect(inbox.tickets[0].unread).toBe(false)
+  expect(
+    (
+      await post(
+        'triage',
+        {
+          ticketId: id,
+          priority: 'high',
+          category: 'Bug',
+          assignee: 'support-owner',
+        },
+        true,
+      )
+    ).status,
+  ).toBe(200)
+  expect(
+    (await (await post('list', { assignment: 'mine' }, true)).json()).tickets,
+  ).toHaveLength(1)
+  expect(
+    (await (await post('list', { assignment: 'unassigned' }, true)).json())
+      .tickets,
+  ).toHaveLength(0)
+  await post(
+    'reply',
+    {
+      ticketId: id,
+      message: 'PRIVATE triage',
+      internal: true,
+      submissionKey: randomUUID(),
+    },
+    true,
+  )
+  await post(
+    'reply',
+    { ticketId: id, message: 'Human response', submissionKey: randomUUID() },
+    true,
+  )
+  runtime.session = 'maker-a'
+  inbox = await (await post('list', {})).json()
+  expect(inbox.tickets[0]).toMatchObject({
+    unread: true,
+    status: 'waiting_on_customer',
+  })
+  const customer = await (await get('ticket=' + id)).json()
+  expect(JSON.stringify(customer)).not.toContain('PRIVATE triage')
+  expect(customer.ticket.assignee).toBeUndefined()
+  expect(customer.messages.at(-1).body).toBe('Human response')
+  expect((await (await post('list', {})).json()).tickets[0].unread).toBe(false)
+  expect(
+    (
+      await post('triage', {
+        ticketId: id,
+        priority: 'urgent',
+        category: 'Bug',
+        assignee: 'maker-a',
+      })
+    ).status,
+  ).toBe(403)
+  await post('reply', {
+    ticketId: id,
+    message: 'Customer follow-up',
+    submissionKey: randomUUID(),
+  })
+  runtime.session = 'support-owner'
+  expect(
+    (await (await post('list', { status: 'open' }, true)).json()).tickets[0]
+      .unread,
+  ).toBe(true)
+  expect(
+    (await post('status', { ticketId: id, status: 'archived' }, true)).status,
+  ).toBe(200)
+  expect(
+    (await (await post('list', { status: 'archived' }, true)).json()).tickets,
+  ).toHaveLength(1)
+  runtime.session = 'maker-b'
+  expect((await get('ticket=' + id)).status).toBe(404)
+  runtime.session = 'support-owner'
+  expect(
+    (
+      await ai(
+        {
+          action: 'confirm',
+          actionId: randomUUID(),
+          confirmation: 'RECONCILE',
+        },
+        true,
+      )
+    ).status,
+  ).toBe(403)
 })

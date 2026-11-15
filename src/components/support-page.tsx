@@ -68,6 +68,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   const [access, setAccess] = useState<{
     staff: boolean
     admin: boolean
+    identityId?: string
   } | null>(null)
   const [initialError, setInitialError] = useState(''),
     [initialStatus, setInitialStatus] = useState(0),
@@ -79,6 +80,8 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   const [selected, setSelected] = useState(''),
     [compose, setCompose] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false)
+  const [mobileView, setMobileView] = useState('list')
+  const [assignment, setAssignment] = useState('all')
   const [search, setSearch] = useState(''),
     [appliedSearch, setAppliedSearch] = useState(''),
     [status, setStatus] = useState('all'),
@@ -115,11 +118,16 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
         .then((v) => {
           if (active) {
             setAccess((old) =>
-              old?.staff === v.staff && old?.admin === v.admin ? old : v,
+              old?.staff === v.staff &&
+              old?.admin === v.admin &&
+              old?.identityId === v.identityId
+                ? old
+                : v,
             )
             setInitialError('')
             setInitialStatus(0)
             setSelected(ticketHash())
+            if (ticketHash()) setMobileView('conversation')
           }
         })
         .catch((e) => {
@@ -143,6 +151,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
   useEffect(() => {
     const navigate = () => {
       setSelected(ticketHash())
+      setMobileView(ticketHash() ? 'conversation' : 'list')
       setCompose(false)
       setSettingsOpen(false)
     }
@@ -162,6 +171,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       const v = await supportPost(staff, 'list', {
         search: appliedSearch,
         status,
+        assignment,
         offset,
       })
       if (request !== listRequest.current.sequence) return
@@ -172,7 +182,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
     } finally {
       if (request === listRequest.current.sequence) setLoading(false)
     }
-  }, [staff, appliedSearch, status, offset, showError])
+  }, [staff, appliedSearch, status, assignment, offset, showError])
   useEffect(() => {
     const state = listRequest.current
     let active = true
@@ -198,7 +208,13 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       }
     })
     supportRequest(mode + '&ticket=' + selected, { signal: controller.signal })
-      .then(setDetail)
+      .then((value) => {
+        if (controller.signal.aborted) return
+        setDetail(value)
+        setTickets((items) =>
+          items.map((t) => (t.id === selected ? { ...t, unread: false } : t)),
+        )
+      })
       .catch((e) => {
         if (!controller.signal.aborted) showError(e)
       })
@@ -207,8 +223,40 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       })
     return () => controller.abort()
   }, [selected, access, mode, showError])
+  useEffect(() => {
+    if (!access) return
+    let active = true
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      void loadList()
+      if (
+        selected &&
+        (window.innerWidth > 1100 || mobileView === 'conversation')
+      ) {
+        void supportRequest(mode + '&ticket=' + selected)
+          .then((value) => {
+            if (!active) return
+            setDetail(value)
+            setTickets((items) =>
+              items.map((t) =>
+                t.id === selected ? { ...t, unread: false } : t,
+              ),
+            )
+          })
+          .catch(showError)
+      }
+    }
+    const timer = window.setInterval(refresh, 30000)
+    window.addEventListener('focus', refresh)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [access, loadList, selected, mode, mobileView, showError])
   function choose(id: string) {
     setSelected(id)
+    setMobileView('conversation')
     setCompose(false)
     setSettingsOpen(false)
     setError('')
@@ -301,6 +349,27 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
       setBusy(false)
     }
   }
+  async function triage(patch: Record<string, unknown>) {
+    if (!detail || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setDetail(
+        await supportPost(true, 'triage', {
+          ticketId: detail.ticket.id,
+          priority: detail.ticket.priority || 'normal',
+          category: detail.ticket.category,
+          assignee: detail.ticket.assignee || null,
+          ...patch,
+        }),
+      )
+      await loadList()
+    } catch (e) {
+      showError(e)
+    } finally {
+      setBusy(false)
+    }
+  }
   async function changeStatus(next: string) {
     if (!detail || busy) return
     setBusy(true)
@@ -347,6 +416,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                   className="public-button"
                   disabled={busy}
                   onClick={() => {
+                    setMobileView('conversation')
                     setCompose(true)
                     setSettingsOpen(false)
                     setSelected('')
@@ -433,6 +503,12 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                 {notice}
               </p>
             )}
+            {!staff && (
+              <details id="ai-helper" className="support-panel support-helper">
+                <summary>Ask the AI assistant</summary>
+                <SupportHelper />
+              </details>
+            )}
             {staff && <SupportAiUsage admin={access.admin} />}
             {staff && (
               <details className="support-panel support-helper">
@@ -447,422 +523,656 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
             {settingsOpen && access.admin ? (
               <SupportNotificationSettings />
             ) : (
-              <div className="support-grid">
-                <aside className="support-panel support-list">
-                  <h2>{staff ? 'Tickets' : 'Your tickets'}</h2>
-                  <form
-                    className="support-search"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      setOffset(0)
-                      setAppliedSearch(search)
-                    }}
-                  >
-                    <label>
-                      Search tickets
-                      <input
-                        value={search}
-                        maxLength={100}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={
-                          staff
-                            ? 'Number, subject or requester'
-                            : 'Number or subject'
-                        }
-                      />
+              <>
+                {!staff && (
+                  <p>
+                    <a href="/help">Search help articles</a> ·{' '}
+                    <a href="#ai-helper">Ask the AI assistant</a> · Use New
+                    ticket for a human response.
+                  </p>
+                )}
+                <nav
+                  className="support-mobile-views"
+                  aria-label="Help desk views"
+                >
+                  {(staff
+                    ? ['navigation', 'list', 'conversation', 'details']
+                    : ['list', 'conversation']
+                  ).map((view) => (
+                    <button
+                      key={view}
+                      className="support-button"
+                      aria-pressed={mobileView === view}
+                      onClick={() => setMobileView(view)}
+                    >
+                      {view === 'list'
+                        ? 'Tickets'
+                        : view[0].toUpperCase() + view.slice(1)}
+                    </button>
+                  ))}
+                </nav>
+                <div
+                  className={
+                    'support-grid ' +
+                    (staff ? 'support-desk ' : '') +
+                    'support-view-' +
+                    mobileView
+                  }
+                >
+                  {staff && (
+                    <nav
+                      className="support-panel support-ticket-nav"
+                      aria-label="Ticket navigation"
+                    >
+                      <h2>Inbox</h2>
+                      {[
+                        ['All tickets', 'all', 'all'],
+                        ['Unassigned', 'all', 'unassigned'],
+                        ['Assigned to me', 'all', 'mine'],
+                        ['Open', 'open', 'all'],
+                        ['Pending', 'waiting_on_customer', 'all'],
+                        ['Resolved', 'resolved', 'all'],
+                        ['Archived', 'archived', 'all'],
+                      ].map(([label, nextStatus, nextAssignment]) => (
+                        <button
+                          key={label}
+                          className="support-button"
+                          aria-pressed={
+                            status === nextStatus &&
+                            assignment === nextAssignment
+                          }
+                          onClick={() => {
+                            setStatus(nextStatus)
+                            setAssignment(nextAssignment)
+                            setOffset(0)
+                            setMobileView('list')
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </nav>
+                  )}
+
+                  <aside className="support-panel support-list">
+                    <h2>{staff ? 'Tickets' : 'Your tickets'}</h2>
+                    <form
+                      className="support-search"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        setOffset(0)
+                        setAppliedSearch(search)
+                      }}
+                    >
+                      <label>
+                        Search tickets
+                        <input
+                          value={search}
+                          maxLength={100}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder={
+                            staff
+                              ? 'Number, subject or requester'
+                              : 'Number or subject'
+                          }
+                        />
+                      </label>
+                      <button
+                        className="support-button"
+                        aria-label="Search tickets"
+                      >
+                        <Search size={17} />
+                      </button>
+                    </form>
+                    <label className="support-field">
+                      Status
+                      <select
+                        value={status}
+                        onChange={(e) => {
+                          setStatus(e.target.value)
+                          setOffset(0)
+                        }}
+                      >
+                        <option value="all">All statuses</option>
+                        {staff && <option value="open">Open</option>}
+                        {Object.entries(supportStatuses).map(([key, value]) => (
+                          <option key={key} value={key}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <button
                       className="support-button"
-                      aria-label="Search tickets"
+                      onClick={() => void loadList()}
+                      disabled={loading}
                     >
-                      <Search size={17} />
+                      <RefreshCw size={14} />
+                      Refresh inbox
                     </button>
-                  </form>
-                  <label className="support-field">
-                    Status
-                    <select
-                      value={status}
-                      onChange={(e) => {
-                        setStatus(e.target.value)
-                        setOffset(0)
-                      }}
-                    >
-                      <option value="all">All statuses</option>
-                      {Object.entries(supportStatuses).map(([key, value]) => (
-                        <option key={key} value={key}>
-                          {value}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className="support-button"
-                    onClick={() => void loadList()}
-                    disabled={loading}
-                  >
-                    <RefreshCw size={14} />
-                    Refresh inbox
-                  </button>
-                  {loading ? (
-                    <p role="status">Loading tickets…</p>
-                  ) : tickets.length ? (
-                    <ul>
-                      {tickets.map((t) => (
-                        <li key={t.id}>
-                          <button
-                            className={selected === t.id ? 'selected' : ''}
-                            disabled={busy}
-                            onClick={() => choose(t.id)}
-                          >
-                            <small>
-                              #{t.number} · {supportStatuses[t.status]}
-                            </small>
-                            <strong>{t.subject}</strong>
-                            {t.requesterEmail && (
-                              <span>{t.requesterEmail}</span>
-                            )}
-                            <small>{time(t.updatedAt)}</small>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : error ? (
-                    <p>Inbox loading failed. Use Refresh inbox to try again.</p>
-                  ) : (
-                    <p>No tickets match this view.</p>
-                  )}
-                  <div className="support-actions">
-                    <button
-                      className="support-button"
-                      disabled={offset === 0 || loading}
-                      onClick={() => setOffset(Math.max(0, offset - 50))}
-                    >
-                      Previous
-                    </button>
-                    <button
-                      className="support-button"
-                      disabled={!hasMore || loading}
-                      onClick={() => setOffset(offset + 50)}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </aside>
-                <div className="support-panel support-conversation">
-                  {!staff && compose ? (
-                    <form onSubmit={create} aria-label="New support ticket">
-                      <h2>Tell us what you need</h2>
-                      <p className="support-warning">
-                        Do not submit passwords, API keys or payment-card
-                        details. Only the text and screenshot you choose are
-                        attached; no business records, console logs or financial
-                        data are collected automatically.
-                      </p>
-                      <label className="support-field">
-                        Subject
-                        <input
-                          required
-                          maxLength={160}
-                          value={subject}
-                          onChange={(e) => setSubject(e.target.value)}
-                        />
-                      </label>
-                      <label className="support-field">
-                        Category
-                        <select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                        >
-                          {supportCategories.map((c) => (
-                            <option key={c}>{c}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="support-field">
-                        Message
-                        <textarea
-                          required
-                          maxLength={6000}
-                          rows={7}
-                          value={message}
-                          onChange={(e) => setMessage(e.target.value)}
-                        />
-                      </label>
-                      <label className="support-note-choice">
-                        <input
-                          type="checkbox"
-                          checked={aiReviewConsent}
-                          onChange={(e) => setAiReviewConsent(e.target.checked)}
-                        />
-                        Allow support staff to send my issue summary and public
-                        replies to OpenAI via Netlify AI Gateway for
-                        troubleshooting suggestions. Screenshots, diagnostics
-                        and private notes are excluded. Optional; support
-                        remains available without AI review.
-                      </label>
-                      <ScreenshotInput key={createKey} onFile={setFile} />
-                      <p className="support-fine">
-                        We include only a sanitized app location and release
-                        version. Email notifications may be inactive; your
-                        ticket is saved in the app.
-                      </p>
-                      <button className="public-button" disabled={busy}>
-                        {busy ? 'Saving…' : 'Submit ticket'}
-                      </button>
-                    </form>
-                  ) : detailLoading ? (
-                    <p role="status">Loading conversation…</p>
-                  ) : detail ? (
-                    <>
-                      <header>
-                        <p className="public-eyebrow">
-                          Ticket #{detail.ticket.number} ·{' '}
-                          {detail.ticket.category}
-                        </p>
-                        <h2>{detail.ticket.subject}</h2>
-                        <p>
-                          <span className="support-status">
-                            {supportStatuses[detail.ticket.status]}
-                          </span>{' '}
-                          · Created {time(detail.ticket.createdAt)}
-                        </p>
-                        {staff && (
-                          <p className="support-fine">
-                            Requester: {detail.ticket.requesterEmail}
-                            <br />
-                            Oven:{' '}
-                            {detail.ticket.workspaceId || 'No active oven'}
-                            <br />
-                            App: {detail.ticket.diagnostics?.appVersion} ·
-                            Location: {detail.ticket.diagnostics?.route}
-                          </p>
-                        )}
-                        <div className="support-actions">
-                          {staff ? (
-                            <label className="support-field">
-                              Ticket status
-                              <select
-                                value={detail.ticket.status}
-                                disabled={busy}
-                                onChange={(e) =>
-                                  void changeStatus(e.target.value)
-                                }
-                              >
-                                {Object.entries(supportStatuses).map(
-                                  ([k, v]) => (
-                                    <option value={k} key={k}>
-                                      {v}
-                                    </option>
-                                  ),
-                                )}
-                              </select>
-                            </label>
-                          ) : (
+                    {loading ? (
+                      <p role="status">Loading tickets…</p>
+                    ) : tickets.length ? (
+                      <ul>
+                        {tickets.map((t) => (
+                          <li key={t.id}>
                             <button
-                              className="support-button"
+                              className={selected === t.id ? 'selected' : ''}
                               disabled={busy}
-                              onClick={() =>
-                                void changeStatus(
-                                  detail.ticket.status === 'resolved'
-                                    ? 'new'
-                                    : 'resolved',
-                                )
-                              }
+                              onClick={() => choose(t.id)}
                             >
-                              {detail.ticket.status === 'resolved'
-                                ? 'Reopen ticket'
-                                : 'Resolve ticket'}
-                            </button>
-                          )}
-                          <button
-                            className="support-button"
-                            disabled={busy || detailLoading}
-                            onClick={() => {
-                              setDetailLoading(true)
-                              supportRequest(mode + '&ticket=' + selected)
-                                .then(setDetail)
-                                .catch((e) => setError(e.message))
-                                .finally(() => setDetailLoading(false))
-                            }}
-                          >
-                            Refresh conversation
-                          </button>
-                        </div>
-                      </header>
-                      <ol
-                        className="support-messages"
-                        aria-label="Conversation history"
-                      >
-                        {detail.messages.map((m) => (
-                          <li
-                            className={'support-message ' + m.kind}
-                            key={m.id}
-                          >
-                            <div>
+                              <small>
+                                #{t.number} · {supportStatuses[t.status]}
+                              </small>
                               <strong>
-                                {m.kind === 'internal' ? (
-                                  <>
-                                    <LockKeyhole size={14} />
-                                    Private internal note
-                                  </>
-                                ) : m.kind === 'support' ? (
-                                  'Platform support'
-                                ) : m.own ? (
-                                  'You'
-                                ) : (
-                                  'Requester'
+                                {t.unread && (
+                                  <span
+                                    className="support-unread"
+                                    aria-label="Unread"
+                                  >
+                                    ●{' '}
+                                  </span>
                                 )}
+                                {t.subject}
                               </strong>
-                              <time dateTime={m.createdAt}>
-                                {time(m.createdAt)}
-                              </time>
-                            </div>
-                            <p>{m.body}</p>
-                            {m.attachments.map((a) => (
-                              <a
-                                key={a.id}
-                                onClick={(e) => {
-                                  e.preventDefault()
-                                  void downloadSupportScreenshot(
-                                    staff,
-                                    a.id,
-                                  ).catch(showError)
-                                }}
-                                href={`/api/support?view=${staff ? 'staff' : 'customer'}&attachment=${a.id}`}
-                              >
-                                <Paperclip size={14} />
-                                Download screenshot (
-                                {Math.ceil(a.byteSize / 1024)} KB)
-                              </a>
-                            ))}
+                              {staff && (
+                                <span>
+                                  {t.businessName || 'No associated business'} ·{' '}
+                                  {t.priority || 'normal'} priority ·{' '}
+                                  {t.assignee
+                                    ? t.assignee === access.identityId
+                                      ? 'Assigned to you'
+                                      : t.assignee
+                                    : 'Unassigned'}
+                                </span>
+                              )}
+                              {t.requesterEmail && (
+                                <span>{t.requesterEmail}</span>
+                              )}
+                              <small>{time(t.updatedAt)}</small>
+                            </button>
                           </li>
                         ))}
-                      </ol>
-                      {detail.aiConversation && (
-                        <details className="support-helper">
-                          <summary>
-                            Attached AI conversation & diagnostics
-                          </summary>
-                          <SupportTranscript
-                            messages={detail.aiConversation.messages}
-                            requesterLabel={staff ? 'Requester' : 'You'}
-                          />
-                          {!!detail.aiConversation.diagnostics && (
-                            <pre className="ai-diagnostics">
-                              {JSON.stringify(
-                                detail.aiConversation.diagnostics,
-                                null,
-                                2,
-                              )}
-                            </pre>
-                          )}
-                          <p>
-                            Attachment expires{' '}
-                            {time(detail.aiConversation.expires_at)}. The
-                            requester can delete it sooner. Ticket summaries and
-                            replies remain.
-                          </p>
-                        </details>
-                      )}
-                      {staff && (
-                        <SupportAiSuggestion
-                          key={detail.ticket.id}
-                          ticketId={detail.ticket.id}
-                          consent={
-                            !!detail.aiConversation ||
-                            detail.ticket.diagnostics?.aiReviewConsent ===
-                              'true'
-                          }
-                          onDraft={(text) => {
-                            setReply(text)
-                            setInternal(false)
-                          }}
-                        />
-                      )}
-                      <form onSubmit={sendReply} aria-label="Ticket reply">
-                        {staff && (
-                          <label className="support-note-choice">
-                            <input
-                              type="checkbox"
-                              checked={internal}
-                              onChange={(e) => setInternal(e.target.checked)}
-                            />
-                            Private internal note — never visible to the
-                            requester
-                          </label>
-                        )}
+                      </ul>
+                    ) : error ? (
+                      <p>
+                        Inbox loading failed. Use Refresh inbox to try again.
+                      </p>
+                    ) : (
+                      <p>No tickets match this view.</p>
+                    )}
+                    <div className="support-actions">
+                      <button
+                        className="support-button"
+                        disabled={offset === 0 || loading}
+                        onClick={() => setOffset(Math.max(0, offset - 50))}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="support-button"
+                        disabled={!hasMore || loading}
+                        onClick={() => setOffset(offset + 50)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </aside>
+                  <div className="support-panel support-conversation">
+                    {!staff && compose ? (
+                      <form onSubmit={create} aria-label="New support ticket">
+                        <h2>Tell us what you need</h2>
+                        <p className="support-warning">
+                          Do not submit passwords, API keys or payment-card
+                          details. Only the text and screenshot you choose are
+                          attached; no business records, console logs or
+                          financial data are collected automatically.
+                        </p>
                         <label className="support-field">
-                          {internal
-                            ? 'Private note'
-                            : 'Reply in Cottage Pantry'}
+                          Subject
+                          <input
+                            required
+                            maxLength={160}
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                          />
+                        </label>
+                        <label className="support-field">
+                          Category
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value)}
+                          >
+                            {supportCategories.map((c) => (
+                              <option key={c}>{c}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="support-field">
+                          Message
                           <textarea
                             required
                             maxLength={6000}
-                            rows={4}
-                            value={reply}
-                            onChange={(e) => setReply(e.target.value)}
+                            rows={7}
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
                           />
                         </label>
+                        <label className="support-note-choice">
+                          <input
+                            type="checkbox"
+                            checked={aiReviewConsent}
+                            onChange={(e) =>
+                              setAiReviewConsent(e.target.checked)
+                            }
+                          />
+                          Allow support staff to send my issue summary and
+                          public replies to OpenAI via Netlify AI Gateway for
+                          troubleshooting suggestions. Screenshots, diagnostics
+                          and private notes are excluded. Optional; support
+                          remains available without AI review.
+                        </label>
+                        <ScreenshotInput key={createKey} onFile={setFile} />
                         <p className="support-fine">
-                          Do not include passwords, API keys or payment-card
-                          details.
+                          We include only a sanitized app location and release
+                          version. Email notifications may be inactive; your
+                          ticket is saved in the app.
                         </p>
-                        <ScreenshotInput key={replyKey} onFile={setReplyFile} />
                         <button className="public-button" disabled={busy}>
-                          {busy
-                            ? 'Saving…'
-                            : internal
-                              ? 'Save private note'
-                              : staff
-                                ? 'Send customer-visible reply'
-                                : 'Send reply'}
+                          {busy ? 'Saving…' : 'Submit ticket'}
                         </button>
                       </form>
-                      {staff && (
-                        <details className="support-delivery">
-                          <summary>Notification delivery · internal</summary>
-                          <p>
-                            Queued or accepted does not mean delivered. Email
-                            remains off until approved and configured. Private
-                            notes never generate customer email.
+                    ) : detailLoading ? (
+                      <p role="status">Loading conversation…</p>
+                    ) : detail ? (
+                      <>
+                        <header>
+                          <p className="public-eyebrow">
+                            Ticket #{detail.ticket.number} ·{' '}
+                            {detail.ticket.category}
                           </p>
-                          <ul>
-                            {detail.notifications?.map((n) => (
-                              <li key={n.id}>
-                                {n.kind}: <strong>{n.status}</strong> ·{' '}
-                                {n.attempts}/3 attempts
-                                {n.errorCode ? ` · ${n.errorCode}` : ''}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      )}
-                    </>
-                  ) : (
-                    <div className="support-empty">
-                      <MessageCircle size={35} />
-                      <h2>
-                        {staff
-                          ? 'Choose a conversation'
-                          : 'A little help when you need it'}
-                      </h2>
-                      <p>
-                        {staff
-                          ? 'Open a ticket to reply, change status or add a private note.'
-                          : 'Create a ticket or open one from your list. Email replies do not update tickets; continue the conversation here.'}
-                      </p>
-                      {!staff && (
-                        <button
-                          className="public-button"
-                          onClick={() => setCompose(true)}
+                          <h2>{detail.ticket.subject}</h2>
+                          <p>
+                            <span className="support-status">
+                              {supportStatuses[detail.ticket.status]}
+                            </span>{' '}
+                            · Created {time(detail.ticket.createdAt)}
+                          </p>
+                          {staff && (
+                            <p className="support-fine">
+                              Requester: {detail.ticket.requesterEmail}
+                              <br />
+                              Oven:{' '}
+                              {detail.ticket.workspaceId || 'No active oven'}
+                              <br />
+                              App: {detail.ticket.diagnostics?.appVersion} ·
+                              Location: {detail.ticket.diagnostics?.route}
+                            </p>
+                          )}
+                          <div className="support-actions">
+                            {staff ? (
+                              <label className="support-field">
+                                Ticket status
+                                <select
+                                  value={detail.ticket.status}
+                                  disabled={busy}
+                                  onChange={(e) =>
+                                    void changeStatus(e.target.value)
+                                  }
+                                >
+                                  {Object.entries(supportStatuses).map(
+                                    ([k, v]) => (
+                                      <option value={k} key={k}>
+                                        {v}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </label>
+                            ) : (
+                              <button
+                                className="support-button"
+                                disabled={busy}
+                                onClick={() =>
+                                  void changeStatus(
+                                    detail.ticket.status === 'resolved'
+                                      ? 'new'
+                                      : 'resolved',
+                                  )
+                                }
+                              >
+                                {detail.ticket.status === 'resolved'
+                                  ? 'Reopen ticket'
+                                  : 'Resolve ticket'}
+                              </button>
+                            )}
+                            <button
+                              className="support-button"
+                              disabled={busy || detailLoading}
+                              onClick={() => {
+                                setDetailLoading(true)
+                                supportRequest(mode + '&ticket=' + selected)
+                                  .then(setDetail)
+                                  .catch((e) => setError(e.message))
+                                  .finally(() => setDetailLoading(false))
+                              }}
+                            >
+                              Refresh conversation
+                            </button>
+                          </div>
+                        </header>
+                        <ol
+                          className="support-messages"
+                          aria-label="Conversation history"
                         >
-                          Get help
-                        </button>
+                          {detail.messages.map((m) => (
+                            <li
+                              className={'support-message ' + m.kind}
+                              key={m.id}
+                            >
+                              <div>
+                                <strong>
+                                  {m.kind === 'internal' ? (
+                                    <>
+                                      <LockKeyhole size={14} />
+                                      Private internal note
+                                    </>
+                                  ) : m.kind === 'support' ? (
+                                    'Platform support'
+                                  ) : m.own ? (
+                                    'You'
+                                  ) : (
+                                    'Requester'
+                                  )}
+                                </strong>
+                                <time dateTime={m.createdAt}>
+                                  {time(m.createdAt)}
+                                </time>
+                              </div>
+                              <p>{m.body}</p>
+                              {m.attachments.map((a) => (
+                                <a
+                                  key={a.id}
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    void downloadSupportScreenshot(
+                                      staff,
+                                      a.id,
+                                    ).catch(showError)
+                                  }}
+                                  href={`/api/support?view=${staff ? 'staff' : 'customer'}&attachment=${a.id}`}
+                                >
+                                  <Paperclip size={14} />
+                                  Download screenshot (
+                                  {Math.ceil(a.byteSize / 1024)} KB)
+                                </a>
+                              ))}
+                            </li>
+                          ))}
+                        </ol>
+                        {detail.aiConversation && (
+                          <details className="support-helper">
+                            <summary>
+                              Attached AI conversation & diagnostics
+                            </summary>
+                            <SupportTranscript
+                              messages={detail.aiConversation.messages}
+                              requesterLabel={staff ? 'Requester' : 'You'}
+                            />
+                            {!!detail.aiConversation.diagnostics && (
+                              <pre className="ai-diagnostics">
+                                {JSON.stringify(
+                                  detail.aiConversation.diagnostics,
+                                  null,
+                                  2,
+                                )}
+                              </pre>
+                            )}
+                            <p>
+                              Attachment expires{' '}
+                              {time(detail.aiConversation.expires_at)}. The
+                              requester can delete it sooner. Ticket summaries
+                              and replies remain.
+                            </p>
+                          </details>
+                        )}
+                        {staff && (
+                          <SupportAiSuggestion
+                            key={detail.ticket.id}
+                            ticketId={detail.ticket.id}
+                            reply={reply}
+                            consent={
+                              !!detail.aiConversation ||
+                              detail.ticket.diagnostics?.aiReviewConsent ===
+                                'true'
+                            }
+                            onDraft={(text) => {
+                              setReply(text)
+                              setInternal(false)
+                            }}
+                          />
+                        )}
+                        <form onSubmit={sendReply} aria-label="Ticket reply">
+                          {staff && (
+                            <label className="support-note-choice">
+                              <input
+                                type="checkbox"
+                                checked={internal}
+                                onChange={(e) => setInternal(e.target.checked)}
+                              />
+                              Private internal note — never visible to the
+                              requester
+                            </label>
+                          )}
+                          <label className="support-field">
+                            {internal
+                              ? 'Private note'
+                              : 'Reply in Cottage Pantry'}
+                            <textarea
+                              required
+                              maxLength={6000}
+                              rows={4}
+                              value={reply}
+                              onChange={(e) => setReply(e.target.value)}
+                            />
+                          </label>
+                          <p className="support-fine">
+                            Do not include passwords, API keys or payment-card
+                            details.
+                          </p>
+                          <ScreenshotInput
+                            key={replyKey}
+                            onFile={setReplyFile}
+                          />
+                          <button className="public-button" disabled={busy}>
+                            {busy
+                              ? 'Saving…'
+                              : internal
+                                ? 'Save private note'
+                                : staff
+                                  ? 'Send customer-visible reply'
+                                  : 'Send reply'}
+                          </button>
+                        </form>
+                        {staff && (
+                          <details className="support-delivery">
+                            <summary>Notification delivery · internal</summary>
+                            <p>
+                              Queued or accepted does not mean delivered. Email
+                              remains off until approved and configured. Private
+                              notes never generate customer email.
+                            </p>
+                            <ul>
+                              {detail.notifications?.map((n) => (
+                                <li key={n.id}>
+                                  {n.kind}: <strong>{n.status}</strong> ·{' '}
+                                  {n.attempts}/3 attempts
+                                  {n.errorCode ? ` · ${n.errorCode}` : ''}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </>
+                    ) : (
+                      <div className="support-empty">
+                        <MessageCircle size={35} />
+                        <h2>
+                          {staff
+                            ? 'Choose a conversation'
+                            : 'A little help when you need it'}
+                        </h2>
+                        <p>
+                          {staff
+                            ? 'Open a ticket to reply, change status or add a private note.'
+                            : 'Create a ticket or open one from your list. Email replies do not update tickets; continue the conversation here.'}
+                        </p>
+                        {!staff && (
+                          <button
+                            className="public-button"
+                            onClick={() => setCompose(true)}
+                          >
+                            Get help
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {staff && (
+                    <aside
+                      className="support-panel support-ticket-details"
+                      aria-label="Ticket details"
+                    >
+                      <h2>Ticket details</h2>
+                      {detail ? (
+                        <>
+                          <dl>
+                            <dt>Requester</dt>
+                            <dd>{detail.ticket.requesterEmail}</dd>
+                            <dt>Business</dt>
+                            <dd>
+                              {detail.ticket.businessName ||
+                                detail.ticket.workspaceId ||
+                                'No associated business'}
+                            </dd>
+                            <dt>Verified subscription</dt>
+                            <dd>
+                              {detail.subscription ? (
+                                <>
+                                  {detail.subscription.plan} ·{' '}
+                                  {detail.subscription.status}
+                                  <br />
+                                  Last verified{' '}
+                                  {detail.subscription.verifiedAt &&
+                                    time(detail.subscription.verifiedAt)}
+                                </>
+                              ) : (
+                                'Verified subscription unavailable'
+                              )}
+                            </dd>
+                            <dt>Created</dt>
+                            <dd>{time(detail.ticket.createdAt)}</dd>
+                            <dt>Updated</dt>
+                            <dd>{time(detail.ticket.updatedAt)}</dd>
+                            <dt>Application context</dt>
+                            <dd>
+                              {detail.ticket.diagnostics?.route ||
+                                'Not provided'}{' '}
+                              ·{' '}
+                              {detail.ticket.diagnostics?.appVersion ||
+                                'Unknown release'}
+                            </dd>
+                          </dl>
+                          <label className="support-field">
+                            Category
+                            <select
+                              disabled={busy}
+                              value={detail.ticket.category}
+                              onChange={(e) =>
+                                void triage({ category: e.target.value })
+                              }
+                            >
+                              {supportCategories.map((c) => (
+                                <option key={c}>{c}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="support-field">
+                            Priority
+                            <select
+                              disabled={busy}
+                              value={detail.ticket.priority || 'normal'}
+                              onChange={(e) =>
+                                void triage({ priority: e.target.value })
+                              }
+                            >
+                              {['low', 'normal', 'high', 'urgent'].map((v) => (
+                                <option key={v}>{v}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <p>
+                            Assignment:{' '}
+                            {detail.ticket.assignee &&
+                            detail.ticket.assignee === access.identityId
+                              ? 'You'
+                              : detail.ticket.assignee || 'Unassigned'}
+                          </p>
+                          <label className="support-field">
+                            Assign administrator
+                            <select
+                              disabled={busy}
+                              value={detail.ticket.assignee || ''}
+                              onChange={(e) =>
+                                void triage({
+                                  assignee: e.target.value || null,
+                                })
+                              }
+                            >
+                              <option value="">Unassigned</option>
+                              {Array.from(
+                                new Set(
+                                  [
+                                    access.identityId,
+                                    detail.ticket.assignee,
+                                    ...(detail.staffOptions || []).map(
+                                      (a) => a.id,
+                                    ),
+                                  ].filter((id): id is string => !!id),
+                                ),
+                              ).map((id) => (
+                                <option key={id} value={id}>
+                                  {id === access.identityId ? 'You' : id}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="support-actions">
+                            <button
+                              className="support-button"
+                              disabled={busy || !access.identityId}
+                              onClick={() =>
+                                void triage({ assignee: access.identityId })
+                              }
+                            >
+                              Assign to me
+                            </button>
+                            <button
+                              className="support-button"
+                              disabled={busy || !detail.ticket.assignee}
+                              onClick={() => void triage({ assignee: null })}
+                            >
+                              Unassign
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <p>Select a ticket to view its details.</p>
                       )}
-                    </div>
+                    </aside>
                   )}
                 </div>
-              </div>
+              </>
             )}
           </>
         )}
