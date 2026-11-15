@@ -176,7 +176,7 @@ import {
 
 import { IngredientDetail } from '@/components/ingredient-detail'
 import { PantryPhoto } from '@/components/pantry-photo'
-import { PantryInventory } from '@/components/pantry-inventory'
+import { PantryInventory, PantrySummary } from '@/components/pantry-inventory'
 import { WorkspaceDashboard } from '@/components/workspace-dashboard'
 import { TaxCenter } from '@/components/tax-center'
 import { SettingsWorkspace } from '@/components/settings-workspace'
@@ -1593,7 +1593,7 @@ export function WorkspaceApp() {
           </div>
         </header>
         <main
-          className={`app-page${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
+          className={`app-page${route.section === 'Inventory' ? ' inventory-layout-page' : ''}${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
           {page === 'Labels' &&
             productDetailReturn &&
@@ -1670,13 +1670,6 @@ export function WorkspaceApp() {
               </p>
             </div>
             <div className="heading-actions">
-              {route.section === 'Inventory' &&
-                ['Owner', 'Manager'].includes(role) && (
-                  <Btn secondary onClick={() => open('add-item')}>
-                    <Plus size={17} />
-                    Add Item
-                  </Btn>
-                )}
               {page === 'Finances' &&
                 !['Finance', 'Purchasing'].includes(route.section) && (
                   <Btn
@@ -1691,6 +1684,7 @@ export function WorkspaceApp() {
                 ['Finance', 'Purchasing'].includes(route.section) &&
                 pageAction?.[1] === 'transaction'
               ) &&
+                route.section !== 'Inventory' &&
                 page !== 'Dashboard' &&
                 page !== 'Settings' &&
                 page !== 'Labels' &&
@@ -1712,6 +1706,21 @@ export function WorkspaceApp() {
                 )}
             </div>
           </div>
+          {route.section === 'Inventory' && (
+            <PantrySummary
+              ingredients={ingredients.filter((i) =>
+                route.tab === 'Craft Materials'
+                  ? i.usedAs === 'material'
+                  : route.tab === 'Ingredients'
+                    ? !['material', 'packaging', 'supply'].includes(i.usedAs)
+                    : route.tab === 'Packaging'
+                      ? i.usedAs === 'packaging'
+                      : route.tab === 'Supplies'
+                        ? i.usedAs === 'supply'
+                        : true,
+              )}
+            />
+          )}
           <SectionWorkspace
             enabled={
               !!sectionTabs[route.section]?.length &&
@@ -1764,6 +1773,20 @@ export function WorkspaceApp() {
                   open={open}
                 />
               )}
+              {route.section === 'Inventory' &&
+                !['All items', 'Receiving'].includes(sub) && (
+                  <InventoryTools
+                    workspace={state}
+                    role={role}
+                    open={open}
+                    mutate={mutate}
+                    refresh={load}
+                  >
+                    {({ actions }) => (
+                      <div className="inventory-filter-actions">{actions}</div>
+                    )}
+                  </InventoryTools>
+                )}
               {page === 'Pantry' && (
                 <>
                   {sub === 'Counts' ? (

@@ -1,3 +1,10 @@
+import { MoreHorizontal } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from './ui/dropdown-menu'
 import { pantryCategoryConflict } from '@/lib/section-categories'
 import { useEffect, useRef, useState } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
@@ -423,7 +430,12 @@ export function SectionCategoryTools({
   onSettings,
   value,
   onFilter,
-}: Common & { value?: string; onFilter?: (id: string) => void }) {
+  compact = false,
+}: Common & {
+  compact?: boolean
+  value?: string
+  onFilter?: (id: string) => void
+}) {
   const [mode, setMode] = useState('')
   return (
     <div className="section-category-tools">
@@ -446,24 +458,45 @@ export function SectionCategoryTools({
           </select>
         </label>
       )}
-      {canManage && (
-        <div className="button-row">
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={() => setMode('add')}
-          >
-            Add category
-          </button>
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={() => setMode('manage')}
-          >
-            Manage categories
-          </button>
-        </div>
-      )}
+      {canManage &&
+        (compact ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="btn secondary"
+                aria-label="Category actions"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="workspace-menu">
+              <DropdownMenuItem onSelect={() => setMode('add')}>
+                Add category
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setMode('manage')}>
+                Manage categories
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <div className="button-row">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setMode('add')}
+            >
+              Add category
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => setMode('manage')}
+            >
+              Manage categories
+            </button>
+          </div>
+        ))}
       {mode && (
         <SectionCategoryManager
           workspace={workspace}

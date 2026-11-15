@@ -312,3 +312,53 @@
     color: var(--primary);
   }
 }
+
+/* Inventory's summary sits above the two-column section workspace. */
+.inventory-layout-page .pantry-v2 > .toolbar {
+  align-items: end;
+}
+.inventory-layout-page .section-category-tools {
+  margin: 0;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.inventory-layout-page .section-category-tools label {
+  min-width: 160px;
+}
+.inventory-layout-page .pantry-sort {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+.inventory-layout-page .inventory-filter-actions > .inventory-primary-actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+@media (max-width: 700px) {
+  .workspace-standard.inventory-layout-page .inventory-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .workspace-standard.inventory-layout-page .inventory-primary-actions > .btn {
+    flex: 0 0 40px;
+    width: 40px;
+    min-height: 44px;
+    padding: 8px;
+  }
+  .inventory-layout-page .inventory-primary-actions .inventory-action-short {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .inventory-layout-page > .pantry-summary {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 105px), 1fr));
+  }
+}
+.inventory-layout-page .inventory-order-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
