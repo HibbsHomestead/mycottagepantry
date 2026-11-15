@@ -138,42 +138,131 @@ export function receiptTotals(r: ReceiptValues) {
     errors,
   }
 }
-/** Acquisition-cost allocation preserves the existing policy, with a last-line cent remainder. */
-export function receiptAllocations(r: ReceiptValues) {
-  const t = receiptTotals(r)
-  if (t.total == null || t.subtotal == null) return []
-  const subtotal = receiptCents(t.subtotal)!,
-    total = receiptCents(t.total)!
-  let allocated = 0,
-    cumulativeBase = 0,
-    allocatedTax = 0
-  const tax = r.taxTreatment === 'exclusive' ? receiptCents(t.tax)! : 0
-  const share = (value: number, weight: number) =>
-    subtotal
+/** Cumulative integer rounding assigns every cent once, independent of classifications. */
+function distribute(total: number, weights: number[]) {
+  const sum = weights.reduce((n, w) => n + w, 0)
+  let cumulative = 0,
+    previous = 0
+  return weights.map((weight) => {
+    cumulative += weight
+    const next = sum
       ? Number(
-          (BigInt(value) * BigInt(weight) * 2n + BigInt(subtotal)) /
-            (BigInt(subtotal) * 2n),
+          (BigInt(total) * BigInt(cumulative) * 2n + BigInt(sum)) /
+            (2n * BigInt(sum)),
         )
       : 0
+    const share = next - previous
+    previous = next
+    return share
+  })
+}
+/** Actual tax takes priority; rates use discounted bases; combined tax uses eligible bases. */
+export function receiptTaxAllocation(r: ReceiptValues) {
+  const t = receiptTotals(r),
+    lines: ReceiptValues[] = r.lines || []
+  const errors: string[] = []
+  if (t.total == null)
+    return {
+      taxes: [] as number[],
+      bases: [] as number[],
+      fees: [] as number[],
+      errors,
+      estimated: false,
+    }
+  if (
+    r.feeAllocation &&
+    !['proportional', 'business', 'personal', 'unreviewed'].includes(
+      r.feeAllocation,
+    )
+  )
+    errors.push('Choose a valid shipping / fee allocation rule.')
+  const raw = lines.map((l) => receiptLineCents(l)!)
+  const bases = distribute(
+    raw.reduce((n, v) => n + v, 0) - receiptCents(t.discount)!,
+    raw,
+  )
+  const taxes: (number | null)[] = lines.map((l, i) => {
+    if (
+      l.taxableStatus &&
+      !['unknown', 'taxable', 'exempt'].includes(l.taxableStatus)
+    )
+      errors.push(`Line ${i + 1}: choose a valid taxable status.`)
+    if (!missing(l.lineTax)) {
+      const actual = receiptCents(l.lineTax)
+      if (actual == null || actual < 0)
+        errors.push(`Line ${i + 1}: enter valid actual tax.`)
+      return actual == null || actual < 0 ? 0 : actual
+    }
+    if (l.taxableStatus === 'exempt') return 0
+    if (!missing(l.taxRate)) {
+      const rate = decimal(l.taxRate)
+      if (!rate || rate.value < 0n || rate.value > 100n * rate.scale) {
+        errors.push(`Line ${i + 1}: enter a tax rate between 0 and 100.`)
+        return 0
+      }
+      const denominator =
+        100n * rate.scale + (r.taxTreatment === 'inclusive' ? rate.value : 0n)
+      return Number(
+        (BigInt(bases[i]) * rate.value * 2n + denominator) / (2n * denominator),
+      )
+    }
+    return null
+  })
+  const originalTax = receiptCents(t.tax)!
+  const known = taxes.reduce<number>((n, v) => n + (v ?? 0), 0)
+  const unknown = taxes.map((v, i) => (v == null ? bases[i] : 0))
+  const remaining = originalTax - known
+  if (remaining < 0 || (!unknown.some(Boolean) && remaining !== 0))
+    errors.push(
+      'Line tax does not reconcile to original receipt tax. Review tax details; original totals are unchanged.',
+    )
+  const estimated =
+    taxes.some(
+      (v, i) =>
+        v == null && lines[i].taxableStatus !== 'taxable' && bases[i] > 0,
+    ) && originalTax > 0
+  // Keep discrepancies visible, rather than silently rewriting the merchant tax.
+  const remainder = distribute(Math.max(0, remaining), unknown)
+  const allocated = taxes.map((v, i) => v ?? remainder[i])
+  if (r.taxTreatment === 'inclusive' && allocated.some((v, i) => v > bases[i]))
+    errors.push('Included line tax exceeds its discounted amount.')
+  const feeWeights = lines.map((l, i) =>
+    !r.feeAllocation || r.feeAllocation === 'proportional'
+      ? bases[i]
+      : (l.allocation ||
+            (l.decision === 'personal' ? 'personal' : 'business')) ===
+          r.feeAllocation
+        ? bases[i]
+        : 0,
+  )
+  const feeTotal = receiptCents(t.charges)! + (receiptCents(r.adjustment) ?? 0)
+  if (feeTotal && !feeWeights.some(Boolean))
+    errors.push('Choose eligible lines for shipping / fee allocation.')
+  const fees = distribute(Math.abs(feeTotal), feeWeights).map((v) =>
+    feeTotal < 0 ? -v : v,
+  )
+  return { taxes: allocated, bases, fees, errors, estimated }
+}
+export function receiptAllocations(r: ReceiptValues) {
+  const t = receiptTotals(r)
+  if (t.total == null) return []
+  const plan = receiptTaxAllocation(r)
   return (r.lines || []).map((l: ReceiptValues, index: number) => {
-    const base = receiptLineCents(l)!
-    cumulativeBase += base
-    const last = index === r.lines.length - 1
-    const cumulativeAmount = last ? total : share(total, cumulativeBase)
-    const cumulativeTax = last ? tax : share(tax, cumulativeBase)
-    const cents = cumulativeAmount - allocated,
-      taxShare = cumulativeTax - allocatedTax
-    allocated = cumulativeAmount
-    allocatedTax = cumulativeTax
+    const tax = plan.taxes[index],
+      base = plan.bases[index],
+      fee = plan.fees[index]
+    const cents = base + fee + (r.taxTreatment === 'exclusive' ? tax : 0)
     return {
       ...l,
-      amount: base / 100,
+      amount: receiptLineCents(l)! / 100,
       postedAmount:
         (r.adjustmentAllocation === 'manual'
           ? (receiptCents(l.adjustedAmount) ?? 0)
           : cents) / 100,
-      taxShare: taxShare / 100,
-      otherChargesShare: (cents - base - taxShare) / 100,
+      subtotalShare: (base - (r.taxTreatment === 'inclusive' ? tax : 0)) / 100,
+      taxShare: tax / 100,
+      otherChargesShare: fee / 100,
+      estimatedTax: plan.estimated,
     }
   }) as ReceiptValues[]
 }
@@ -239,8 +328,31 @@ export function businessReceiptLine(l: ReceiptValues): ReceiptValues & {
     if (!l.quantityAllocationConfirmed)
       errors.push('Confirm quantity and cost allocation agree')
   }
+  const tax = receiptCents(l.taxShare) ?? 0
+  const businessTax =
+    full > 0 &&
+    Number.isSafeInteger(business) &&
+    business >= 0 &&
+    business <= full
+      ? distribute(tax, [business, full - business])[0]
+      : 0
+  const fee = receiptCents(l.otherChargesShare) ?? 0
+  const businessFees =
+    full > 0 &&
+    Number.isSafeInteger(business) &&
+    business >= 0 &&
+    business <= full
+      ? distribute(Math.abs(fee), [business, full - business])[0] *
+        (fee < 0 ? -1 : 1)
+      : 0
   return {
     ...l,
+    businessTax: businessTax / 100,
+    excludedTax: (tax - businessTax) / 100,
+    businessSubtotal: Number.isFinite(business)
+      ? (business - businessTax - businessFees) / 100
+      : 0,
+    businessFees: businessFees / 100,
     allocation,
     fullAmount: full / 100,
     postedAmount: Number.isFinite(business) ? business / 100 : 0,
@@ -253,9 +365,12 @@ export function receiptBusinessAllocations(r: ReceiptValues) {
 }
 export function receiptAllocationIssues(r: ReceiptValues) {
   const allocations = receiptBusinessAllocations(r)
-  const errors = allocations.flatMap((l, i) =>
-    l.allocationErrors.map((e: string) => `Line ${i + 1}: ${e}`),
-  )
+  const errors = [
+    ...receiptTaxAllocation(r).errors,
+    ...allocations.flatMap((l, i) =>
+      l.allocationErrors.map((e: string) => `Line ${i + 1}: ${e}`),
+    ),
+  ]
   if (
     r.adjustmentAllocation &&
     !['manual', 'proportional'].includes(r.adjustmentAllocation)

@@ -278,3 +278,66 @@ it('recovers a lost confirmation response by reading the existing posted receipt
   expect(calls).toEqual(['receiptPost', 'read-status'])
   expect(screen.getByRole('status')).toHaveTextContent('Receipt is confirmed')
 })
+it('immediately reallocates tax when excluding and restoring lines without deleting original items', async () => {
+  const user = userEvent.setup(),
+    workspace = demoData()
+  workspace.receipt_extractions = [
+    {
+      ...base,
+      vendor: 'Tax acceptance',
+      date: '2026-11-15',
+      extractionStatus: 'needs_review',
+      arithmeticVersion: 2,
+      allocationVersion: 1,
+      taxTreatment: 'exclusive',
+      tax: 2.4,
+      subtotal: 30,
+      total: 32.4,
+      printedTotal: 32.4,
+      lines: [
+        {
+          description: 'Business item',
+          amount: 20,
+          allocation: 'business',
+          decision: 'expense',
+          category: 'Supplies expense',
+          taxRate: 8,
+        },
+        {
+          description: 'Mixed item',
+          amount: 10,
+          allocation: 'business',
+          decision: 'expense',
+          category: 'Supplies expense',
+          taxRate: 8,
+        },
+      ],
+    },
+  ]
+  const fetcher = vi.fn()
+  vi.stubGlobal('fetch', fetcher)
+  render(<App initial={workspace} />)
+  await user.click(screen.getByRole('button', { name: /Tax acceptance/ }))
+  await user.click(screen.getByRole('tab', { name: 'Line Items' }))
+  const summary = within(
+    screen.getByRole('region', { name: 'Allocation summary' }),
+  )
+  expect(summary.getByText('Business tax $2.40')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /Mixed item.*Edit/ }))
+  await user.selectOptions(screen.getByLabelText('Allocation'), 'personal')
+  expect(summary.getByText('Business subtotal $20.00')).toBeInTheDocument()
+  expect(summary.getByText('Business tax $1.60')).toBeInTheDocument()
+  expect(summary.getByText('Business total $21.60')).toBeInTheDocument()
+  expect(summary.getByText('Personal / excluded $10.80')).toBeInTheDocument()
+  expect(summary.getByText(/Original.*\$32.40/)).toBeInTheDocument()
+  await user.click(screen.getByLabelText('Show excluded items'))
+  await user.click(screen.getByRole('button', { name: 'Restore to business' }))
+  expect(summary.getByText('Business total $32.40')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Remove line 2' }))
+  expect(summary.getByText('Business tax $1.60')).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Restore to business' }),
+  ).toBeInTheDocument()
+  expect(workspace.receipt_extractions[0].lines).toHaveLength(2)
+  expect(fetcher).not.toHaveBeenCalled()
+})

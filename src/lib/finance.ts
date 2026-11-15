@@ -800,6 +800,11 @@ export function planFinance(
       )
     const receipt: Item = {
       ...old,
+      originalReceipt:
+        old.originalReceipt ||
+        (old.lines?.length
+          ? structuredClone(receiptReviewValues(old))
+          : undefined),
       vendor: text(d.vendor ?? old.vendor),
       name: text(d.vendor ?? old.vendor) || old.name,
       date: Object.hasOwn(d, 'date') ? d.date : old.date,
@@ -860,6 +865,7 @@ export function planFinance(
         'printedTotal',
         'allocationVersion',
         'adjustmentAllocation',
+        'feeAllocation',
       ])
         receipt[key] = Object.hasOwn(d, key) ? d[key] : old[key]
       if (old.allocationVersion === 1) receipt.allocationVersion = 1
@@ -1276,25 +1282,17 @@ export function planFinance(
       if (receipt.allocationVersion === 1) {
         lineSnapshots.forEach((snapshot, index) => {
           const allocated = allocations[index]
-          const ratio = allocated.fullAmount
-            ? allocated.postedAmount / allocated.fullAmount
-            : 0
-          const base = roundMoney(Number(receipt.lines[index].amount) * ratio)
           Object.assign(snapshot, {
             fullAmount: allocated.fullAmount,
             excludedAmount: allocated.excludedAmount,
             adjustmentAllocation:
               receipt.adjustmentAllocation || 'proportional',
-            businessBaseAmount: base,
-            taxShare:
-              receipt.adjustmentAllocation === 'manual'
-                ? null
-                : roundMoney((allocated.taxShare || 0) * ratio),
+            businessBaseAmount: allocated.businessSubtotal,
+            taxShare: allocated.businessTax,
+            excludedTax: allocated.excludedTax,
+            estimatedTax: allocated.estimatedTax,
+            otherChargesShare: allocated.businessFees,
           })
-          snapshot.otherChargesShare =
-            receipt.adjustmentAllocation === 'manual'
-              ? null
-              : roundMoney(allocated.postedAmount - base - snapshot.taxShare)
         })
       }
       for (const [key, item] of stock)

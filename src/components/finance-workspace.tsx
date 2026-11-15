@@ -2,7 +2,9 @@ import { FinanceDashboard } from './finance-dashboard'
 import {
   editableReceipt,
   receiptTotals,
+  receiptTaxAllocation,
   receiptLineCents,
+  receiptCents,
   receiptBusinessAllocations,
   receiptAllocationIssues,
   receiptLineIssues,
@@ -2278,6 +2280,7 @@ function ReceiptReview({
     [correctionReason, setCorrectionReason] = useState(''),
     [active, setActive] = useState(-1),
     [needsOnly, setNeedsOnly] = useState(false),
+    [showExcluded, setShowExcluded] = useState(false),
     [confirming, setConfirming] = useState(false),
     [previewOpen, setPreviewOpen] = useState(false),
     [zoom, setZoom] = useState(1),
@@ -2383,6 +2386,9 @@ function ReceiptReview({
   const totals = receiptTotals(r)
   const allocations = receiptBusinessAllocations(r)
   const allocationErrors = receiptAllocationIssues(r)
+  const taxPlan = receiptTaxAllocation(r)
+  const businessSum = (key: string) =>
+    allocations.reduce((n, l) => n + (receiptCents(l[key]) ?? 0), 0) / 100
   const unresolved = lines.filter(
     (l: Partial<Item>) => receiptLineIssues(l).length,
   ).length
@@ -2515,8 +2521,13 @@ function ReceiptReview({
                 ? 'Ready to post'
                 : 'Needs review'}
           </strong>
+          <span>Business total {money(businessSum('postedAmount'))}</span>
           <span>
-            Business {money(amountFor('expense') + amountFor('inventory'))}
+            Business subtotal {money(businessSum('businessSubtotal'))}
+          </span>
+          <span>Business tax {money(businessSum('businessTax'))}</span>
+          <span>
+            Business shipping / fees {money(businessSum('businessFees'))}
           </span>
           <span>Personal / excluded {money(amountFor('personal'))}</span>
           <span>
@@ -2528,13 +2539,22 @@ function ReceiptReview({
             {totals.difference == null ? '—' : money(totals.difference)}
           </span>
           <span>
-            Unallocated{' '}
+            Remaining unreviewed (including tax){' '}
             {money(
               allocations
                 .filter((l) => l.allocation === 'unreviewed')
                 .reduce((n, l) => n + l.fullAmount, 0),
             )}
           </span>
+          {taxPlan.estimated && (
+            <p>
+              Estimated tax allocation — taxable status is unknown for some
+              items.
+            </p>
+          )}
+          {allocationErrors.length > 0 && (
+            <p aria-live="polite">{allocationErrors.join(' · ')}</p>
+          )}
           <p>
             The full receipt, including excluded lines, is visible to everyone
             authorized to view this receipt. Business allocation does not
@@ -2744,7 +2764,9 @@ function ReceiptReview({
                       void (async () => {
                         const result = await onSave('receiptDraft', r)
                         if (result)
-                          await onSave('receiptDismissExtraction', { id: r.id })
+                          await onSave('receiptDismissExtraction', {
+                            id: r.id,
+                          })
                       })()
                     }
                   >
@@ -2956,10 +2978,10 @@ function ReceiptReview({
               {!closed && (
                 <>
                   <p>
-                    Adjustments: proportional to line amounts by default. This
-                    is an allocation of actual receipt charges, not a sales-tax
-                    calculation. Use actual adjusted amounts for different item
-                    tax treatments.
+                    Tax uses actual line tax first, then discounted amounts and
+                    confirmed rates. Combined tax is shared across eligible
+                    items; unknown tax treatment is labeled estimated. Discounts
+                    apply before tax. Shipping / fees remain separate.
                   </p>
                   <Field label="Tax, discount and fee allocation method">
                     <select
@@ -2976,6 +2998,24 @@ function ReceiptReview({
                         Actual / custom adjusted amount per line
                       </option>
                     </select>
+                  </Field>
+                  <Field label="Shipping / fee allocation">
+                    <select
+                      disabled={busy}
+                      value={r.feeAllocation || 'proportional'}
+                      onChange={(e) => update('feeAllocation', e.target.value)}
+                    >
+                      <option value="proportional">
+                        Proportional to discounted line amounts
+                      </option>
+                      <option value="business">Business lines only</option>
+                      <option value="personal">Personal lines only</option>
+                      <option value="unreviewed">Unreviewed lines only</option>
+                    </select>
+                    <small>
+                      Split lines share associated fees using the business
+                      share. Tax is allocated separately.
+                    </small>
                   </Field>
                   <div className="button-row">
                     {[false, true].flatMap((selected) =>
@@ -3040,8 +3080,17 @@ function ReceiptReview({
                   View / edit all items ({lines.length})
                 </button>
               </div>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={showExcluded}
+                  onChange={(e) => setShowExcluded(e.target.checked)}
+                />{' '}
+                Show excluded items
+              </label>
               {lines.map(
                 (l: any, i: number) =>
+                  (showExcluded || l.allocation !== 'personal') &&
                   (!needsOnly ||
                     receiptLineIssues(l).length ||
                     active === i) && (
@@ -3156,12 +3205,10 @@ function ReceiptReview({
                                 aria-label={'Remove line ' + (i + 1)}
                                 disabled={busy}
                                 onClick={() =>
-                                  update(
-                                    'lines',
-                                    lines.filter(
-                                      (_: any, j: number) => j !== i,
-                                    ),
-                                  )
+                                  patchLine(i, {
+                                    allocation: 'personal',
+                                    decision: 'personal',
+                                  })
                                 }
                               >
                                 <X size={16} />
@@ -3307,6 +3354,72 @@ function ReceiptReview({
                                 </p>
                               )}
                             </details>
+                            {l.allocation === 'personal' && !closed && (
+                              <button
+                                className="btn secondary"
+                                disabled={busy}
+                                onClick={() =>
+                                  patchLine(i, {
+                                    allocation: 'business',
+                                    decision: l.itemId
+                                      ? 'inventory'
+                                      : 'expense',
+                                  })
+                                }
+                              >
+                                Restore to business
+                              </button>
+                            )}
+                            <Field label="Taxable status">
+                              <select
+                                disabled={closed || busy}
+                                value={l.taxableStatus || 'unknown'}
+                                onChange={(e) =>
+                                  line(i, 'taxableStatus', e.target.value)
+                                }
+                              >
+                                <option value="unknown">
+                                  Unknown — estimated allocation
+                                </option>
+                                <option value="taxable">Taxable</option>
+                                <option value="exempt">Tax exempt</option>
+                              </select>
+                            </Field>
+                            <Field label="Applicable tax rate (%)">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="any"
+                                disabled={
+                                  closed || busy || l.taxableStatus === 'exempt'
+                                }
+                                value={l.taxRate ?? ''}
+                                onChange={(e) =>
+                                  line(i, 'taxRate', e.target.value)
+                                }
+                              />
+                              <small>
+                                Only enter a confirmed rate for this item. Leave
+                                unknown rates blank.
+                              </small>
+                            </Field>
+                            <Field label="Actual line tax ($)">
+                              <input
+                                type="number"
+                                min="0"
+                                step=".01"
+                                disabled={closed || busy}
+                                value={l.lineTax ?? ''}
+                                onChange={(e) =>
+                                  line(i, 'lineTax', e.target.value)
+                                }
+                              />
+                              <small>
+                                Printed line tax overrides the rate; leave blank
+                                if unavailable.
+                              </small>
+                            </Field>
                             <Field label="Allocation">
                               <select
                                 disabled={closed || busy}
@@ -4046,9 +4159,42 @@ function ReceiptReview({
               )}
               <details>
                 <summary>View calculation & history</summary>
+                {r.originalReceipt && (
+                  <details>
+                    <summary>
+                      Original receipt values before review edits
+                    </summary>
+                    <p>
+                      Subtotal {shownAmount(r.originalReceipt.subtotal)} ·
+                      discounts{' '}
+                      {shownAmount(
+                        r.originalReceipt.receiptDiscount ??
+                          r.originalReceipt.discounts,
+                      )}{' '}
+                      · tax {shownAmount(r.originalReceipt.tax)} · total{' '}
+                      {shownAmount(
+                        r.originalReceipt.printedTotal ??
+                          r.originalReceipt.total,
+                      )}
+                    </p>
+                    {r.originalReceipt.lines?.map((l: any, i: number) => (
+                      <p key={i}>
+                        {l.description || `Item ${i + 1}`} ·{' '}
+                        {shownAmount(
+                          receiptLineCents(l) == null
+                            ? null
+                            : receiptLineCents(l)! / 100,
+                        )}
+                      </p>
+                    ))}
+                  </details>
+                )}
                 {r.postedLines?.map((l: any, i: number) => (
                   <p key={i}>
-                    {l.description}: {money(l.postedAmount)} · allocated tax{' '}
+                    {l.description}: {money(l.postedAmount)} ·{' '}
+                    {l.estimatedTax
+                      ? 'estimated tax allocation'
+                      : 'allocated tax'}{' '}
                     {l.adjustmentAllocation === 'manual'
                       ? 'included in custom cost'
                       : money(l.taxShare || 0)}{' '}
