@@ -1,5 +1,7 @@
 import { useRef, useState, type ReactElement, type ReactNode } from 'react'
 import {
+  Plus,
+  PackageOpen,
   ScanBarcode,
   PackagePlus,
   ListOrdered,
@@ -190,6 +192,34 @@ export function InventoryTools({
       role="group"
       aria-label="Inventory scanning and labels"
     >
+      {canEdit && (
+        <ActionTip label="Add item">
+          <button
+            className="btn secondary"
+            aria-label="Add item"
+            onClick={() => open('add-item')}
+          >
+            <Plus className="inventory-action-icon" aria-hidden="true" />
+            <span className="inventory-action-full">Add item</span>
+            <span className="inventory-action-short" aria-hidden="true">
+              Add item
+            </span>
+          </button>
+        </ActionTip>
+      )}
+      <ActionTip label="Receive stock">
+        <button
+          className="btn secondary"
+          aria-label="Receive stock"
+          onClick={() => open('receive-picker')}
+        >
+          <PackageOpen className="inventory-action-icon" aria-hidden="true" />
+          <span className="inventory-action-full">Receive stock</span>
+          <span className="inventory-action-short" aria-hidden="true">
+            Receive stock
+          </span>
+        </button>
+      </ActionTip>
       <ActionTip label="Scan barcode">
         <button
           className="btn secondary"

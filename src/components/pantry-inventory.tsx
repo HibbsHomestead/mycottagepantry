@@ -72,7 +72,7 @@ export function PantryInventory({
   onCategorySettings,
   canManageCategories = false,
 }: {
-  onCategorySettings?: (patch: Partial<Item>)=>void
+  onCategorySettings?: (patch: Partial<Item>) => void
   canManageCategories?: boolean
   workspace?: Workspace
   actions?: ReactNode
@@ -90,9 +90,14 @@ export function PantryInventory({
   setSearch: (search: string) => void
   open: (kind: string, item?: Item) => void
 }) {
-  const [categoryFilter,setCategoryFilter]=useState('all')
-  const categoryScope: CategoryScope = typeFilter === 'packaging' || filter === 'Packaging' ? 'packaging' : typeFilter === 'material' || filter === 'Craft materials' ? 'handmade-materials' : 'food-ingredients'
-  useEffect(()=>setCategoryFilter('all'),[categoryScope])
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const categoryScope: CategoryScope =
+    typeFilter === 'packaging' || filter === 'Packaging'
+      ? 'packaging'
+      : typeFilter === 'material' || filter === 'Craft materials'
+        ? 'handmade-materials'
+        : 'food-ingredients'
+  useEffect(() => setCategoryFilter('all'), [categoryScope])
   const [view, setView] = useState<'cards' | 'table'>(
     savedView === 'table' ? 'table' : 'cards',
   )
@@ -193,7 +198,17 @@ export function PantryInventory({
                       ? i.usedAs === 'supply'
                       : true,
     )
-  const rows = sortIngredients(filtered.filter(i=>!workspace || categoryFilter==='all' || (categoryFilter==='uncategorized' ? !assignedCategoryId(i,workspace,categoryScope) : assignedCategoryId(i,workspace,categoryScope)===categoryFilter)), sort)
+  const rows = sortIngredients(
+    filtered.filter(
+      (i) =>
+        !workspace ||
+        categoryFilter === 'all' ||
+        (categoryFilter === 'uncategorized'
+          ? !assignedCategoryId(i, workspace, categoryScope)
+          : assignedCategoryId(i, workspace, categoryScope) === categoryFilter),
+    ),
+    sort,
+  )
   function selectionCheckbox(i: Item) {
     if (!labelSelection?.active) return null
     return (
@@ -209,30 +224,6 @@ export function PantryInventory({
   }
   return (
     <div className="pantry-v2">
-      {workspace && onCategorySettings && <SectionCategoryTools workspace={workspace} scope={categoryScope} canManage={canManageCategories} onSettings={onCategorySettings} value={categoryFilter} onFilter={setCategoryFilter} />}
-      <div className="pantry-summary">
-        <span>
-          <Package size={21} />
-          <span>
-            Pantry value
-            <strong>
-              {money(ingredients.reduce((s, i) => s + i.quantity * i.cost, 0))}
-            </strong>
-          </span>
-        </span>
-        <span>
-          <TriangleAlert size={21} />
-          <span>
-            Low stock<strong>{low.length} items</strong>
-          </span>
-        </span>
-        <span>
-          <Clock3 size={21} />
-          <span>
-            Expiring soon<strong>{expiring.length} items</strong>
-          </span>
-        </span>
-      </div>
       <div className="inventory-filter-actions">
         <div className="inventory-tabs" aria-label="Pantry views">
           {(typeFilter === undefined
@@ -304,34 +295,50 @@ export function PantryInventory({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <label className="pantry-sort">
-          Sort by
-          <select
-            aria-label="Sort by"
-            value={sort.key}
-            onChange={(e) =>
-              chooseSort({ ...sort, key: e.target.value as PantrySort['key'] })
+        <div className="inventory-order-controls">
+          {workspace && onCategorySettings && (
+            <SectionCategoryTools
+              workspace={workspace}
+              scope={categoryScope}
+              canManage={canManageCategories}
+              onSettings={onCategorySettings}
+              compact
+              value={categoryFilter}
+              onFilter={setCategoryFilter}
+            />
+          )}
+          <label className="pantry-sort">
+            Sort by
+            <select
+              aria-label="Sort by"
+              value={sort.key}
+              onChange={(e) =>
+                chooseSort({
+                  ...sort,
+                  key: e.target.value as PantrySort['key'],
+                })
+              }
+            >
+              {columns.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {key === 'name' ? 'Name' : label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="btn secondary"
+            aria-label="Reverse sort direction"
+            onClick={() =>
+              chooseSort({
+                ...sort,
+                direction: sort.direction === 'asc' ? 'desc' : 'asc',
+              })
             }
           >
-            {columns.map(([key, label]) => (
-              <option key={key} value={key}>
-                {key === 'name' ? 'Name' : label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="btn secondary"
-          aria-label="Reverse sort direction"
-          onClick={() =>
-            chooseSort({
-              ...sort,
-              direction: sort.direction === 'asc' ? 'desc' : 'asc',
-            })
-          }
-        >
-          {sort.direction === 'asc' ? '↑ Ascending' : '↓ Descending'}
-        </button>
+            {sort.direction === 'asc' ? '↑ Ascending' : '↓ Descending'}
+          </button>
+        </div>
         <span className="muted item-count">{rows.length} items</span>
       </div>
       {labelSelection?.active && (
@@ -751,6 +758,45 @@ export function PantryInventory({
           )}
         </section>
       )}
+    </div>
+  )
+}
+
+export function PantrySummary({ ingredients }: { ingredients: Item[] }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const next = new Date(new Date(today).getTime() + 7 * 86400000)
+    .toISOString()
+    .slice(0, 10)
+  const low = ingredients.filter(
+    (i) => i.trackInventory !== false && i.quantity <= i.threshold,
+  )
+  const expiring = ingredients.filter(
+    (i) =>
+      supportsExpiry(i) && i.expires && i.expires >= today && i.expires <= next,
+  )
+  return (
+    <div className="pantry-summary">
+      <span>
+        <Package size={21} />
+        <span>
+          Pantry value
+          <strong>
+            {money(ingredients.reduce((s, i) => s + i.quantity * i.cost, 0))}
+          </strong>
+        </span>
+      </span>
+      <span>
+        <TriangleAlert size={21} />
+        <span>
+          Low stock<strong>{low.length} items</strong>
+        </span>
+      </span>
+      <span>
+        <Clock3 size={21} />
+        <span>
+          Expiring soon<strong>{expiring.length} items</strong>
+        </span>
+      </span>
     </div>
   )
 }
