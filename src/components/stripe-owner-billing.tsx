@@ -1,3 +1,4 @@
+import { SubscriptionExpenses } from './subscription-expenses'
 import { useEffect, useRef, useState } from 'react'
 import {
   launchPricing,
@@ -176,6 +177,11 @@ export function StripeOwnerBilling({
           The business owner manages billing. Ask the owner to open Settings →
           Billing &amp; Subscription.
         </p>
+      )}
+      {data && (
+        <SubscriptionExpenses
+          key={String(data.billing?.lastReconciled || data.workspace?.id)}
+        />
       )}
       {data && (
         <>

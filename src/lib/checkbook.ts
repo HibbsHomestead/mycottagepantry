@@ -135,6 +135,8 @@ export function bookRows(w: Workspace): Item[] {
         sourceId: j.sourceId,
         transactionId: source?.id,
         receiptId: source?.receiptId,
+        receiptUrl: source?.receiptUrl,
+        subscriptionPaymentId: source?.subscriptionPaymentId,
         journalId: j.id,
         source: source
           ? source.kind || (source.productId ? 'Sale' : 'Purchase')
@@ -286,6 +288,7 @@ export function bookSummary(w: Workspace, from: string, to: string) {
     ...(w.expenses || []).filter((e) => !e.transactionId && !e.inventory),
   ].filter(
     (t) =>
+      !['draft', 'superseded'].includes(t.status) &&
       !['bill', 'invoice'].includes(t.kind) &&
       !(w.journals || []).some((j) => j.sourceId === t.id) &&
       !(t.saleIds || []).some((id: string) =>
@@ -333,6 +336,9 @@ export function bookSummary(w: Workspace, from: string, to: string) {
     receiptsNeedingReview: (w.receipt_extractions || []).filter(
       (r) => r.status === 'draft',
     ).length,
+    subscriptionReview: (w.finance_transactions || []).filter(
+      (t) => t.subscriptionPaymentId && t.status === 'draft',
+    ),
     legacyReview: missing.map((t) => ({
       id: t.id,
       name: t.name,
@@ -551,6 +557,56 @@ export function planBookkeeping(
       date: d.date,
       requestId: d.requestId,
     })
+  } else if (action === 'financeBookRefund') {
+    const original = (w.finance_transactions || []).find(
+      (t) =>
+        t.id === d.id &&
+        t.bookkeeping &&
+        t.status === 'posted' &&
+        t.kind === 'expense',
+    )
+    if (!original || original.reversedBy || !original.subscriptionPaymentId)
+      throw new Error(
+        'Review the original subscription expense before recording its refund.',
+      )
+    const amount = positive(d.amount)
+    const refunded = (w.finance_transactions || [])
+      .filter(
+        (t) =>
+          t.originalId === original.id &&
+          t.kind === 'expenseRefund' &&
+          !t.reversedBy,
+      )
+      .reduce((n, t) => n + cents(t.amount), 0)
+    if (amount + refunded > cents(original.amount))
+      throw new Error('Refunds cannot exceed the original payment.')
+    if (original.splits?.length !== 1)
+      throw new Error('This refund needs an accountant’s review.')
+    const date = validateDate(d.date)
+    const tx = {
+      id,
+      name: 'Refund: ' + original.name,
+      kind: 'expenseRefund',
+      originalId: original.id,
+      date,
+      amount: amount / 100,
+      account: original.account,
+      category: original.category,
+      reason: clean(d.reason),
+      bookkeeping: true,
+      status: 'posted',
+    }
+    journal(
+      tx.name,
+      date,
+      [
+        line(original.account, amount),
+        line(original.splits[0].category, -amount),
+      ],
+      id,
+      { refundOf: original.id },
+    )
+    put('finance_transactions', tx)
   } else if (action === 'financeBookVoid') {
     const tx = (w.finance_transactions || []).find(
       (t) => t.id === d.id && t.bookkeeping,
@@ -558,6 +614,10 @@ export function planBookkeeping(
     if (
       !tx ||
       tx.reversedBy ||
+      (w.finance_transactions || []).some(
+        (t) =>
+          t.kind === 'expenseRefund' && t.originalId === tx.id && !t.reversedBy,
+      ) ||
       (['bill', 'invoice'].includes(tx.kind) && (tx.paid || 0) > 0)
     )
       throw new Error('Use the linked source correction for this record.')

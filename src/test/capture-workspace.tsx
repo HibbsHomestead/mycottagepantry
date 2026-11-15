@@ -151,3 +151,16 @@ export async function mountScrollFixture() {
   document.body.replaceChildren(host)
   createRoot(host).render(<ScrollFixture />)
 }
+
+export async function mountSubscriptionExpenseFixture() {
+  const { SubscriptionExpenses } =
+    await import('@/components/subscription-expenses')
+  const host = document.createElement('div')
+  document.body.replaceChildren(host)
+  createRoot(host).render(
+    <div style={{ maxWidth: 760, margin: '24px auto', padding: 16 }}>
+      <h1>Billing &amp; Subscription</h1>
+      <SubscriptionExpenses />
+    </div>,
+  )
+}

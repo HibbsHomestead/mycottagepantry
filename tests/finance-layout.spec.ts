@@ -35,10 +35,11 @@ for (const width of [1440, 2560, 1280, 390])
     ).toBeTruthy()
     if (width >= 1280) {
       const box = await page.locator('main').boundingBox()
-      expect(width - box!.x - box!.width).toBeLessThan(100)
+      const shell = await page.locator('.main-shell').boundingBox()
+      expect(Math.abs(box!.x - shell!.x)).toBeLessThan(2)
     }
     await page.screenshot({
-      path: `docs/reviews/finance-navigation/overview-${width}.png`,
+      path: `docs/reviews/subscription-expenses/finance-navigation-${width}.png`,
       fullPage: true,
     })
     const from = page.getByLabel('From', { exact: true })

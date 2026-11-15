@@ -1,3 +1,4 @@
+import { subscriptionExpenseRequest } from '../lib/subscription-expenses'
 import { customerMessage } from '../../src/lib/customer-message'
 import { deploymentRuntime } from '../lib/runtime-environment'
 import { adminTransaction } from '../lib/platform-admin-core'
@@ -75,18 +76,40 @@ export default async (request: Request) => {
                 'preview_change',
                 'confirm_change',
                 'cancel_pending',
+                'expenses',
+                'expense_record',
+                'expense_skip',
+                'expense_preferences',
               ]),
               environment: z.enum(['test', 'live']).optional(),
               plan: z.string().max(100).optional(),
               confirmed: z.boolean().optional(),
               changeId: z.uuid().optional(),
+              paymentId: z.uuid().optional(),
+              draft: z.boolean().optional(),
+              enabled: z.boolean().optional(),
+              category: z.string().max(200).optional(),
+              account: z.string().max(200).optional(),
             })
             .strict()
             .parse(JSON.parse((await limitedBody(request, 2000)).toString()))
         : null
     await registrationTransaction(actor, async (c) => {
       await c.query("SELECT set_config('app.billing_worker','true',true)")
-      await registrationRateLimit(c, actor.id, 'stripe-billing', 30)
+      const expenses =
+        input &&
+        [
+          'expenses',
+          'expense_record',
+          'expense_skip',
+          'expense_preferences',
+        ].includes(input.action)
+      await registrationRateLimit(
+        c,
+        actor.id,
+        expenses ? 'subscription-expenses' : 'stripe-billing',
+        expenses ? 120 : 30,
+      )
     })
     if (input?.action === 'checkout') {
       // Commit the reservation before any provider resource is created.
@@ -117,6 +140,15 @@ export default async (request: Request) => {
     const result = await registrationTransaction(actor, async (c) => {
       await c.query("SELECT set_config('app.billing_worker','true',true)")
       if (!input) return stripeOwnerView(c, actor)
+      if (
+        [
+          'expenses',
+          'expense_record',
+          'expense_skip',
+          'expense_preferences',
+        ].includes(input.action)
+      )
+        return subscriptionExpenseRequest(c, actor, input)
       if (input.action === 'refresh') return stripeRefresh(c, actor)
       if (input.action === 'portal') return stripePortal(c, actor)
       if (input.action === 'preview_change') {

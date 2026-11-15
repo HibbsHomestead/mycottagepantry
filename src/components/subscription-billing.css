@@ -131,3 +131,76 @@
     white-space: normal;
   }
 }
+
+.subscription-expenses {
+  padding: 20px;
+  margin-block: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.subscription-expense-offer {
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+}
+.subscription-expense-offer h3 {
+  margin-top: 0;
+}
+.subscription-expense-form {
+  display: grid;
+  gap: 16px;
+  margin-block: 16px;
+}
+.subscription-expense-form label:not(.check-label) {
+  display: grid;
+  gap: 8px;
+}
+.subscription-expense-form select {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.subscription-expense-form .check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.subscription-expense-form input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 3px;
+  accent-color: var(--primary);
+}
+.subscription-expense-dialog {
+  max-width: 580px;
+  max-height: 90dvh;
+  overflow: auto;
+}
+.subscription-payment-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.subscription-payment-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.subscription-expenses summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+}

@@ -1,3 +1,4 @@
+import { synchronizeExpenseAttempt } from '../lib/subscription-expenses'
 import { adminTransaction } from '../lib/platform-admin-core'
 import { limitedBody } from '../lib/support-core'
 import {
@@ -15,6 +16,7 @@ export default async (request: Request) => {
     return new Response(null, { status: 404, headers })
   try {
     const raw = (await limitedBody(request, 1024 * 1024)).toString('utf8')
+    let expenseJobs: { id: string; refundInvoiceId?: string }[] = []
     const outcome = await adminTransaction(async (c) => {
       await c.query("SELECT set_config('app.billing_worker','true',true)")
       const settings = await stripeSettings(c, e)
@@ -55,7 +57,7 @@ export default async (request: Request) => {
       )
       await c.query('SAVEPOINT stripe_processing')
       try {
-        await processStripeEvent(c, record)
+        expenseJobs = (await processStripeEvent(c, record)) || []
         await c.query(
           'UPDATE stripe_provider_settings SET webhook_verified_at=NOW() WHERE environment=$1',
           [e],
@@ -70,6 +72,17 @@ export default async (request: Request) => {
         return 'retry'
       }
     })
+    // Subscription access is committed above. An expense failure cannot undo it.
+    if (outcome === 'ok')
+      for (const job of expenseJobs) {
+        try {
+          await adminTransaction((c) =>
+            synchronizeExpenseAttempt(c, job.id, job.refundInvoiceId),
+          )
+        } catch {
+          console.error('Subscription expense webhook follow-up requires retry')
+        }
+      }
     return Response.json(
       { status: outcome },
       {

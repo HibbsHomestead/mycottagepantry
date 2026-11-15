@@ -1,5 +1,11 @@
 import { customerMessage } from '@/lib/customer-message'
-import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import { csv } from '@/lib/domain'
 import { ovenToday } from '@/lib/oven-dates'
@@ -71,6 +77,7 @@ export function Checkbook({
     [csvRows, setCsvRows] = useState<Record<string, string>[]>([]),
     [mapping, setMapping] = useState({ date: '', name: '', amount: '' }),
     [selected, setSelected] = useState<string[]>([])
+  const openedSubscriptionPayment = useRef(false)
   const refreshAfterReceipt = useEffectEvent(() => {
     void refresh()
   })
@@ -205,6 +212,20 @@ export function Checkbook({
       setBusy(false)
     }
   }
+  const openLinkedSubscription = useEffectEvent((row: Item) => {
+    setFrom(row.date)
+    setTo(row.date)
+    open('detail', row)
+  })
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('subscriptionPayment')
+    if (!id || openedSubscriptionPayment.current || !ready) return
+    const row = b?.rows?.find((r: Item) => r.subscriptionPaymentId === id)
+    if (row) {
+      openedSubscriptionPayment.current = true
+      openLinkedSubscription(row)
+    }
+  }, [b, ready])
   const input = (key: string, label: string, type = 'text') => (
     <Field label={label}>
       <input
@@ -478,6 +499,21 @@ export function Checkbook({
                     subscription billing is separate.
                   </p>
                 </div>
+                {!!b.subscriptionReview?.length && (
+                  <section className="book-panel">
+                    <h3>
+                      Subscription payments needing review (
+                      {b.subscriptionReview.length})
+                    </h3>
+                    <p>
+                      These drafts do not change balances.{' '}
+                      <a href="/oven/billing">
+                        Review in Billing &amp; Subscription
+                      </a>
+                      .
+                    </p>
+                  </section>
+                )}
                 {b.legacyReview.length > 0 && (
                   <div className="book-panel">
                     <h3>Older records need review ({b.legacyReview.length})</h3>
@@ -625,6 +661,7 @@ export function Checkbook({
                                     income: 'Money in',
                                     expense: 'Money out',
                                     reversal: 'Correction',
+                                    expenseRefund: 'Expense refund',
                                   } as Record<string, string>
                                 )[r.source] || r.source}
                               </small>
@@ -662,6 +699,14 @@ export function Checkbook({
                                 >
                                   📎 Receipt
                                 </button>
+                              ) : r.receiptUrl ? (
+                                <a
+                                  href={r.receiptUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Invoice / receipt
+                                </a>
                               ) : (
                                 '—'
                               )}
@@ -1337,6 +1382,11 @@ export function Checkbook({
                   </p>
                   <p>{d.notes}</p>
                   <p>Source: {d.source}</p>
+                  {d.receiptUrl && (
+                    <a href={d.receiptUrl} target="_blank" rel="noreferrer">
+                      View invoice or receipt
+                    </a>
+                  )}
                   {d.receiptId && (
                     <button
                       type="button"
