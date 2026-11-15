@@ -1,3 +1,4 @@
+import { correctionList, proposeTimezone } from './support-corrections'
 import { admin } from '@netlify/identity'
 import { selectedWorkspace } from './verified-session'
 import { randomUUID } from 'node:crypto'
@@ -34,7 +35,13 @@ export function assistantTools(
     ...(staff
       ? ['support_lookup', 'account_status', 'business_status', 'troubleshoot']
       : contextConsent
-        ? ['account_status', 'business_status', 'troubleshoot']
+        ? [
+            'account_status',
+            'business_status',
+            'troubleshoot',
+            'inspect_timezone',
+            'propose_timezone',
+          ]
         : []),
   ]
   return {
@@ -96,7 +103,8 @@ export function assistantTools(
             .parse(input)
           result = { articles: supportArticles(question) }
         } else {
-          if (name !== 'support_lookup') noArgs.parse(input)
+          if (!['support_lookup', 'propose_timezone'].includes(name))
+            noArgs.parse(input)
           if (staff && !ticket && name !== 'support_lookup') {
             result = {
               available: false,
@@ -159,6 +167,45 @@ export function assistantTools(
               reason: staff
                 ? 'Select a support ticket with an attached business first.'
                 : 'No active business is selected. Open the intended oven first.',
+            }
+          } else if (name === 'propose_timezone') {
+            result = await proposeTimezone(
+              c,
+              actor,
+              req,
+              chat.id,
+              business,
+              input,
+            )
+          } else if (name === 'inspect_timezone') {
+            if (staff || role !== 'Owner')
+              throw new SupportError(
+                403,
+                'Only the business Owner can inspect settings for correction.',
+              )
+            const row = (
+              await c.query(
+                'SELECT id,data FROM settings WHERE business_id=$1 ORDER BY created_at,id LIMIT 1',
+                [business],
+              )
+            ).rows[0]
+            result = {
+              stage: 'Issue diagnosed',
+              targetId: row?.id,
+              timezone: row?.data.timezone || null,
+              effectiveDefault: row?.data.timezone || 'America/Chicago',
+              correctionOutcomes: (await correctionList(c, actor, chat.id)).map(
+                (p) => ({
+                  status: p.status,
+                  before: p.before,
+                  after: p.after,
+                  approvedAt: p.approved_at,
+                  verifiedAt: p.verified_at,
+                }),
+              ),
+              asOf: new Date().toISOString(),
+              limitation:
+                'Recorded setting only. Compare with the user’s intended timezone; do not infer location. No change made.',
             }
           } else if (name === 'business_status') {
             result = await businessStatus(

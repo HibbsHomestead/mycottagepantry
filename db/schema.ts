@@ -1275,3 +1275,50 @@ export const supportAiActions = pgTable('support_ai_actions', {
     .notNull()
     .defaultNow(),
 }).enableRLS()
+
+// Durable approvals survive chat retention; contains only allowlisted timezone values.
+export const supportCorrections = pgTable('support_corrections', {
+  id: uuid().primaryKey(),
+  conversationId: uuid('conversation_id').notNull(),
+  actorId: text('actor_id').notNull(),
+  businessId: uuid('business_id')
+    .notNull()
+    .references(() => businesses.id),
+  targetId: text('target_id').notNull(),
+  before: jsonb().$type<{ timezone: string | null }>().notNull(),
+  after: jsonb().$type<{ timezone: string }>().notNull(),
+  status: text().notNull().default('proposed'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+}).enableRLS()
+
+// Content-free provider metering. Uncertain requests retain their full reservation.
+export const supportAiMeter = pgTable(
+  'support_ai_meter',
+  {
+    id: uuid().primaryKey(),
+    requestId: uuid('request_id').notNull(),
+    actorId: text('actor_id').notNull(),
+    businessId: uuid('business_id'),
+    model: text().notNull(),
+    returnedModel: text('returned_model'),
+    status: text().notNull().default('reserved'),
+    reservedNanoUsd: bigint('reserved_nano_usd', { mode: 'number' }).notNull(),
+    costNanoUsd: bigint('cost_nano_usd', { mode: 'number' }),
+    inputTokens: integer('input_tokens'),
+    cachedTokens: integer('cached_tokens'),
+    outputTokens: integer('output_tokens'),
+    providerCostUsd: numeric('provider_cost_usd'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index('support_ai_meter_request').on(t.requestId),
+    index('support_ai_meter_date').on(t.createdAt),
+  ],
+).enableRLS()

@@ -506,7 +506,18 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
             {!staff && (
               <details id="ai-helper" className="support-panel support-helper">
                 <summary>Ask the AI assistant</summary>
-                <SupportHelper />
+                <SupportHelper
+                  screenshots={
+                    detail?.messages
+                      .filter((m) => m.kind !== 'internal')
+                      .flatMap((m, i) =>
+                        m.attachments.map((a, j) => ({
+                          id: a.id,
+                          label: `Ticket screenshot ${i + 1}.${j + 1}`,
+                        })),
+                      ) || []
+                  }
+                />
               </details>
             )}
             {staff && <SupportAiUsage admin={access.admin} />}
@@ -516,6 +527,16 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                 <SupportHelper
                   key={selected}
                   staff
+                  screenshots={
+                    detail?.messages
+                      .filter((m) => m.kind !== 'internal')
+                      .flatMap((m, i) =>
+                        m.attachments.map((a, j) => ({
+                          id: a.id,
+                          label: `Ticket screenshot ${i + 1}.${j + 1}`,
+                        })),
+                      ) || []
+                  }
                   contextTicketId={selected || undefined}
                 />
               </details>

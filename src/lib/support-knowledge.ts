@@ -1,6 +1,14 @@
 /** Reviewed against the implemented workflows; shared by Help and server retrieval. */
 export const supportKnowledge = [
   {
+    id: 'timezone-support',
+    title: 'Business timezone diagnostics and approved corrections',
+    href: '/oven#Settings',
+    terms:
+      'timezone time zone date dates today yesterday midnight defaults wrong correct correction',
+    text: 'Business-local date defaults and date-based views use Settings timezone, falling back to America/Chicago when unset. Existing saved transaction dates are not rewritten. In AI support, the signed-in business Owner can allow status checks, ask to inspect the saved timezone, and specify the intended IANA timezone. The assistant can propose only this setting correction. Review the exact business, settings target, before/after timezone and consequences in the server-issued approval card. Only clicking Approve exact change executes it; chat text is not approval. Proposals expire after 15 minutes and reject intervening changes, changed permissions or suspended access. The server reads back the saved value and records verification. Refresh the oven to load it and separately check the original symptom. Review undo proposal prepares a separate approval for the prior timezone (America/Chicago if originally unset). Undo cannot reverse records created meanwhile. No AI financial, stock, subscription, permission, destructive, historical accounting or platform changes are supported. Contact support carries the conversation and server diagnostic/correction outcomes to a person.',
+  },
+  {
     id: 'login',
     title: 'Login and account access',
     href: '/login',
