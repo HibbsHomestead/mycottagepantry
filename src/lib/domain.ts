@@ -1,3 +1,4 @@
+import { handmadeEstimate } from './handmade'
 import { configuredTaxRates } from './tax-configuration'
 import { categoryTaxState } from './product-categories'
 export type Item = { id: string; name: string; [key: string]: any }
@@ -25,6 +26,7 @@ export const units: Record<string, { category: string; factor: number }> = {
   ft: { category: 'length', factor: 0.3048 },
   yd: { category: 'length', factor: 0.9144 },
   each: { category: 'count', factor: 1 },
+  sheet: { category: 'sheet', factor: 1 },
   dozen: { category: 'count', factor: 12 },
   package: { category: 'count', factor: 0 },
   case: { category: 'count', factor: 0 },
@@ -720,6 +722,42 @@ export function kitCosting(
   }
 }
 export function productCosting(product: Item, workspace: Workspace) {
+  if (product.workflow === 'handmade' && product.bom) {
+    const c = handmadeEstimate(product, workspace)
+    const bom = product.bom
+    const packaging: Item[] = c.lines
+      .filter(
+        (l) =>
+          workspace.ingredients.find((i) => i.id === l.itemId)?.usedAs ===
+          'packaging',
+      )
+      .map((l) => ({
+        ...l,
+        inventoryQuantity: l.quantity,
+        storageUnit: l.unit,
+        unitCost: l.quantity ? l.cost / l.quantity : 0,
+      }))
+    return {
+      lines: c.lines.filter(
+        (l) => !packaging.some((p) => p.itemId === l.itemId),
+      ),
+      packaging,
+      ingredient: c.materials,
+      packagingCost: c.packaging,
+      laborMinutes: Number(bom.laborMinutes),
+      laborRate: Number(bom.laborRate),
+      labor: c.labor,
+      overhead: c.overhead,
+      waste: 0,
+      total: c.total,
+      plannedYield: Number(bom.output),
+      actualYield: Number(bom.output),
+      packages: Number(bom.output),
+      unitsPerPackage: 1,
+      perPackage: c.unit,
+      perItem: c.unit,
+    }
+  }
   if (product.workflow === 'kit') return kitCosting(product, workspace)
   if (product.workflow === 'resale') {
     if (product.stockCostKnown !== true)

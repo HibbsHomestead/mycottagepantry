@@ -27,7 +27,9 @@ import handler from '../../netlify/functions/workspace.mts'
 const db = new PGlite()
 const a = '00000000-0000-4000-8000-000000000051',
   b = '00000000-0000-4000-8000-000000000052'
-const context = { cookies: { get: () => 'a'.repeat(64) } } as unknown as Context
+const context = {
+  cookies: { get: () => 'a'.repeat(64) },
+} as unknown as Context
 async function call(
   action?: string,
   table = '',
@@ -514,4 +516,376 @@ it('food and assembled kit balances remain enforced by the database movement led
         [a, id],
       ),
     ).rejects.toThrow('movement ledger')
+})
+
+it('handmade BOMs, explicit purchases, actual multi-output production, reversals, sales and tenant boundaries', async () => {
+  session.user = 'production-owner-a'
+  const original = await ok()
+  const material = {
+    id: 'handmade-cord',
+    name: 'Cotton cord',
+    unit: 'ft',
+    materialCategory: 'Cord',
+    sku: 'CORD',
+    threshold: 3,
+  }
+  await ok('handmadeMaterialSave', 'ingredients', material)
+  await ok('handmadeMaterialSave', 'ingredients', {
+    ...material,
+    id: 'handmade-beads',
+    name: 'Wood beads',
+    unit: 'each',
+  })
+  const receipt = {
+    ...material,
+    operationId: 'cord-purchase-one',
+    purchaseQuantity: 4,
+    purchaseUnit: 'yd',
+    usagePerPurchase: 3,
+    purchaseCost: 12,
+    date: '2026-11-15',
+  }
+  let w = await ok('handmadeMaterialReceive', 'ingredients', receipt)
+  expect(find(w.ingredients, material.id)).toMatchObject({
+    quantity: 12,
+    cost: 1,
+  })
+  w = await ok('handmadeMaterialReceive', 'ingredients', receipt)
+  expect(find(w.ingredients, material.id).quantity).toBe(12)
+  expect(
+    (
+      await call('handmadeMaterialReceive', 'ingredients', {
+        ...receipt,
+        purchaseCost: 13,
+      })
+    ).status,
+  ).toBe(400)
+  await ok('handmadeMaterialReceive', 'ingredients', {
+    ...receipt,
+    id: 'handmade-beads',
+    operationId: 'bead-purchase-one',
+    purchaseQuantity: 20,
+    purchaseUnit: 'each',
+    usagePerPurchase: 1,
+    purchaseCost: 10,
+  })
+  // Shared packaging is received through its existing stock workflow, never duplicated.
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  await db.query(
+    "UPDATE ingredients SET quantity=100,data=jsonb_set(data,'{quantity}','100') WHERE business_id=$1 AND id='bag'",
+    [a],
+  )
+  const bom = {
+    id: 'cord-bom',
+    name: 'Cord ornament BOM',
+    output: 4,
+    laborMinutes: 30,
+    laborRate: 12,
+    overhead: 2,
+    scrapPercent: 10,
+    instructions: 'Cut, knot, and finish.',
+    lines: [
+      { ingredientId: material.id, quantity: 1, unit: 'yd' },
+      { ingredientId: 'handmade-beads', quantity: 4, unit: 'each' },
+      { ingredientId: 'bag', quantity: 4, unit: 'each' },
+    ],
+  }
+  const p = {
+    id: 'handmade-ornament',
+    name: 'Cord ornament',
+    description: 'Hand knotted ornament',
+    workflow: 'handmade',
+    sku: 'ORN-NAT',
+    variantGroup: 'Ornaments',
+    variant: 'Natural',
+    price: 12,
+    productCategoryId: 'goods',
+    bom,
+  }
+  w = await ok('save', 'products', p)
+  expect(find(w.products, p.id).recipeId).toBeFalsy()
+  const version = find(w.products, p.id).bom.version
+  await ok('save', 'products', {
+    ...p,
+    id: 'handmade-variant',
+    sku: 'ORN-DOUBLE',
+    variant: 'Double beads',
+    bom: {
+      ...bom,
+      lines: bom.lines.map((l) =>
+        l.ingredientId === 'handmade-beads' ? { ...l, quantity: 8 } : l,
+      ),
+    },
+  })
+  expect(
+    find((await ok()).products, 'handmade-variant').bom.lines[1].quantity,
+  ).toBe(8)
+  w = await ok('productionSave', 'batches', {
+    id: 'handmade-run-one',
+    productId: p.id,
+    quantity: 4,
+    status: 'scheduled',
+    date: '2026-11-15',
+  })
+  expect(find(w.batches, 'handmade-run-one').definition.bom.version).toBe(
+    version,
+  )
+  const actual = {
+    id: 'handmade-run-one',
+    output: 3,
+    waste: 1,
+    wasteReason: 'One damaged ornament',
+    usage: { 'handmade-cord': 4, 'handmade-beads': 4, bag: 3 },
+    laborMinutes: 40,
+  }
+  w = await ok('productionComplete', 'batches', actual)
+  const finished = structuredClone(find(w.batches, actual.id))
+  // 4 cord + 2 beads + .60 packaging + 8 actual labor + 2 overhead.
+  expect(finished.historicalCost).toBeCloseTo(16.6)
+  expect(find(w.products, p.id)).toMatchObject({
+    quantity: 3,
+    stockCostKnown: true,
+  })
+  expect(find(w.ingredients, material.id).quantity).toBe(8)
+  expect(find(w.ingredients, 'bag').quantity).toBe(97)
+  const after = await ok('productionComplete', 'batches', actual)
+  expect(after.ledger).toEqual(w.ledger)
+  expect(
+    (await call('productionComplete', 'batches', { ...actual, output: 2 }))
+      .status,
+  ).toBe(400)
+  // Supplier and BOM changes cannot rewrite the recorded production cost.
+  await ok('handmadeMaterialReceive', 'ingredients', {
+    ...receipt,
+    operationId: 'cord-purchase-two',
+    purchaseQuantity: 1,
+    purchaseCost: 30,
+  })
+  w = await ok('save', 'products', { ...p, bom: { ...bom, laborRate: 24 } })
+  expect(find(w.batches, actual.id)).toEqual(finished)
+  expect(find(w.products, p.id).bom.version).toBeGreaterThan(version)
+  w = await ok('productionReverse', 'batches', {
+    id: actual.id,
+    reason: 'Rework the damaged run',
+  })
+  expect(find(w.products, p.id).quantity).toBe(0)
+  expect(find(w.ingredients, material.id).quantity).toBe(15)
+  expect(find(w.batches, actual.id)).toEqual(finished)
+  const reversedLedger = w.ledger
+  expect(
+    (
+      await ok('productionReverse', 'batches', {
+        id: actual.id,
+        reason: 'Retry reversal',
+      })
+    ).ledger,
+  ).toEqual(reversedLedger)
+  await ok('productionSave', 'batches', {
+    id: 'handmade-run-sale',
+    productId: p.id,
+    quantity: 4,
+    status: 'scheduled',
+    date: '2026-11-15',
+  })
+  w = await ok('productionComplete', 'batches', {
+    ...actual,
+    id: 'handmade-run-sale',
+    output: 4,
+    waste: 0,
+  })
+  const unitCost = find(w.products, p.id).cost
+  w = await ok('save', 'sales', {
+    id: 'handmade-sale-one',
+    name: p.name,
+    productId: p.id,
+    quantity: 1,
+    date: '2026-11-15',
+  })
+  expect(find(w.products, p.id).quantity).toBe(3)
+  expect(find(w.sales, 'handmade-sale-one').historicalCogs).toBeCloseTo(
+    Math.round(unitCost * 100) / 100,
+  )
+  expect(
+    (
+      await call('productionReverse', 'batches', {
+        id: 'handmade-run-sale',
+        reason: 'Cannot reverse sold units',
+      })
+    ).status,
+  ).toBe(400)
+  w = await ok('refund', 'sales', { id: 'handmade-sale-one', restock: true })
+  expect(find(w.products, p.id).quantity).toBe(4)
+  expect(
+    (await call('refund', 'sales', { id: 'handmade-sale-one', restock: true }))
+      .status,
+  ).toBe(400)
+  // Financial-only refunds do not replenish stock or reverse cost a second time.
+  await ok('save', 'sales', {
+    id: 'handmade-sale-two',
+    name: p.name,
+    productId: p.id,
+    quantity: 1,
+  })
+  w = await ok('refund', 'sales', { id: 'handmade-sale-two', restock: false })
+  expect(find(w.products, p.id).quantity).toBe(3)
+  expect(
+    w.sales.find((s: Item) => s.refundOf === 'handmade-sale-two')
+      .historicalCogs,
+  ).toBe(0)
+  // Unfunded materials can be documented, but never fabricated into zero-cost production.
+  await ok('handmadeMaterialSave', 'ingredients', {
+    ...material,
+    id: 'handmade-unknown',
+    name: 'Unpriced ribbon',
+  })
+  await ok('save', 'products', {
+    ...p,
+    id: 'handmade-unpriced',
+    sku: 'UNPRICED',
+    bom: {
+      ...bom,
+      lines: [{ ingredientId: 'handmade-unknown', quantity: 1, unit: 'ft' }],
+    },
+  })
+  await ok('productionSave', 'batches', {
+    id: 'handmade-run-missing',
+    productId: 'handmade-unpriced',
+    quantity: 1,
+    status: 'scheduled',
+  })
+  expect(
+    (
+      await call('productionComplete', 'batches', {
+        id: 'handmade-run-missing',
+        output: 1,
+      })
+    ).status,
+  ).toBe(400)
+  await ok('productionSave', 'batches', {
+    id: 'handmade-run-short',
+    productId: p.id,
+    quantity: 1000,
+    status: 'scheduled',
+  })
+  const beforeShortage = await ok()
+  expect(
+    (
+      await call('productionComplete', 'batches', {
+        id: 'handmade-run-short',
+        output: 1000,
+      })
+    ).status,
+  ).toBe(400)
+  expect((await ok()).ledger).toEqual(beforeShortage.ledger)
+  session.user = 'production-staff'
+  expect(
+    (
+      await call('productionReverse', 'batches', {
+        id: 'handmade-run-sale',
+        reason: 'Unauthorized',
+      })
+    ).status,
+  ).toBe(400)
+  expect(
+    (await call('handmadeMaterialSave', 'ingredients', material)).status,
+  ).toBe(400)
+  session.user = 'production-reader'
+  expect(
+    (
+      await call('productionComplete', 'batches', {
+        id: 'handmade-run-short',
+        output: 1,
+      })
+    ).status,
+  ).toBe(400)
+  session.user = 'production-owner-b'
+  expect(
+    (
+      await call('productionReverse', 'batches', {
+        id: actual.id,
+        reason: 'Cross-business attempt',
+      })
+    ).status,
+  ).toBe(400)
+  expect((await call('save', 'products', p)).status).toBe(400)
+  expect(
+    (await call('handmadeMaterialReceive', 'ingredients', receipt)).status,
+  ).toBe(400)
+  session.user = 'production-owner-a'
+  const final = await ok()
+  expect(find(final.batches, 'legacy-completed')).toEqual(
+    find(original.batches, 'legacy-completed'),
+  )
+}, 30000)
+
+it('adopts a legacy handmade design without replacing its product, stock, photos or sale history', async () => {
+  session.user = 'production-owner-a'
+  const legacyDesign = {
+    id: 'legacy-handmade-design',
+    name: 'Original handmade pattern',
+    workflow: 'handmade',
+    yield: 2,
+    laborMinutes: 10,
+    laborRate: 12,
+    overhead: 1,
+    lines: [{ ingredientId: 'handmade-cord', quantity: 1, unit: 'ft' }],
+  }
+  await ok('save', 'recipes', legacyDesign)
+  const p = {
+    id: 'legacy-handmade-product',
+    name: 'Original hanging',
+    description: 'Original description',
+    image: '/original-photo.png',
+    workflow: 'handmade',
+    recipeId: legacyDesign.id,
+    sku: 'LEGACY-HANG',
+    price: 18,
+    productCategoryId: 'goods',
+  }
+  await ok('save', 'products', p)
+  await ok('productionSave', 'batches', {
+    id: 'legacy-handmade-run',
+    productId: p.id,
+    quantity: 2,
+    status: 'scheduled',
+    mapping: { quantity: 1, unit: 'each', verified: true },
+  })
+  await ok('productionComplete', 'batches', {
+    id: 'legacy-handmade-run',
+    output: 2,
+  })
+  const before = await ok('save', 'sales', {
+    id: 'legacy-handmade-sale',
+    name: p.name,
+    productId: p.id,
+    quantity: 1,
+  })
+  const stored = find(before.products, p.id)
+  const bom = {
+    ...find(before.recipes, legacyDesign.id),
+    output: 2,
+    scrapPercent: 0,
+  }
+  const after = await ok('save', 'products', { ...stored, bom })
+  expect(after.products.filter((r: Item) => r.id === p.id)).toHaveLength(1)
+  expect(find(after.products, p.id)).toMatchObject({
+    id: stored.id,
+    name: stored.name,
+    description: stored.description,
+    image: stored.image,
+    price: stored.price,
+    quantity: stored.quantity,
+    cost: stored.cost,
+    recipeId: legacyDesign.id,
+  })
+  expect(find(after.recipes, legacyDesign.id)).toEqual(
+    find(before.recipes, legacyDesign.id),
+  )
+  expect(find(after.batches, 'legacy-handmade-run')).toEqual(
+    find(before.batches, 'legacy-handmade-run'),
+  )
+  expect(find(after.sales, 'legacy-handmade-sale')).toEqual(
+    find(before.sales, 'legacy-handmade-sale'),
+  )
+  expect(after.ledger).toEqual(before.ledger)
 })

@@ -1,4 +1,9 @@
 import {
+  handmadeBom,
+  handmadeRequirements,
+  validateHandmadeBom,
+} from './handmade'
+import {
   convert,
   costBreakdown,
   effectiveRecipeLines,
@@ -91,6 +96,21 @@ export function productionDefinition(
       ),
     }
   }
+  if (workflow === 'handmade' && product.bom) {
+    const bom = handmadeBom(product, state)!
+    validateHandmadeBom(bom, state)
+    return {
+      id: product.id,
+      name: product.name,
+      product: structuredClone(product),
+      bom: structuredClone(bom),
+      ingredients: structuredClone(
+        state.ingredients.filter((i) =>
+          bom.lines.some((l: Item) => l.ingredientId === i.id),
+        ),
+      ),
+    }
+  }
   const recipe = state.recipes.find((r) => r.id === product.recipeId)
   if (!recipe)
     throw new Error('Missing recipe. Open Edit product and link a recipe.')
@@ -156,6 +176,13 @@ export function productionRequirements(
   quantity: number,
   actual: Item = { id: '', name: '' },
 ) {
+  if (definition.bom)
+    return handmadeRequirements(
+      definition.bom,
+      definition.ingredients,
+      quantity,
+      actual,
+    )
   number(quantity, 'Selling packages', 1)
   if (!Number.isInteger(quantity))
     throw new Error('Enter a whole number of selling packages.')

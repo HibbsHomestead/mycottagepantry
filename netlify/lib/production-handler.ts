@@ -30,9 +30,12 @@ export async function handleProduction(
   ctx: Context,
 ) {
   if (
-    !['productionSave', 'productionComplete', 'productionCancel'].includes(
-      action,
-    )
+    ![
+      'productionSave',
+      'productionComplete',
+      'productionCancel',
+      'productionReverse',
+    ].includes(action)
   )
     return false
   if (table !== 'batches' || !/^[a-zA-Z0-9_-]{8,100}$/.test(data.id || ''))
@@ -43,6 +46,103 @@ export async function handleProduction(
     throw new Error(
       'Legacy runs retain their original workflow. Create a new product run separately.',
     )
+  if (action === 'productionReverse') {
+    if (
+      !existing ||
+      existing.status !== 'completed' ||
+      existing.definition?.product?.workflow !== 'handmade'
+    )
+      throw new Error('Choose a completed handmade production run.')
+    const reversalId = 'production-reversal-' + existing.id
+    if (state.ledger.some((l) => l.id === reversalId)) return true
+    const reason = String(data.reason || '').trim()
+    if (!reason) throw new Error('Explain the reversal before posting it.')
+    const p = state.products.find((p) => p.id === existing.productId)
+    if (
+      !p ||
+      Number(p.quantity) < existing.actualYield ||
+      p.stockCostKnown !== true
+    )
+      throw new Error('Finished output is unavailable for reversal.')
+    if (
+      state.ledger.some(
+        (l) =>
+          l.productId === p.id &&
+          Number(l.quantity) < 0 &&
+          String(l.occurredAt || '') >= existing.completedAt,
+      )
+    )
+      throw new Error(
+        'Finished units moved after this run. Resolve downstream sales/usage before a production correction; automatic disassembly is unavailable.',
+      )
+    const remaining = Number(p.quantity) - existing.actualYield
+    const remainingValue =
+      Number(p.quantity) * Number(p.cost) - existing.historicalCost
+    if (remainingValue < -0.000001)
+      throw new Error('Inventory valuation needs review before reversal.')
+    await finishedMovement(
+      ctx,
+      p,
+      reversalId,
+      -existing.actualYield,
+      -existing.historicalCost,
+      {
+        type: 'production_reversal',
+        sourceId: existing.id,
+        batchId: existing.id,
+        reason,
+      },
+    )
+    p.cost = remaining > 0 ? Math.max(0, remainingValue) / remaining : 0
+    await save('products', p)
+    for (const line of existing.usage) {
+      if (!line.tracked || line.kind !== 'ingredient') continue
+      const i = state.ingredients.find((i) => i.id === line.itemId)
+      if (!i || i.unit !== line.unit)
+        throw new Error(
+          'Material stock unit changed; review the correction with your accountant.',
+        )
+      const quantity = Number(i.quantity) + line.quantity
+      i.cost = (Number(i.quantity) * Number(i.cost) + line.cost) / quantity
+      i.currentCost = i.cost
+      i.quantity = quantity
+      await save('ingredients', i)
+      await save('ledger', {
+        id: reversalId + '-' + i.id,
+        name: i.name,
+        ingredientId: i.id,
+        quantity: line.quantity,
+        amount: line.cost,
+        unit: i.unit,
+        type: 'production_reversal',
+        sourceId: existing.id,
+        batchId: existing.id,
+        date: ctx.today,
+        reason,
+      })
+    }
+    const original = state.journals.find(
+      (j) => j.id === 'production-journal-' + existing.id,
+    )
+    if (original)
+      await save('journals', {
+        id: reversalId,
+        name: existing.name + ' production reversal',
+        sourceId: existing.id,
+        status: 'posted',
+        date: ctx.today,
+        lines: original.lines.map((l: Item) => ({
+          ...l,
+          debit: l.credit,
+          credit: l.debit,
+        })),
+      })
+    await ctx.audit(
+      'Handmade production reversed',
+      existing.name + ': ' + reason,
+    )
+    return true
+  }
   if (action === 'productionSave') {
     const hash = digest([
       data.productId,
@@ -59,7 +159,8 @@ export async function handleProduction(
         'Only drafts can be changed. Cancel an uncompleted plan and create a new run.',
       )
     const product = state.products.find((p) => p.id === data.productId)
-    if (!product) throw new Error('Choose a product from this oven.')
+    if (!product || product.archived)
+      throw new Error('Choose an active product from this oven.')
     const quantity = number(data.quantity, 'Selling packages', 1)
     if (!Number.isInteger(quantity))
       throw new Error('Use whole selling packages.')
@@ -145,6 +246,8 @@ export async function handleProduction(
   d.ingredients = d.ingredients.map((i: Item) => {
     const current = state.ingredients.find((item) => item.id === i.id)
     if (!current) throw new Error(`${i.name}: input unavailable.`)
+    if (current.needsCostSetup || current.cost == null || current.cost === '')
+      throw new Error(`${i.name}: stock cost is incomplete.`)
     return {
       ...i,
       cost:
@@ -154,6 +257,14 @@ export async function handleProduction(
   })
   const product = state.products.find((p) => p.id === existing.productId)
   if (!product) throw new Error('Output product unavailable.')
+  if (
+    product.workflow === 'handmade' &&
+    Number(product.quantity || 0) > 0 &&
+    product.stockCostKnown !== true
+  )
+    throw new Error(
+      'Existing finished inventory cost needs review before blending new production.',
+    )
   if (
     product.foodStockEnabled !== true &&
     !['handmade', 'kit'].includes(product.workflow) &&

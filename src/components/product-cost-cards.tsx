@@ -43,7 +43,8 @@ function productCostCardData({
           ]
         : [
             {
-              label: 'Ingredients',
+              label:
+                product.workflow === 'handmade' ? 'Materials' : 'Ingredients',
               value: c.ingredient,
               tone: 'lavender' as const,
             },
@@ -165,18 +166,19 @@ export function ProductCostCards({
             />
           </>
         )}
-        {Number(product.targetFoodCost) > 0 && (
-          <CostCard
-            label="Food-cost target price"
-            value={money(
-              (c.ingredient /
-                c.packages /
-                (Number(product.targetFoodCost) / 100)) *
-                p.divisor,
-            )}
-            note={`For ${product.targetFoodCost}% ingredient cost`}
-          />
-        )}
+        {product.workflow !== 'handmade' &&
+          Number(product.targetFoodCost) > 0 && (
+            <CostCard
+              label="Food-cost target price"
+              value={money(
+                (c.ingredient /
+                  c.packages /
+                  (Number(product.targetFoodCost) / 100)) *
+                  p.divisor,
+              )}
+              note={`For ${product.targetFoodCost}% ingredient cost`}
+            />
+          )}
       </div>
       <details className="calculation-box">
         <summary>How this is calculated</summary>

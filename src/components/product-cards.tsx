@@ -1,3 +1,4 @@
+import { handmadeEstimate } from '../lib/handmade'
 import { stockUnitLabel } from '@/lib/resale-stock'
 import { productCategoryName } from '@/lib/product-categories'
 import { stockStatus } from '@/lib/ingredients'
@@ -34,6 +35,13 @@ function cardCost(product: Item, workspace: Workspace) {
             ? (error as Error).message
             : 'Receive resale stock to establish its cost.',
       }
+    }
+  }
+  if (product.workflow === 'handmade' && product.bom) {
+    try {
+      return { cost: handmadeEstimate(product, workspace).unit }
+    } catch (error) {
+      return { reason: (error as Error).message }
     }
   }
   const recipe = workspace.recipes.find((r) => r.id === product.recipeId)

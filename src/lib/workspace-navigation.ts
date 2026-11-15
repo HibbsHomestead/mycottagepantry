@@ -1,6 +1,13 @@
 /** Canonical hash routes retain compatibility with previously shared workspace links. */
 export const sectionTabs: Record<string, string[]> = {
   Dashboard: [],
+  Handmade: [
+    'Overview',
+    'Materials & Supplies',
+    'Products & Bills of Materials',
+    'Production',
+    'Finished Inventory',
+  ],
   Products: [
     'All Products',
     'Food',
@@ -140,10 +147,10 @@ export function destination(name: string, section?: string): Destination {
       tab === 'Counts'
         ? 'Counts'
         : tab === 'Movements'
-        ? 'Inventory ledger'
-        : tab === 'Finished Goods'
-          ? 'Finished Goods'
-          : 'All items'
+          ? 'Inventory ledger'
+          : tab === 'Finished Goods'
+            ? 'Finished Goods'
+            : 'All items'
     if (
       ['Ingredients', 'Craft Materials', 'Packaging', 'Supplies'].includes(tab)
     )
