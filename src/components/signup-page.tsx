@@ -10,6 +10,11 @@ import {
 } from '@/lib/launch-plans'
 import { signupPlan, signupPlanHref } from '@/lib/signup-plan'
 import { signupPlanRequest } from '@/lib/signup-plan-client'
+import {
+  useStripePurchaseAvailability,
+  purchaseStatus,
+} from '@/lib/stripe-availability'
+import { planAudience, teamAvailabilityNotice } from '@/lib/plan-presentation'
 import { useSyncExternalStore, useState, type FormEvent } from 'react'
 import './registration.css'
 
@@ -20,6 +25,7 @@ function subscribeToSearch(listener: () => void) {
 
 export function SignupPage() {
   const account = useAccountAccess('signup')
+  const availability = useStripePurchaseAvailability()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -38,6 +44,10 @@ export function SignupPage() {
       invalidSelection = (failure as Error).message
     }
   }
+  const loginHref = plan
+    ? signupPlanHref(plan, '/login') +
+      (plan === 'free' ? '' : '&returnTo=%2Foven%2Fbilling')
+    : '/login'
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy || submitted || !plan) return
@@ -96,10 +106,10 @@ export function SignupPage() {
           </p>
           <p>
             Review <a href="/pricing">View Plans</a> for monthly pricing and
-            intended feature scope. Your selected plan is a saved preference,
-            not a subscription. You can create your account now. Paid activation
-            is not yet available. Creating an account does not activate a paid
-            plan or collect payment.
+            feature availability. Choose your plan, create an account and verify
+            your email, then enter your business details. Available paid plans
+            continue to secure Stripe checkout. Free needs no payment method. A
+            plan choice alone never grants paid access.
           </p>
           {(error || invalidSelection) && (
             <p role="alert">{error || invalidSelection}</p>
@@ -115,14 +125,12 @@ export function SignupPage() {
               <p>
                 Your chosen plan is kept for when you return after verification.
               </p>
-              <a href={plan ? signupPlanHref(plan, '/login') : '/login'}>
-                Continue to login
-              </a>
+              <a href={loginHref}>Continue to login</a>
             </div>
           ) : (
             <form className="registration-form" onSubmit={submit}>
               <fieldset className="signup-plan-choice">
-                <legend>Choose your intended plan</legend>
+                <legend>Choose your plan</legend>
                 {launchPricing.plans
                   .filter((p) => planVisible(p.id))
                   .map((p) => (
@@ -136,21 +144,26 @@ export function SignupPage() {
                         onChange={() => {
                           setPlan(p.id)
                           setError('')
-                          history.replaceState(null, '', signupPlanHref(p.id))
+                          history.replaceState(
+                            null,
+                            '',
+                            signupPlanHref(p.id) +
+                              (p.id === 'free'
+                                ? ''
+                                : '&returnTo=%2Foven%2Fbilling'),
+                          )
                         }}
                       />
                       <span>
                         {p.name} — ${p.monthlyUsd} USD/month per business
-                        {p.id !== 'free'
-                          ? ' (not yet available for purchase)'
-                          : ''}
                         <span className="signup-plan-scope">
-                          {planUserLabel(p.id)}.{' '}
-                          {p.id === 'cottage-kitchen'
-                            ? 'All intended program features except resale and consignment. Invitations and member administration Coming soon.'
-                            : p.id === 'cottage-mercantile'
-                              ? 'Full intended program, including resale and consignment. Invitations Coming soon; new team member setup awaits a confirmed user limit.'
-                              : ''}
+                          {purchaseStatus(availability, p.id)}
+                        </span>
+                        <span className="signup-plan-scope">
+                          {planUserLabel(p.id)}. {planAudience[p.id]}{' '}
+                          {p.users > 1 && teamAvailabilityNotice}
+                          {p.id === 'bakers-bench' &&
+                            ' Advanced planning is Partial; reporting-period comparisons are Coming soon.'}
                         </span>
                       </span>
                     </label>
@@ -158,7 +171,11 @@ export function SignupPage() {
                 <p role="status">
                   {plan === 'free'
                     ? 'Free setup requires email verification and valid business details. Proposed record and feature limits are not active.'
-                    : 'You can create your account now. Paid activation is not yet available. Your selected plan will be saved; no paid access or subscription is granted.'}
+                    : plan && availability.plans.includes(plan)
+                      ? 'Your plan choice is saved through email verification and business setup. Complete Stripe checkout afterward; paid access starts only after verified billing.'
+                      : plan
+                        ? `${purchaseStatus(availability, plan)} You may create an account, but this selection does not grant paid access.`
+                        : 'Choose a listed plan.'}
                 </p>
               </fieldset>
               <label>
@@ -197,10 +214,7 @@ export function SignupPage() {
             </form>
           )}
           <div className="registration-actions">
-            <a
-              className="public-text-link"
-              href={plan ? signupPlanHref(plan, '/login') : '/login'}
-            >
+            <a className="public-text-link" href={loginHref}>
               Already have an account? Log in.
             </a>
           </div>

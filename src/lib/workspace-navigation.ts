@@ -46,6 +46,7 @@ export const sectionTabs: Record<string, string[]> = {
   ],
   Settings: [
     'Business Profile',
+    'Billing & Subscription',
     'Appearance',
     'Taxes',
     'Integrations',
@@ -140,10 +141,10 @@ export function destination(name: string, section?: string): Destination {
       tab === 'Counts'
         ? 'Counts'
         : tab === 'Movements'
-        ? 'Inventory ledger'
-        : tab === 'Finished Goods'
-          ? 'Finished Goods'
-          : 'All items'
+          ? 'Inventory ledger'
+          : tab === 'Finished Goods'
+            ? 'Finished Goods'
+            : 'All items'
     if (
       ['Ingredients', 'Craft Materials', 'Packaging', 'Supplies'].includes(tab)
     )

@@ -17,10 +17,11 @@ export type SignupSelection = {
   monthlyUsd: number
   currency: 'USD'
   interval: 'month'
-  paidActivationAvailable: false
 }
 
-/** Server and browser share identifiers; checkout still verifies its own mapping. */
+/** A saved preference contains no purchase-availability or entitlement assertion.
+ * Live availability comes only from the verified billing availability endpoint;
+ * checkout independently validates the current recurring Price mapping. */
 export function signupPlanDetails(value: unknown): SignupSelection {
   const planId = signupPlan(value)
   const plan = launchPricing.plans.find((row) => row.id === planId)!
@@ -30,6 +31,5 @@ export function signupPlanDetails(value: unknown): SignupSelection {
     monthlyUsd: plan.monthlyUsd,
     currency: launchPricing.currency,
     interval: launchPricing.interval,
-    paidActivationAvailable: false,
   }
 }

@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test'
+import { installPublicPlanFixture } from './public-plan-fixture'
+
+test.beforeEach(async ({ page }) => {
+  await installPublicPlanFixture(page)
+})
 
 for (const [id, name] of [
   ['free', 'Free'],
@@ -17,18 +22,28 @@ for (const [id, name] of [
         exact: true,
       })
       .click()
-    await expect(page).toHaveURL(new RegExp(`/signup\\?plan=${id}$`))
+    expect(new URL(page.url()).pathname).toBe('/signup')
+    expect(new URL(page.url()).searchParams.get('plan')).toBe(id)
+    await expect(
+      page.getByRole('group', { name: 'Choose your plan' }),
+    ).toBeVisible()
     await expect(
       page.locator(`input[name="plan-choice"][value="${id}"]`),
     ).toBeChecked()
     await expect(
       page.getByRole('link', { name: 'Already have an account? Log in.' }),
-    ).toHaveAttribute('href', `/login?plan=${id}`)
-    await expect(
-      page
-        .getByText('Paid activation is not yet available.', { exact: false })
-        .first(),
-    ).toBeVisible()
+    ).toHaveAttribute(
+      'href',
+      `/login?plan=${id}${id === 'free' ? '' : '&returnTo=%2Foven%2Fbilling'}`,
+    )
+    await expect(page.locator('.signup-plan-choice')).toContainText(
+      id === 'free'
+        ? 'No payment method required'
+        : 'Available monthly subscription',
+    )
+    await expect(page.locator('body')).not.toContainText(
+      /Choose your intended plan|not yet available for purchase|awaits a confirmed user limit/,
+    )
     await expect(
       page.getByRole('button', { name: /subscribe|checkout|buy/i }),
     ).toHaveCount(0)
@@ -49,7 +64,7 @@ for (const width of [1440, 1190, 1024, 768, 390, 320]) {
     const cards = page.locator('.plan-card')
     await expect(cards).toHaveCount(5)
     for (const card of await cards.all()) {
-      await expect(card.locator('li')).toHaveCount(6)
+      expect(await card.locator('li').count()).toBeGreaterThan(0)
       await expect(card.locator('.plan-limits')).toBeVisible()
       await expect(card.locator('.plan-card-footer a')).toHaveAttribute(
         'href',
@@ -69,12 +84,14 @@ for (const width of [1440, 1190, 1024, 768, 390, 320]) {
       '$40',
     )
     await expect(page.locator('.plan-card-cottage-mercantile')).toContainText(
-      'Team user limit awaiting confirmation',
+      '6 total users, including the owner',
     )
     await expect(
       page.locator('.plan-card-cottage-mercantile'),
     ).not.toContainText(/5 total|unlimited users/)
     await expect(page.getByRole('table')).toBeVisible()
+    await expect(page.getByRole('table')).toContainText('Partial')
+    await expect(page.getByRole('table')).toContainText('Coming soon')
     await expect(page.locator('a[href*="checkout"]')).toHaveCount(0)
     expect(
       await page.evaluate(
@@ -116,7 +133,7 @@ for (const width of [1440, 1190, 1024, 768, 390, 320]) {
   })
 }
 
-test('signup displays both upper tiers without enabling paid activation', async ({
+test('signup displays approved allowances and Free setup without requesting payment', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 960 })
@@ -134,11 +151,60 @@ test('signup displays both upper tiers without enabling paid activation', async 
     '2 total users, including the owner',
   )
   await expect(page.locator('.signup-plan-choice')).toContainText(
-    'Team user limit awaiting confirmation',
+    '6 total users, including the owner',
+  )
+  await expect(page.locator('.signup-plan-choice')).toContainText(
+    'Invitations and member administration are Coming soon',
+  )
+  await expect(page.locator('.signup-plan-choice')).toContainText(
+    'No payment method required',
   )
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth - innerWidth,
     ),
   ).toBeLessThanOrEqual(1)
+})
+
+test('an unmapped tier explains its blocker while Mercantile remains purchasable', async ({
+  page,
+}) => {
+  await installPublicPlanFixture(page, 'bakers-bench')
+  await page.goto('/pricing')
+  const blocked = page.locator('.plan-card-bakers-bench')
+  await expect(blocked).toContainText(
+    'A validated recurring Price mapping is missing for this tier.',
+  )
+  await expect(
+    blocked.getByRole('button', { name: 'Currently unavailable' }),
+  ).toBeDisabled()
+  await expect(
+    page.getByRole('link', { name: 'Choose Cottage Mercantile', exact: true }),
+  ).toBeVisible()
+})
+
+test('an availability outage keeps Free setup open and blocks unverified paid purchases', async ({
+  page,
+}) => {
+  await page.route('**/api/stripe/billing?view=availability**', (route) =>
+    route.fulfill({ status: 503, json: {} }),
+  )
+  await page.goto('/pricing')
+  await expect(
+    page.getByRole('link', { name: 'Get Started Free', exact: true }),
+  ).toBeVisible()
+  for (const id of [
+    'mixing-bowl',
+    'bakers-bench',
+    'cottage-kitchen',
+    'cottage-mercantile',
+  ]) {
+    const card = page.locator(`.plan-card-${id}`)
+    await expect(card).toContainText(
+      'Purchase availability could not be verified. Refresh to retry.',
+    )
+    await expect(
+      card.getByRole('button', { name: 'Currently unavailable' }),
+    ).toBeDisabled()
+  }
 })

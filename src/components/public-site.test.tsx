@@ -2,6 +2,9 @@ import { render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 const session = vi.hoisted(() => ({ status: vi.fn() }))
+vi.mock('@/lib/identity-session', () => ({
+  restoreIdentitySession: async () => {},
+}))
 vi.mock('@/lib/account-access-client', () => ({
   useAccountAccess: () => ({
     loading: false,
@@ -16,6 +19,8 @@ vi.mock('@/lib/session.functions', () => ({
 }))
 import { SignupPage } from './signup-page'
 import { tourPlanScope } from './product-tour'
+import { launchFeatures } from '@/lib/launch-plans'
+import { featurePresentation, publicPlans } from '@/lib/plan-presentation'
 import {
   HomePage,
   FeaturesPage,
@@ -27,7 +32,23 @@ beforeEach(() => {
   session.status.mockResolvedValue({ signedIn: false })
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => Response.json({ policy: null })),
+    vi.fn(async (url: string) =>
+      url.includes('view=availability')
+        ? Response.json({
+            plans: [
+              'mixing-bowl',
+              'bakers-bench',
+              'cottage-kitchen',
+              'cottage-mercantile',
+            ],
+          })
+        : url === '/api/stripe/billing'
+          ? Response.json(
+              { code: 'SIGN_IN_REQUIRED', error: 'Log in to continue.' },
+              { status: 401 },
+            )
+          : Response.json({ policy: null }),
+    ),
   )
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -56,12 +77,10 @@ it('shows the website to signed-out visitors and an obvious oven link to signed-
   view.unmount()
   vi.unstubAllGlobals()
 })
-it('compares approved monthly prices while distinguishing proposed scope and unavailable checkout', async () => {
+it('compares approved prices, verified purchase availability, user allowances and partial/planned features', async () => {
   render(<PricingPage />)
   expect(
-    screen.getByText(
-      /Your chosen plan is saved; registration collects no payment/,
-    ),
+    screen.getByText(/Paid access starts only after verified billing/),
   ).toBeInTheDocument()
   expect(
     await screen.findByText(
@@ -70,7 +89,7 @@ it('compares approved monthly prices while distinguishing proposed scope and una
   ).toBeInTheDocument()
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   expect(screen.queryByText(/Join the beta/)).not.toBeInTheDocument()
-  // Approved monthly prices are compared, but no paid plan is purchasable yet.
+  await screen.findByRole('link', { name: 'Choose Cottage Mercantile' })
   const comparison = screen.getByRole('region', {
     name: 'Find your place in the pantry.',
   })
@@ -89,26 +108,73 @@ it('compares approved monthly prices while distinguishing proposed scope and una
       within(card).getByRole('link', {
         name: id === 'free' ? 'Get Started Free' : `Choose ${name}`,
       }),
-    ).toHaveAttribute('href', `/signup?plan=${id}`)
+    ).toHaveAttribute('href', `/signup?plan=${id}&returnTo=%2Foven%2Fbilling`)
   }
   expect(comparison).not.toHaveTextContent(/\$25|\$50|annual|trial/i)
   expect(comparison).toHaveTextContent('Cottage Mercantile')
   expect(comparison).toHaveTextContent('2 total users, including the owner')
   expect(comparison).toHaveTextContent('6 total users, including the owner')
   expect(comparison).toHaveTextContent('Excludes resale and consignment')
-  expect(comparison).toHaveTextContent('Free’s proposed limits are not active')
+  expect(comparison).toHaveTextContent('Proposed record limits are not active')
   expect(
     [...comparison.querySelectorAll('.plan-status')].filter((n) =>
       /not (yet )?available for purchase/i.test(n.textContent || ''),
     ),
-  ).toHaveLength(4)
+  ).toHaveLength(0)
+  expect(comparison).toHaveTextContent('Partial')
+  expect(comparison).toHaveTextContent('Coming soon')
   expect(within(comparison).getByRole('table')).toBeInTheDocument()
+  const table = within(comparison).getByRole('table')
+  for (const feature of launchFeatures) {
+    const labels = within(table).getAllByRole('rowheader', {
+      name: feature.label,
+    })
+    expect(labels).toHaveLength(1)
+    const cells = within(labels[0].closest('tr')!).getAllByRole('cell')
+    publicPlans.forEach((plan, index) => {
+      const expected = featurePresentation(plan.id, feature.id)
+      expect(cells[index].textContent?.includes('✓')).toBe(
+        expected.status === 'implemented',
+      )
+      if (expected.status !== 'excluded')
+        expect(cells[index]).toHaveTextContent(expected.text)
+      else
+        expect(
+          within(cells[index]).getByLabelText('Not included'),
+        ).toBeInTheDocument()
+    })
+  }
   for (const link of screen.getAllByRole('link', { name: /^Get Started/ }))
-    expect(link.getAttribute('href')).toMatch(/^\/signup(?:\?plan=free)?$/)
+    expect(link.getAttribute('href')).toMatch(
+      /^\/signup(?:\?plan=free&returnTo=%2Foven%2Fbilling)?$/,
+    )
   expect(
     screen.queryByRole('link', { name: /checkout|subscribe|purchase/i }),
   ).not.toBeInTheDocument()
 })
+it.each(['BUSINESS_SETUP_REQUIRED', 'EMAIL_UNVERIFIED'])(
+  'keeps plan selection available to an account needing %s',
+  async (code) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('view=availability')
+          ? Response.json({ plans: ['cottage-mercantile'] })
+          : url === '/api/stripe/billing'
+            ? Response.json({ code, error: 'Complete setup.' }, { status: 409 })
+            : Response.json({ policy: null }),
+      ),
+    )
+    render(<PricingPage />)
+    expect(
+      await screen.findByRole('link', { name: 'Choose Cottage Mercantile' }),
+    ).toHaveAttribute(
+      'href',
+      '/signup?plan=cottage-mercantile&returnTo=%2Foven%2Fbilling',
+    )
+    expect(screen.queryByText(/owner manages billing/i)).not.toBeInTheDocument()
+  },
+)
 it.each([HomePage, FeaturesPage, PricingPage, HelpPage])(
   'removes beta admission and unavailable plan offers from public screens',
   (Page) => {

@@ -1,6 +1,6 @@
 # Stripe test-mode setup
 
-The approved test scope includes all four paid tiers. No trial, additional failed-payment grace, plan switching, proration, or self-service cancellation is enabled. The customer portal supports payment methods and invoice history. Live checkout is a separate later activation.
+The approved test scope includes all four paid tiers. No trial or additional failed-payment grace is enabled. The customer portal supports payment methods and invoice history; plan changes and cancellation use the reviewed in-app workflow described in [billing and subscription management](stripe-live-launch.md). Upgrades use Stripe-previewed proration, while downgrades and cancellations take effect at renewal. LIVE checkout is already enabled and must remain unchanged during TEST verification. The setup instructions below apply only when configuring a new or incomplete TEST environment; do not repeat them against working LIVE settings.
 
 ## 1. Open the correct test environment
 

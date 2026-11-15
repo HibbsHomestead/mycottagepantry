@@ -1127,6 +1127,59 @@ export const stripeEvents = pgTable('stripe_events', {
   processedAt: timestamp('processed_at', { withTimezone: true }),
 })
 
+// Owner-confirmed previews also serve as durable idempotency and reconciliation records.
+export const stripeSubscriptionChanges = pgTable(
+  'stripe_subscription_changes',
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id),
+    identityId: text('identity_id').notNull(),
+    environment: text().notNull(),
+    subscriptionId: text('subscription_id').notNull(),
+    fromPlan: text('from_plan').notNull(),
+    toPlan: text('to_plan').notNull(),
+    fromPrice: text('from_price').notNull(),
+    toPrice: text('to_price'),
+    kind: text().notNull(),
+    status: text().notNull().default('previewed'),
+    preview: jsonb().$type<Record<string, unknown>>().notNull(),
+    effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    providerScheduleId: text('provider_schedule_id'),
+    providerInvoiceId: text('provider_invoice_id'),
+    errorCode: text('error_code'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index('stripe_changes_subscription').on(t.businessId, t.subscriptionId),
+    uniqueIndex('stripe_one_pending_change')
+      .on(t.businessId)
+      .where(
+        sql`${t.status} IN ('applying','pending','scheduled','releasing')`,
+      ),
+    check(
+      'stripe_change_environment',
+      sql`${t.environment} IN ('test','live')`,
+    ),
+    check(
+      'stripe_change_kind',
+      sql`${t.kind} IN ('upgrade','downgrade','cancel','resume')`,
+    ),
+    check(
+      'stripe_change_status',
+      sql`${t.status} IN ('previewed','applying','pending','scheduled','releasing','applied','cancelled','expired','failed')`,
+    ),
+  ],
+).enableRLS()
+
 // Support chats are private to the requester and verified business; only escalated chats enter support's view.
 export const supportAiPolicy = pgTable('support_ai_policy', {
   id: text().primaryKey().default('platform'),

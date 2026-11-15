@@ -111,8 +111,8 @@ export function PublicSite({ children }: { children: ReactNode }) {
           )}
         </nav>
         <p className="public-fine">
-          Monthly plans in USD. Paid subscriptions are not yet available for
-          purchase.
+          Monthly plans in USD. <a href="/pricing">View Plans</a> for verified
+          purchase availability and current feature status.
         </p>
       </footer>
     </div>
@@ -156,7 +156,7 @@ export function HomePage() {
           </div>
           <p className="public-fine">
             Compare the approved monthly prices and current plan availability.
-            Paid checkout is not yet available.
+            Paid access starts after verified billing.
           </p>
         </div>
         <div className="hero-product">
@@ -293,26 +293,11 @@ export function FeaturesPage() {
 export function PricingPage() {
   return (
     <PublicSite>
-      <section className="public-width public-page-intro narrow pricing-page-intro">
-        <p className="public-eyebrow">Plans & pricing</p>
-        <h1>Your business, in good order.</h1>
-        <p className="public-lead">
-          A little order for what you make and sell. Compare the tools and room
-          each plan brings to your business.
-        </p>
-        <div className="public-actions">
-          <CreateAccountLink />
-          <a className="public-text-link" href="/login">
-            Log in
-          </a>
-        </div>
-      </section>
       <PlanComparison />
     </PublicSite>
   )
 }
-/** Approved monthly USD prices. Paid plans are shown for comparison only until the
- * production billing release is approved; nothing here starts a purchase. */
+/** Shared plan comparison with server-verified purchase availability. */
 export function PlanComparison() {
   return <PricingComparison />
 }
@@ -359,11 +344,11 @@ export function HelpPage() {
             ],
             [
               'How do I create an account?',
-              'Use View Plans to compare monthly pricing and current availability, then Get Started to create an account and verify your email. Registration currently offers the Free setup path only and collects no payment. After email verification, enter your business details to create your oven. Existing account holders can log in separately.',
+              'Use View Plans to compare monthly pricing and current availability, then Get Started to choose a plan, create an account and verify your email. After verification, enter your business details. Free needs no payment method; approved paid plans continue to secure Stripe checkout after business setup. Existing account holders can log in separately.',
             ],
             [
               'Can I subscribe to a paid plan now?',
-              'Paid checkout is not yet available. Approved prices are monthly in USD; displayed feature and user limits remain proposed scope. Choosing or viewing a paid plan does not activate a subscription. View Plans for current availability.',
+              'View Plans shows verified purchase availability for each monthly USD plan. Approved paid plans can be purchased after verified account and business setup. Choosing a plan does not activate paid access. Existing subscribers use Billing & Subscription to review changes to their current subscription. Partial and Coming soon capabilities remain clearly labeled.',
             ],
           ].map(([q, a]) => (
             <details key={q}>

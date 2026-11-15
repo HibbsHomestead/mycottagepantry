@@ -2,6 +2,8 @@
 
 > Historical implementation record. Square integration and its setup requirements were retired; see [the retirement record](./square-subscription-billing.md). For current connection evidence, see [Stripe status](./reviews/stripe-connection-status.md).
 
+> Current behavior supersedes the historical release blockers below: LIVE Stripe checkout is enabled for all four paid tiers. Signup says “Choose your plan” and reads verified purchase availability from billing. A saved plan response contains only the preference and approved price; it does not contain a hardcoded paid-activation flag or grant access. See [current billing behavior](./stripe-live-launch.md). Do not reset LIVE checkout based on this historical record.
+
 ## Stage 1 — selected-plan registration
 
 Added Get Started Free and Choose [Plan Name] links to the existing card footers. All five approved plan IDs can be selected, including Cottage Mercantile at $40 USD per business monthly. Existing card layout and tier definitions were retained.

@@ -92,7 +92,7 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
     screen.getByRole('radio', { name: /Cottage Mercantile/ }),
   ).toBeEnabled()
   expect(
-    screen.getByText(/Creating an account does not activate a paid plan/),
+    screen.getByText(/A plan choice alone never grants paid access/),
   ).toBeInTheDocument()
   auth.signup.mockResolvedValue({ id: 'new' })
   const user = userEvent.setup()
@@ -105,7 +105,10 @@ it('preserves a paid plan choice while ignoring browser prices', async () => {
   })
   expect(
     await screen.findByRole('link', { name: 'Continue to login' }),
-  ).toHaveAttribute('href', '/login?plan=mixing-bowl')
+  ).toHaveAttribute(
+    'href',
+    '/login?plan=mixing-bowl&returnTo=%2Foven%2Fbilling',
+  )
 })
 it('shows the approved $40 tier selected without activating a purchase', () => {
   history.replaceState({}, '', '/signup?plan=cottage-mercantile')
@@ -118,7 +121,10 @@ it('shows the approved $40 tier selected without activating a purchase', () => {
   ).not.toBeInTheDocument()
   expect(
     screen.getByRole('link', { name: 'Already have an account? Log in.' }),
-  ).toHaveAttribute('href', '/login?plan=cottage-mercantile')
+  ).toHaveAttribute(
+    'href',
+    '/login?plan=cottage-mercantile&returnTo=%2Foven%2Fbilling',
+  )
 })
 it('does not substitute Free for an invalid plan or create an account if saving the preference fails', async () => {
   history.replaceState({}, '', '/signup?plan=unknown')

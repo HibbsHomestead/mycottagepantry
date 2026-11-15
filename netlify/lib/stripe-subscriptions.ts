@@ -4,13 +4,19 @@ import { randomUUID } from 'node:crypto'
 import type { AdminClient } from './platform-admin-core'
 import { AdminError } from './platform-admin-core'
 import {
-  currentMembership,
   RegistrationError,
   type RegistrationActor,
   type RegistrationClient,
 } from './registration-core'
 import { effectiveAccess, latestManualGrant } from './manual-access'
-import { launchPricing } from '../../src/lib/launch-plans'
+import { launchPricing, planUserLimit } from '../../src/lib/launch-plans'
+import { stripeBillingOwner } from './stripe-billing-owner'
+import { stripePlanAvailability } from './stripe-availability'
+import {
+  publicStripeChange,
+  stripeSeatUsage,
+  verifiedChangeSchedule,
+} from './stripe-changes'
 import {
   openStripe,
   stripeRequest,
@@ -25,22 +31,37 @@ import {
 
 const customerId = (value: any): string =>
   typeof value === 'string' ? value : value?.id
-async function worker(c: RegistrationClient) {
-  await c.query("SELECT set_config('app.billing_worker','true',true)")
-}
-async function owner(c: RegistrationClient, actor: RegistrationActor) {
-  const member = await currentMembership(c, actor)
-  if (!member || member.role !== 'Owner')
-    throw new RegistrationError(
-      403,
-      'OWNER_REQUIRED',
-      'Only an active business owner can manage its subscription.',
-    )
-  await worker(c)
-  await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,717))', [
-    member.id,
-  ])
-  return member
+const owner = stripeBillingOwner
+async function checkoutBlock(
+  c: RegistrationClient,
+  business: string,
+  billing: any,
+) {
+  if (
+    billing?.subscription_id &&
+    (!['cancelled', 'expired'].includes(billing.status) ||
+      (billing.paid_through &&
+        Date.parse(String(billing.paid_through)) > Date.now()))
+  )
+    return {
+      code: 'EXISTING_SUBSCRIPTION',
+      reason:
+        'This business already has linked billing. Use subscription management. If the subscription has ended, wait until its verified paid coverage ends before subscribing again.',
+    }
+  if (
+    (
+      await c.query(
+        "SELECT 1 FROM billing_subscriptions WHERE business_id=$1 AND status IN ('PENDING','ACTIVE','PAUSED') UNION ALL SELECT 1 FROM billing_attempts WHERE business_id=$1 AND status IN ('checkout_pending','payment_processing','unknown') LIMIT 1",
+        [business],
+      )
+    ).rows.length
+  )
+    return {
+      code: 'SQUARE_BILLING_EXISTS',
+      reason:
+        'Existing Square subscription or checkout requires support review before Stripe checkout. No additional subscription was created.',
+    }
+  return null
 }
 export async function stripeOwnerView(
   c: RegistrationClient,
@@ -54,7 +75,7 @@ export async function stripeOwnerView(
   ).rows[0]
   const settings = (
     await c.query(
-      'SELECT environment,checkout_enabled,configuration FROM stripe_provider_settings',
+      'SELECT environment,account_id,validated_at,webhook_verified_at,checkout_enabled,configuration FROM stripe_provider_settings',
     )
   ).rows
   const attempts = (
@@ -87,8 +108,51 @@ export async function stripeOwnerView(
   )
   const { currentSignupSelection } = await import('./signup-plan-intent')
   const signupSelection = await currentSignupSelection(c, actor)
+  const changes = (
+    await c.query(
+      'SELECT * FROM stripe_subscription_changes WHERE business_id=$1 ORDER BY created_at DESC LIMIT 10',
+      [member.id],
+    )
+  ).rows
+  const seatUsage = await stripeSeatUsage(c, member.id)
+  const subscription = billing?.snapshot?.stripeSubscription || null
+  const hasSubscription =
+    !!billing?.subscription_id &&
+    ['stripe_test', 'stripe_live'].includes(billing.source) &&
+    !['canceled', 'incomplete_expired'].includes(billing.provider_status)
+  const checkoutBlocked = await checkoutBlock(c, member.id, billing)
+  const changeBlockedReason = !hasSubscription
+    ? ''
+    : subscription?.status !== 'active'
+      ? 'Refresh billing and resolve the subscription status in Stripe before changing plans.'
+      : subscription?.pendingUpdate
+        ? 'Resolve the pending payment update in Stripe and refresh billing before changing plans.'
+        : subscription?.cancelAtPeriodEnd
+          ? 'Cancellation is scheduled. Resume the subscription before choosing another plan. Cancellations scheduled outside this app require support review.'
+          : subscription?.providerSchedule
+            ? 'Cancel the pending scheduled change before choosing another plan. Schedules created outside this app require support review.'
+            : ''
   return {
     workspace: { id: member.id, name: member.business_name },
+    canManage: true,
+    hasSubscription,
+    checkoutBlockedReason: checkoutBlocked?.reason || '',
+    changeBlockedReason,
+    subscription,
+    seatUsage,
+    includedUsers:
+      access.access?.entitlementPolicy === 'legacy'
+        ? null
+        : planUserLimit(access.plan || 'free'),
+    changes: changes.map(publicStripeChange),
+    changePlans: hasSubscription
+      ? stripePlanAvailability(
+          settings.find((r) => r.environment === billing.environment),
+          billing.environment,
+          deploymentRuntime().context === 'production',
+          false,
+        )
+      : [],
     historicalInvoices: (
       await c.query(
         'SELECT environment,status,amount_cents,paid_cents,refunded_cents,service_from,service_through FROM billing_invoices WHERE business_id=$1 ORDER BY service_from DESC NULLS LAST LIMIT 50',
@@ -105,18 +169,25 @@ export async function stripeOwnerView(
           paidThrough: billing.paid_through,
           cancellation: billing.canceled_date,
           lastReconciled: billing.last_reconciled_at,
+          nextBillingDate: billing.next_billing_date,
         }
       : null,
     access,
     attempts,
     available: available.map((r) => ({
       environment: r.environment,
-      plans: Object.entries(r.configuration.mappings || {})
-        .filter(
-          ([id, m]: [string, any]) =>
-            m.purchase && stripeTierPurchasable(id, r.environment),
-        )
-        .map(([id]) => id),
+      plans: stripePlanAvailability(
+        r,
+        r.environment,
+        deploymentRuntime().context === 'production',
+      )
+        .filter((p) => p.purchasable)
+        .map((p) => p.id),
+      tiers: stripePlanAvailability(
+        r,
+        r.environment,
+        deploymentRuntime().context === 'production',
+      ),
     })),
   }
 }
@@ -163,6 +234,8 @@ export async function stripeCheckout(
     !row.webhook_verified_at ||
     !row.configuration?.policy ||
     !mapping?.purchase ||
+    !mapping?.verifiedAt ||
+    mapping?.account !== row.account_id ||
     !tier ||
     !stripeTierPurchasable(input.plan, e) ||
     (e === 'test' && !testAllowed) ||
@@ -173,28 +246,14 @@ export async function stripeCheckout(
       'CHECKOUT_DISABLED',
       'This tier or environment is not approved for checkout. Existing business access remains unchanged.',
     )
-  if (
-    billing?.subscription_id &&
-    (!['cancelled', 'expired'].includes(billing.status) ||
-      (billing.paid_through && Date.parse(billing.paid_through) > Date.now()))
-  )
+  const blocked = await checkoutBlock(c, member.id, billing)
+  if (blocked) throw new RegistrationError(409, blocked.code, blocked.reason)
+  const usage = await stripeSeatUsage(c, member.id)
+  if (usage > planUserLimit(tier.id)!)
     throw new RegistrationError(
       409,
-      'EXISTING_SUBSCRIPTION',
-      'This business already has linked billing. Reconcile it before starting another subscription.',
-    )
-  if (
-    (
-      await c.query(
-        "SELECT 1 FROM billing_subscriptions WHERE business_id=$1 AND status IN ('PENDING','ACTIVE','PAUSED') UNION ALL SELECT 1 FROM billing_attempts WHERE business_id=$1 AND status IN ('checkout_pending','payment_processing','unknown') LIMIT 1",
-        [member.id],
-      )
-    ).rows.length
-  )
-    throw new RegistrationError(
-      409,
-      'SQUARE_BILLING_EXISTS',
-      'Existing Square subscription or checkout requires review before Stripe checkout.',
+      'SEAT_LIMIT',
+      `This business has ${usage} active users. ${tier.name} allows ${planUserLimit(tier.id)} total users, including the owner. Resolve extra memberships with support before subscribing; no users or data were removed.`,
     )
   let attempt = (
     await c.query(
@@ -323,7 +382,6 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
     sub.metadata?.attempt_id !== attempt.id ||
     customer !== customerId(session.customer) ||
     sub.items?.data?.length !== 1 ||
-    customerId(item?.price) !== attempt.price_id ||
     item.quantity !== 1 ||
     (attempt.subscription_id && attempt.subscription_id !== sub.id) ||
     (attempt.customer_id && attempt.customer_id !== customer)
@@ -339,6 +397,69 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
       [attempt.business_id],
     )
   ).rows[0]
+  const changes = (
+    await c.query(
+      `SELECT * FROM stripe_subscription_changes WHERE business_id=$1 AND subscription_id=$2 AND environment=$3 AND confirmed_at IS NOT NULL ORDER BY created_at DESC`,
+      [attempt.business_id, sub.id, attempt.environment],
+    )
+  ).rows
+  const currentPrice = customerId(item?.price)
+  const priceChange = changes.find(
+    (change) =>
+      change.to_price === currentPrice &&
+      ['applying', 'pending', 'scheduled', 'applied'].includes(change.status),
+  )
+  // Checkout history is immutable. A different recurring Price is accepted only
+  // through a durable change authorized for this exact business/subscription.
+  if (currentPrice !== attempt.price_id && !priceChange)
+    throw new AdminError(
+      409,
+      'UNREVIEWED_SUBSCRIPTION_PRICE',
+      'The subscription Price changed outside the reviewed workflow. Existing access was preserved for review.',
+    )
+  const currentPlan = priceChange?.to_plan || attempt.plan_id
+  if (
+    priceChange?.kind === 'downgrade' &&
+    Date.parse(priceChange.effective_at) > Date.now() &&
+    existing?.plan_id !== currentPlan
+  )
+    throw new AdminError(
+      409,
+      'CHANGE_TOO_EARLY',
+      'Stripe reported the scheduled lower tier before its approved effective date. Current paid access was preserved for review.',
+    )
+  if (currentPrice !== attempt.price_id || priceChange)
+    await validatedPrice(key, currentPrice, currentPlan, attempt.environment)
+  const scheduled = changes.find(
+    (change) =>
+      change.kind === 'downgrade' &&
+      change.status === 'scheduled' &&
+      Date.parse(change.effective_at) > Date.now() &&
+      sub.schedule,
+  )
+  if (scheduled) {
+    const schedule = await stripeRequest(
+      key,
+      '/subscription_schedules/' + customerId(sub.schedule),
+    )
+    if (
+      schedule.id !== scheduled.provider_schedule_id ||
+      !verifiedChangeSchedule(
+        schedule,
+        sub,
+        scheduled,
+        attempt.environment,
+        customer,
+      )
+    )
+      throw new RegistrationError(
+        409,
+        'SCHEDULE_REVIEW_REQUIRED',
+        'The scheduled plan differs from the confirmed change and needs support review. Existing verified access was preserved.',
+      )
+  }
+  const monthlyCents =
+    launchPricing.plans.find((p) => p.id === currentPlan)!.monthlyUsd * 100
   if (
     existing?.subscription_id &&
     existing.subscription_id !== sub.id &&
@@ -361,13 +482,23 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
   )
   let from = 0,
     through = 0
+  const pendingUpgrade = changes.find(
+    (change) =>
+      change.kind === 'upgrade' &&
+      ['applying', 'pending'].includes(change.status),
+  )
+  let pendingUpgradeInvoice: string | null = null
   for (const invoice of invoices.data || []) {
+    const pendingEvidence =
+      pendingUpgrade &&
+      invoice.id ===
+        (pendingUpgrade.provider_invoice_id ||
+          customerId(sub.latest_invoice)) &&
+      invoice.billing_reason === 'subscription_update' &&
+      invoice.created >= pendingUpgrade.preview.prorationDate - 5
     if (
-      invoice.status !== 'paid' ||
+      (invoice.status !== 'paid' && !pendingEvidence) ||
       invoice.currency !== 'usd' ||
-      invoice.amount_paid <
-        launchPricing.plans.find((p) => p.id === attempt.plan_id)!.monthlyUsd *
-          100 ||
       customerId(invoice.customer) !== customer
     )
       continue
@@ -384,27 +515,78 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
     for (const line of lines.data || []) {
       const price = line.pricing?.price_details?.price || line.price?.id
       if (
-        price === attempt.price_id &&
+        pendingEvidence &&
+        price === pendingUpgrade.to_price &&
+        line.period?.end === pendingUpgrade.preview.periodEnd
+      )
+        pendingUpgradeInvoice = invoice.id
+      if (invoice.status !== 'paid') continue
+      if (
+        price === currentPrice &&
         line.period?.end > through &&
         line.period?.start <= Date.now() / 1000 &&
-        line.amount >=
-          launchPricing.plans.find((p) => p.id === attempt.plan_id)!
-            .monthlyUsd *
-            100
+        line.amount >= monthlyCents &&
+        invoice.amount_paid >= monthlyCents
       ) {
         from = line.period.start
         through = line.period.end
+      }
+      // An immediate upgrade pays only the provider-previewed prorated delta.
+      // It may extend the already verified tier for the remainder of that paid
+      // period, never create a new paid period from a redirect or an open invoice.
+      if (
+        price === currentPrice &&
+        priceChange?.kind === 'upgrade' &&
+        priceChange.from_plan === existing?.plan_id &&
+        invoice.billing_reason === 'subscription_update' &&
+        invoice.id ===
+          (priceChange.provider_invoice_id || customerId(sub.latest_invoice)) &&
+        invoice.created >= priceChange.preview.prorationDate - 5 &&
+        invoice.amount_paid >= priceChange.preview.amountDue &&
+        line.period?.start <= Date.now() / 1000 &&
+        Date.parse(String(existing.paid_through)) > Date.now()
+      ) {
+        const coveredThrough = Math.min(
+          Date.parse(String(existing.paid_through)) / 1000,
+          line.period.end,
+          item.current_period_end,
+        )
+        if (coveredThrough > through) {
+          from = Date.parse(String(existing.paid_from)) / 1000
+          through = coveredThrough
+        }
       }
     }
   }
   // Preserve already verified coverage if it is older than this provider page.
   if (
     existing?.subscription_id === sub.id &&
+    (existing.plan_id === currentPlan ||
+      (!existing.plan_id && currentPrice === attempt.price_id)) &&
     existing?.paid_through &&
     Date.parse(String(existing.paid_through)) > through * 1000
   ) {
     through = Date.parse(String(existing.paid_through)) / 1000
     from = Date.parse(String(existing.paid_from)) / 1000
+  }
+  let verifiedPlan = currentPlan,
+    verifiedPrice = currentPrice
+  if (
+    through <= Date.now() / 1000 &&
+    existing?.subscription_id === sub.id &&
+    existing.plan_id &&
+    existing.plan_id !== currentPlan
+  ) {
+    // Stripe can report a changed item before the corresponding invoice is paid.
+    // Keep the previous verified access until its original paid-through date.
+    verifiedPlan = existing.plan_id
+    verifiedPrice = existing.plan_variation_id
+    through = existing.paid_through
+      ? Date.parse(String(existing.paid_through)) / 1000
+      : 0
+    from = existing.paid_from
+      ? Date.parse(String(existing.paid_from)) / 1000
+      : 0
   }
   const status =
     sub.status === 'canceled'
@@ -425,6 +607,55 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
     ['suspended', 'security_suspended', 'disabled'].includes(existing.status)
       ? existing.status
       : status
+  // The two-phase schedule has fulfilled its reviewed purpose after a paid
+  // downgrade. Release it at the new Price so the owner can change plans again
+  // without waiting through an unnecessary second billing period.
+  if (
+    priceChange?.kind === 'downgrade' &&
+    sub.schedule &&
+    verifiedPlan === priceChange.to_plan &&
+    through > Date.now() / 1000
+  ) {
+    const schedule = await stripeRequest(
+      key,
+      '/subscription_schedules/' + customerId(sub.schedule),
+    )
+    if (
+      schedule.id !== priceChange.provider_schedule_id ||
+      !verifiedChangeSchedule(
+        schedule,
+        sub,
+        priceChange,
+        attempt.environment,
+        customer,
+      )
+    )
+      throw new RegistrationError(
+        409,
+        'SCHEDULE_REVIEW_REQUIRED',
+        'The effective schedule needs review before it can be released. Existing access was preserved.',
+      )
+    await stripeRequest(
+      key,
+      '/subscription_schedules/' + schedule.id + '/release',
+      new URLSearchParams({ preserve_cancel_date: 'true' }),
+      'cottage-fulfilled-' + priceChange.id,
+    )
+    const released = await stripeRequest(key, '/subscriptions/' + sub.id)
+    if (
+      released.id !== sub.id ||
+      released.livemode !== sub.livemode ||
+      customerId(released.customer) !== customer ||
+      released.schedule ||
+      customerId(released.items?.data?.[0]?.price) !== currentPrice
+    )
+      throw new RegistrationError(
+        409,
+        'SCHEDULE_RELEASE_UNVERIFIED',
+        'Refresh billing to verify the completed schedule. No additional subscription was created.',
+      )
+    sub.schedule = null
+  }
   // A new subscription adopts the current policy even on an older Free account.
   // Reconciliation of the same historical subscription retains its saved policy.
   await c.query(
@@ -432,14 +663,14 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp(NULLIF($11,0)),to_timestamp(NULLIF($12,0)),$13,$14,NOW(),'kitchen-two-v1') ON CONFLICT(business_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,entitlement_policy=CASE WHEN workspace_billing.subscription_id IS DISTINCT FROM EXCLUDED.subscription_id THEN EXCLUDED.entitlement_policy ELSE workspace_billing.entitlement_policy END,source=EXCLUDED.source,status=EXCLUDED.status,subscription_id=EXCLUDED.subscription_id,customer_id=EXCLUDED.customer_id,environment=EXCLUDED.environment,billing_owner_identity=EXCLUDED.billing_owner_identity,plan_variation_id=EXCLUDED.plan_variation_id,provider_status=EXCLUDED.provider_status,paid_from=EXCLUDED.paid_from,paid_through=EXCLUDED.paid_through,canceled_date=EXCLUDED.canceled_date,next_billing_date=EXCLUDED.next_billing_date,last_reconciled_at=NOW(),updated_at=NOW()`,
     [
       attempt.business_id,
-      attempt.plan_id,
+      verifiedPlan,
       'stripe_' + attempt.environment,
       effectiveStatus,
       sub.id,
       customer,
       attempt.environment,
       attempt.identity_id,
-      attempt.price_id,
+      verifiedPrice,
       sub.status,
       from,
       through,
@@ -449,6 +680,108 @@ export async function reconcileStripeCheckout(c: AdminClient, attempt: any) {
         : null,
     ],
   )
+  // Store only provider-verified display data, alongside existing snapshot keys.
+  // A selected application plan never supplies the subscription amount/status.
+  const providerPrice = item.price || {}
+  const snapshot = {
+    plan: currentPlan,
+    monthlyCents: Number.isSafeInteger(providerPrice.unit_amount)
+      ? providerPrice.unit_amount
+      : null,
+    currency: providerPrice.currency || null,
+    interval: providerPrice.recurring?.interval || null,
+    intervalCount: providerPrice.recurring?.interval_count || null,
+    status: sub.status,
+    cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+    endsAt: cancellation ? new Date(cancellation * 1000).toISOString() : null,
+    renewsAt: item.current_period_end
+      ? new Date(item.current_period_end * 1000).toISOString()
+      : null,
+    pendingUpdate: !!sub.pending_update,
+    environment: attempt.environment,
+    providerSchedule: !!sub.schedule,
+    verifiedAt: new Date().toISOString(),
+  }
+  await c.query(
+    "UPDATE workspace_billing SET snapshot=snapshot || jsonb_build_object('stripeSubscription',$2::jsonb) WHERE business_id=$1",
+    [attempt.business_id, JSON.stringify(snapshot)],
+  )
+  if (
+    priceChange &&
+    verifiedPlan === priceChange.to_plan &&
+    through > Date.now() / 1000
+  ) {
+    await c.query(
+      "UPDATE workspace_billing SET entitlement_policy='kitchen-two-v1' WHERE business_id=$1",
+      [attempt.business_id],
+    )
+  }
+  for (const change of changes) {
+    if (
+      !['applying', 'pending', 'scheduled', 'releasing'].includes(change.status)
+    )
+      continue
+    if (
+      change.to_price === currentPrice &&
+      verifiedPlan === change.to_plan &&
+      through > Date.now() / 1000 &&
+      !sub.pending_update
+    ) {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='applied',error_code=NULL,updated_at=now() WHERE id=$1 AND business_id=$2",
+        [change.id, attempt.business_id],
+      )
+    } else if (
+      change.id === pendingUpgrade?.id &&
+      pendingUpgradeInvoice &&
+      change.status === 'applying' &&
+      sub.pending_update
+    ) {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='pending',provider_invoice_id=$2,updated_at=now() WHERE id=$1 AND business_id=$3",
+        [change.id, pendingUpgradeInvoice, attempt.business_id],
+      )
+    } else if (
+      change.kind === 'upgrade' &&
+      (change.status === 'pending' ||
+        (change.status === 'applying' &&
+          pendingUpgradeInvoice &&
+          change.id === pendingUpgrade?.id)) &&
+      !sub.pending_update &&
+      currentPrice === change.from_price
+    ) {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='failed',error_code='PAYMENT_NOT_COMPLETED',updated_at=now() WHERE id=$1 AND business_id=$2",
+        [change.id, attempt.business_id],
+      )
+    } else if (change.kind === 'cancel' && sub.status === 'canceled') {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='applied',updated_at=now() WHERE id=$1 AND business_id=$2",
+        [change.id, attempt.business_id],
+      )
+    } else if (
+      change.kind === 'cancel' &&
+      change.status === 'scheduled' &&
+      !sub.cancel_at_period_end &&
+      Date.parse(change.effective_at) > Date.now()
+    ) {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='cancelled',updated_at=now() WHERE id=$1 AND business_id=$2",
+        [change.id, attempt.business_id],
+      )
+    } else if (
+      change.kind === 'downgrade' &&
+      change.status === 'scheduled' &&
+      !sub.schedule &&
+      currentPrice === change.from_price &&
+      Date.parse(change.effective_at) > Date.now()
+    ) {
+      await c.query(
+        "UPDATE stripe_subscription_changes SET status='cancelled',updated_at=now() WHERE id=$1 AND business_id=$2",
+        [change.id, attempt.business_id],
+      )
+    }
+  }
   await c.query(
     'UPDATE stripe_checkouts SET status=$2,subscription_id=$3,customer_id=$4,reconciled_at=NOW(),error_code=NULL,access_verified_at=CASE WHEN $5 THEN NOW() ELSE access_verified_at END WHERE id=$1',
     [

@@ -1,0 +1,133 @@
+.subscription-billing {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+.subscription-billing h2,
+.subscription-billing h3,
+.subscription-billing p {
+  margin: 0;
+}
+.billing-overview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+  padding: 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--primary) 6%, var(--background));
+}
+.billing-overview h3 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  margin-block: 0.35rem;
+}
+.billing-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+.billing-facts div {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.billing-facts dt,
+.billing-overview span:first-child {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+.billing-facts dd {
+  margin: 0.35rem 0 0;
+  overflow-wrap: anywhere;
+}
+.billing-notice,
+.billing-error {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--background));
+}
+.billing-error {
+  border-left: 3px solid #9c4d35;
+}
+.billing-small {
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.billing-plan-select {
+  display: grid;
+  gap: 1rem;
+  border-top: 1px solid var(--border);
+  padding-block: 1.25rem;
+}
+.billing-plan-select label {
+  display: grid;
+  gap: 0.5rem;
+}
+.billing-plan-select select {
+  min-height: 44px;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+.billing-plan-select .check-label,
+.billing-review .check-label {
+  display: flex;
+  align-items: start;
+  gap: 0.7rem;
+  line-height: 1.6;
+}
+.billing-plan-select input[type='checkbox'],
+.billing-review input[type='checkbox'] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin-top: 4px;
+}
+.billing-actions {
+  flex-wrap: wrap;
+}
+.billing-review {
+  width: min(680px, calc(100vw - 24px));
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+.billing-review ul {
+  padding-left: 1.3rem;
+}
+.billing-review details {
+  border-block: 1px solid var(--border);
+  padding-block: 1rem;
+}
+.billing-review summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.billing-review .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.billing-loading {
+  min-height: 180px;
+  padding: 1.5rem;
+  background: color-mix(in srgb, var(--primary) 5%, var(--background));
+  border-radius: 14px;
+}
+@media (max-width: 560px) {
+  .billing-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+  .billing-actions .btn,
+  .billing-review .button-row .btn {
+    width: 100%;
+    white-space: normal;
+  }
+}

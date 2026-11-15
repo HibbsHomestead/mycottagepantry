@@ -5,6 +5,8 @@ import { businessProfile } from '@/lib/registration'
 import { PublicSite } from './public-site'
 import { SignOutAccountButton } from './account-access-status'
 import type { SignupSelection } from '@/lib/signup-plan'
+import { planUserLabel, planUserLimit } from '@/lib/launch-plans'
+import { teamAvailabilityNotice } from '@/lib/plan-presentation'
 
 export function FreeWorkspaceSetup({
   onCreated,
@@ -110,7 +112,9 @@ export function FreeWorkspaceSetup({
           {selection && (
             <p className="registration-notice">
               Selected plan: {selection.name} — ${selection.monthlyUsd} USD per
-              business, monthly.
+              business, monthly. {planUserLabel(selection.planId)}.
+              {Number(planUserLimit(selection.planId)) > 1 &&
+                ` ${teamAvailabilityNotice}`}
               {selection.planId !== 'free' &&
                 ' Your choice is saved. Continue to billing after business setup to check approved subscription availability; no paid access is granted by this form.'}{' '}
               Current access: verified account only; no business is created yet.
@@ -120,10 +124,9 @@ export function FreeWorkspaceSetup({
             Your email is verified. Business setup uses the currently
             implemented Free access rules; it does not activate a paid plan.
             Review <a href="/pricing">View Plans</a> for monthly pricing and
-            proposed features. Subscription checkout depends on administrator
-            approval and verified billing. Business oven setup requires a
-            verified email and valid business details. Proposed Free count
-            limits and feature restrictions are not active.
+            current features and verified purchase availability. Business setup
+            requires a verified email and valid business details. Proposed Free
+            count limits and feature restrictions are not active.
           </p>
           {policies.loading && (
             <p role="status">Checking published Terms and Privacy…</p>

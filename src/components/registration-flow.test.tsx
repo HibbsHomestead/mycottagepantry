@@ -1,9 +1,16 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+type AccountFixture = {
+  loading: boolean
+  error: boolean
+  traceId: string
+  retry: () => void
+  access: { status: string; privateTest: boolean } | null
+}
 const api = vi.hoisted(() => ({
   request: vi.fn(),
-  account: null as any,
+  account: {} as AccountFixture,
   resume: vi.fn(),
 }))
 vi.mock('@/lib/signup-plan-client', () => ({
@@ -66,7 +73,7 @@ it('does not expose the private form or acceptance to an unauthorized visitor', 
 })
 
 it('shows a failed ordinary setup lookup and preserves business details during Retry', async () => {
-  api.account.access.privateTest = false
+  api.account.access!.privateTest = false
   api.resume
     .mockRejectedValueOnce(new Error('Unavailable'))
     .mockResolvedValueOnce(null)
@@ -220,7 +227,6 @@ it('keeps the saved paid choice while allowing business setup without unpublishe
     monthlyUsd: 30,
     currency: 'USD',
     interval: 'month',
-    paidActivationAvailable: false,
   })
   api.account.access = { status: 'no_workspace', privateTest: false }
   history.replaceState({}, '', '/onboarding?plan=cottage-kitchen')

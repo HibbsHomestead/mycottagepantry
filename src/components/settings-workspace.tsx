@@ -1,4 +1,5 @@
 import { CategoryTaxSettings } from './product-categories'
+import { StripeOwnerBilling } from './stripe-owner-billing'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import {
   Palette,
@@ -16,6 +17,7 @@ import {
   Plug,
   Database,
   ArrowRight,
+  CreditCard,
 } from 'lucide-react'
 import {
   accentThemes,
@@ -40,6 +42,7 @@ import {
 } from './ui/dropdown-menu'
 export const settingsSections = [
   'Business Profile',
+  'Billing & Subscription',
   'Appearance',
   'Units & Costing Defaults',
   'Inventory Rules',
@@ -51,6 +54,7 @@ export const settingsSections = [
 ]
 const icons = [
   Building2,
+  CreditCard,
   Palette,
   SlidersHorizontal,
   Package,
@@ -101,6 +105,7 @@ export function SettingsWorkspace({
     ),
     [error, setError] = useState(''),
     [savedSection, setSavedSection] = useState(''),
+    [savedAppearance, setSavedAppearance] = useState(''),
     [saving, setSaving] = useState(false)
   const taxDraftDirty = useRef(false)
   useEffect(() => {
@@ -109,10 +114,7 @@ export function SettingsWorkspace({
       business.taxRates ??
         applicableTaxes({ id: 'default', name: '' }, business),
     )
-  }, [business.taxRates, business.taxRate, business.jurisdiction])
-  useEffect(() => {
-    setSavedSection('')
-  }, [appearance.theme, appearance.mode])
+  }, [business])
   const save = async (fn: () => Promise<void>) => {
     try {
       setError('')
@@ -120,6 +122,7 @@ export function SettingsWorkspace({
       setSaving(true)
       await fn()
       setSavedSection(selected)
+      setSavedAppearance(`${appearance.theme}:${appearance.mode}`)
       if (selected === 'Taxes') taxDraftDirty.current = false
     } catch (e) {
       setError((e as Error).message)
@@ -154,6 +157,15 @@ export function SettingsWorkspace({
         <section className="panel settings-section">
           <span className="eyebrow">OVEN SETTINGS</span>
           <h2>{selected}</h2>
+          {selected === 'Billing & Subscription' &&
+            (isOwner ? (
+              <StripeOwnerBilling embedded />
+            ) : (
+              <p>
+                The business owner manages billing. Ask the owner to open this
+                section to manage the subscription, payment method and invoices.
+              </p>
+            ))}
           {selected === 'Appearance' && (
             <>
               <p>A little more you. Choose your oven color and display mode.</p>
@@ -565,9 +577,12 @@ export function SettingsWorkspace({
             </>
           )}
           {saving && <p role="status">Saving…</p>}
-          {!saving && savedSection === selected && (
-            <p role="status">Saved successfully.</p>
-          )}
+          {!saving &&
+            savedSection === selected &&
+            (selected !== 'Appearance' ||
+              savedAppearance === `${appearance.theme}:${appearance.mode}`) && (
+              <p role="status">Saved successfully.</p>
+            )}
           {error && (
             <p className="form-error" role="alert">
               {error}

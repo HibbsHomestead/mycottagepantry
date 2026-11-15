@@ -57,6 +57,25 @@ export const accountNavigation = {
   replace: (destination: string) => window.location.replace(destination),
 }
 
+/** Carry a customer choice through email verification or to an explicit billing return.
+ * It is UI selection, never an access decision or a subscription mutation. */
+export function billingPlanForReturn(
+  search: string,
+  awaitingEmail = false,
+): PlanId | undefined {
+  const params = new URLSearchParams(search)
+  if (
+    !awaitingEmail &&
+    safeWorkspaceReturn(params.get('returnTo')) !== '/oven/billing'
+  )
+    return
+  try {
+    return signupPlan(params.get('plan'))
+  } catch {
+    return undefined
+  }
+}
+
 export function navigateAccount(
   destination: string,
   traceId: string,
@@ -84,8 +103,7 @@ export function navigateAccount(
   if (['/workspace', '/workspace/billing'].includes(url.pathname))
     url.pathname = url.pathname.replace('/workspace', '/oven')
   url.searchParams.set('accessTrace', traceId)
-  // Forward only an explicitly resolved preference for new-business setup.
-  // Ambient URL state must not steer existing-account access or throw here.
+  // Only explicitly validated preferences reach setup or the billing selector.
   if (planId) url.searchParams.set('plan', signupPlan(planId))
   if (url.pathname !== '/oven' && returnTo)
     url.searchParams.set('returnTo', safeWorkspaceReturn(returnTo))
@@ -148,7 +166,14 @@ export function useAccountAccess(page: AccountPage) {
             destination,
             reference,
             returnTo,
-            selection?.planId,
+            selection?.planId ||
+              (destination.startsWith('/oven/billing') ||
+              value.status === 'email_unverified'
+                ? billingPlanForReturn(
+                    location.search,
+                    value.status === 'email_unverified',
+                  )
+                : undefined),
             router
               ? (href) => {
                   void router.navigate({ href, replace: true })

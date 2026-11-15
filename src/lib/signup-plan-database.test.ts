@@ -79,8 +79,8 @@ it.each([
       monthlyUsd,
       currency: 'USD',
       interval: 'month',
-      paidActivationAvailable: false,
     })
+    expect(data.selection).not.toHaveProperty('paidActivationAvailable')
     expect(result.headers.get('set-cookie')).toMatch(
       /HttpOnly; Secure; SameSite=Lax/,
     )

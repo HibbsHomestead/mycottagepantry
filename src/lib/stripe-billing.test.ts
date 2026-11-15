@@ -785,10 +785,16 @@ it.each(launchPricing.plans.filter((p) => p.monthlyUsd > 0))(
                 validated_at: '2026-11-14',
                 webhook_verified_at: '2026-11-14',
                 ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
+                account_id: 'acct_fixture',
                 configuration: {
                   policy: {},
                   mappings: {
-                    [tier.id]: { price: 'price_fixture', purchase: true },
+                    [tier.id]: {
+                      price: 'price_fixture',
+                      purchase: true,
+                      account: 'acct_fixture',
+                      verifiedAt: '2026-11-14',
+                    },
                   },
                 },
               },

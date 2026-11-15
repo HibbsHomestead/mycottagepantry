@@ -91,7 +91,7 @@ export function AccountAccessStatus({
         {!loading && <SignOutAccountButton />}
         {!loading && errorMessage && access?.status === 'no_workspace' && (
           <p>
-            <a href="/pricing">Choose your intended plan again</a>
+            <a href="/pricing">Choose your plan again</a>
           </p>
         )}
         <a href="/help">Need help?</a>
