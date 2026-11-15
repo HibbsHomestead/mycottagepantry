@@ -1,5 +1,5 @@
 import { customerMessage } from '@/lib/customer-message'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useState, type ReactNode } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import { csv } from '@/lib/domain'
 import { ovenToday } from '@/lib/oven-dates'
@@ -37,7 +37,9 @@ export function Checkbook({
   role,
   onReceipts,
   onLegacySale,
-  onSectionChange,
+  onUploadReceipt,
+  onRecordTransaction,
+  receiptRevision = 0,
   initialTab = 'Overview',
 }: {
   workspace: Workspace
@@ -46,11 +48,14 @@ export function Checkbook({
   role: string
   onReceipts: () => void
   onLegacySale: () => void
+  onUploadReceipt?: () => void
+  onRecordTransaction?: () => void
+  receiptRevision?: number
   onSectionChange?: (tab: string) => void
   initialTab?: string
 }) {
   const today = ovenToday(w.settings?.[0]),
-    [tab, setTab] = useState(initialTab),
+    [tab] = useState(initialTab),
     [modal, setModal] = useState(''),
     [d, setD] = useState<Partial<Item>>({}),
     [error, setError] = useState(''),
@@ -66,6 +71,12 @@ export function Checkbook({
     [csvRows, setCsvRows] = useState<Record<string, string>[]>([]),
     [mapping, setMapping] = useState({ date: '', name: '', amount: '' }),
     [selected, setSelected] = useState<string[]>([])
+  const refreshAfterReceipt = useEffectEvent(() => {
+    void refresh()
+  })
+  useEffect(() => {
+    if (receiptRevision) refreshAfterReceipt()
+  }, [receiptRevision])
   const b = w.bookkeeping?.[0],
     canWrite = ready && ['Owner', 'Manager'].includes(role)
   const open = (kind: string, values: Partial<Item> = {}) => {
@@ -253,16 +264,6 @@ export function Checkbook({
   const obligations = (b?.obligations || []).filter(
     (r: Item) => r.kind === (tab === 'Bills' ? 'bill' : 'invoice'),
   )
-  const nav = [
-    'Overview',
-    'Register',
-    'Accounts',
-    ...(b?.settings.bills ? ['Bills'] : []),
-    ...(b?.settings.invoices ? ['Invoices'] : []),
-    'Mileage',
-    'Reports',
-    'Settings / Categories',
-  ]
   const transactionKinds = [
     'income',
     'expense',
@@ -294,24 +295,6 @@ export function Checkbook({
     )
   return (
     <section className="checkbook">
-      <aside className="book-nav" aria-label="Finance sections">
-        <span className="book-eyebrow">YOUR BUSINESS, BALANCED</span>
-        <h2>Bookkeeping</h2>
-        {nav.map((n) => (
-          <button
-            key={n}
-            type="button"
-            aria-current={tab === n ? 'page' : undefined}
-            onClick={() => {
-              setTab(n)
-              if (!['Bills', 'Invoices'].includes(n)) onSectionChange?.(n)
-            }}
-          >
-            {n}
-          </button>
-        ))}
-        <button onClick={onReceipts}>Receipt inbox ↗</button>
-      </aside>
       <div className="book-main">
         <header className="book-header">
           <div>
@@ -319,22 +302,32 @@ export function Checkbook({
             <h2>{tab}</h2>
             <p>A clear picture of your money, one line at a time.</p>
           </div>
-          <div className="button-row">
-            <button disabled={!canWrite} onClick={() => open('income')}>
-              + Money in
-            </button>
-            <button disabled={!canWrite} onClick={() => open('expense')}>
-              + Money out
-            </button>
-            <button
-              className="secondary"
-              disabled={!canWrite}
-              onClick={() => open('transfer')}
-            >
-              Transfer
-            </button>
-          </div>
         </header>
+        <div className="button-row book-actions" aria-label="Finance actions">
+          {onUploadReceipt && (
+            <button disabled={!canWrite} onClick={onUploadReceipt}>
+              Upload receipt
+            </button>
+          )}
+          {onRecordTransaction && (
+            <button disabled={!canWrite} onClick={onRecordTransaction}>
+              Record a transaction
+            </button>
+          )}
+          <button disabled={!canWrite} onClick={() => open('income')}>
+            + Money in
+          </button>
+          <button disabled={!canWrite} onClick={() => open('expense')}>
+            + Money out
+          </button>
+          <button
+            className="secondary"
+            disabled={!canWrite}
+            onClick={() => open('transfer')}
+          >
+            Transfer
+          </button>
+        </div>
         {error && (
           <p role="alert" className="error">
             {error}
@@ -1544,5 +1537,62 @@ export function Checkbook({
         </Dialog>
       </div>
     </section>
+  )
+}
+
+export function FinanceNavigation({
+  active,
+  workspace,
+  onNavigate,
+}: {
+  active: string
+  workspace: Workspace
+  onNavigate: (tab: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const settings = workspace.bookkeeping?.[0]?.settings
+  const tabs = [
+    'Overview',
+    'Register',
+    'Accounts',
+    ...(settings?.bills ? ['Bills'] : []),
+    ...(settings?.invoices ? ['Invoices'] : []),
+    'Mileage',
+    'Reports',
+    'Settings / Categories',
+    'Advanced',
+    'Advanced reports',
+    'Receipt inbox',
+  ]
+  return (
+    <aside
+      className="book-nav"
+      aria-label="Finance sections"
+      data-expanded={expanded}
+    >
+      <span className="book-eyebrow">YOUR BUSINESS, BALANCED</span>
+      <h2>Bookkeeping</h2>
+      <button
+        className="book-nav-toggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+      >
+        Bookkeeping · {active}
+      </button>
+      <div className="book-nav-links">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            aria-current={active === tab ? 'page' : undefined}
+            onClick={() => {
+              onNavigate(tab)
+              setExpanded(false)
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+    </aside>
   )
 }

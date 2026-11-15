@@ -24,13 +24,20 @@ const base = {
   total: null,
   lines: [],
 }
-function App({ initial }: { initial?: Workspace }) {
+function App({
+  initial,
+  finance = false,
+}: {
+  initial?: Workspace
+  finance?: boolean
+}) {
   const [w, setW] = useState(initial || demoData())
   return (
     <FinanceWorkspace
       workspace={w}
       onWorkspace={setW}
-      section="Receipt inbox"
+      section={finance ? 'Upload receipt' : 'Receipt inbox'}
+      initialEntry={finance ? 'receiptUpload' : undefined}
       ready
       role="Owner"
     />
@@ -51,9 +58,9 @@ it('uploads, reads, populates review, and makes no posting request before confir
     return pending
   })
   vi.stubGlobal('fetch', fetcher)
-  render(<App initial={workspace} />)
+  render(<App initial={workspace} finance />)
   await user.upload(
-    screen.getByLabelText('Upload receipt'),
+    screen.getByLabelText('Upload receipt', { selector: 'input' }),
     new File(['%PDF-1.7'], 'Invoice.pdf', { type: 'application/pdf' }),
   )
   const dialog = screen.getByRole('dialog', { name: 'Review receipt' })

@@ -45,6 +45,8 @@ export const sectionTabs: Record<string, string[]> = {
     'Overview',
     'Register',
     'Accounts',
+    'Bills',
+    'Invoices',
     'Mileage',
     'Reports',
     'Settings / Categories',
