@@ -1,4 +1,10 @@
 import { customerMessage } from '../../src/lib/customer-message'
+import {
+  receiptBusinessAllocations,
+  receiptAllocationIssues,
+  receiptTotals,
+  receiptLineIssues,
+} from '../../src/lib/receipt-totals'
 import { handlePantryCategories } from '../lib/pantry-category-handler'
 import {
   assertSectionCategoryAssignment,
@@ -1535,8 +1541,15 @@ export default async (req: Request, context: Context) => {
       if (!receipt || !receipt.fileHash)
         throw new Error('Receipt file not found in this oven.')
       const original = requestUrl.searchParams.get('original') === '1'
+      const source = receipt.sourceReceiptId
+        ? state.receipt_extractions.find(
+            (r) => r.id === receipt.sourceReceiptId,
+          )
+        : receipt
+      if (!source || source.fileHash !== receipt.fileHash)
+        throw new Error('Receipt source not found in this oven.')
       const bytes = await getStore('receipts-private').get(
-        receiptObjectKey(org, receipt, original),
+        receiptObjectKey(org, source, original),
         { type: 'arrayBuffer' },
       )
       if (!bytes) throw new Error('Receipt file is unavailable.')
@@ -3048,9 +3061,39 @@ export default async (req: Request, context: Context) => {
         )
         if (!receipt || receipt.status !== 'draft' || !transaction)
           throw new Error('Choose an open receipt and an existing purchase.')
+        if (receipt.allocationVersion === 1) {
+          const totals = receiptTotals(receipt)
+          const allocations = receiptBusinessAllocations(receipt)
+          if (
+            totals.errors.length ||
+            (totals.difference != null && totals.difference !== 0) ||
+            receiptAllocationIssues(receipt).length ||
+            receipt.lines.some((l: Item) => receiptLineIssues(l).length)
+          )
+            throw new Error(
+              'Complete allocation review and reconciliation before attaching a purchase.',
+            )
+          if (
+            allocations.some(
+              (l) => l.allocation !== 'personal' && l.decision === 'inventory',
+            )
+          )
+            throw new Error(
+              'Use receipt posting for confirmed stock additions; attachment does not receive inventory.',
+            )
+          if (
+            Math.round(
+              allocations.reduce((sum, l) => sum + l.postedAmount, 0) * 100,
+            ) !== Math.round(Number(transaction.amount) * 100)
+          )
+            throw new Error(
+              'The existing purchase must match only the business allocation. Correct the existing purchase first if it includes excluded personal costs.',
+            )
+        }
         if (
           receipt.total == null ||
-          Number(receipt.total) !== Number(transaction.amount)
+          (receipt.allocationVersion !== 1 &&
+            Number(receipt.total) !== Number(transaction.amount))
         )
           throw new Error(
             'Receipt total must match the existing purchase amount.',
@@ -3133,6 +3176,7 @@ export default async (req: Request, context: Context) => {
           'financeReconcile',
           'financeReverse',
           'receiptDraft',
+          'receiptCorrect',
           'receiptCreateItem',
           'receiptPost',
           'receiptCancel',

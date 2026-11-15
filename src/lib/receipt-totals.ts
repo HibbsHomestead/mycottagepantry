@@ -121,9 +121,7 @@ export function receiptTotals(r: ReceiptValues) {
     tax > totalCents
   )
     errors.push('Included tax cannot exceed the receipt total.')
-  const printed = missing(r.printedTotal)
-    ? null
-    : receiptCents(r.printedTotal)
+  const printed = missing(r.printedTotal) ? null : receiptCents(r.printedTotal)
   if (!missing(r.printedTotal) && (printed == null || printed < 0))
     errors.push('Enter a valid printed total or leave it blank.')
   return {
@@ -170,18 +168,148 @@ export function receiptAllocations(r: ReceiptValues) {
     return {
       ...l,
       amount: base / 100,
-      postedAmount: cents / 100,
+      postedAmount:
+        (r.adjustmentAllocation === 'manual'
+          ? (receiptCents(l.adjustedAmount) ?? 0)
+          : cents) / 100,
       taxShare: taxShare / 100,
       otherChargesShare: (cents - base - taxShare) / 100,
     }
   }) as ReceiptValues[]
 }
-export function editableReceipt(r: Item): Item {
-  if (r.status !== 'draft' || r.arithmeticVersion === 2)
-    return structuredClone(r)
+/** Separate supporting allocation from immutable merchant amounts and explicit stock quantities. */
+export function businessReceiptLine(l: ReceiptValues): ReceiptValues & {
+  allocation: string
+  fullAmount: number
+  postedAmount: number
+  excludedAmount: number
+  allocationErrors: string[]
+} {
+  const full = receiptCents(l.postedAmount) ?? 0
+  const allocation =
+    l.allocation ??
+    (l.decision === 'personal'
+      ? 'personal'
+      : ['expense', 'inventory'].includes(l.decision)
+        ? 'business'
+        : 'unreviewed')
+  let business = allocation === 'business' ? full : 0
+  if (allocation === 'split') {
+    if (l.splitMethod === 'amount')
+      business = receiptCents(l.businessAmount) ?? NaN
+    else {
+      const percent = decimal(l.businessPercent)
+      business =
+        percent && percent.value >= 0n && percent.value <= 100n * percent.scale
+          ? Number(
+              (BigInt(full) * percent.value * 2n + 100n * percent.scale) /
+                (200n * percent.scale),
+            )
+          : NaN
+    }
+  }
+  const errors: string[] = []
+  if (!['business', 'personal', 'split'].includes(allocation))
+    errors.push('Classify allocation')
+  if (!Number.isSafeInteger(business) || business < 0 || business > full)
+    errors.push('Business allocation must be within the line total')
+  if (allocation === 'split' && business === 0)
+    errors.push('Choose Personal when no amount is allocated to business')
+  if (allocation === 'split' && l.decision === 'inventory') {
+    if (!(Number(l.quantity) > 0) || !l.unit || !l.stockQuantityConfirmed)
+      errors.push('Confirm explicit business stock quantity and unit')
+    if (
+      l.unit === l.printedUnit &&
+      Number(l.printedQuantity) > 0 &&
+      Number(l.quantity) > Number(l.printedQuantity)
+    )
+      errors.push('Business quantity exceeds purchased quantity')
+    if (
+      l.unit === l.printedUnit &&
+      Number(l.printedQuantity) > 0 &&
+      Number.isFinite(business) &&
+      Math.abs(
+        Math.round((full * Number(l.quantity)) / Number(l.printedQuantity)) -
+          business,
+      ) > 1
+    )
+      errors.push(
+        'Business cost must correspond to the confirmed share of purchased quantity',
+      )
+    if (!l.quantityAllocationConfirmed)
+      errors.push('Confirm quantity and cost allocation agree')
+  }
   return {
-    ...structuredClone(r),
+    ...l,
+    allocation,
+    fullAmount: full / 100,
+    postedAmount: Number.isFinite(business) ? business / 100 : 0,
+    excludedAmount: Number.isFinite(business) ? (full - business) / 100 : 0,
+    allocationErrors: errors,
+  }
+}
+export function receiptBusinessAllocations(r: ReceiptValues) {
+  return receiptAllocations(r).map(businessReceiptLine)
+}
+export function receiptAllocationIssues(r: ReceiptValues) {
+  const allocations = receiptBusinessAllocations(r)
+  const errors = allocations.flatMap((l, i) =>
+    l.allocationErrors.map((e: string) => `Line ${i + 1}: ${e}`),
+  )
+  if (
+    r.adjustmentAllocation &&
+    !['manual', 'proportional'].includes(r.adjustmentAllocation)
+  )
+    errors.push('Choose an adjustment allocation method')
+  if (
+    r.allocationVersion === 1 &&
+    (r.lines || []).some((l: ReceiptValues) => !l.allocation)
+  )
+    errors.push('Classify every line as Business, Personal or Split')
+  if (r.allocationVersion === 1 && receiptCents(r.printedTotal) == null)
+    errors.push('Enter the original receipt total to reconcile before posting')
+  if (r.adjustmentAllocation === 'manual') {
+    if (
+      (r.lines || []).some(
+        (l: ReceiptValues) =>
+          receiptCents(l.adjustedAmount) == null ||
+          receiptCents(l.adjustedAmount)! < 0,
+      )
+    )
+      errors.push('Enter every adjusted line amount')
+    if (
+      allocations.reduce(
+        (sum, l) => sum + (receiptCents(l.fullAmount) ?? 0),
+        0,
+      ) !== receiptCents(receiptTotals(r).total)
+    )
+      errors.push('Adjusted line amounts must reconcile to the receipt total')
+  }
+  return errors
+}
+export function editableReceipt(r: Item): Item {
+  if (r.status !== 'draft') return structuredClone(r)
+  const editable = structuredClone(r)
+  editable.lines = (editable.lines || []).map((l: ReceiptValues) => ({
+    ...l,
+    allocation:
+      l.allocation ??
+      (l.decision === 'personal'
+        ? 'personal'
+        : ['inventory', 'expense'].includes(l.decision)
+          ? 'business'
+          : 'unreviewed'),
+  }))
+  if (r.arithmeticVersion === 2)
+    return {
+      ...editable,
+      allocationVersion: 1,
+      printedTotal: Object.hasOwn(r, 'printedTotal') ? r.printedTotal : r.total,
+    }
+  return {
+    ...editable,
     arithmeticVersion: 2,
+    allocationVersion: 1,
     printedTotal: r.total ?? null,
     taxTreatment:
       r.taxTreatment || (r.taxInclusive === true ? 'inclusive' : ''),
@@ -192,10 +320,20 @@ export function receiptLineIssues(l: ReceiptValues) {
   const issues: string[] = []
   if (!String(l.description || '').trim()) issues.push('Add item name')
   if (receiptLineCents(l) == null) issues.push('Amount incomplete')
+  if (l.allocation === 'unreviewed') issues.push('Classify allocation')
+  if (l.allocation === 'split') {
+    if (
+      l.splitMethod === 'amount'
+        ? !(Number(l.businessAmount) > 0)
+        : !(Number(l.businessPercent) > 0 && Number(l.businessPercent) <= 100)
+    )
+      issues.push('Enter business share')
+    if (l.decision === 'inventory' && !l.quantityAllocationConfirmed)
+      issues.push('Confirm quantity and cost allocation')
+  }
   if (!['inventory', 'expense', 'personal'].includes(l.decision))
     issues.push('Choose use')
-  if (l.decision === 'expense' && !l.category)
-    issues.push('Choose category')
+  if (l.decision === 'expense' && !l.category) issues.push('Choose category')
   if (l.decision === 'inventory' && (!l.itemId || l.createNew))
     issues.push('Match or create item')
   if (

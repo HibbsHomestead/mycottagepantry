@@ -207,7 +207,7 @@ it('receives 25 lb flour into grams, preserves old cost, splits expenses and per
   expect(w.ledger.at(-1)?.priorCost).toBe(0.002)
   expect(w.ingredients[0].cost).toBeCloseTo((2 + 11.5) / 12339.80925)
   expect(w.expenses.at(-1)?.amount).toBe(5.25)
-  expect(p.journal?.lines).toContainEqual({
+  expect(p.journal?.lines).not.toContainEqual({
     account: 'Owner draws',
     debit: 5.25,
     credit: 0,
@@ -215,8 +215,10 @@ it('receives 25 lb flour into grams, preserves old cost, splits expenses and per
   expect(p.journal?.lines).toContainEqual({
     account: 'Cash',
     debit: 0,
-    credit: 22,
+    credit: 16.75,
   })
+  expect(w.receipt_extractions[0].excludedTotal).toBe(5.25)
+  expect(w.receipt_extractions[0].total).toBe(22)
   expect(w.receipt_extractions[0].status).toBe('posted')
   expect(w.receipt_extractions[0].fileHash).toBe('original')
   expect(() => apply(w, 'receiptPost', { id: 'receipt' })).toThrow('closed')
