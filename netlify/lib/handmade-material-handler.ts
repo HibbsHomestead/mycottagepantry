@@ -51,6 +51,7 @@ export async function handleHandmadeMaterial(
       usedAs: 'material',
       category: 'Craft materials',
       categoryId: 'craft-materials',
+      sectionCategoryId: data.sectionCategoryId === undefined ? old?.sectionCategoryId : String(data.sectionCategoryId || ''),
       materialCategory: String(data.materialCategory || '').slice(0, 200),
       supplier: String(data.supplier || '').slice(0, 200),
       sku: String(data.sku || '').slice(0, 200),

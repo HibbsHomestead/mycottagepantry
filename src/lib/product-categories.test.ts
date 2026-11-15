@@ -74,7 +74,7 @@ it('retains legacy overrides, exemptions, inclusive behavior and calculations ev
     ).revenue,
   ).toBe(100)
 })
-it('does not equate unclassified, unavailable, inactive or unconfigured with exempt', () => {
+it('does not equate unclassified, unavailable or unconfigured with exempt', () => {
   for (const p of [
     { ...product, productCategoryId: 'review' },
     { ...product, productCategoryId: 'foreign' },
@@ -91,7 +91,7 @@ it('does not equate unclassified, unavailable, inactive or unconfigured with exe
         { id: 'bread', name: 'Bread', classification: 'food', active: false },
       ],
     }).issue,
-  ).toMatch(/inactive/)
+  ).toBe('')
 })
 it('keeps rate scopes, effective dates, activation and configured zero rates distinct', () => {
   const rates = [

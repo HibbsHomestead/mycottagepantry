@@ -1,0 +1,116 @@
+.app-dialog.business-details-dialog {
+  width: min(740px, calc(100vw - 24px));
+  padding: 24px;
+  gap: 16px;
+  max-height: calc(100dvh - 32px);
+}
+.business-details-dialog .editor-settings {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+.business-details-fields {
+  display: grid;
+  gap: 12px;
+}
+.business-details-dialog .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0;
+}
+.business-details-dialog label {
+  min-width: 0;
+}
+.business-details-dialog .field {
+  margin: 0;
+}
+.business-details-dialog h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.business-details-dialog input,
+.business-details-dialog select {
+  min-height: 42px;
+}
+.business-tax-fields {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.business-details-dialog .form-hint {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.business-advanced {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.business-advanced summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.business-advanced[open] > summary {
+  margin-bottom: 12px;
+}
+.business-advanced .calculation-box {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.business-details-dialog .form-footer {
+  position: sticky;
+  bottom: -24px;
+  background: var(--card);
+  padding: 12px 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  z-index: 2;
+}
+.percentage-input {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.percentage-input input {
+  width: 100%;
+  padding-right: 42px;
+}
+.percentage-input > span {
+  position: absolute;
+  right: 28px;
+  pointer-events: none;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .app-dialog.business-details-dialog {
+    padding: 20px;
+  }
+  .business-details-dialog .form-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .business-details-dialog .form-footer {
+    bottom: -20px;
+  }
+}
+/* The base app shell caps ordinary dialogs at 550px with important rules. */
+.app-dialog.business-details-dialog {
+  max-width: min(740px, calc(100vw - 24px)) !important;
+  padding: 24px !important;
+}
+.business-details-dialog .form-hint {
+  font-size: 13px;
+}
+.business-tax-fields > .tax-combined-summary {
+  margin: 8px 0;
+}
+@media (max-width: 640px) {
+  .app-dialog.business-details-dialog {
+    padding: 20px !important;
+  }
+}
+/* A closed overlay must release the saved form's return target immediately. */
+[data-slot='dialog-overlay'][data-state='closed'] {
+  pointer-events: none;
+}

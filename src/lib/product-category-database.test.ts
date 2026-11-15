@@ -66,6 +66,7 @@ async function call(
 }
 async function category(body: Record<string, unknown>) {
   const current = await call()
+  if (body.operation === 'saveCategory') body = {...body, category:{scope:'food-products', ...(body.category as object)}}
   return call({ expectedRevision: current.revision, ...body })
 }
 const saveProduct = (data: Record<string, unknown>) =>
@@ -423,7 +424,7 @@ it('enforces separate oven lists, references, management permissions and stale r
   ).toBe(true)
 })
 
-it('archives only unlinked categories with confirmation, retains records and mappings, and isolates archive requests by Oven', async () => {
+it('archives categories while preserving assigned records with confirmation, retains records and mappings, and isolates archive requests by Oven', async () => {
   session.user = 'category-owner-a'
   const created = await category({
     operation: 'saveCategory',
@@ -459,7 +460,8 @@ it('archives only unlinked categories with confirmation, retains records and map
   ).toBe(400)
   expect(
     (await category({ ...archive, categoryId: foodId, confirm: true })).status,
-  ).toBe(400)
+  ).toBe(200)
+  await category({...archive,categoryId:foodId,active:true,confirm:true})
   const restored = await category({ ...archive, active: true, confirm: true })
   expect(
     restored.categories.find((c: Item) => c.id === created.selectedId).active,
@@ -923,4 +925,78 @@ it('links component recipes and consumes prepared stock once, with immutable his
   )
   expect(foreign.status).toBe(400)
   expect(foreign.error).toContain('unavailable')
+})
+
+it('scopes product categories, retains tax treatment on archive, and rejects cross-section assignments', async () => {
+  session.user='category-owner-a'
+  const food = await category({operation:'saveCategory',category:{name:'Scope test',scope:'food-products',classification:'food',description:'Food items',displayOrder:2}})
+  const handmade = await category({operation:'saveCategory',category:{name:'Scope test',scope:'handmade-products',classification:'non_food'}})
+  expect(food.status,food.error).toBe(200)
+  expect(handmade.status,handmade.error).toBe(200)
+  const wrong=await saveProduct({id:'scope-mismatch',name:'Food with craft category',recipeId:'recipe',productCategoryId:handmade.selectedId,price:8,unpacked:true,unitsPerPackage:1})
+  expect(wrong.status).toBe(400)
+  expect(wrong.error).toMatch(/this section/)
+  const saved=await saveProduct({id:'scope-food',name:'Food with own category',recipeId:'recipe',productCategoryId:food.selectedId,price:8,unpacked:true,unitsPerPackage:1})
+  expect(saved.status,saved.error).toBe(200)
+  const before=saved.workspace
+  const product=before.products.find((p:Item)=>p.id==='scope-food')
+  const taxes=applicableTaxes(product,before.settings[0])
+  expect((await category({operation:'setCategoryActive',categoryId:food.selectedId,active:false,confirm:true})).status).toBe(200)
+  const after=(await call(undefined,'')).workspace
+  expect(after.products).toEqual(before.products)
+  expect(applicableTaxes(product,after.settings[0])).toEqual(taxes)
+  expect(after.ledger).toEqual(before.ledger)
+})
+
+it('persists pantry category metadata, parents and ordering in tenant-scoped settings without changing stock', async () => {
+  session.user='category-owner-a'
+  async function pantry(body?: Record<string, unknown>) {
+    const current=await call(undefined,'?pantryCategories=1')
+    return body ? call({...body,expectedRevision:current.revision},'?pantryCategories=1') : current
+  }
+  const before=(await call(undefined,'')).workspace
+  const food=await pantry({operation:'saveCategory',category:{name:'Market supplies',scope:'food-ingredients',description:'Food preparation supplies',displayOrder:4}})
+  expect(food.status,food.error).toBe(200)
+  const parent=food.selectedId
+  const packaging=await pantry({operation:'saveCategory',category:{name:'Market supplies',scope:'packaging',description:'Boxes and bags'}})
+  expect(packaging.status,packaging.error).toBe(200)
+  const craft=await pantry({operation:'saveCategory',category:{name:'Market supplies',scope:'handmade-materials'}})
+  expect(craft.status,craft.error).toBe(200)
+  const child=await pantry({operation:'saveCategory',category:{name:'Liners',scope:'packaging',parentId:packaging.selectedId,description:'Paper liners',displayOrder:1}})
+  expect(child.status,child.error).toBe(200)
+  const duplicate=await pantry({operation:'saveCategory',category:{name:'  MARKET   supplies ',scope:'packaging'}})
+  expect(duplicate.status).toBe(400)
+  expect(duplicate.error).toMatch(/already exists/)
+  const crossParent=await pantry({operation:'saveCategory',category:{name:'Invalid child',scope:'packaging',parentId:parent}})
+  expect(crossParent.status).toBe(400)
+  const cycle=await pantry({operation:'saveCategory',category:{id:packaging.selectedId,name:'Market supplies',scope:'packaging',parentId:child.selectedId}})
+  expect(cycle.status).toBe(400)
+  const material=await call({action:'handmadeMaterialSave',table:'ingredients',data:{id:'scoped-material',name:'Cotton cord',unit:'each',sectionCategoryId:craft.selectedId,threshold:0}},'')
+  expect(material.status,material.error).toBe(200)
+  const wrong=await call({action:'handmadeMaterialSave',table:'ingredients',data:{id:'wrong-material',name:'Wrong category',unit:'each',sectionCategoryId:packaging.selectedId,threshold:0}},'')
+  expect(wrong.status).toBe(400)
+  expect((await pantry({operation:'setCategoryActive',categoryId:craft.selectedId,active:false})).status).toBe(200)
+  const saved=(await call(undefined,'')).workspace
+  expect(saved.ingredients.find((i:Item)=>i.id==='scoped-material').sectionCategoryId).toBe(craft.selectedId)
+  expect(saved.ingredients.find((i:Item)=>i.id==='scoped-material').quantity).toBe(0)
+  expect(saved.ingredients.find((i:Item)=>i.id==='flour')).toEqual(before.ingredients.find((i:Item)=>i.id==='flour'))
+  expect(saved.ledger).toEqual(before.ledger)
+  expect(saved.products).toEqual(before.products)
+  expect(saved.settings[0].taxRates).toEqual(before.settings[0].taxRates)
+  session.user='category-owner-b'
+  expect((await pantry()).categories.some((c:Item)=>c.id===craft.selectedId)).toBe(false)
+  expect((await pantry({operation:'setCategoryActive',categoryId:craft.selectedId,active:true})).status).toBe(400)
+  session.user='category-staff'
+  expect((await pantry({operation:'saveCategory',category:{name:'Forbidden',scope:'packaging'}})).status).toBe(400)
+  session.user='category-owner-a'
+})
+
+it('leaves saved rate collections and legacy absence unchanged on a business no-op save', async () => {
+  const before=(await call(undefined,'')).workspace
+  const rates=structuredClone(before.settings[0].taxRates)
+  const result=await call({action:'save',table:'settings',data:before.settings[0]},'')
+  expect(result.status,result.error).toBe(200)
+  expect(result.workspace.settings[0].taxRates).toEqual(rates)
+  expect(result.workspace.sales).toEqual(before.sales)
+  expect(result.workspace.settings[0].productCategories).toEqual(before.settings[0].productCategories)
 })

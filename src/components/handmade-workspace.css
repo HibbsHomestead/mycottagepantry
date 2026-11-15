@@ -202,3 +202,32 @@
   border-bottom: 2px solid var(--primary);
   border-radius: 0;
 }
+
+/* Share the food product popup shell, media column and cost card rules. */
+.handmade-detail-dialog .button-row {
+  flex-wrap: wrap;
+}
+.handmade-detail-dialog .btn {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  flex-shrink: 0;
+}
+.handmade-detail-dialog .section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.handmade-detail-dialog .section-tabs [data-state='active'] {
+  background: var(--primary);
+  color: var(--card);
+}
+.handmade-detail-panel {
+  min-width: 0;
+}
+.handmade-detail-dialog .handmade-run {
+  flex-wrap: wrap;
+}
+.handmade-detail-dialog .table-scroll {
+  max-width: 100%;
+}

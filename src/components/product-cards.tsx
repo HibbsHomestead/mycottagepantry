@@ -244,8 +244,20 @@ export function ProductCards({
                   {pricing ? `${pricing.margin.toFixed(1)}%` : 'Unavailable'}
                 </dd>
               </dl>
-              {reason && <p className="muted">{reason}</p>}
-              {product.workflow === 'handmade' && !product.bom && (
+              {reason &&
+                (product.workflow === 'handmade' ? (
+                  <details className="table-note">
+                    <summary>
+                      {!product.bom
+                        ? 'Legacy BOM needs review.'
+                        : 'Cost incomplete · review details'}
+                    </summary>
+                    <p>{reason}</p>
+                  </details>
+                ) : (
+                  <p className="muted">{reason}</p>
+                ))}
+              {product.workflow === 'handmade' && !product.bom && !reason && (
                 <p className="muted">Legacy BOM needs review.</p>
               )}
               {product.workflow === 'handmade' &&

@@ -818,6 +818,7 @@ export function validateTaxRates(rates: TaxRate[]) {
   for (const r of rates) {
     if (!r.id || !r.name || !r.jurisdiction)
       throw new Error('Tax name and jurisdiction are required.')
+    if (r.ratePercent == null || String(r.ratePercent).trim() === '') throw new Error('Enter a tax percentage; enter 0 explicitly for a zero-percent rate.')
     if (number(r.ratePercent, 'Tax rate') > 100)
       throw new Error('Tax rate must not exceed 100%.')
     if (!['inclusive', 'exclusive'].includes(r.behavior))

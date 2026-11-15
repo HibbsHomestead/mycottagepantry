@@ -1,0 +1,90 @@
+.section-category-tools {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0 20px;
+}
+.section-category-tools label {
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
+}
+.section-category-tools .button-row {
+  flex-wrap: wrap;
+}
+.scoped-category-select {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.section-category-dialog {
+  width: min(760px, calc(100vw - 24px));
+}
+.section-category-dialog fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.section-category-dialog .form-grid {
+  gap: 12px;
+}
+.section-category-dialog label {
+  display: grid;
+  gap: 6px;
+}
+.section-category-dialog .check-label {
+  display: flex;
+}
+.section-category-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.section-category-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.section-category-list li > div:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.section-category-list small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.section-category-list p {
+  margin: 6px 0;
+}
+.section-category-list .button-row {
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  max-width: 45%;
+}
+.section-category-dialog .btn {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+@media (max-width: 640px) {
+  .section-category-list li {
+    align-items: start;
+    flex-direction: column;
+  }
+  .section-category-list .button-row {
+    max-width: 100%;
+  }
+  .section-category-dialog .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-category-tools > label {
+    width: 100%;
+  }
+}

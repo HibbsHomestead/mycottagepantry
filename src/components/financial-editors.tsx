@@ -371,7 +371,9 @@ export function PackagingEditor({
 export function TaxRateEditor({
   rates,
   onChange,
+  showPrimaryFields = true,
 }: {
+  showPrimaryFields?: boolean
   rates: TaxRate[]
   onChange: (rates: TaxRate[]) => void
 }) {
@@ -385,12 +387,14 @@ export function TaxRateEditor({
         plus all preceding taxes. Inclusive rates are backed out of the entered
         price.
       </p>
+      <p className="form-hint">Enter 8.25 for 8.25%. Zero is an explicit rate; a blank rate must be completed before saving.</p>
       {rates.map((r, index) => (
-        <details key={r.id} open className="tax-rate-editor">
+        <details key={r.id} className="tax-rate-editor">
           <summary>
             {r.name || 'New tax rate'} · {r.ratePercent}% · {r.behavior}
           </summary>
           <div className="form-grid">
+            {showPrimaryFields && <>
             <label>
               Rate name
               <input
@@ -422,12 +426,13 @@ export function TaxRateEditor({
               Rate (%)
               <input
                 type="number"
+                required
                 min="0"
                 max="100"
                 step="any"
                 value={r.ratePercent}
                 onChange={(e) =>
-                  update(index, 'ratePercent', Number(e.target.value))
+                  update(index, 'ratePercent', e.target.value === '' ? '' : Number(e.target.value))
                 }
               />
             </label>
@@ -441,6 +446,8 @@ export function TaxRateEditor({
                 <option value="inclusive">Inclusive · included in price</option>
               </select>
             </label>
+            </>}
+            {!showPrimaryFields && <label>Jurisdiction type<select value={r.jurisdictionType || 'other'} onChange={e=>update(index,'jurisdictionType',e.target.value)}>{['state','county','city','district','other'].map(v=><option key={v}>{v}</option>)}</select></label>}
             <label>
               Calculation order
               <input

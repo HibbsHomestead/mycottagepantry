@@ -1,3 +1,4 @@
+import { categoryDetailsShape, categoryOrder } from './category-details'
 import { z } from 'zod'
 import type { Item, Workspace } from './domain'
 
@@ -24,6 +25,7 @@ export type RecipeIconName = (typeof recipeIconNames)[number]
 export const recipeCategorySchema = z.object({
   id: z.string().min(1).max(1200),
   name: z.string().trim().min(1).max(100),
+  ...categoryDetailsShape,
   icon: z.enum(recipeIconNames),
   active: z.boolean().default(true),
   previousNames: z.array(z.string().max(100)).max(500).default([]),
@@ -84,7 +86,7 @@ export function recipeCategories(workspace: Workspace): RecipeCategory[] {
     if (!recipe.recipeCategoryId && typeof recipe.category === 'string')
       add(recipe.category, 'other')
   }
-  return result
+  return categoryOrder(result)
 }
 export function recipeCategory(recipe: Item, categories: RecipeCategory[]) {
   if (recipe.recipeCategoryId)

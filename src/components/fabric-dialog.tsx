@@ -1,3 +1,4 @@
+import { ScopedCategorySelect } from './section-categories'
 import { ProductLinkImport } from './product-link-import'
 import { InventoryReviewNotice } from './inventory-review'
 import { InventoryProductFields } from './inventory-product-fields'
@@ -379,6 +380,7 @@ export function FabricDialog({
                 <>
                   {field('name', 'Fabric name', true)}
                   <FabricFields value={draft} change={change} fixed />
+                  <ScopedCategorySelect workspace={workspace} scope="handmade-materials" item={draft} canManage={['Owner','Manager'].includes(role)} onSettings={patch=>onWorkspace({...workspace,settings:workspace.settings.map((b,i)=>i===0 ? {...b,...patch} : b)})} onChange={change} />
                   <div className="form-grid">
                     {field('sku', 'SKU')}
                     {field('barcode', 'Barcode')}

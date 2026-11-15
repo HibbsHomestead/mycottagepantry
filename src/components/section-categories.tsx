@@ -1,0 +1,574 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Item, Workspace } from '@/lib/domain'
+import {
+  categoryScopes,
+  productCategoryScope,
+  pantryCategoryScope,
+  categoryOrder,
+  type CategoryScope,
+} from '@/lib/category-details'
+import {
+  assignedCategoryId,
+  categoryEndpointFor,
+  categorySettingsPatch,
+  recordsInScope,
+  sectionCategories,
+  type SectionCategory,
+} from '@/lib/section-categories'
+import { recipeIconNames } from '@/lib/recipe-categories'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from './ui/dialog'
+import './section-categories.css'
+
+type Common = {
+  workspace: Workspace
+  scope: CategoryScope
+  canManage: boolean
+  onSettings: (patch: Partial<Item>) => void
+}
+export function SectionCategoryManager({
+  workspace,
+  scope,
+  onSettings,
+  close,
+  create = false,
+  onCreated,
+}: Omit<Common, 'canManage'> & {
+  close: () => void
+  create?: boolean
+  onCreated?: (category: SectionCategory) => void
+}) {
+  const [w, setW] = useState(workspace)
+  const [editing, setEditing] = useState<Partial<SectionCategory> | null>(
+    create ? { scope } : null,
+  )
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false),
+    [loaded, setLoaded] = useState(false),
+    [confirmed, setConfirmed] = useState(false)
+  const pending = useRef(false)
+  const endpoint = categoryEndpointFor(scope)
+  const isProduct = scope.endsWith('products') || scope === 'kits'
+  const accept = (data: any) => {
+    if (!Array.isArray(data.categories) || !Number.isInteger(data.revision))
+      throw new Error(
+        'Category response unavailable. Reload categories; your edits are preserved.',
+      )
+    const patch = categorySettingsPatch(scope, data)
+    setW((old) => ({
+      ...old,
+      settings: [{ ...old.settings[0], ...patch }, ...old.settings.slice(1)],
+    }))
+    onSettings(patch)
+    setLoaded(true)
+  }
+  async function request(payload?: any) {
+    if (pending.current) return
+    pending.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const business = w.settings[0]
+      const revision =
+        scope === 'recipes'
+          ? business.recipeCategoryRevision || 0
+          : isProduct
+            ? business.categoryConfigRevision || 0
+            : business.pantryCategoryRevision || 0
+      const res = await fetch(
+        endpoint,
+        payload
+          ? {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...payload, expectedRevision: revision }),
+            }
+          : { credentials: 'same-origin' },
+      )
+      if (!(res.headers.get('content-type') || '').includes('application/json'))
+        throw new Error(
+          'Could not read categories. Check your connection and reload categories.',
+        )
+      const data = await res.json()
+      if (!res.ok)
+        throw new Error(data.error || 'Category changes could not be saved.')
+      accept(data)
+      if (payload?.operation === 'saveCategory') {
+        const saved = data.categories.find(
+          (c: SectionCategory) => c.id === data.selectedId,
+        )
+        if (!editing?.id && saved) {
+          onCreated?.(saved)
+          if (create) {
+            close()
+            return
+          }
+        }
+        setEditing(null)
+        setConfirmed(false)
+      }
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      pending.current = false
+      setBusy(false)
+    }
+  }
+  useEffect(() => {
+    void request()
+  }, [])
+  const categories = sectionCategories(w, scope)
+  const legacy: SectionCategory[] = isProduct
+    ? (w.settings[0].productCategories || []).filter(
+        (c: SectionCategory) => !c.scope,
+      )
+    : []
+  const all = isProduct ? [...categories, ...legacy] : categories
+  const change = (key: string, value: unknown) => {
+    setEditing((e) => ({ ...e, [key]: value }))
+    setConfirmed(false)
+  }
+  const affected = w.products.filter(
+    (p) => p.productCategoryId === editing?.id,
+  ).length
+  const changesTax =
+    isProduct &&
+    !!editing?.id &&
+    editing.classification !==
+      (w.settings[0].productCategories || []).find(
+        (c: SectionCategory) => c.id === editing.id,
+      )?.classification
+  return (
+    <Dialog open onOpenChange={(v) => !v && !busy && close()}>
+      <DialogContent className="app-dialog wide-dialog section-category-dialog">
+        <DialogHeader>
+          <DialogTitle>
+            {create ? 'Add category' : 'Manage categories'} ·{' '}
+            {categoryScopes[scope]}
+          </DialogTitle>
+          <DialogDescription>
+            Categories belong to this business and section. Archiving keeps
+            assigned records and history.
+          </DialogDescription>
+        </DialogHeader>
+        {error && (
+          <div role="alert">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() => void request()}
+            >
+              Reload categories
+            </button>
+          </div>
+        )}
+        {!loaded && !error && <p role="status">Loading categories…</p>}
+        {editing ? (
+          <form
+            className="app-form category-detail-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void request({
+                operation: 'saveCategory',
+                category: {
+                  ...editing,
+                  scope,
+                  icon: editing.icon || 'other',
+                  classification: editing.classification ?? null,
+                },
+                confirmAffected: changesTax && confirmed ? affected : undefined,
+              })
+            }}
+          >
+            <fieldset disabled={busy || !loaded}>
+              <div className="form-grid">
+                <label>
+                  Category name
+                  <input
+                    required
+                    maxLength={100}
+                    value={editing.name || ''}
+                    onChange={(e) => change('name', e.target.value)}
+                  />
+                </label>
+                <label>
+                  Section
+                  <input value={categoryScopes[scope]} readOnly />
+                </label>
+                <label>
+                  Parent category
+                  <select
+                    aria-label="Parent category"
+                    value={editing.parentId || ''}
+                    onChange={(e) => change('parentId', e.target.value || null)}
+                  >
+                    <option value="">No parent</option>
+                    {categories
+                      .filter((c) => c.id !== editing.id && c.active !== false)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Display order
+                  <input
+                    type="number"
+                    min="0"
+                    max="100000"
+                    step="1"
+                    value={editing.displayOrder ?? 0}
+                    onChange={(e) =>
+                      change(
+                        'displayOrder',
+                        e.target.value === ''
+                          ? undefined
+                          : Number(e.target.value),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+              <label>
+                Description
+                <textarea
+                  maxLength={1000}
+                  rows={2}
+                  value={editing.description || ''}
+                  onChange={(e) => change('description', e.target.value)}
+                />
+              </label>
+              {scope === 'recipes' && (
+                <label>
+                  Category icon
+                  <select
+                    value={editing.icon || 'other'}
+                    onChange={(e) => change('icon', e.target.value)}
+                  >
+                    {recipeIconNames.map((i) => (
+                      <option key={i}>{i}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {isProduct && (
+                <>
+                  <label>
+                    Food / non-food classification
+                    <select
+                      required
+                      aria-label="Classification"
+                      value={editing.classification || ''}
+                      onChange={(e) => change('classification', e.target.value)}
+                    >
+                      <option value="">Choose classification</option>
+                      <option value="food">Food</option>
+                      <option value="non_food">Non-food</option>
+                    </select>
+                  </label>
+                  <p className="form-hint">
+                    Classification uses the existing category tax mappings.
+                    Section does not determine tax treatment. Manage rate
+                    mappings in Products → Categories → Tax Settings.
+                  </p>
+                  <p className="form-hint">
+                    Inherited tax treatment:{' '}
+                    {(
+                      (w.settings[0].categoryTaxMappings?.[
+                        editing.classification || ''
+                      ] || []) as string[]
+                    )
+                      .map((id) => {
+                        const r = w.settings[0].taxRates?.find(
+                          (r: Item) => r.id === id,
+                        )
+                        return r
+                          ? `${r.name} · ${r.ratePercent}% · ${r.behavior}`
+                          : 'Saved rate unavailable'
+                      })
+                      .join('; ') || 'Not configured'}
+                  </p>
+                  {changesTax && (
+                    <label className="check-label">
+                      <input
+                        type="checkbox"
+                        checked={confirmed}
+                        onChange={(e) => setConfirmed(e.target.checked)}
+                      />
+                      Confirm classification change for {affected} linked
+                      products. Recorded taxes stay unchanged.
+                    </label>
+                  )}
+                </>
+              )}
+            </fieldset>
+            <div className="form-footer">
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => (create ? close() : setEditing(null))}
+              >
+                Cancel category edit
+              </button>
+              <button
+                className="btn"
+                disabled={busy || !loaded || (changesTax && !confirmed)}
+              >
+                {busy ? 'Saving…' : 'Save category'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="button-row">
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || !loaded}
+                onClick={() => setEditing({ scope })}
+              >
+                Add category
+              </button>
+            </div>
+            <ul className="section-category-list">
+              {categoryOrder(all).map((c) => {
+                const count = recordsInScope(w, scope).filter(
+                  (i) => assignedCategoryId(i, w, scope) === c.id,
+                ).length
+                const parent = all.find((p) => p.id === c.parentId)
+                return (
+                  <li key={c.id}>
+                    <div>
+                      <strong>
+                        {parent ? `${parent.name} / ` : ''}
+                        {c.name}
+                      </strong>
+                      <small>
+                        {!c.scope && isProduct
+                          ? 'Legacy section assignment · review needed'
+                          : c.needsReview
+                            ? 'Legacy label · review needed'
+                            : categoryScopes[scope]}{' '}
+                        · {c.active === false ? 'Archived' : 'Active'} · Order{' '}
+                        {c.displayOrder || 0} · {count} assigned records
+                      </small>
+                      {c.description && <p>{c.description}</p>}
+                    </div>
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        disabled={busy || !loaded}
+                        onClick={() => {
+                          setEditing(c)
+                          setConfirmed(false)
+                        }}
+                      >
+                        Edit {c.name}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={busy || !loaded}
+                        onClick={() =>
+                          void request({
+                            operation: 'setCategoryActive',
+                            categoryId: c.id,
+                            active: c.active === false,
+                            confirm: true,
+                          })
+                        }
+                      >
+                        {c.active === false ? 'Restore' : 'Archive'} {c.name}
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+            {!all.length && <p>No categories in this section yet.</p>}
+            <div className="form-footer">
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={close}
+              >
+                Done
+              </button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+export function SectionCategoryTools({
+  workspace,
+  scope,
+  canManage,
+  onSettings,
+  value,
+  onFilter,
+}: Common & { value?: string; onFilter?: (id: string) => void }) {
+  const [mode, setMode] = useState('')
+  return (
+    <div className="section-category-tools">
+      {onFilter && (
+        <label>
+          Filter by category
+          <select
+            aria-label="Filter by category"
+            value={value || 'all'}
+            onChange={(e) => onFilter(e.target.value)}
+          >
+            <option value="all">All categories</option>
+            <option value="uncategorized">Uncategorized</option>
+            {sectionCategories(workspace, scope).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.active === false ? ' (archived)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {canManage && (
+        <div className="button-row">
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => setMode('add')}
+          >
+            Add category
+          </button>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => setMode('manage')}
+          >
+            Manage categories
+          </button>
+        </div>
+      )}
+      {mode && (
+        <SectionCategoryManager
+          workspace={workspace}
+          scope={scope}
+          onSettings={onSettings}
+          create={mode === 'add'}
+          close={() => setMode('')}
+        />
+      )}
+    </div>
+  )
+}
+export function ScopedCategorySelect({
+  workspace,
+  scope,
+  item,
+  canManage,
+  onSettings,
+  onChange,
+}: Common & { item: Item; onChange: (key: string, value: any) => void }) {
+  const [mode, setMode] = useState('')
+  const categories = sectionCategories(workspace, scope)
+  const id = assignedCategoryId(item, workspace, scope)
+  const current = categories.find((c) => c.id === id)
+  const select = (category?: SectionCategory) => {
+    if (scope === 'recipes') {
+      onChange('recipeCategoryId', category?.id || '')
+      onChange('category', category?.name || '')
+    } else if (scope.endsWith('products') || scope === 'kits')
+      onChange('productCategoryId', category?.id || '')
+    else {
+      onChange('sectionCategoryId', category?.id || '')
+      if (scope === 'handmade-materials')
+        onChange('materialCategory', category?.name || '')
+    }
+  }
+  return (
+    <div className="scoped-category-select">
+      <div className="category-field-head">
+        <span>Category</span>
+        {canManage && (
+          <span className="category-actions">
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setMode('add')}
+            >
+              Add category
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setMode('manage')}
+            >
+              Manage categories
+            </button>
+          </span>
+        )}
+      </div>
+      <label>
+        <span className="sr-only">Category</span>
+        <select
+          aria-label="Category"
+          value={id}
+          onChange={(e) =>
+            select(categories.find((c) => c.id === e.target.value))
+          }
+        >
+          <option value="">Uncategorized</option>
+          {id && !current && (
+            <option value={id} disabled>
+              Saved category · review section assignment
+            </option>
+          )}
+          {categories
+            .filter((c) => c.active !== false || c.id === id)
+            .map((c) => (
+              <option key={c.id} value={c.id} disabled={c.active === false}>
+                {c.parentId
+                  ? `${categories.find((p) => p.id === c.parentId)?.name || 'Parent'} / `
+                  : ''}
+                {c.name}
+                {c.active === false ? ' (archived)' : ''}
+              </option>
+            ))}
+        </select>
+      </label>
+      {current?.description && (
+        <p className="form-hint">{current.description}</p>
+      )}
+      {current?.needsReview && (
+        <p className="form-hint">
+          Legacy label preserved; category details need review.
+        </p>
+      )}
+      {mode && (
+        <SectionCategoryManager
+          workspace={workspace}
+          scope={scope}
+          onSettings={onSettings}
+          create={mode === 'add'}
+          onCreated={select}
+          close={() => setMode('')}
+        />
+      )}
+    </div>
+  )
+}
+export { productCategoryScope, pantryCategoryScope }

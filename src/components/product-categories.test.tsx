@@ -150,6 +150,7 @@ it('retains the selected ID and draft after retryable loading or save failures, 
     ).toHaveValue('Bread · Food'),
   )
   await userEvent.click(screen.getByRole('button', { name: 'Add category' }))
+  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
   await userEvent.type(screen.getByLabelText('Category name'), 'Bread')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification', { exact: true }),
@@ -298,7 +299,7 @@ it('shows the real category list first, searches records and names products affe
   expect(within(bread).getByText('State treatment · Test · 5%')).toBeVisible()
   expect(
     within(bread).getByRole('button', { name: 'Archive Bread' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   const taxSettings = screen
     .getByText('Tax Settings · Food / Non-food mappings')
     .closest('details')!
@@ -372,6 +373,7 @@ it('uses honest loading and permission-error states, then offers first-category 
     await screen.findByRole('button', { name: 'Add Your First Category' }),
   )
   expect(screen.getByRole('button', { name: 'Save category' })).toBeDisabled()
+  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
   await userEvent.type(screen.getByLabelText('Category name'), 'Bread')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification', { exact: true }),
@@ -447,7 +449,7 @@ it('keeps category creation independent of malformed tax settings without replac
       const input = JSON.parse(String(init.body))
       expect(input).toEqual({
         operation: 'saveCategory',
-        category: { name: 'Gift boxes', classification: 'non_food' },
+        category: { name: 'Gift boxes', classification: 'non_food', description:'',parentId:null,displayOrder:0,scope:'food-products' },
         expectedRevision: 1,
       })
       return Response.json({
@@ -477,6 +479,7 @@ it('keeps category creation independent of malformed tax settings without replac
     screen.getByRole('button', { name: 'Save category tax mappings' }),
   ).toBeDisabled()
   await userEvent.click(screen.getByRole('button', { name: 'Add Category' }))
+  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
   await userEvent.type(screen.getByLabelText('Category name'), 'Gift boxes')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification'),
@@ -533,6 +536,7 @@ it('retains the loaded list, category form and tax draft through a failed retry,
     screen.getByLabelText('Category name'),
     'Unsaved gift boxes',
   )
+  await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification'),
     'non_food',
@@ -646,8 +650,8 @@ it('recovers tax controls after a tax-only retry without assuming or saving a re
     screen.getByRole('button', { name: 'Remove State treatment' }),
   ).toBeEnabled()
   expect(fetcher).toHaveBeenCalledTimes(2)
+  expect(onConfig.mock.calls[1][0]).not.toHaveProperty('taxRates')
   expect(onConfig.mock.calls[1][0]).toMatchObject({
-    taxRates: configured().rates,
     categoryTaxMappings: configured().mappings,
   })
 })

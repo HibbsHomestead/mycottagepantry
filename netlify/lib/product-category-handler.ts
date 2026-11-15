@@ -1,3 +1,9 @@
+import {
+  categoryDetailsShape,
+  categoryScopeSchema,
+  validateCategoryTree,
+} from '../../src/lib/category-details'
+import { z } from 'zod'
 import { configuredTaxRates } from '../../src/lib/tax-configuration'
 import { randomUUID } from 'node:crypto'
 import type { Item, Workspace } from '../../src/lib/domain'
@@ -35,6 +41,7 @@ export async function handleProductCategories(
         products: state.products.map((p) => ({
           id: p.id,
           name: p.name,
+          workflow: p.workflow,
           category: p.category,
           productCategoryId: p.productCategoryId,
           taxSource: p.taxSource,
@@ -76,10 +83,21 @@ export async function handleProductCategories(
         : ''
     if (!name || name.length > 100)
       throw new Error('Enter a category name of 1–100 characters.')
+    const details = z
+      .object({
+        ...categoryDetailsShape,
+        scope: categoryScopeSchema.optional(),
+      })
+      .parse({ ...previous, ...input.category })
+    if (!previous && !details.scope) throw new Error('Choose a section for this category.')
+    if (previous?.scope && details.scope !== previous.scope)
+      throw new Error('A saved category cannot move to another section.')
     if (
       categories.some(
         (c) =>
           c.id !== previous?.id &&
+          c.scope === details.scope &&
+          (c.parentId || '') === (details.parentId || '') &&
           [c.name, ...(c.previousNames || [])].some(
             (value) =>
               normalizedCategoryName(value) === normalizedCategoryName(name),
@@ -97,6 +115,7 @@ export async function handleProductCategories(
       throw new Error('Choose Food or Non-food for this category.')
     const category = {
       ...previous,
+      ...details,
       id: previous?.id || randomUUID(),
       name,
       ...(previous && previous.name !== name
@@ -117,6 +136,7 @@ export async function handleProductCategories(
         ? categories.map((c) => (c.id === previous.id ? category : c))
         : [...categories, category],
     )
+    validateCategoryTree(categories)
     selectedId = category.id
   } else if (input.operation === 'setCategoryActive') {
     const previous = categories.find((c) => c.id === input.categoryId)
@@ -125,10 +145,6 @@ export async function handleProductCategories(
     if (typeof input.active !== 'boolean' || input.confirm !== true)
       throw new Error('Confirm the category archive or restore action.')
     affected = categoryImpact(state.products, categories, previous.id)
-    if (!input.active && affected.length)
-      throw new Error(
-        `This category is linked to ${affected.length} products. Reassign them before archiving. No products or transaction records were changed.`,
-      )
     categories = categories.map((c) =>
       c.id === previous.id ? { ...c, active: input.active } : c,
     )
