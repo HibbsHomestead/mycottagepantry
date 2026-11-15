@@ -1,3 +1,10 @@
+import { supportMeter } from './support-ai-meter'
+import { supportImage } from './support-ai-image'
+import {
+  correctionList,
+  confirmTimezone,
+  proposeTimezone,
+} from './support-corrections'
 import { assistantTools } from './support-ai-tools'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -87,8 +94,14 @@ async function reserve(
   actor: SupportActor,
   business: string | null,
   id: string,
+  staff = false,
 ) {
   const p = await policy(c)
+  if (!staff && (!business || !p.evaluationBusinessIds.includes(business)))
+    throw new SupportError(
+      503,
+      'AI support is in private evaluation. Help guides and Contact support remain available.',
+    )
   if (!p.enabled)
     throw new SupportError(
       503,
@@ -155,6 +168,11 @@ export async function handleSupportAi(
             usage,
             conversations: conversations.map(view),
             actions: [],
+            metering: (
+              await c.query(
+                'SELECT model,count(*)::int AS calls,sum(input_tokens)::text AS input_tokens,sum(cached_tokens)::text AS cached_tokens,sum(output_tokens)::text AS output_tokens,sum(cost_nano_usd)::text AS cost_nano_usd,sum(provider_cost_usd)::text AS provider_cost_usd,sum(CASE WHEN cost_nano_usd IS NULL THEN reserved_nano_usd ELSE 0 END)::text AS uncertain_nano_usd,count(*) FILTER (WHERE cost_nano_usd IS NULL)::int AS uncertain_calls FROM support_ai_meter GROUP BY model',
+              )
+            ).rows,
           }
         }
         const business = staff ? null : await businessScope(c, actor, req)
@@ -168,7 +186,22 @@ export async function handleSupportAi(
             [actor.id, business],
           )
         ).rows
-        return { policy: p, conversations: rows.map(view) }
+        return {
+          policy: {
+            ...p,
+            evaluationBusinessIds: [],
+            enabled:
+              p.enabled &&
+              !!business &&
+              p.evaluationBusinessIds.includes(business),
+          },
+          conversations: await Promise.all(
+            rows.map(async (r) => ({
+              ...view(r),
+              corrections: await correctionList(c, actor, r.id),
+            })),
+          ),
+        }
       }),
     )
   if (req.method !== 'POST')
@@ -182,6 +215,7 @@ export async function handleSupportAi(
         'summarize',
         'policy',
         'confirm',
+        'undo',
       ]),
       conversationId: z.uuid().optional(),
       requestId: z.uuid().optional(),
@@ -190,8 +224,11 @@ export async function handleSupportAi(
       consent: z.literal(true).optional(),
       diagnostics: z.unknown().optional(),
       contextConsent: z.boolean().optional(),
+      screenshotAttachmentId: z.uuid().optional(),
+      screenshotConsent: z.literal(true).optional(),
       actionId: z.uuid().optional(),
-      confirmation: z.literal('RECONCILE').optional(),
+      confirmation: z.enum(['APPLY_TIMEZONE', 'RECONCILE']).optional(),
+      timezone: z.string().max(80).optional(),
       ticketId: z.uuid().optional(),
       assistance: z
         .enum(['summary', 'category', 'draft', 'rewrite'])
@@ -201,10 +238,82 @@ export async function handleSupportAi(
     })
     .strict()
     .parse(JSON.parse((await limitedBody(req, 30000)).toString()))
-  if (input.action === 'confirm') {
+  if (input.screenshotAttachmentId && !input.screenshotConsent)
     throw new SupportError(
-      403,
-      'Account actions are unavailable through support conversations. Use the dedicated administrator workflow.',
+      400,
+      'Review and explicitly approve sharing this screenshot with the AI provider.',
+    )
+  if (input.action === 'confirm' || input.action === 'undo') {
+    if (staff || input.confirmation === 'RECONCILE')
+      throw new SupportError(
+        403,
+        'Use the business Owner session for corrections.',
+      )
+    return response(
+      await supportTransaction(actor, async (c) => {
+        if (!(await policy(c)).enabled)
+          throw new SupportError(
+            503,
+            'AI corrections are paused; use Settings or Contact support.',
+          )
+        const scope = await businessScope(c, actor, req)
+        if (!scope || !(await policy(c)).evaluationBusinessIds.includes(scope))
+          throw new SupportError(
+            503,
+            'AI corrections are in private evaluation. Use Settings or Contact support.',
+          )
+        if (input.action === 'confirm')
+          return confirmTimezone(c, actor, req, {
+            actionId: input.actionId,
+            confirmation: input.confirmation,
+            timezone: input.timezone,
+          })
+        if (!input.actionId)
+          throw new SupportError(400, 'Choose a verified correction.')
+        const original = (
+          await c.query(
+            "SELECT * FROM support_corrections WHERE id=$1 AND actor_id=$2 AND status='verified'",
+            [input.actionId, actor.id],
+          )
+        ).rows[0]
+        if (!original)
+          throw new SupportError(404, 'Verified correction not found.')
+        const business = await businessScope(c, actor, req)
+        if (business !== original.business_id)
+          throw new SupportError(403, 'Select the original oven.')
+        await ownConversation(c, actor, original.conversation_id, business)
+        await c.query("SELECT set_config('app.business_id',$1,true)", [
+          business,
+        ])
+        const current = (
+          await c.query(
+            "SELECT data->>'timezone' AS timezone FROM settings WHERE business_id=$1 AND id=$2",
+            [business, original.target_id],
+          )
+        ).rows[0]
+        if (current?.timezone !== original.after.timezone)
+          throw new SupportError(
+            409,
+            'Timezone changed again. Request a fresh inspection instead of undo.',
+          )
+        return proposeTimezone(
+          c,
+          actor,
+          req,
+          original.conversation_id,
+          business!,
+          { timezone: original.before.timezone || 'America/Chicago' },
+        )
+      }).catch(async (error) => {
+        await supportTransaction(actor, async (c) =>
+          supportAudit(
+            c,
+            actor,
+            `timezone_correction_${input.action}_failed_or_denied:${input.actionId || 'missing'}`,
+          ),
+        ).catch(() => {})
+        throw error
+      }),
     )
   }
   if (input.action === 'policy') {
@@ -269,10 +378,32 @@ export async function handleSupportAi(
               actor.id,
             ],
           )
+        const evidence = (
+          await c.query(
+            'SELECT tool,status,created_at FROM support_ai_actions WHERE conversation_id=$1 AND actor_id=$2 ORDER BY created_at DESC LIMIT 20',
+            [chat.id, actor.id],
+          )
+        ).rows
+        const corrections = await correctionList(c, actor, chat.id)
         const ticket = await createTicket(c, actor, {
           subject: 'AI help: ' + redactSupportText(input.summary).slice(0, 130),
           category: 'Question',
-          message: redactSupportText(input.summary),
+          message:
+            redactSupportText(input.summary) +
+            '\n\nServer diagnostic outcomes: ' +
+            JSON.stringify(evidence) +
+            '\nTimezone correction audit: ' +
+            JSON.stringify(
+              corrections.map((r) => ({
+                id: r.id,
+                target: r.target_id,
+                before: r.before,
+                after: r.after,
+                status: r.status,
+                approvedAt: r.approved_at,
+                verifiedAt: r.verified_at,
+              })),
+            ),
           submissionKey: chat.id,
           route: '/oven',
           aiReviewConsent: true,
@@ -326,10 +457,18 @@ export async function handleSupportAi(
           403,
           'The requester has not agreed to AI review. Review this ticket manually.',
         )
-      await reserve(c, actor, business, requestId)
+      const p = await reserve(
+        c,
+        actor,
+        t.workspace_id || null,
+        requestId,
+        staff,
+      )
       const at = new Date().toISOString()
       return {
         admin: true,
+        policy: p,
+        business: t.workspace_id || null,
         suggestion: true,
         id: undefined,
         messages: [
@@ -376,7 +515,13 @@ export async function handleSupportAi(
         'Review the AI data notice and enter your question.',
       )
     const id = input.conversationId || randomUUID()
-    if (staff && input.ticketId) await getTicket(c, actor, input.ticketId, true)
+    const contextTicket =
+      staff && input.ticketId
+        ? await getTicket(c, actor, input.ticketId, true)
+        : null
+    const meteringBusiness = staff
+      ? contextTicket?.workspace_id || null
+      : business
     const chat = input.conversationId
       ? await ownConversation(c, actor, id, business, staff)
       : null
@@ -399,7 +544,7 @@ export async function handleSupportAi(
         409,
         'Start a new conversation; this one has reached its message limit.',
       )
-    const p = await reserve(c, actor, business, requestId)
+    const p = await reserve(c, actor, meteringBusiness, requestId, staff)
     const messages: SupportAiMessage[] = [
       ...(chat?.messages || []),
       {
@@ -438,12 +583,32 @@ export async function handleSupportAi(
           staff ? input.ticketId || null : null,
         ],
       )
-    return { id, messages, admin: staff, suggestion: false }
+    return {
+      id,
+      messages,
+      admin: staff,
+      suggestion: false,
+      policy: p,
+      business: meteringBusiness,
+    }
   })
   let answer: Awaited<ReturnType<typeof supportAnswer>> | undefined
+  let spendingCutoff = false
   let failedInputTokens = 0,
     failedOutputTokens = 0
   try {
+    const image = input.screenshotAttachmentId
+      ? await supportTransaction(actor, (c) =>
+          supportImage(
+            c,
+            actor,
+            input.screenshotAttachmentId!,
+            reserved.business,
+            staff,
+            input.ticketId,
+          ),
+        )
+      : undefined
     answer = await supportAnswer(
       reserved.messages,
       reserved.admin,
@@ -451,9 +616,24 @@ export async function handleSupportAi(
         ? assistantTools(req, reserved.id, staff, !!input.contextConsent)
         : undefined,
       reserved.suggestion ? input.assistance || 'summary' : undefined,
+      {
+        policy: reserved.policy,
+        meter: supportMeter(
+          actor,
+          reserved.business,
+          requestId,
+          reserved.policy.model,
+        ),
+        image,
+      },
     )
   } catch (error) {
-    const usage = error as { inputTokens?: unknown; outputTokens?: unknown }
+    const usage = error as {
+      inputTokens?: unknown
+      outputTokens?: unknown
+      cutoff?: boolean
+    }
+    spendingCutoff = usage.cutoff === true
     failedInputTokens =
       typeof usage.inputTokens === 'number' &&
       Number.isSafeInteger(usage.inputTokens) &&
@@ -493,13 +673,34 @@ export async function handleSupportAi(
       )
     ).rows[0]
     if (!row) return { gone: true }
+    const corrections = staff ? [] : await correctionList(c, actor, row.id)
+    const observations = (
+      await c.query(
+        "SELECT tool FROM support_ai_actions WHERE conversation_id=$1 AND actor_id=$2 AND status='verified_read' AND created_at >= $3::timestamptz",
+        [row.id, actor.id, row.messages.at(-1)?.at || new Date().toISOString()],
+      )
+    ).rows
     const messages: SupportAiMessage[] = [
       ...row.messages,
       {
         role: 'assistant',
+        stage: !answer
+          ? 'Escalation required'
+          : corrections.some(
+                (p) =>
+                  p.status === 'proposed' &&
+                  Date.parse(p.created_at) >=
+                    Date.parse(row.messages.at(-1)?.at || ''),
+              )
+            ? 'Change proposed'
+            : observations.some((r) => r.tool !== 'search_help')
+              ? 'Issue diagnosed'
+              : 'Guidance provided',
         text:
           answer?.text ||
-          'The AI provider is unavailable. I cannot determine the cause. Try again later, use the help guides, or Contact support. Your conversation is preserved.',
+          (spendingCutoff
+            ? 'The AI spending cutoff is reached. Help guides and Contact support remain available. Your conversation is preserved; no repair is verified.'
+            : 'The AI provider is unavailable. I cannot determine the cause. Try again later, use the help guides, or Contact support. Your conversation is preserved.'),
         articles: answer?.articles || [],
         at: new Date().toISOString(),
       },
@@ -518,7 +719,14 @@ export async function handleSupportAi(
           )
         ).rows
       : []
-    return { conversation: view(updated), providerFailed: !answer, actions }
+    return {
+      conversation: {
+        ...view(updated),
+        corrections: staff ? [] : await correctionList(c, actor, updated.id),
+      },
+      providerFailed: !answer,
+      actions,
+    }
   })
   if ('gone' in settled)
     return Response.json(

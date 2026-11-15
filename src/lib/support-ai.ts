@@ -4,9 +4,21 @@ import {
   inventoryErrorStack,
 } from './inventory-error-details'
 import { safeSupportRoute } from './support'
-export const supportAiModel = 'gpt-4.1-mini'
+export const supportAiModel = 'gpt-5.4-mini'
+export const supportAiModels = [
+  'gpt-5.4-mini',
+  'gpt-5.4-mini-2026-03-17',
+] as const
+export const supportRates = { input: 0.75, cachedInput: 0.075, output: 4.5 } // USD / million tokens, 2026-11-15
 export const supportAiDefaults = {
   enabled: true,
+  model: supportAiModel as (typeof supportAiModels)[number],
+  evaluationBusinessIds: [] as string[],
+  maxToolCalls: 6,
+  maxProviderCalls: 4,
+  businessDailyUsd: 1,
+  globalDailyUsd: 10,
+  lifetimeUsd: 25,
   userDaily: 20,
   businessDaily: 60,
   globalDaily: 400,
@@ -16,6 +28,13 @@ export const supportAiDefaults = {
 export const supportAiPolicySchema = z
   .object({
     enabled: z.boolean(),
+    model: z.enum(supportAiModels).default(supportAiModel),
+    evaluationBusinessIds: z.array(z.uuid()).max(20).default([]),
+    maxToolCalls: z.number().int().min(1).max(6).default(6),
+    maxProviderCalls: z.number().int().min(1).max(4).default(4),
+    businessDailyUsd: z.number().positive().max(10).default(1),
+    globalDailyUsd: z.number().positive().max(100).default(10),
+    lifetimeUsd: z.number().positive().max(1000).default(25),
     userDaily: z.number().int().min(1).max(100),
     businessDaily: z.number().int().min(1).max(500),
     globalDaily: z.number().int().min(1).max(2000),
@@ -71,6 +90,11 @@ export type SupportAiMessage = {
   text: string
   at: string
   articles?: string[]
+  stage?:
+    | 'Guidance provided'
+    | 'Issue diagnosed'
+    | 'Change proposed'
+    | 'Escalation required'
 }
 export type SupportAiConversation = {
   id: string
@@ -79,6 +103,17 @@ export type SupportAiConversation = {
   contextTicketId?: string | null
   ticketId?: string | null
   expiresAt: string
+  corrections?: SupportCorrection[]
+}
+export type SupportCorrection = {
+  id: string
+  business_id: string
+  target_id: string
+  before: { timezone: string | null }
+  after: { timezone: string }
+  status: 'proposed' | 'verified' | 'stale' | 'expired'
+  expires_at: string
+  verified_at: string | null
 }
 
 export type SupportAiAction = {
@@ -90,5 +125,5 @@ export type SupportAiAction = {
 }
 // Reference API token estimate only; Gateway/hosting charges and provider rate changes are separate.
 export function supportTokenEstimate(input: number, output: number) {
-  return (input * 0.4 + output * 1.6) / 1_000_000
+  return (input * supportRates.input + output * supportRates.output) / 1_000_000
 }

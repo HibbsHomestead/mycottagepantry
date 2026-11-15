@@ -150,3 +150,73 @@ it('never exposes account-action controls from a support conversation, including
   ).toBeInTheDocument()
   expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
 })
+
+it('shows the exact server proposal and sends approval only after an explicit button click', async () => {
+  const proposal = {
+    id: '10000000-0000-4000-8000-000000000002',
+    business_id: 'my-oven',
+    target_id: 'settings-one',
+    before: { timezone: 'America/Chicago' },
+    after: { timezone: 'America/New_York' },
+    status: 'proposed',
+    expires_at: '2099-12-14T00:00:00Z',
+    verified_at: null,
+  }
+  api.mockResolvedValue({
+    conversations: [{ ...chat, corrections: [proposal] }],
+    policy: supportAiDefaults,
+  })
+  const user = userEvent.setup()
+  render(<SupportHelper />)
+  const approve = await screen.findByRole('button', {
+    name: 'Approve exact change to America/New_York',
+  })
+  expect(screen.getByText(/Settings: settings-one/)).toBeInTheDocument()
+  expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
+  api.mockResolvedValueOnce({
+    stage: 'Fix verified',
+    message: 'Saved timezone read back.',
+  })
+  await user.click(approve)
+  expect(api).toHaveBeenCalledWith(false, {
+    action: 'confirm',
+    actionId: proposal.id,
+    confirmation: 'APPLY_TIMEZONE',
+    timezone: 'America/New_York',
+  })
+  expect(await screen.findByRole('status')).toHaveTextContent('Fix verified')
+})
+
+it('requires separate screenshot sharing consent and sends only the selected attachment ID', async () => {
+  const user = userEvent.setup()
+  render(
+    <SupportHelper
+      screenshots={[
+        {
+          id: '10000000-0000-4000-8000-000000000009',
+          label: 'Ticket screenshot 1',
+        },
+      ]}
+    />,
+  )
+  await user.type(
+    await screen.findByLabelText('Your app question'),
+    'What does this inventory screenshot show?',
+  )
+  await user.click(screen.getByLabelText(/I agree to send/))
+  await user.selectOptions(
+    screen.getByLabelText('Screenshot from selected ticket'),
+    '10000000-0000-4000-8000-000000000009',
+  )
+  expect(screen.getByRole('button', { name: 'Send to AI' })).toBeDisabled()
+  expect(api.mock.calls.some((c) => c[1]?.screenshotAttachmentId)).toBe(false)
+  await user.click(screen.getByLabelText(/I reviewed this screenshot/))
+  await user.click(screen.getByRole('button', { name: 'Send to AI' }))
+  expect(api).toHaveBeenCalledWith(
+    false,
+    expect.objectContaining({
+      screenshotAttachmentId: '10000000-0000-4000-8000-000000000009',
+      screenshotConsent: true,
+    }),
+  )
+})

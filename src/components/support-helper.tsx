@@ -5,6 +5,7 @@ import {
   sanitizeSupportDiagnostics,
   type SupportAiConversation,
   type SupportAiMessage,
+  type SupportCorrection,
 } from '@/lib/support-ai'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import {
@@ -27,6 +28,7 @@ export function SupportTranscript({
           <strong>
             {m.role === 'assistant' ? 'AI support helper' : requesterLabel}
           </strong>
+          {m.stage && <small>{m.stage}</small>}
           <p>{m.text}</p>
           {!!m.articles?.length && (
             <ul className="ai-links">
@@ -55,7 +57,19 @@ export function SupportTranscript({
 export function SupportHelper({
   staff = false,
   contextTicketId,
-}: { staff?: boolean; contextTicketId?: string } = {}) {
+  screenshots = [],
+}: {
+  staff?: boolean
+  contextTicketId?: string
+  screenshots?: { id: string; label: string }[]
+} = {}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const [screenshot, setScreenshot] = useState('')
+  const [screenshotConsent, setScreenshotConsent] = useState(false)
   const [contextConsent, setContextConsent] = useState(false)
   const [shareDiagnostics, setShareDiagnostics] = useState(false)
   const [chats, setChats] = useState<SupportAiConversation[]>([])
@@ -103,6 +117,35 @@ export function SupportHelper({
     if (chat?.messages.length)
       end.current?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
   }, [chat?.messages.length])
+  async function correction(
+    action: 'confirm' | 'undo',
+    proposal: SupportCorrection,
+  ) {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await supportAiRequest(false, {
+        action,
+        actionId: proposal.id,
+        ...(action === 'confirm'
+          ? {
+              confirmation: 'APPLY_TIMEZONE',
+              timezone: proposal.after.timezone,
+            }
+          : {}),
+      })
+      setNotice(
+        `${result.stage}: ${result.message || 'Review the new undo proposal below; nothing is undone until approved.'}`,
+      )
+      const refreshed = await supportAiRequest(false)
+      setChats(refreshed.conversations)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
   async function send(e: FormEvent) {
     e.preventDefault()
     if (busy || !draft.trim() || !consent) return
@@ -117,6 +160,9 @@ export function SupportHelper({
         message: draft,
         consent: true,
         contextConsent,
+        ...(screenshot && screenshotConsent
+          ? { screenshotAttachmentId: screenshot, screenshotConsent: true }
+          : {}),
         ...(staff ? { ticketId: contextTicketId } : {}),
         ...(attach ? { diagnostics } : {}),
       })
@@ -126,6 +172,8 @@ export function SupportHelper({
       ])
       setId(v.conversation.id)
       setDraft('')
+      setScreenshot('')
+      setScreenshotConsent(false)
       setAttach(false)
       setContextConsent(false)
       if (v.providerFailed)
@@ -210,7 +258,7 @@ export function SupportHelper({
       <p>
         {staff
           ? 'Private to your verified administrator account. Search support, inspect recorded account, billing and integration status, review sanitized diagnostics, and review the selected ticket. Account actions are unavailable through support conversations.'
-          : 'Practical steps from current app workflows. With your permission, check your verified account, current business, recorded plan/integration status allowed by your role, receipt attempt statuses and your label recovery count. AI can make mistakes; it cannot edit stock, item types, plans or permissions.'}
+          : 'Practical steps from current app workflows. With your permission, check your verified account, current business, recorded plan/integration status allowed by your role, receipt attempt statuses and your label recovery count. The business Owner can review and approve an exact timezone correction. AI can make mistakes; it cannot edit stock, item types, plans or permissions.'}
       </p>
       <div className="ai-toolbar">
         <a href={staff ? 'https://mycottagepantry.com/help' : '/help'}>
@@ -266,8 +314,10 @@ export function SupportHelper({
           are sent to OpenAI through Netlify AI Gateway with the relevant help
           guides. With status-sharing consent, only the listed account/business
           metadata and permitted diagnostic counts are sent. Raw account
-          records, inventory and payment details are excluded. Diagnostic
-          attachments are excluded from AI requests. Avoid private details in
+          records, inventory and payment details are excluded. Sanitized error
+          attachments are excluded from AI requests. Only a screenshot
+          explicitly selected and approved below is sent, resized to 512 pixels;
+          screenshot text may contain private data. Avoid private details in
           messages. The provider processes these messages under its service data
           policies.
         </p>
@@ -283,9 +333,12 @@ export function SupportHelper({
           replies through the same provider. Delete conversation removes that
           attachment, including from a support request. The support ticket
           summary and staff replies remain under the existing ticket record
-          policy. Usage counts and token totals contain no conversation text and
-          expire after 30 days. Requests set provider storage off. OpenAI may
-          retain abuse-monitoring logs for up to 30 days under its policy; zero
+          policy. Timezone approval audits retain the actor, business, exact
+          target, before/after values and outcome separately from chat
+          retention; deleting a chat does not delete those audits. Usage counts
+          and token totals contain no conversation text and expire after 30
+          days. Requests set provider storage off. OpenAI may retain
+          abuse-monitoring logs for up to 30 days under its policy; zero
           retention is not claimed. Status sharing sends only allowlisted
           metadata when selected, with no credentials, private inventory,
           payment details, files or raw logs.
@@ -313,9 +366,76 @@ export function SupportHelper({
             messages={chat.messages}
             requesterLabel={staff ? 'Administrator' : 'You'}
           />
+          {!staff &&
+            chat.corrections?.map((p) => (
+              <section
+                className="ai-notice"
+                key={p.id}
+                aria-label="Timezone correction approval"
+              >
+                <strong>
+                  {p.status === 'verified'
+                    ? 'Fix verified — recorded outcome'
+                    : p.status === 'proposed'
+                      ? 'Change proposed — approval required'
+                      : `Proposal ${p.status}`}
+                </strong>
+                <p>
+                  Business: {p.business_id} · Settings: {p.target_id}
+                </p>
+                <p>
+                  Timezone: {p.before.timezone || 'Default (America/Chicago)'} →{' '}
+                  {p.after.timezone}
+                </p>
+                <p>
+                  Changes business-local date defaults and date-based views for
+                  everyone in this oven. Existing saved transaction dates remain
+                  unchanged. Undo restores the previous timezone; it cannot
+                  reverse records created meanwhile.
+                </p>
+                {p.status === 'proposed' && (
+                  <>
+                    <small>
+                      Expires {new Date(p.expires_at).toLocaleString()}
+                    </small>
+                    <button
+                      type="button"
+                      disabled={busy || Date.parse(p.expires_at) <= now}
+                      onClick={() => correction('confirm', p)}
+                    >
+                      Approve exact change to {p.after.timezone}
+                    </button>
+                  </>
+                )}
+                {p.status === 'verified' && (
+                  <>
+                    <p>
+                      Read back and verified{' '}
+                      {p.verified_at &&
+                        new Date(p.verified_at).toLocaleString()}
+                      . Refresh your oven to load the setting. Check the
+                      original symptom separately.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => correction('undo', p)}
+                    >
+                      Review undo proposal
+                    </button>
+                  </>
+                )}
+              </section>
+            ))}
           <div ref={end} />
           <small>Expires {new Date(chat.expiresAt).toLocaleDateString()}</small>
         </>
+      )}
+      {ready && !policy.enabled && (
+        <p role="status">
+          AI support is in private evaluation or paused. Help guides and Contact
+          support remain available.
+        </p>
       )}
       {ready && (
         <form onSubmit={send} aria-label="Ask AI support">
@@ -350,7 +470,8 @@ export function SupportHelper({
               Allow authorized status checks for this question and share
               sanitized results with the AI provider (verified sign-in, business
               role, permitted plan/integration status, receipt attempt statuses
-              and my label recovery count).
+              my label recovery count, and business timezone
+              inspection/proposals).
             </label>
           )}
           {!staff && (
@@ -385,9 +506,49 @@ export function SupportHelper({
               </small>
             </details>
           )}
+          {!!screenshots.length && (
+            <>
+              <label>
+                Screenshot from selected ticket
+                <select
+                  value={screenshot}
+                  onChange={(e) => {
+                    setScreenshot(e.target.value)
+                    setScreenshotConsent(false)
+                  }}
+                >
+                  <option value="">Do not share a screenshot</option>
+                  {screenshots.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {screenshot && (
+                <label className="ai-check">
+                  <input
+                    type="checkbox"
+                    checked={screenshotConsent}
+                    onChange={(e) => setScreenshotConsent(e.target.checked)}
+                  />
+                  I reviewed this screenshot and approve sending its visible
+                  content to OpenAI for this question. Screenshots can contain
+                  private information; use the ticket preview before sharing.
+                </label>
+              )}
+            </>
+          )}
           <button
             className="btn primary"
-            disabled={busy || !consent || !policy.enabled}
+            disabled={
+              busy ||
+              !consent ||
+              !policy.enabled ||
+              (!!screenshot &&
+                (!screenshotConsent ||
+                  !screenshots.some((a) => a.id === screenshot)))
+            }
           >
             {busy ? 'Preparing reply…' : 'Send to AI'}
           </button>

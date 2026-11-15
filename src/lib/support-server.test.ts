@@ -170,6 +170,21 @@ beforeAll(async () => {
     "ALTER TABLE businesses ADD COLUMN business_name text DEFAULT 'Test bakery'; CREATE TABLE workspace_billing(business_id uuid,plan_id text,status text,source text,last_reconciled_at timestamptz); CREATE TABLE platform_admins(identity_id text,enabled boolean,role text);",
   )
   await db.exec(
+    "ALTER TABLE users ADD COLUMN role text DEFAULT 'Owner'; ALTER TABLE businesses ADD COLUMN identity_owner text DEFAULT 'maker-a'; ALTER TABLE workspace_billing ADD COLUMN paid_through timestamptz, ADD COLUMN environment text, ADD COLUMN entitlement_policy text; CREATE TABLE settings(id text,business_id uuid,data jsonb,created_at timestamptz DEFAULT now(),updated_at timestamptz); CREATE TABLE complimentary_grants(id uuid,business_id uuid,plan_id text,operation text,grant_source text,owner_identity text,actor_identity text,reason text,created_at timestamptz,expires_at timestamptz);",
+  )
+  await db.exec(
+    await readFile(
+      'netlify/database/migrations/20261210010000_add_support_corrections/migration.sql',
+      'utf8',
+    ),
+  )
+  await db.exec(
+    await readFile(
+      'netlify/database/migrations/20261211010000_add_support_ai_meter/migration.sql',
+      'utf8',
+    ),
+  )
+  await db.exec(
     'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO support_test; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO support_test;',
   )
   // Serialize pool connections over the embedded engine. Production uses PostgreSQL row/advisory locks.
@@ -208,12 +223,15 @@ beforeEach(async () => {
   await db.exec(
     'TRUNCATE support_tickets,support_messages,support_attachments,support_outbox,support_delivery_events,support_audit CASCADE; UPDATE support_settings SET recipient=NULL,pending_recipient=NULL,recipient_verified_at=NULL,from_address=NULL,reply_to=NULL,enabled=false,version=1;',
   )
-  await db.exec('TRUNCATE support_ai_conversations,support_ai_usage CASCADE;')
+  await db.exec(
+    "TRUNCATE support_ai_conversations,support_ai_usage,support_ai_meter,support_corrections,settings,workspace_billing CASCADE; UPDATE users SET role='Owner',active=true;",
+  )
   await db.query("UPDATE support_ai_policy SET data=$1 WHERE id='platform'", [
     JSON.stringify({
       enabled: true,
       userDaily: 20,
       businessDaily: 60,
+      evaluationBusinessIds: [business, '20000000-0000-4000-8000-000000000002'],
       globalDaily: 400,
       cooldownSeconds: 10,
       retentionDays: 30,
@@ -885,7 +903,9 @@ it('stores private AI conversations, survives reload, escalates a reviewed summa
   const { ticketId } = await escalated.json()
   const detail = await (await get('ticket=' + ticketId)).json()
   expect(detail.aiConversation.messages).toHaveLength(2)
-  expect(detail.messages[0].body).toBe('Please review my receiving question.')
+  expect(detail.messages[0].body).toContain(
+    'Please review my receiving question.',
+  )
   expect(
     (
       await ai({
@@ -1283,4 +1303,411 @@ it('runs persistent help desk triage, unread receipts, private notes, replies an
       )
     ).status,
   ).toBe(403)
+})
+
+it('resolves, proposes, approves, reads back and deduplicates a real timezone correction with durable audit and reviewed undo', async () => {
+  const { assistantTools } = await import('../../netlify/lib/support-ai-tools')
+  await db.query('INSERT INTO settings(id,business_id,data) VALUES($1,$2,$3)', [
+    'settings-test',
+    business,
+    JSON.stringify({
+      id: 'settings-test',
+      timezone: 'America/Chicago',
+      currency: 'USD',
+    }),
+  ])
+  const chat = (
+    await (
+      await ai({
+        action: 'chat',
+        message: 'My timezone is wrong',
+        consent: true,
+      })
+    ).json()
+  ).conversation
+  const tools = assistantTools(
+    new Request(origin + '/api/support'),
+    chat.id,
+    false,
+    true,
+  )
+  expect((await tools.run('inspect_timezone', {})) as any).toMatchObject({
+    timezone: 'America/Chicago',
+    targetId: 'settings-test',
+  })
+  const proposal = (await tools.run('propose_timezone', {
+    timezone: 'America/New_York',
+  })) as any
+  expect(proposal.stage).toBe('Change proposed')
+  const approve = {
+    action: 'confirm',
+    actionId: proposal.actionId,
+    confirmation: 'APPLY_TIMEZONE',
+    timezone: 'America/New_York',
+  }
+  const switched = await handler(
+    new Request(origin + '/api/support?ai=1', {
+      method: 'POST',
+      headers: {
+        Origin: origin,
+        'Content-Type': 'application/json',
+        cookie: 'cp_selected_workspace=20000000-0000-4000-8000-000000000002',
+      },
+      body: JSON.stringify(approve),
+    }),
+  )
+  expect(switched.status).toBe(403)
+  expect((await ai({ ...approve, timezone: 'Europe/London' })).status).toBe(409)
+  expect((await ai(approve)).status, runtime.errors.join(';')).toBe(200)
+  expect((await (await ai(approve)).json()).stage).toBe(
+    'Change approved and applied',
+  )
+  expect(
+    (await db.query<any>('SELECT data FROM settings')).rows[0].data,
+  ).toEqual({
+    id: 'settings-test',
+    timezone: 'America/New_York',
+    currency: 'USD',
+  })
+  const audit = (
+    await db.query<any>('SELECT * FROM support_corrections WHERE id=$1', [
+      proposal.actionId,
+    ])
+  ).rows[0]
+  expect(audit).toMatchObject({
+    actor_id: 'maker-a',
+    business_id: business,
+    status: 'verified',
+    before: { timezone: 'America/Chicago' },
+    after: { timezone: 'America/New_York' },
+  })
+  expect(audit.approved_at).toBeTruthy()
+  expect(audit.verified_at).toBeTruthy()
+  const undo = await (
+    await ai({ action: 'undo', actionId: proposal.actionId })
+  ).json()
+  expect(undo.stage).toBe('Change proposed')
+  expect(
+    (await db.query<any>('SELECT data FROM settings')).rows[0].data.timezone,
+  ).toBe('America/New_York')
+  expect(
+    (
+      await ai({
+        action: 'confirm',
+        actionId: undo.actionId,
+        confirmation: 'APPLY_TIMEZONE',
+        timezone: 'America/Chicago',
+      })
+    ).status,
+  ).toBe(200)
+  await ai({ action: 'delete', conversationId: chat.id })
+  expect(
+    (await db.query('SELECT * FROM support_corrections')).rows,
+  ).toHaveLength(2)
+})
+
+it('rejects stale, expired, cross-user, suspended, invalid and unapproved corrections', async () => {
+  const { assistantTools } = await import('../../netlify/lib/support-ai-tools')
+  await db.query('INSERT INTO settings(id,business_id,data) VALUES($1,$2,$3)', [
+    'settings-test',
+    business,
+    JSON.stringify({ timezone: 'America/Chicago' }),
+  ])
+  const chat = (
+    await (
+      await ai({ action: 'chat', message: 'Timezone help', consent: true })
+    ).json()
+  ).conversation
+  const req = new Request(origin + '/api/support')
+  const tools = assistantTools(req, chat.id, false, true)
+  await expect(
+    tools.run('propose_timezone', { timezone: 'invalid-zone' }),
+  ).rejects.toThrow()
+  await expect(
+    assistantTools(req, chat.id, false, false).run('propose_timezone', {
+      timezone: 'UTC',
+    }),
+  ).rejects.toThrow()
+  const proposal = (await tools.run('propose_timezone', {
+    timezone: 'UTC',
+  })) as any
+  runtime.session = 'maker-b'
+  expect(
+    (
+      await ai({
+        action: 'confirm',
+        actionId: proposal.actionId,
+        confirmation: 'APPLY_TIMEZONE',
+        timezone: 'UTC',
+      })
+    ).status,
+  ).toBe(404)
+  runtime.session = 'maker-a'
+  await db.query("UPDATE users SET role='Manager' WHERE identity_id='maker-a'")
+  expect(
+    (
+      await ai({
+        action: 'confirm',
+        actionId: proposal.actionId,
+        confirmation: 'APPLY_TIMEZONE',
+        timezone: 'UTC',
+      })
+    ).status,
+  ).toBe(404)
+  await db.query("UPDATE users SET role='Owner' WHERE identity_id='maker-a'")
+  await db.query(
+    "INSERT INTO workspace_billing(business_id,status,source) VALUES($1,'suspended','stripe_live')",
+    [business],
+  )
+  expect(
+    (
+      await ai({
+        action: 'confirm',
+        actionId: proposal.actionId,
+        confirmation: 'APPLY_TIMEZONE',
+        timezone: 'UTC',
+      })
+    ).status,
+  ).toBe(403)
+  await db.query('DELETE FROM workspace_billing')
+  await db.query('UPDATE settings SET data=\'{"timezone":"Europe/London"}\'')
+  expect(
+    (
+      await (
+        await ai({
+          action: 'confirm',
+          actionId: proposal.actionId,
+          confirmation: 'APPLY_TIMEZONE',
+          timezone: 'UTC',
+        })
+      ).json()
+    ).stage,
+  ).toBe('Escalation required')
+  const expired = (await tools.run('propose_timezone', {
+    timezone: 'UTC',
+  })) as any
+  await db.query(
+    "UPDATE support_corrections SET expires_at=now()-interval '1 minute' WHERE id=$1",
+    [expired.actionId],
+  )
+  expect(
+    (
+      await (
+        await ai({
+          action: 'confirm',
+          actionId: expired.actionId,
+          confirmation: 'APPLY_TIMEZONE',
+          timezone: 'UTC',
+        })
+      ).json()
+    ).stage,
+  ).toBe('Escalation required')
+  expect(
+    (await db.query<any>('SELECT data FROM settings')).rows[0].data.timezone,
+  ).toBe('Europe/London')
+})
+
+it('keeps general customer AI closed while leaving human ticket creation working', async () => {
+  await db.query(
+    "UPDATE support_ai_policy SET data=data || '{\"evaluationBusinessIds\":[]}'::jsonb WHERE id='platform'",
+  )
+  expect(
+    (
+      await ai({
+        action: 'chat',
+        message: 'How do I receive stock?',
+        consent: true,
+      })
+    ).status,
+  ).toBe(503)
+  expect((await create()).ticket.id).toBeTruthy()
+  const state = await (await get('ai=1')).json()
+  expect(state.policy.enabled).toBe(false)
+  expect(state.policy.evaluationBusinessIds).toEqual([])
+})
+
+it('reserves spending atomically, meters actual cached/output tokens, and holds unknown usage against the cutoff', async () => {
+  const { supportMeter, tokenCostNano } =
+    await import('../../netlify/lib/support-ai-meter')
+  const actor = {
+    id: 'maker-a',
+    email: 'maker-a@example.test',
+    staff: false,
+    admin: false,
+  }
+  await db.query(
+    "UPDATE support_ai_policy SET data=data || '{\"lifetimeUsd\":0.006}'::jsonb WHERE id='platform'",
+  )
+  const meter = supportMeter(actor, business, randomUUID(), 'gpt-5.4-mini')
+  const attempts = await Promise.allSettled([
+    meter(1000, 1000),
+    meter(1000, 1000),
+  ])
+  expect(attempts.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+  expect(attempts.filter((r) => r.status === 'rejected')).toHaveLength(1)
+  const complete = (
+    attempts.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<
+      Awaited<ReturnType<typeof meter>>
+    >
+  ).value
+  await complete({
+    model: 'gpt-5.4-mini-2026-03-17',
+    usage: {
+      prompt_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 50 },
+      completion_tokens: 20,
+    },
+  })
+  let row = (await db.query<any>('SELECT * FROM support_ai_meter')).rows[0]
+  expect(Number(row.cost_nano_usd)).toBe(tokenCostNano(100, 50, 20))
+  expect(row).toMatchObject({
+    model: 'gpt-5.4-mini',
+    returned_model: 'gpt-5.4-mini-2026-03-17',
+    input_tokens: 100,
+    cached_tokens: 50,
+    output_tokens: 20,
+    status: 'metered',
+  })
+  // Settlement cannot rewrite a recorded charge.
+  await complete({ usage: { prompt_tokens: 0, completion_tokens: 0 } })
+  expect(
+    Number(
+      (await db.query<any>('SELECT * FROM support_ai_meter')).rows[0]
+        .cost_nano_usd,
+    ),
+  ).toBe(tokenCostNano(100, 50, 20))
+  const unknown = await meter(1000, 1000)
+  await unknown({ model: 'gpt-5.4-mini' })
+  await expect(meter(1000, 1000)).rejects.toThrow('spending cutoff')
+  expect(
+    (
+      await db.query<any>(
+        "SELECT * FROM support_ai_meter WHERE status='unknown'",
+      )
+    ).rows[0].cost_nano_usd,
+  ).toBeNull()
+})
+
+it('enforces business spending across actors, provider charges and policy changes without blocking another business', async () => {
+  const { supportMeter } = await import('../../netlify/lib/support-ai-meter')
+  const actor = {
+    id: 'maker-a',
+    email: 'maker-a@example.test',
+    staff: false,
+    admin: false,
+  }
+  await db.query(
+    "UPDATE support_ai_policy SET data=data || '{\"businessDailyUsd\":0.006}'::jsonb WHERE id='platform'",
+  )
+  const complete = await supportMeter(
+    actor,
+    business,
+    randomUUID(),
+    'gpt-5.4-mini',
+  )(1000, 1000)
+  await complete({
+    usage: { prompt_tokens: 10, completion_tokens: 1, cost: 0.006 },
+  })
+  await expect(
+    supportMeter(
+      { ...actor, id: 'maker-b' },
+      business,
+      randomUUID(),
+      'gpt-5.4-mini',
+    )(1000, 1000),
+  ).rejects.toThrow('spending cutoff')
+  await expect(
+    supportMeter(
+      actor,
+      '20000000-0000-4000-8000-000000000002',
+      randomUUID(),
+      'gpt-5.4-mini',
+    )(1000, 1000),
+  ).resolves.toBeTypeOf('function')
+  await db.query(
+    "UPDATE support_ai_policy SET data=data || '{\"enabled\":false}'::jsonb WHERE id='platform'",
+  )
+  await expect(
+    supportMeter(actor, null, randomUUID(), 'gpt-5.4-mini')(1000, 1000),
+  ).rejects.toThrow('configuration changed')
+})
+
+it('loads only explicitly consented, authorized public screenshots for AI review', async () => {
+  const { supportImage } = await import('../../netlify/lib/support-ai-image')
+  const t = await create()
+  const png = await sharp({
+    create: { width: 700, height: 700, channels: 3, background: 'white' },
+  })
+    .png()
+    .toBuffer()
+  const uploaded = await (
+    await upload(t.messages[0].id, randomUUID(), png)
+  ).json()
+  const actor = {
+    id: 'maker-a',
+    email: 'maker-a@example.test',
+    staff: false,
+    admin: false,
+  }
+  const image = await supportTransaction(actor, (c) =>
+    supportImage(c, actor, uploaded.attachmentId, business, false),
+  )
+  const metadata = await sharp(
+    Buffer.from(image.split(',')[1], 'base64'),
+  ).metadata()
+  expect(metadata.width).toBe(512)
+  expect(
+    (
+      await ai({
+        action: 'chat',
+        message: 'Interpret screenshot',
+        consent: true,
+        screenshotAttachmentId: uploaded.attachmentId,
+      })
+    ).status,
+  ).toBe(400)
+  await expect(
+    supportTransaction({ ...actor, id: 'maker-b' }, (c) =>
+      supportImage(
+        c,
+        { ...actor, id: 'maker-b' },
+        uploaded.attachmentId,
+        business,
+        false,
+      ),
+    ),
+  ).rejects.toThrow(/(?:Ticket|Public screenshot) not found/)
+  await expect(
+    supportTransaction(actor, (c) =>
+      supportImage(
+        c,
+        actor,
+        uploaded.attachmentId,
+        '20000000-0000-4000-8000-000000000002',
+        false,
+      ),
+    ),
+  ).rejects.toThrow('support context')
+})
+
+it('attributes private staff ticket assistance to that business for usage and spending', async () => {
+  const t = await create()
+  runtime.session = 'support-owner'
+  const response = await ai(
+    {
+      action: 'chat',
+      message: 'Inspect the selected ticket business status',
+      consent: true,
+      ticketId: t.ticket.id,
+    },
+    true,
+  )
+  expect(response.status, runtime.errors.join(';')).toBe(200)
+  const row = (
+    await db.query<any>(
+      'SELECT business_id FROM support_ai_usage WHERE requester_id=$1',
+      ['support-owner'],
+    )
+  ).rows[0]
+  expect(row.business_id).toBe(business)
 })

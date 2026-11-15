@@ -6,7 +6,9 @@ vi.mock('openai', () => ({
     chat = { completions: { create: api } }
   },
 }))
-import { supportAnswer } from '../../netlify/lib/support-ai-provider'
+import { supportAnswer as answer } from '../../netlify/lib/support-ai-provider'
+const supportAnswer: typeof answer = (m, a, t, s, o) =>
+  answer(m, a, t, s, o || { meter: async () => async () => {} })
 import { redactSupportText, sanitizeSupportDiagnostics } from './support-ai'
 const message = (text: string) => [
   { role: 'user' as const, text, at: new Date().toISOString() },
@@ -47,7 +49,7 @@ it('grounds app answers in docs, bounds provider use and accepts only known arti
   expect(answer.articles).toEqual(['inventory'])
   expect(answer.text).not.toContain('evil.test')
   const request = api.mock.calls.at(-1)![0]
-  expect(request.max_tokens).toBe(550)
+  expect(request.max_completion_tokens).toBe(1000)
   expect(JSON.stringify(request)).not.toContain('password=private')
   expect(request.messages[0].content).toContain('cannot read any account')
   expect(request).not.toHaveProperty('tools')
@@ -147,4 +149,126 @@ it('uses only supplied tools, disables provider storage and re-grounds returned 
     'business_status',
   ])
   expect(JSON.stringify(api.mock.calls)).not.toMatch(/web_search/)
+})
+
+it('uses online provider tool calling for inspection and a proposal, with no model execution tool', async () => {
+  api.mockReset()
+  const run = vi
+    .fn()
+    .mockResolvedValueOnce({
+      timezone: 'America/Chicago',
+      targetId: 'settings-one',
+    })
+    .mockResolvedValueOnce({
+      stage: 'Change proposed',
+      actionId: 'proposal-one',
+      before: { timezone: 'America/Chicago' },
+      after: { timezone: 'America/New_York' },
+    })
+  api.mockResolvedValueOnce({
+    choices: [
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'inspect',
+              type: 'function',
+              function: { name: 'inspect_timezone', arguments: '{}' },
+            },
+          ],
+        },
+      },
+    ],
+  })
+  api.mockResolvedValueOnce({
+    choices: [
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'propose',
+              type: 'function',
+              function: {
+                name: 'propose_timezone',
+                arguments: '{"timezone":"America/New_York"}',
+              },
+            },
+          ],
+        },
+      },
+    ],
+  })
+  api.mockResolvedValueOnce({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            answer:
+              'Change proposed. Review the exact timezone change in the approval card.',
+            articleIds: [],
+          }),
+        },
+      },
+    ],
+  })
+  const result = await supportAnswer(
+    message('Change my business timezone to America/New_York'),
+    false,
+    { names: ['inspect_timezone', 'propose_timezone'], run },
+  )
+  expect(run.mock.calls).toEqual([
+    ['inspect_timezone', {}],
+    ['propose_timezone', { timezone: 'America/New_York' }],
+  ])
+  expect(result.text).toContain('Change proposed')
+  expect(api.mock.calls[0][0].tools.map((t: any) => t.function.name)).toEqual([
+    'inspect_timezone',
+    'propose_timezone',
+  ])
+  expect(JSON.stringify(api.mock.calls.at(-1)![0].messages)).toContain(
+    'proposal-one',
+  )
+})
+
+it('requires accounting before inference and stops tool overflow before executing tools', async () => {
+  api.mockReset()
+  await expect(answer(message('inventory'))).rejects.toThrow(
+    'accounting is required',
+  )
+  expect(api).not.toHaveBeenCalled()
+  api.mockResolvedValue({
+    choices: [
+      {
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: Array.from({ length: 7 }, (_, i) => ({
+            id: String(i),
+            type: 'function',
+            function: { name: 'business_status', arguments: '{}' },
+          })),
+        },
+      },
+    ],
+    usage: { prompt_tokens: 20, completion_tokens: 20 },
+  })
+  const run = vi.fn()
+  const record = vi.fn()
+  const meter = vi.fn(async () => record)
+  await expect(
+    answer(
+      message('Check my business status'),
+      false,
+      { names: ['business_status'], run },
+      undefined,
+      { meter },
+    ),
+  ).rejects.toThrow()
+  expect(meter).toHaveBeenCalledTimes(1)
+  expect(record).toHaveBeenCalledTimes(1)
+  expect(run).not.toHaveBeenCalled()
 })
