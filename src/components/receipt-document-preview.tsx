@@ -103,7 +103,10 @@ export function ReceiptDocumentPreview({
         setPages(doc.numPages)
         const p = await doc.getPage(page)
         if (cancelled || !canvas.current) return
-        const viewport = p.getViewport({ scale: zoom * 1.3 })
+        const viewport = p.getViewport({
+          scale: zoom * 1.3,
+          rotation: ((rotation % 360) + 360) % 360,
+        })
         const target = canvas.current
         target.width = viewport.width
         target.height = viewport.height
@@ -122,7 +125,7 @@ export function ReceiptDocumentPreview({
       cancelled = true
       cleanup()
     }
-  }, [document, page, zoom])
+  }, [document, page, zoom, rotation])
   async function original(download: boolean) {
     try {
       const file = await fetch(fileEndpoint || receiptFileEndpoint(id, true), {
@@ -214,7 +217,10 @@ export function ReceiptDocumentPreview({
               Next page
             </button>
           </div>
-          <div className="receipt-image-wrap">
+          <div
+            className="receipt-image-wrap"
+            style={{ width: `${zoom * 100}%`, maxWidth: 'none' }}
+          >
             <canvas
               ref={canvas}
               aria-label={documentLabel + ' PDF page ' + page}

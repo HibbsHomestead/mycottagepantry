@@ -19,5 +19,5 @@ export function dateRange(period: DatePeriod, today = new Date()) {
       end: iso(today),
     }
   if (period === 'Year to date') return { start: `${y}-01-01`, end: iso(today) }
-  return { start: iso(new Date(y, m, 1)), end: iso(today) }
+  return { start: iso(new Date(y, m, 1)), end: iso(new Date(y, m + 1, 0)) }
 }

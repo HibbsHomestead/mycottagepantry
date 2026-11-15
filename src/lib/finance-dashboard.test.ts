@@ -115,7 +115,7 @@ it('explains four posted receipts using original dates and canonical expense and
     contributes: false,
     withinPeriod: true,
     inventoryAmount: 20.41,
-    reason: expect.stringContaining('asset'),
+    reason: 'Posted – inventory',
   })
   const year = financeDashboard(data, '2026-01-01', '2026-11-14')
   expect(year.expenses.value).toBe(137.32)
@@ -234,12 +234,10 @@ it('reconciles signed sales, tax, refunds, fees, bills and reversals without sum
     { month: '2026-11-02', income: -20, expenses: 0 },
     { month: '2026-11-03', income: 3, expenses: -1 },
   ])
-  expect(
-    result.categories.reduce((n, c) => n + (c.value || 0), 0),
-  ).toBe(14)
-  expect(
-    financeDashboard(data, '2026-11-02', '2026-11-02').income.value,
-  ).toBe(-20)
+  expect(result.categories.reduce((n, c) => n + (c.value || 0), 0)).toBe(14)
+  expect(financeDashboard(data, '2026-11-02', '2026-11-02').income.value).toBe(
+    -20,
+  )
 })
 it('distinguishes empty, missing and recorded zero; scopes attention and category records to dates', () => {
   const data = w()
@@ -282,9 +280,9 @@ it('adds commission and deductions in cents without float tails', () => {
       tax: 0,
     },
   ]
-  expect(
-    financeDashboard(data, '2026-11-01', '2026-11-30').income.value,
-  ).toBe(0.3)
+  expect(financeDashboard(data, '2026-11-01', '2026-11-30').income.value).toBe(
+    0.3,
+  )
 })
 
 it('includes legacy manual bills without double counting canonical splits or requiring reconciliation', () => {
@@ -344,15 +342,11 @@ it('includes legacy manual bills without double counting canonical splits or req
   const result = financeDashboard(data, '2026-11-01', '2026-11-30')
   expect(result.expenses.value).toBe(43)
   expect(result.unreconciled).toHaveLength(4)
-  expect(result.trend.reduce((n, p) => n + (p.expenses || 0), 0)).toBe(
-    43,
+  expect(result.trend.reduce((n, p) => n + (p.expenses || 0), 0)).toBe(43)
+  expect(result.categories.reduce((n, p) => n + (p.value || 0), 0)).toBe(43)
+  expect(result.activity.find((r) => r.id === 'owner')?.exclusion).toContain(
+    'equity',
   )
-  expect(
-    result.categories.reduce((n, p) => n + (p.value || 0), 0),
-  ).toBe(43)
-  expect(
-    result.activity.find((r) => r.id === 'owner')?.exclusion,
-  ).toContain('equity')
 })
 it('converts timestamp instants into business dates and preserves calendar dates at boundaries', () => {
   const data = w()
@@ -376,7 +370,93 @@ it('converts timestamp instants into business dates and preserves calendar dates
   const result = financeDashboard(data, '2026-11-01', '2026-11-01')
   expect(result.income.value).toBe(10)
   expect(result.rows[0].date).toBe('2026-11-01')
+  expect(financeDashboard(data, '0001-01-01', '9999-12-31').income.value).toBe(
+    30,
+  )
+})
+it('shows November stock spending and pending receipts without adding documents to expenses', () => {
+  const data = w()
+  data.settings[0].timezone = 'America/Chicago'
+  data.receipt_extractions = [
+    {
+      id: 'stock',
+      name: "Clara's Discount Groceries",
+      status: 'posted',
+      date: '2026-11-10',
+      total: 20.41,
+    },
+    {
+      id: 'review',
+      name: 'COUNTRY MART',
+      status: 'draft',
+      date: '2026-11-14',
+      total: 99,
+      createdAt: '2026-12-01T12:00:00Z',
+    },
+  ]
+  data.finance_transactions = [
+    {
+      id: 'purchase',
+      name: 'Stock',
+      kind: 'receipt',
+      status: 'posted',
+      date: '2026-11-10',
+      receiptId: 'stock',
+      amount: 20.41,
+      lineSnapshots: [{ decision: 'inventory', postedAmount: 20.41 }],
+    },
+  ]
+  const result = financeDashboard(data, '2026-11-01', '2026-11-30')
+  expect(result).toMatchObject({
+    inventorySpent: 20.41,
+    totalSpent: 20.41,
+    inventoryPurchaseCount: 1,
+    hasPeriodRecords: true,
+  })
+  expect(result.expenses.value).toBe(0)
+  expect(result.drafts).toHaveLength(1)
+  expect(result.receiptRecords.map((r) => r.receipt.id)).toEqual([
+    'review',
+    'stock',
+  ])
   expect(
-    financeDashboard(data, '0001-01-01', '9999-12-31').income.value,
-  ).toBe(30)
+    financeDashboard(data, '2026-12-01', '2026-12-31').drafts,
+  ).toHaveLength(0)
+})
+it('keeps an unpaid bill in expense totals and counts only its payments as money spent', () => {
+  const data = w()
+  data.finance_transactions = [
+    {
+      id: 'bill',
+      name: 'Supplies',
+      kind: 'bill',
+      date: '2026-11-01',
+      status: 'posted',
+      amount: 40,
+    },
+    {
+      id: 'payment',
+      name: 'Payment',
+      kind: 'vendorPayment',
+      date: '2026-11-10',
+      status: 'posted',
+      billId: 'bill',
+      amount: 15,
+    },
+  ]
+  data.expenses = [
+    {
+      id: 'expense',
+      name: 'Supplies',
+      transactionId: 'bill',
+      amount: 40,
+      date: '2026-11-01',
+      status: 'posted',
+    },
+  ]
+  expect(financeDashboard(data, '2026-11-01', '2026-11-30')).toMatchObject({
+    operatingSpent: 15,
+    totalSpent: 15,
+    expenses: { value: 40 },
+  })
 })
