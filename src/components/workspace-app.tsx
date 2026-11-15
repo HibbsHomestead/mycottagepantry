@@ -1,3 +1,4 @@
+import { Checkbook } from './checkbook'
 import { customerMessage } from '@/lib/customer-message'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { BusinessTaxFields } from './business-tax-fields'
@@ -1015,7 +1016,7 @@ export function WorkspaceApp() {
     }
     if (['expense', 'sale', 'transaction'].includes(kind) && !item) {
       setFinanceEntry(kind)
-      go('Finances', 'Money activity')
+      go('Finances', 'Advanced')
       return
     }
 
@@ -2318,10 +2319,29 @@ export function WorkspaceApp() {
               )}
               {[
                 'Overview',
-                'Receipt inbox',
-                'Money activity',
-                'Consignment',
+                'Register',
+                'Accounts',
+                'Mileage',
+                'Bookkeeping reports',
+                'Settings / Categories',
               ].includes(sub) ? (
+                <Checkbook
+                  key={sub}
+                  initialTab={sub === 'Bookkeeping reports' ? 'Reports' : sub}
+                  workspace={state}
+                  onWorkspace={setState}
+                  ready={ready}
+                  role={role}
+                  onSectionChange={(section) => go('Finances', section)}
+                  onReceipts={() => go('Finances', 'Receipt inbox')}
+                  onLegacySale={() => {
+                    setFinanceEntry('sale')
+                    go('Finances', 'Advanced')
+                  }}
+                />
+              ) : ['Receipt inbox', 'Money activity', 'Consignment'].includes(
+                  sub,
+                ) ? (
                 <FinanceWorkspace
                   workspace={state}
                   onWorkspace={(workspace) => {

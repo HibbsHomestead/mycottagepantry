@@ -1,4 +1,5 @@
 import { FinanceDashboard } from './finance-dashboard'
+import { bookAccounts } from '@/lib/checkbook'
 import {
   editableReceipt,
   receiptTotals,
@@ -1349,6 +1350,18 @@ export function FinanceWorkspace({
                 {input('date', 'Sale date', 'date')}
                 {input('channel', 'Sales channel')}
                 {input('method', 'Payment method')}
+                <Field label="Money received into">
+                  <select
+                    value={draft.paymentAccount || 'Cash'}
+                    onChange={(e) =>
+                      setDraft({ ...draft, paymentAccount: e.target.value })
+                    }
+                  >
+                    {bookAccounts(w).map((a) => (
+                      <option key={a.name}>{a.name}</option>
+                    ))}
+                  </select>
+                </Field>
                 {input('customer', 'Customer (optional)')}
                 {input('fees', 'Processing fees ($)', 'number', {
                   min: 0,
@@ -2823,6 +2836,16 @@ function ReceiptReview({
                       value={r.date || ''}
                       onChange={(e) => update('date', e.target.value)}
                     />
+                  </Field>
+                  <Field label="Paid from account">
+                    <select
+                      value={r.paymentAccount || 'Cash'}
+                      onChange={(e) => update('paymentAccount', e.target.value)}
+                    >
+                      {bookAccounts(w).map((a) => (
+                        <option key={a.name}>{a.name}</option>
+                      ))}
+                    </select>
                   </Field>
                   <Field label="Payment method">
                     <input

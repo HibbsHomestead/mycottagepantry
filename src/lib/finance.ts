@@ -76,6 +76,18 @@ export const defaultAccounts = [
     ...expenseCategories,
   ].map((name) => ({ name, type: 'expense' })),
 ]
+export function businessMoneyAccount(
+  w: Workspace,
+  value: unknown = 'Cash',
+): string {
+  const name = String(value || 'Cash')
+  if (
+    !['Cash', 'Bank account'].includes(name) &&
+    !(w.accounts || []).some((a) => a.bookAccount && a.name === name)
+  )
+    throw new Error('Choose an account from this business.')
+  return name
+}
 export type Posting = { account: string; debit: number; credit: number }
 export type FinancePlan = {
   writes: { table: string; record: Item }[]
@@ -835,6 +847,11 @@ export function planFinance(
         ? null
         : money(d.otherCharges ?? old.otherCharges, 'Other charges'),
       method: text(d.method ?? old.method),
+      notes: text(d.notes ?? old.notes),
+      paymentAccount: businessMoneyAccount(
+        w,
+        d.paymentAccount ?? old.paymentAccount,
+      ),
       lines: d.lines ?? old.lines,
       status: action === 'receiptCancel' ? 'cancelled' : 'draft',
       previewCrop:
@@ -1304,12 +1321,14 @@ export function planFinance(
               lineSnapshots.reduce((sum, l) => sum + l.postedAmount, 0),
             )
       if (businessTotal > 0) {
-        lines.push(credit('Cash', businessTotal))
+        lines.push(credit(receipt.paymentAccount, businessTotal))
         entry = journal('Receipt: ' + receipt.vendor, receipt.date, lines)
         put('finance_transactions', {
           id,
           name: receipt.vendor,
           kind: 'receipt',
+          paymentAccount: receipt.paymentAccount,
+          notes: receipt.notes,
           date: receipt.date,
           amount: businessTotal,
           receiptId: old.id,
@@ -1353,7 +1372,12 @@ export function planFinance(
       credit: l.debit,
     }))
     if (original.kind === 'receipt') {
-      reverseLines = [debit('Cash', original.amount)]
+      reverseLines = [
+        debit(
+          businessMoneyAccount(w, original.paymentAccount),
+          original.amount,
+        ),
+      ]
       const stock = new Map<string, Item>()
       let currentInventoryValue = 0,
         originalInventoryValue = 0

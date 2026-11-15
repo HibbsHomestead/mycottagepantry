@@ -1058,7 +1058,9 @@ it('preserves manual edits, original bytes and previous attempts when retrying e
       .inlineData.data,
   ).toBe(bytes.toString('base64'))
   expect(draft.extractionAttempts).toBeUndefined()
-  expect(database.records.receipt_extractions[0].extractionAttempts.length).toBeGreaterThan(0)
+  expect(
+    database.records.receipt_extractions[0].extractionAttempts.length,
+  ).toBeGreaterThan(0)
   result = await post('receiptDismissExtraction', '', { id: receipt.id })
   expect(result.workspace.receipt_extractions[0].vendor).toBe('My correction')
   receiptProvider.generate.mockRejectedValue({ status: 503 })
@@ -1070,7 +1072,9 @@ it('preserves manual edits, original bytes and previous attempts when retrying e
   expect(draft.extractionStatus).toBe('failed')
   expect(draft.vendor).toBe('My correction')
   expect(draft.extractionAttempts).toBeUndefined()
-  expect(database.records.receipt_extractions[0].extractionAttempts.length).toBeGreaterThan(0)
+  expect(
+    database.records.receipt_extractions[0].extractionAttempts.length,
+  ).toBeGreaterThan(0)
   receiptProvider.generate.mockRejectedValue(new Error('API key must be set'))
   result = await post('receiptExtract', '', {
     id: receipt.id,
@@ -3625,4 +3629,58 @@ it('deducts two each from a saved six-each opening total and locks the correspon
     (l: any) => l.type === 'batch_consumption',
   )
   expect(consumption).toMatchObject({ quantity: -200, unit: 'g', amount: -0.8 })
+})
+
+it('posts checkbook income once and returns server-derived totals', async () => {
+  const data = {
+    kind: 'income',
+    name: 'Disposable market',
+    date: '2026-11-12',
+    amount: '12.34',
+    account: 'Cash',
+    category: 'Sales',
+    requestId: 'checkbook-once',
+  }
+  const first = await post('financeBookEntry', '', data)
+  expect(first.status).toBe(200)
+  expect(first.workspace.bookkeeping[0].rows).toHaveLength(1)
+  const again = await post('financeBookEntry', '', data)
+  expect(again.status).toBe(200)
+  expect(again.workspace.journals).toHaveLength(1)
+  expect(again.workspace.finance_transactions).toHaveLength(1)
+})
+it('rejects checkbook writes for production staff and read-only accountants', async () => {
+  for (const role of ['Production Staff', 'Read-only Accountant']) {
+    database.role = role
+    const result = await post('financeBookEntry', '', {
+      kind: 'income',
+      name: 'Forbidden',
+      date: '2026-11-12',
+      amount: 10,
+      account: 'Cash',
+      category: 'Sales',
+      requestId: 'denied',
+    })
+    expect(result.status).toBe(400)
+    expect(database.records.journals || []).toHaveLength(0)
+  }
+})
+it('omits finance records and summaries from production-only workspace responses', async () => {
+  database.records.journals = [
+    {
+      id: 'secret',
+      name: 'Private',
+      date: '2026-11-12',
+      status: 'posted',
+      lines: [
+        { account: 'Cash', debit: 10, credit: 0 },
+        { account: 'Sales revenue', debit: 0, credit: 10 },
+      ],
+    },
+  ]
+  database.role = 'Production Staff'
+  const result = await post('pantryView', 'settings', { view: 'cards' })
+  expect(result.status).toBe(200)
+  expect(result.workspace.journals).toEqual([])
+  expect(result.workspace.bookkeeping).toEqual([])
 })

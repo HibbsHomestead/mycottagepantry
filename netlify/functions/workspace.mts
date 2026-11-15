@@ -1,3 +1,4 @@
+import { bookSummary, planBookkeeping } from '../../src/lib/checkbook'
 import { customerMessage } from '../../src/lib/customer-message'
 import {
   receiptBusinessAllocations,
@@ -137,6 +138,7 @@ import {
 import {
   financeTables,
   defaultAccounts,
+  businessMoneyAccount,
   planFinance,
 } from '../../src/lib/finance'
 import {
@@ -578,8 +580,50 @@ export default async (req: Request, context: Context) => {
         .digest('hex')
     }
     function workspaceForDevice(workspace: Workspace): Workspace {
+      if (role === 'Production Staff') {
+        workspace = { ...workspace }
+        for (const table of [
+          ...financeTables,
+          'accounts',
+          'journals',
+          'sales',
+          'expenses',
+        ])
+          workspace[table] = []
+        workspace.settings = workspace.settings.map((s) => {
+          const view = { ...s }
+          delete view.bookkeeping
+          return view
+        })
+      }
+      const bookToday = ovenToday(workspace.settings[0])
+      const canSeeBook = ['Owner', 'Manager', 'Read-only Accountant'].includes(
+        role,
+      )
+      const monthBook = canSeeBook
+        ? bookSummary(workspace, bookToday.slice(0, 7) + '-01', bookToday)
+        : null
+      const yearBook = canSeeBook
+        ? bookSummary(workspace, bookToday.slice(0, 4) + '-01-01', bookToday)
+        : null
       return {
         ...workspace,
+        bookkeeping: ['Owner', 'Manager', 'Read-only Accountant'].includes(role)
+          ? [
+              {
+                ...bookSummary(
+                  workspace,
+                  requestUrl.searchParams.get('bookFrom') ||
+                    bookToday.slice(0, 7) + '-01',
+                  requestUrl.searchParams.get('bookTo') || bookToday,
+                ),
+                monthMoneyIn: monthBook!.moneyIn,
+                monthMoneyOut: monthBook!.moneyOut,
+                monthProfit: monthBook!.profit,
+                yearProfit: yearBook!.profit,
+              },
+            ]
+          : [],
         receipt_extractions: workspace.receipt_extractions.map((receipt) => {
           const view = { ...receipt }
           delete view.extractionError
@@ -757,6 +801,8 @@ export default async (req: Request, context: Context) => {
       if (table === 'recipes') delete item.baseRecipe
       if (table === 'recipes' && item.workflow === 'handmade' && !stockMutation)
         throw new Error('Save handmade designs through the design editor.')
+      if (table === 'settings' && state.settings?.[0] && !stockMutation)
+        item.bookkeeping = state.settings[0].bookkeeping
       if (table === 'settings' && !dateApproval && state.settings?.[0])
         item.receivedDateCorrections =
           state.settings[0]?.receivedDateCorrections || []
@@ -1069,6 +1115,15 @@ export default async (req: Request, context: Context) => {
         r.added_at ? { ...r.data, addedAt: r.added_at } : r.data,
       )
     }
+    if (requestUrl.searchParams.has('bookFrom'))
+      validateDate(requestUrl.searchParams.get('bookFrom')!)
+    if (requestUrl.searchParams.has('bookTo'))
+      validateDate(requestUrl.searchParams.get('bookTo')!)
+    if (
+      (requestUrl.searchParams.get('bookFrom') || '') >
+      (requestUrl.searchParams.get('bookTo') || '9999-12-31')
+    )
+      throw new Error('Choose an ending date after the starting date.')
     if (requestUrl.searchParams.has('catalog'))
       return await handleCatalog(req, {
         client,
@@ -1535,6 +1590,10 @@ export default async (req: Request, context: Context) => {
       )
     }
     if (req.method === 'GET' && requestUrl.searchParams.has('receiptFile')) {
+      if (!['Owner', 'Manager', 'Read-only Accountant'].includes(role))
+        throw new Error(
+          'Your role does not include access to business receipts.',
+        )
       const receipt = state.receipt_extractions.find(
         (r) => r.id === requestUrl.searchParams.get('receiptFile'),
       )
@@ -2206,6 +2265,7 @@ export default async (req: Request, context: Context) => {
       audit: async (_name: string, _detail: string) => {},
     })
     async function recordSale(item: Item) {
+      item.paymentAccount = businessMoneyAccount(state, item.paymentAccount)
       delete item.stockDeducted
       if (state.sales.some((s) => s.id === item.id))
         throw new Error('Recorded sales are immutable. Use a refund.')
@@ -2302,7 +2362,11 @@ export default async (req: Request, context: Context) => {
           date: item.date,
           status: 'posted',
           lines: [
-            { account: 'Cash', debit: tax.customerTotal, credit: 0 },
+            {
+              account: item.paymentAccount,
+              debit: tax.customerTotal,
+              credit: 0,
+            },
             { account: 'Sales revenue', debit: 0, credit: tax.revenue },
             ...tax.snapshot
               .filter((r) => r.amount > 0)
@@ -2328,7 +2392,11 @@ export default async (req: Request, context: Context) => {
               debit: roundMoney(item.fees),
               credit: 0,
             },
-            { account: 'Cash', debit: 0, credit: roundMoney(item.fees) },
+            {
+              account: item.paymentAccount,
+              debit: 0,
+              credit: roundMoney(item.fees),
+            },
           ],
         })
     }
@@ -2385,6 +2453,13 @@ export default async (req: Request, context: Context) => {
           type: action,
           actor: user?.id || 'Demo owner',
         })
+      if (
+        String(action).startsWith('financeBook') &&
+        !['Owner', 'Manager'].includes(role)
+      )
+        throw new Error(
+          'Only an Owner or Manager can change bookkeeping records.',
+        )
       if (
         table === 'users' &&
         ['save', 'import'].includes(action) &&
@@ -2805,6 +2880,7 @@ export default async (req: Request, context: Context) => {
             batchId: l.batchId || undefined,
             channel: String(data.channel || 'Other').slice(0, 200),
             paymentMethod: String(data.method || '').slice(0, 100),
+            paymentAccount: businessMoneyAccount(state, data.paymentAccount),
             customer: String(data.customer || '').slice(0, 200),
             receiptId,
             transactionId: groupId,
@@ -3147,6 +3223,12 @@ export default async (req: Request, context: Context) => {
         })
         delete receipt.pendingExtraction
         await save('receipt_extractions', receipt)
+      } else if (String(action).startsWith('financeBook')) {
+        const plan = planBookkeeping(state, action, data, randomUUID)
+        for (const write of plan.writes)
+          await save(write.table, write.record, true)
+        if (plan.writes.length)
+          await audit(plan.description, plan.writes[0]?.record.name || '')
       } else if (action === 'receiptManual') {
         await save('receipt_extractions', {
           id: randomUUID(),
@@ -4535,7 +4617,11 @@ export default async (req: Request, context: Context) => {
                 debit: original.tax || 0,
                 credit: 0,
               },
-              { account: 'Cash', debit: 0, credit: -refund.customerTotal },
+              {
+                account: businessMoneyAccount(state, original.paymentAccount),
+                debit: 0,
+                credit: -refund.customerTotal,
+              },
             ],
           })
         await audit(
