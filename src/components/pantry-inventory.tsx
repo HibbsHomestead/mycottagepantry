@@ -1,3 +1,6 @@
+import { SectionCategoryTools } from './section-categories'
+import { assignedCategoryId } from '@/lib/section-categories'
+import type { CategoryScope } from '@/lib/category-details'
 import { barcodeMatches } from '@/lib/barcodes'
 import { PantryPhoto } from './pantry-photo'
 import { pantryDisplayUnit, precise, stockStatus } from '@/lib/ingredients'
@@ -66,7 +69,11 @@ export function PantryInventory({
   actions,
   labelSelection,
   workspace,
+  onCategorySettings,
+  canManageCategories = false,
 }: {
+  onCategorySettings?: (patch: Partial<Item>)=>void
+  canManageCategories?: boolean
   workspace?: Workspace
   actions?: ReactNode
   labelSelection?: InventoryLabelSelection
@@ -83,6 +90,9 @@ export function PantryInventory({
   setSearch: (search: string) => void
   open: (kind: string, item?: Item) => void
 }) {
+  const [categoryFilter,setCategoryFilter]=useState('all')
+  const categoryScope: CategoryScope = typeFilter === 'packaging' || filter === 'Packaging' ? 'packaging' : typeFilter === 'material' || filter === 'Craft materials' ? 'handmade-materials' : 'food-ingredients'
+  useEffect(()=>setCategoryFilter('all'),[categoryScope])
   const [view, setView] = useState<'cards' | 'table'>(
     savedView === 'table' ? 'table' : 'cards',
   )
@@ -183,7 +193,7 @@ export function PantryInventory({
                       ? i.usedAs === 'supply'
                       : true,
     )
-  const rows = sortIngredients(filtered, sort)
+  const rows = sortIngredients(filtered.filter(i=>!workspace || categoryFilter==='all' || (categoryFilter==='uncategorized' ? !assignedCategoryId(i,workspace,categoryScope) : assignedCategoryId(i,workspace,categoryScope)===categoryFilter)), sort)
   function selectionCheckbox(i: Item) {
     if (!labelSelection?.active) return null
     return (
@@ -199,6 +209,7 @@ export function PantryInventory({
   }
   return (
     <div className="pantry-v2">
+      {workspace && onCategorySettings && <SectionCategoryTools workspace={workspace} scope={categoryScope} canManage={canManageCategories} onSettings={onCategorySettings} value={categoryFilter} onFilter={setCategoryFilter} />}
       <div className="pantry-summary">
         <span>
           <Package size={21} />

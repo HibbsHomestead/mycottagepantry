@@ -1,3 +1,4 @@
+import { ScopedCategorySelect, pantryCategoryScope } from './section-categories'
 import { IngredientPurchaseSetup } from './ingredient-purchase-setup'
 import { InventoryReviewNotice } from './inventory-review'
 import {
@@ -872,9 +873,9 @@ export function IngredientDetail({
                         </Field>
                         <div className="form-grid">
                           <Field label="Brand">{input('brand')}</Field>
-                          <Field label="Category">
+                          <Field label="Inventory group">
                             <select
-                              aria-label="Category"
+                              aria-label="Inventory group"
                               value={pantryCategoryId(draft) || '__custom'}
                               onChange={(e) =>
                                 change('categoryId', e.target.value)
@@ -896,6 +897,7 @@ export function IngredientDetail({
                               ))}
                             </select>
                           </Field>
+                          <ScopedCategorySelect workspace={w} scope={pantryCategoryScope(draft)} item={draft} canManage={canEdit} onSettings={patch=>onWorkspace({...w,settings:w.settings.map((b,n)=>n===0 ? {...b,...patch} : b)})} onChange={change} />
                           <Field label="Preferred vendor">
                             <select
                               value={

@@ -1,3 +1,8 @@
+import {
+  categoryDetailsShape,
+  validateCategoryTree,
+} from '../../src/lib/category-details'
+import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { Item, Workspace } from '../../src/lib/domain'
 import {
@@ -26,6 +31,7 @@ export async function handleRecipeCategories(
     throw new Error('Oven settings are unavailable. Reload and retry.')
   let categories = recipeCategories(state)
   const revision = settings.recipeCategoryRevision || 0
+  let selectedId: string | undefined
   if (req.method !== 'GET') {
     if (req.method !== 'POST')
       throw new Error('Use GET or POST for recipe categories.')
@@ -46,6 +52,9 @@ export async function handleRecipeCategories(
         throw new Error('This recipe category is unavailable in this oven.')
       const category = recipeCategorySchema.parse({
         ...previous,
+        ...z
+          .object(categoryDetailsShape)
+          .parse({ ...previous, ...input.category }),
         id: previous?.id || randomUUID(),
         name:
           typeof input.category?.name === 'string'
@@ -61,6 +70,7 @@ export async function handleRecipeCategories(
         categories.some(
           (c) =>
             c.id !== category.id &&
+            (c.parentId || '') === (category.parentId || '') &&
             [c.name, ...c.previousNames].some(
               (n) => recipeCategoryKey(n) === recipeCategoryKey(category.name),
             ),
@@ -69,6 +79,7 @@ export async function handleRecipeCategories(
         throw new Error(
           'A recipe category with this name already exists, including archived categories.',
         )
+      selectedId = category.id
       categories = previous
         ? categories.map((c) => (c.id === category.id ? category : c))
         : [...categories, category]
@@ -79,6 +90,7 @@ export async function handleRecipeCategories(
         c.id === previous.id ? { ...c, active: input.active } : c,
       )
     } else throw new Error('Choose a supported recipe category operation.')
+    validateCategoryTree(categories)
     settings.recipeCategories = recipeCategoryListSchema.parse(categories)
     settings.recipeCategoryRevision = revision + 1
     await save('settings', settings)
@@ -91,7 +103,7 @@ export async function handleRecipeCategories(
   }
   await client.query('COMMIT')
   return Response.json(
-    { categories, revision: settings.recipeCategoryRevision || 0 },
+    { selectedId, categories, revision: settings.recipeCategoryRevision || 0 },
     { headers: { 'Cache-Control': 'private, no-store' } },
   )
 }

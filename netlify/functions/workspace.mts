@@ -1,3 +1,5 @@
+import { handlePantryCategories } from '../lib/pantry-category-handler'
+import { assertSectionCategoryAssignment } from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
@@ -630,6 +632,7 @@ export default async (req: Request, context: Context) => {
       countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
+      assertSectionCategoryAssignment(item, state[table]?.find(r => r.id === item.id), state, table)
       if (table === 'ingredients' && !countPackageWrite) {
         const previous = state.ingredients.find((i) => i.id === item.id)
         if (previous?.countPackages) item.countPackages = previous.countPackages
@@ -1051,6 +1054,7 @@ export default async (req: Request, context: Context) => {
         role,
         actor: user?.id,
       })
+    if (requestUrl.searchParams.has('pantryCategories')) return await handlePantryCategories(req, {state,role,save,client})
     if (requestUrl.searchParams.has('productCategories')) {
       return await handleProductCategories(req, {
         state,
@@ -4058,6 +4062,8 @@ export default async (req: Request, context: Context) => {
             'categoryConfigRevision',
             'recipeCategories',
             'recipeCategoryRevision',
+            'pantryCategories',
+            'pantryCategoryRevision',
           ])
             item[key] = state.settings[0]?.[key]
           if (item.taxRates) validateTaxRates(item.taxRates)
@@ -4066,7 +4072,7 @@ export default async (req: Request, context: Context) => {
               item.defaultOverhead,
               'Default overhead',
             )
-          item.taxRate = number(item.taxRate || 0, 'Tax rate')
+          if (item.taxRate !== undefined && item.taxRate !== null && item.taxRate !== '') item.taxRate = number(item.taxRate, 'Tax rate')
           item.laborRate = number(item.laborRate ?? 18, 'Labor rate')
           item.targetMargin = number(item.targetMargin ?? 65, 'Target margin')
           if (item.taxRate > 100 || item.targetMargin >= 100)

@@ -1,3 +1,4 @@
+import { categoryDetailsShape, categoryScopeSchema } from './category-details'
 import { configuredTaxRates } from './tax-configuration'
 import { z } from 'zod'
 import type { Item, TaxRate } from './domain'
@@ -5,6 +6,8 @@ import type { Item, TaxRate } from './domain'
 export const productCategorySchema = z.object({
   id: z.string().min(1).max(100),
   name: z.string().trim().min(1).max(100),
+  ...categoryDetailsShape,
+  scope: categoryScopeSchema.optional(),
   classification: z.enum(['food', 'non_food']).nullable(),
   active: z.boolean().optional(),
   previousNames: z.array(z.string().max(100)).max(100).optional(),
@@ -47,15 +50,13 @@ export function categoryTaxState(product: Item, business: Item) {
   )
   const issue = !category
     ? 'Product category not configured.'
-    : category.active === false
-      ? 'Saved product category is inactive.'
-      : !category.classification
-        ? 'Category classification not configured; owner review needed.'
-        : !ids.length
-          ? 'Tax treatment not configured. Not configured does not mean tax exempt.'
-          : rates.length !== ids.length || rates.some((r) => r.active === false)
-            ? 'Configured tax treatment is unavailable or inactive.'
-            : ''
+    : !category.classification
+      ? 'Category classification not configured; owner review needed.'
+      : !ids.length
+        ? 'Tax treatment not configured. Not configured does not mean tax exempt.'
+        : rates.length !== ids.length || rates.some((r) => r.active === false)
+          ? 'Configured tax treatment is unavailable or inactive.'
+          : ''
   return { category, ids, rates, issue }
 }
 /** Display and server confirmation use the same affected product set, including preserved legacy assignments. */

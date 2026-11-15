@@ -1,3 +1,10 @@
+import {
+  categoryScopes,
+  productCategoryScope,
+  categoryOrder,
+  type CategoryScope,
+} from '@/lib/category-details'
+import { SectionCategoryManager } from './section-categories'
 import { useEffect, useId, useRef, useState } from 'react'
 import { applicableTaxes, type Item, type TaxRate } from '@/lib/domain'
 import {
@@ -54,7 +61,7 @@ function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
       productCategories: next.categories,
       categoryConfigRevision: next.revision,
       ...(tax.success
-        ? { taxRates: tax.data.rates, categoryTaxMappings: tax.data.mappings }
+        ? { categoryTaxMappings: tax.data.mappings }
         : {}),
     })
     return next
@@ -157,12 +164,14 @@ function CategoryForm({
   api,
   category,
   initialName = '',
+  scope,
   onSaved,
   onCancel,
 }: {
   api: ReturnType<typeof useCategoryConfiguration>
   category?: ProductCategory
   initialName?: string
+  scope?: CategoryScope
   onSaved: (data: Configuration) => void
   onCancel: () => void
 }) {
@@ -170,6 +179,10 @@ function CategoryForm({
   const [classification, setClassification] = useState(
     category?.classification || '',
   )
+  const [description, setDescription] = useState(category?.description || '')
+  const [parentId, setParentId] = useState(category?.parentId || '')
+  const [displayOrder, setDisplayOrder] = useState(category?.displayOrder ?? 0)
+  const [section, setSection] = useState(category?.scope || scope || '')
   const [confirmed, setConfirmed] = useState(false)
   const changed =
     !!category && classification !== (category.classification || '')
@@ -195,6 +208,68 @@ function CategoryForm({
           onChange={(e) => setName(e.target.value)}
         />
       </label>
+      <label className="field">
+        <span>Description</span>
+        <textarea
+          rows={2}
+          maxLength={1000}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </label>
+      <div className="form-grid">
+        <label className="field">
+          <span>Section</span>
+          <select
+            value={section}
+            disabled={!!scope || !!category?.scope}
+            onChange={(e) => {
+              setSection(e.target.value)
+              setParentId('')
+            }}
+          >
+            <option value="">Legacy section · review needed</option>
+            {Object.entries(categoryScopes)
+              .filter(([key]) => key.endsWith('products') || key === 'kits')
+              .map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Parent category</span>
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+          >
+            <option value="">No parent</option>
+            {(api.data?.categories || [])
+              .filter(
+                (c) =>
+                  c.id !== category?.id &&
+                  c.scope === section &&
+                  c.active !== false,
+              )
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Display order</span>
+          <input
+            type="number"
+            min={0}
+            max={100000}
+            value={displayOrder}
+            onChange={(e) => setDisplayOrder(Number(e.target.value))}
+          />
+        </label>
+      </div>
       <label className="field">
         <span>Classification</span>
         <select
@@ -247,7 +322,7 @@ function CategoryForm({
             api.loading ||
             api.saving ||
             !name.trim() ||
-            (!category && !classification) ||
+            (!category && (!classification || !section)) ||
             (changed && !confirmed)
           }
           onClick={async () => {
@@ -256,6 +331,10 @@ function CategoryForm({
               category: {
                 ...(category ? { id: category.id } : {}),
                 name,
+                description,
+                parentId: parentId || null,
+                displayOrder,
+                scope: section || undefined,
                 classification: classification || null,
               },
               confirmAffected: confirmed ? affected.length : undefined,
@@ -319,7 +398,7 @@ export function ProductCategoryManager({
   const [archiving, setArchiving] = useState<ProductCategory>()
   const [notice, setNotice] = useState('')
   const categories = api.data?.categories || []
-  const visible = categories.filter((c) =>
+  const visible = categoryOrder(categories).filter((c) =>
     normalizedCategoryName(c.name).includes(normalizedCategoryName(search)),
   )
   const archived = categories.filter((c) => c.active === false).length
@@ -431,6 +510,16 @@ export function ProductCategoryManager({
                   <li className="panel product-category-row" key={category.id}>
                     <div className="category-row-name">
                       <h3>{category.name}</h3>
+                      {category.description && <p>{category.description}</p>}
+                      <small>
+                        {category.scope
+                          ? categoryScopes[category.scope]
+                          : 'Legacy section · review needed'}
+                        {category.parentId
+                          ? ` · Parent: ${categories.find((c) => c.id === category.parentId)?.name || 'Unavailable'}`
+                          : ''}{' '}
+                        · Order {category.displayOrder || 0}
+                      </small>
                       <span>
                         {classificationLabel(category.classification)}
                         {category.active === false ? ' · Archived' : ''}
@@ -460,17 +549,7 @@ export function ProductCategoryManager({
                         <button
                           type="button"
                           className="text-button"
-                          disabled={
-                            !api.ready ||
-                            api.loading ||
-                            api.saving ||
-                            (category.active !== false && count > 0)
-                          }
-                          title={
-                            count && category.active !== false
-                              ? 'Reassign linked products before archiving'
-                              : undefined
-                          }
+                          disabled={!api.ready || api.loading || api.saving}
                           onClick={() => {
                             setArchiving(category)
                             setEditing(undefined)
@@ -479,11 +558,6 @@ export function ProductCategoryManager({
                           {category.active === false ? 'Restore' : 'Archive'}{' '}
                           {category.name}
                         </button>
-                        {category.active !== false && count > 0 && (
-                          <small>
-                            Reassign linked products before archiving.
-                          </small>
-                        )}
                       </div>
                     )}
                   </li>
@@ -504,7 +578,7 @@ export function ProductCategoryManager({
               <p>
                 {archiving.active === false
                   ? 'This category becomes available in product dropdowns again.'
-                  : 'This category is kept for reference and removed from new product selections. Linked products must be reassigned first.'}{' '}
+                  : 'This category is kept for reference and removed from new product selections. Existing assignments remain identifiable.'}{' '}
                 No products or completed transactions are deleted or changed.
               </p>
               <div className="category-actions">
@@ -583,12 +657,16 @@ export function ProductCategorySelector({
   useEffect(() => {
     onBusyChange?.(api.saving)
   }, [api.saving, onBusyChange])
+  const [manageDialog, setManageDialog] = useState(false)
   const [managing, setManaging] = useState(false),
     [editing, setEditing] = useState(false),
     [id, setId] = useState(''),
     [newName, setNewName] = useState('')
   const labelId = useId()
-  const categories = api.data?.categories || []
+  const scope = productCategoryScope(product)
+  const categories = categoryOrder(api.data?.categories || []).filter(
+    (c) => c.scope === scope || c.id === product.productCategoryId,
+  )
   const begin = (category?: ProductCategory, name = '') => {
     setId(category?.id || '')
     setNewName(name)
@@ -600,6 +678,22 @@ export function ProductCategorySelector({
       className="product-category-editor product-category-compact"
       aria-label="Product category and inherited tax"
     >
+      {manageDialog && (
+        <SectionCategoryManager
+          workspace={{
+            settings: [business],
+            products: api.data?.products || [],
+            recipes: [],
+            ingredients: [],
+          }}
+          scope={scope}
+          onSettings={onConfig}
+          close={() => {
+            setManageDialog(false)
+            api.reload()
+          }}
+        />
+      )}
       <LoadState api={api} />
       <div className="category-field-head">
         <span id={labelId}>Product category</span>
@@ -619,8 +713,7 @@ export function ProductCategorySelector({
               aria-expanded={managing}
               disabled={!api.ready || api.loading}
               onClick={() => {
-                setManaging(!managing)
-                if (managing) setEditing(false)
+                setManageDialog(true)
               }}
             >
               Manage categories
@@ -638,6 +731,22 @@ export function ProductCategorySelector({
         onSelect={(value) => onChange('productCategoryId', value)}
         onAdd={(name) => begin(undefined, name)}
       />
+      {categories.find((c) => c.id === product.productCategoryId)
+        ?.description && (
+        <p className="form-hint">
+          {
+            categories.find((c) => c.id === product.productCategoryId)
+              ?.description
+          }
+        </p>
+      )}
+      {product.productCategoryId &&
+        !categories.find((c) => c.id === product.productCategoryId)?.scope && (
+          <p className="form-hint">
+            Saved category has a legacy section assignment; review in Manage
+            categories.
+          </p>
+        )}
       {api.ready && !categories.length && (
         <p className="form-hint">
           No product categories yet. Use Add category to create one.
@@ -716,6 +825,7 @@ export function ProductCategorySelector({
               api={api}
               category={categories.find((c) => c.id === id)}
               initialName={newName}
+              scope={scope}
               onCancel={() => setEditing(false)}
               onSaved={(result) => {
                 if (!id && result.selectedId)

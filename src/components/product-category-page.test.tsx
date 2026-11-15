@@ -4,7 +4,7 @@ import { WorkspaceApp } from './workspace-app'
 import { TooltipProvider } from './ui/tooltip'
 import { demoData } from '@/lib/demo'
 
-vi.mock('@netlify/identity', () => ({ onAuthChange: () => () => {} }))
+vi.mock('@netlify/identity', () => ({ onAuthChange: () => () => {}, hydrateSession: async()=>null, refreshSession:async()=>null }))
 afterEach(() => {
   vi.unstubAllGlobals()
   history.replaceState({}, '', '/oven')

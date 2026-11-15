@@ -114,6 +114,7 @@ export async function handleFabric(
       throw new Error('This fabric changed elsewhere. Reopen before saving.')
     // Explicit metadata allowlist: editing never changes stock or valuation.
     const keys = [
+      'sectionCategoryId',
       ...inventoryProductKeys,
       'brand',
       'productSourceUrl',

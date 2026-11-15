@@ -282,6 +282,7 @@ export function duplicateBarcodes(
 }
 
 const textFields = [
+  'sectionCategoryId',
   'name',
   'brand',
   'category',
