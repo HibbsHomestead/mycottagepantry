@@ -223,3 +223,18 @@ it('posts only the recalculated business total and preserves original source and
   })
   expect(saved.postedLines[1]).toMatchObject({ taxShare: 0, excludedTax: 0.8 })
 })
+it('uses only the business allocation in saved document amounts and restores personal items', async () => {
+  const { receiptBusinessTotal } = await import('./receipt-totals')
+  const r = receipt(
+    [
+      line(20, 'business', { taxRate: 8 }),
+      line(10, 'personal', { taxRate: 8 }),
+    ],
+    2.4,
+  )
+  expect(receiptBusinessTotal(r)).toBe(21.6)
+  r.lines[1].allocation = 'business'
+  r.lines[1].decision = 'expense'
+  expect(receiptBusinessTotal(r)).toBe(32.4)
+  expect(r.printedTotal).toBe(32.4)
+})

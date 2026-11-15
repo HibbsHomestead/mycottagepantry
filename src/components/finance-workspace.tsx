@@ -2,6 +2,7 @@ import { FinanceDashboard } from './finance-dashboard'
 import {
   editableReceipt,
   receiptTotals,
+  receiptBusinessTotal,
   receiptTaxAllocation,
   receiptLineCents,
   receiptCents,
@@ -20,7 +21,11 @@ import { InventoryProductFields } from './inventory-product-fields'
 import { FabricFields } from './fabric-fields'
 import { ReceiptDocumentPreview } from './receipt-document-preview'
 import { fabricUnitOptions, isFabric, supportsExpiry } from '@/lib/fabric'
-import { receiptReadingLabel } from '../lib/receipt-document'
+import {
+  receiptReadingLabel,
+  receiptReviewValues,
+  receiptFileEndpoint,
+} from '../lib/receipt-document'
 import { CardDisclosure } from './ui/card'
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import {
@@ -195,7 +200,11 @@ export function FinanceWorkspace({
   }, [initialEntry])
   const canWrite = ready && ['Owner', 'Manager'].includes(role)
   const today = () => ovenToday(w.settings[0])
-  const receipts = w.receipt_extractions || [],
+  const receipts = [...(w.receipt_extractions || [])].sort(
+      (a, b) =>
+        String(b.date || '').localeCompare(String(a.date || '')) ||
+        String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
+    ),
     owners = w.consignors || [],
     items = w.consignment_items || [],
     sales = w.consignment_sales || [],
@@ -612,7 +621,6 @@ export function FinanceWorkspace({
               <div className="finance-list">
                 {[...receipts]
                   .filter((r) => !needsReviewOnly || r.status === 'draft')
-                  .reverse()
                   .map((r) => (
                     <button
                       className="finance-list-row finance-list-row--receipt"
@@ -631,7 +639,9 @@ export function FinanceWorkspace({
                         </small>
                       </span>
                       <strong>
-                        {r.total == null ? 'Not extracted' : money(r.total)}
+                        {receiptBusinessTotal(r) == null
+                          ? 'Not extracted'
+                          : money(receiptBusinessTotal(r)!)}
                       </strong>
                       <span
                         className={
@@ -2045,6 +2055,30 @@ export function FinanceWorkspace({
       {receipt && (
         <ReceiptReview
           receipt={receipt}
+          onPrevious={
+            receipts.findIndex((r) => r.id === receipt.id) > 0
+              ? () =>
+                  setReceipt(
+                    structuredClone(
+                      receipts[
+                        receipts.findIndex((r) => r.id === receipt.id) - 1
+                      ],
+                    ),
+                  )
+              : undefined
+          }
+          onNext={
+            receipts.findIndex((r) => r.id === receipt.id) < receipts.length - 1
+              ? () =>
+                  setReceipt(
+                    structuredClone(
+                      receipts[
+                        receipts.findIndex((r) => r.id === receipt.id) + 1
+                      ],
+                    ),
+                  )
+              : undefined
+          }
           localFile={localReceiptFile}
           workspace={w}
           onWorkspace={onWorkspace}
@@ -2247,6 +2281,8 @@ export function FinanceWorkspace({
 }
 function ReceiptReview({
   receipt: initial,
+  onPrevious,
+  onNext,
   localFile,
   workspace: w,
   onWorkspace,
@@ -2258,6 +2294,8 @@ function ReceiptReview({
   onRetryUpload,
 }: {
   receipt: Item
+  onPrevious?: () => void
+  onNext?: () => void
   onRetryUpload?: () => void
   onWorkspace?: (w: Workspace) => void
   localFile?: File | null
@@ -2275,11 +2313,12 @@ function ReceiptReview({
       ...editableReceipt(initial),
       receivedDate: initial.receivedDate || ovenToday(w.settings[0]),
     })),
-    [reviewTab, setReviewTab] = useState('details'),
     [selectedLines, setSelectedLines] = useState<number[]>([]),
     [correctionReason, setCorrectionReason] = useState(''),
     [active, setActive] = useState(-1),
-    [needsOnly, setNeedsOnly] = useState(false),
+    [needsOnly] = useState(false),
+    [toolsOpen, setToolsOpen] = useState(false),
+    [entryColumn, setEntryColumn] = useState<'subtotal' | 'total'>('subtotal'),
     [showExcluded, setShowExcluded] = useState(false),
     [confirming, setConfirming] = useState(false),
     [previewOpen, setPreviewOpen] = useState(false),
@@ -2340,6 +2379,40 @@ function ReceiptReview({
       window.removeEventListener('resize', fit)
     }
   }, [])
+  const saveCallback = useRef(onSave)
+  saveCallback.current = onSave
+  const savedReview = useRef(JSON.stringify(receiptReviewValues(r)))
+  const initialVersion = useRef(initial)
+  if (initialVersion.current !== initial) {
+    initialVersion.current = initial
+    savedReview.current = JSON.stringify(
+      receiptReviewValues(editableReceipt(initial)),
+    )
+  }
+  useEffect(() => {
+    const signature = JSON.stringify(receiptReviewValues(r))
+    if (
+      r.status !== 'draft' ||
+      busy ||
+      !canWrite ||
+      r.id === 'uploading' ||
+      r.extractionStatus === 'processing' ||
+      signature === savedReview.current
+    )
+      return
+    const timer = setTimeout(() => {
+      void saveCallback.current('receiptDraft', r).then((result) => {
+        const saved = result?.receipt_extractions?.find(
+          (item: Item) => item.id === r.id,
+        )
+        if (saved)
+          savedReview.current = JSON.stringify(
+            receiptReviewValues(editableReceipt(saved)),
+          )
+      })
+    }, 1800)
+    return () => clearTimeout(timer)
+  }, [r, busy, canWrite])
   const inventoryItems = purchasableInventory(w)
   const matchedItem = (l: any) =>
     inventoryItems.find(
@@ -2383,6 +2456,39 @@ function ReceiptReview({
   }
   const line = (index: number, key: string, v: any) =>
     patchLine(index, { [key]: v })
+  const enterLineTotal = (index: number, value: string) => {
+    const target = receiptCents(value)
+    if (target == null || target < 0) return
+    const trial = (cents: number) => ({
+      ...r,
+      lines: lines.map((l: any, i: number) =>
+        i === index
+          ? {
+              ...l,
+              amountMode: 'direct',
+              enteredAmount: cents / 100,
+              lineDiscount: 0,
+            }
+          : l,
+      ),
+    })
+    let low = 0,
+      high = Math.max(target * 2 + 10000, 10000)
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      const amount =
+        receiptCents(
+          receiptBusinessAllocations(trial(mid))[index]?.fullAmount,
+        ) ?? 0
+      if (amount < target) low = mid + 1
+      else high = mid
+    }
+    patchLine(index, {
+      amountMode: 'direct',
+      enteredAmount: low / 100,
+      lineDiscount: 0,
+    })
+  }
   const totals = receiptTotals(r)
   const allocations = receiptBusinessAllocations(r)
   const allocationErrors = receiptAllocationIssues(r)
@@ -2424,6 +2530,19 @@ function ReceiptReview({
         String(r.vendor).trim().toLowerCase() &&
       Number(t.amount) === totals.total,
   )
+  const navigateReceipt = async (navigate?: () => void) => {
+    if (!navigate || busy) return
+    if (
+      !closed &&
+      JSON.stringify(receiptReviewValues(r)) !== savedReview.current
+    ) {
+      const saved = await onSave('receiptDraft', r)
+      if (!saved) return
+    }
+    setActive(-1)
+    setConfirming(false)
+    navigate()
+  }
   const shownAmount = (n: number | null) =>
     n == null ? 'Incomplete' : money(n)
   const viewReceipt = () => {
@@ -2439,156 +2558,99 @@ function ReceiptReview({
     <Dialog
       open
       onOpenChange={(v) => {
-        if (!v) onClose()
+        if (!v) void navigateReceipt(onClose)
       }}
     >
       <DialogContent
         ref={dialogRef}
         className="receipt-review-dialog"
+        aria-label={closed ? 'Receipt record' : 'Review receipt'}
+        aria-labelledby={undefined}
         onOpenAutoFocus={(e) => {
           e.preventDefault()
-          dialogRef.current?.focus({ preventScroll: true })
+          const total = dialogRef.current?.querySelector<HTMLInputElement>(
+            '[aria-label="Receipt total (from receipt)"]',
+          )
+          if (!closed && (r.printedTotal == null || r.printedTotal === ''))
+            total?.focus({ preventScroll: true })
+          else dialogRef.current?.focus({ preventScroll: true })
         }}
       >
         <DialogHeader>
           <DialogTitle>
-            {closed ? 'Receipt record' : 'Review receipt'}
+            {r.vendor || (closed ? 'Receipt record' : 'Review receipt')} ·{' '}
+            {r.date || 'Date needed'}
           </DialogTitle>
           <DialogDescription>
-            {closed
-              ? 'The original file and confirmed values are preserved.'
-              : 'Check extracted fields, decide what each line is for, and confirm when ready.'}
+            <span className="badge">
+              {closed
+                ? r.status
+                : canConfirm
+                  ? 'Ready to post'
+                  : 'Needs review'}
+            </span>{' '}
+            {r.updatedAt
+              ? `Last saved ${ovenTimestamp(r.updatedAt, w.settings[0])}`
+              : 'Unsaved draft'}
           </DialogDescription>
+          <div className="receipt-header-actions">
+            <button
+              className="text-button receipt-mobile-preview-toggle"
+              onClick={viewReceipt}
+            >
+              Preview
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setToolsOpen(!toolsOpen)}
+            >
+              Details & history
+            </button>
+            <button
+              className="text-button"
+              disabled={!onPrevious || busy}
+              onClick={() => void navigateReceipt(onPrevious)}
+            >
+              Previous
+            </button>
+            <button
+              className="text-button"
+              disabled={!onNext || busy}
+              onClick={() => void navigateReceipt(onNext)}
+            >
+              Next
+            </button>
+            {r.fileHash && r.id !== 'uploading' && (
+              <a
+                className="text-button"
+                href={receiptFileEndpoint(r.id, true)}
+                download={r.filename || 'receipt'}
+              >
+                Download
+              </a>
+            )}
+            {!closed && r.fileHash && (
+              <button
+                className="text-button"
+                disabled={busy || !canWrite}
+                onClick={() => void onSave('receiptExtract', r)}
+              >
+                Rescan
+              </button>
+            )}
+          </div>
         </DialogHeader>
         {error && (
           <p role="alert" className="finance-feedback error">
             {error}
           </p>
         )}
-        <ol className="receipt-progress" aria-label="Receipt workflow">
-          <li>1 Capture</li>
-          <li>2 Process</li>
-          <li className={!confirming ? 'current' : ''}>3 Review</li>
-          <li className={confirming ? 'current' : ''}>4 Confirm</li>
-        </ol>
-        <section className="receipt-summary" aria-label="Receipt summary">
-          <div>
-            <small>{r.vendor || 'Merchant needed'}</small>
-            <strong>{shownAmount(closed ? r.total : totals.total)}</strong>
-            <span>Calculated receipt total</span>
-          </div>
-          <dl>
-            <div>
-              <dt>Receipt date</dt>
-              <dd>{r.date || 'Needs review'}</dd>
-            </div>
-            <div>
-              <dt>Receipt tax</dt>
-              <dd>
-                {r.tax == null || r.tax === ''
-                  ? 'Unknown'
-                  : money(Number(r.tax))}
-              </dd>
-            </div>
-            <div>
-              <dt>Recognized lines</dt>
-              <dd>{lines.length}</dd>
-            </div>
-            <div>
-              <dt>Matched / needs review</dt>
-              <dd>
-                {
-                  lines.filter(
-                    (l: Partial<Item>) =>
-                      l.itemId && l.decision === 'inventory',
-                  ).length
-                }{' '}
-                / {unresolved}
-              </dd>
-            </div>
-          </dl>
-        </section>
-        <section
-          className="receipt-allocation-summary"
-          aria-label="Allocation summary"
-        >
-          <strong>
-            {closed
-              ? r.status === 'posted'
-                ? 'Posted'
-                : r.status
-              : canConfirm
-                ? 'Ready to post'
-                : 'Needs review'}
-          </strong>
-          <span>Business total {money(businessSum('postedAmount'))}</span>
-          <span>
-            Business subtotal {money(businessSum('businessSubtotal'))}
-          </span>
-          <span>Business tax {money(businessSum('businessTax'))}</span>
-          <span>
-            Business shipping / fees {money(businessSum('businessFees'))}
-          </span>
-          <span>Personal / excluded {money(amountFor('personal'))}</span>
-          <span>
-            Original{' '}
-            {r.printedTotal == null || r.printedTotal === ''
-              ? 'total needed'
-              : money(Number(r.printedTotal))}{' '}
-            · Difference{' '}
-            {totals.difference == null ? '—' : money(totals.difference)}
-          </span>
-          <span>
-            Remaining unreviewed (including tax){' '}
-            {money(
-              allocations
-                .filter((l) => l.allocation === 'unreviewed')
-                .reduce((n, l) => n + l.fullAmount, 0),
-            )}
-          </span>
-          {taxPlan.estimated && (
-            <p>
-              Estimated tax allocation — taxable status is unknown for some
-              items.
-            </p>
-          )}
-          {allocationErrors.length > 0 && (
-            <p aria-live="polite">{allocationErrors.join(' · ')}</p>
-          )}
-          <p>
-            The full receipt, including excluded lines, is visible to everyone
-            authorized to view this receipt. Business allocation does not
-            determine tax deductibility.
-          </p>
-        </section>
         <div className="receipt-review-grid">
           <section className="receipt-preview">
-            <button
-              className="receipt-preview-launch btn secondary"
-              onClick={viewReceipt}
-            >
-              <span className="receipt-mobile-thumbnail">
-                {r.fileHash ? (
-                  <ReceiptDocumentPreview
-                    id={r.id}
-                    localFile={localFile}
-                    zoom={0.2}
-                    rotation={0}
-                    thumbnail
-                  />
-                ) : (
-                  <FileText size={24} />
-                )}
-              </span>
-              <span>
-                <strong>
-                  {r.fileHash ? 'Original receipt attached' : 'Manual receipt'}
-                </strong>
-                <small>{r.filename || 'No file attached'}</small>
-              </span>
-              {r.fileHash && 'View receipt'}
-            </button>
             <div className="button-row receipt-desktop-controls">
+              <button className="btn secondary" onClick={() => setZoom(1)}>
+                Fit
+              </button>
               <button
                 className="btn secondary"
                 aria-label="Zoom out"
@@ -2606,7 +2668,7 @@ function ReceiptReview({
               </button>
               <button
                 className="btn secondary"
-                disabled={pdf || heic}
+                disabled={heic}
                 onClick={() => setRotation(rotation + 90)}
               >
                 <RotateCw size={17} />
@@ -2658,66 +2720,34 @@ function ReceiptReview({
                 />
               )}
             </div>
-            <small>
-              Preview controls do not alter your saved original.
-              {active >= 0 && !lines[active]?.bbox
-                ? ' This extracted line has no position data to highlight.'
-                : ''}
+            <small className="receipt-preview-filename">
+              {r.filename || 'Original receipt'}
             </small>
           </section>
-          <section className={'receipt-fields receipt-tab-' + reviewTab}>
-            <div
-              className="button-row"
-              role="tablist"
-              aria-label="Receipt entries"
-            >
-              {['details', 'lines'].map((tab) => (
-                <button
-                  key={tab}
-                  className={
-                    'btn secondary ' + (reviewTab === tab ? 'active' : '')
-                  }
-                  role="tab"
-                  aria-selected={reviewTab === tab}
-                  id={`receipt-tab-${r.id}-${tab}`}
-                  aria-controls={`receipt-panel-${r.id}-${tab}`}
-                  data-review-tab={tab}
-                  tabIndex={reviewTab === tab ? 0 : -1}
-                  onKeyDown={(e) => {
-                    if (
-                      ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)
-                    ) {
-                      e.preventDefault()
-                      const next =
-                        e.key === 'Home'
-                          ? 'details'
-                          : e.key === 'End'
-                            ? 'lines'
-                            : tab === 'details'
-                              ? 'lines'
-                              : 'details'
-                      setReviewTab(next)
-                      e.currentTarget.parentElement
-                        ?.querySelector<HTMLButtonElement>(
-                          `[data-review-tab="${next}"]`,
-                        )
-                        ?.focus()
-                    }
-                  }}
-                  onClick={() => setReviewTab(tab)}
-                >
-                  {tab === 'details' ? 'Details' : 'Line Items'}
-                </button>
-              ))}
-            </div>
-            <div
-              role="tabpanel"
-              id={`receipt-panel-${r.id}-details`}
-              aria-labelledby={`receipt-tab-${r.id}-details`}
-              hidden={reviewTab !== 'details'}
-            >
-              {r.extractionMessage && (
-                <p className="finance-feedback">{r.extractionMessage}</p>
+          <section className="receipt-fields">
+            <div className="receipt-details-panel">
+              {['failed', 'not_configured', 'partial'].includes(
+                r.extractionStatus,
+              ) && (
+                <p className="receipt-inline-notice">
+                  Couldn't read this document. Enter details manually or{' '}
+                  <button
+                    className="text-button"
+                    disabled={busy || !canWrite}
+                    onClick={() => void onSave('receiptExtract', r)}
+                  >
+                    Retry
+                  </button>
+                  .
+                </p>
+              )}
+              {r.extractionStatus === 'upload_failed' && (
+                <p className="receipt-inline-notice">
+                  Upload failed.{' '}
+                  <button onClick={onRetryUpload} disabled={busy}>
+                    Retry upload
+                  </button>
+                </p>
               )}
               {r.pendingExtraction && (
                 <div className="finance-feedback">
@@ -2774,68 +2804,6 @@ function ReceiptReview({
                   </button>
                 </div>
               )}
-              <p role="status">{receiptReadingLabel(r)}</p>
-              {r.extractionStatus === 'upload_failed' && (
-                <p>
-                  Your file is still available in this panel but has not been
-                  saved.{' '}
-                  <button
-                    className="btn secondary"
-                    disabled={busy}
-                    onClick={onRetryUpload}
-                  >
-                    Retry upload
-                  </button>
-                </p>
-              )}
-              {!closed && r.fileHash && r.id !== 'uploading' && (
-                <div className="button-row">
-                  <button
-                    className="btn secondary"
-                    disabled={
-                      busy ||
-                      !canWrite ||
-                      w.settings[0]?.receiptReading?.enabled === false
-                    }
-                    onClick={() => void onSave('receiptExtract', r)}
-                  >
-                    {['failed', 'not_configured', 'partial'].includes(
-                      r.extractionStatus,
-                    )
-                      ? 'Retry reading'
-                      : 'Read receipt again'}
-                  </button>
-                  <span>
-                    Manual entry stays available. Retrying preserves
-                    corrections.
-                  </span>
-                </div>
-              )}
-              {w.settings[0]?.receiptReading?.enabled === false && (
-                <p>
-                  Receipt reading is unavailable. Enter details manually; your
-                  original is saved.
-                </p>
-              )}
-              {r.lastReadSummary && (
-                <p className="finance-feedback">
-                  {r.lastReadSummary.pageCount} page(s) inspected ·{' '}
-                  {r.lastReadSummary.processingMethod === 'embedded_text'
-                    ? 'Embedded text'
-                    : 'Text and document OCR'}
-                  {r.lastReadSummary.unverifiedPages?.length
-                    ? ` · Review page(s) ${r.lastReadSummary.unverifiedPages.join(', ')}`
-                    : ''}
-                  . {r.lastReadSummary.warnings?.join(' ')}
-                </p>
-              )}
-              <p>
-                Added at:{' '}
-                {ovenTimestamp(
-                  r.addedAt || r.createdAt || r.history?.[0]?.at,
-                  w.settings[0],
-                )}
-              </p>
               <fieldset
                 disabled={closed || busy || r.id === 'uploading'}
                 className="receipt-metadata"
@@ -2854,6 +2822,13 @@ function ReceiptReview({
                       type="date"
                       value={r.date || ''}
                       onChange={(e) => update('date', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Payment method">
+                    <input
+                      aria-label="Payment method"
+                      value={r.method || ''}
+                      onChange={(e) => update('method', e.target.value)}
                     />
                   </Field>
                   <Field label="Tax treatment">
@@ -2887,199 +2862,173 @@ function ReceiptReview({
                     </small>
                   </Field>
                 </div>
-                <details className="receipt-adjustments">
-                  <summary>Discounts, shipping & receipt details</summary>
-                  <div className="finance-form-grid">
-                    {[
-                      [
-                        'receiptDiscount',
-                        'Additional receipt discount ($)',
-                        'number',
-                      ],
-                      ['otherCharges', 'Shipping / fees ($)', 'number'],
-                      [
-                        'printedTotal',
-                        'Printed / imported total ($, optional)',
-                        'number',
-                      ],
-                      [
-                        'adjustment',
-                        'Rounding adjustment ($, signed)',
-                        'number',
-                      ],
-                      ['adjustmentReason', 'Rounding explanation', 'text'],
-                      ['receivedDate', 'Inventory received date', 'date'],
-                      ['receiptNumber', 'Receipt / invoice number', 'text'],
-                      [
-                        'currency',
-                        'Printed currency (ISO code, optional)',
-                        'text',
-                      ],
-                      ['method', 'Payment method', 'text'],
-                    ].map(([key, label, type]) => (
-                      <Field key={key} label={label}>
-                        <input
-                          type={type}
-                          inputMode={type === 'number' ? 'decimal' : undefined}
-                          enterKeyHint="next"
-                          step={type === 'number' ? '.01' : undefined}
-                          value={r[key] ?? ''}
-                          onChange={(e) => update(key, e.target.value)}
-                        />
-                      </Field>
-                    ))}
-                  </div>
-                  <p>
-                    Only enter discounts and fees that are not already reflected
-                    in the line amounts. The original receipt total is required
-                    for reconciliation. Rounding is limited to five cents and
-                    requires an explanation.
-                  </p>
-                  {r.discounts != null && (
-                    <p>
-                      Imported discount (already reflected):{' '}
-                      {money(Number(r.discounts))}.
-                    </p>
-                  )}
-                </details>
+                <div className="receipt-inline-adjustments">
+                  {[
+                    ['receiptDiscount', 'Discount'],
+                    ['otherCharges', 'Shipping / fees'],
+                    ['adjustment', 'Rounding'],
+                  ].map(([key, label]) => (
+                    <label key={key}>
+                      {label}
+                      <input
+                        aria-label={label}
+                        type="number"
+                        step=".01"
+                        value={r[key] ?? ''}
+                        onChange={(e) => update(key, e.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
               </fieldset>
             </div>
-            <div
-              role="tabpanel"
-              id={`receipt-panel-${r.id}-lines`}
-              aria-labelledby={`receipt-tab-${r.id}-lines`}
-              className="receipt-lines-panel"
-              hidden={reviewTab !== 'lines'}
-            >
-              <div className="panel-heading">
-                <div>
-                  <h3>Receipt lines</h3>
-                  <p>
-                    Review one item at a time. Totals update as you edit.
-                    Refunds use the existing purchase correction/reversal
-                    workflow; negative receipt lines cannot be posted here.
-                  </p>
-                </div>
-                {!closed && (
+            <div className="receipt-lines-panel">
+              <div className="receipt-compact-lines">
+                <div className="receipt-table-head">
+                  <span>Description / allocation</span>
                   <button
-                    className="btn secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setActive(lines.length)
-                      setNeedsOnly(false)
-                      update('lines', [...lines, freshLine()])
-                    }}
+                    className="text-button"
+                    title="Type in subtotal"
+                    aria-pressed={entryColumn === 'subtotal'}
+                    onClick={() => setEntryColumn('subtotal')}
                   >
-                    <Plus size={16} />
-                    Add line
+                    Subtotal ✎
                   </button>
-                )}
+                  <span>Tax</span>
+                  <button
+                    className="text-button"
+                    title="Type in total"
+                    aria-pressed={entryColumn === 'total'}
+                    onClick={() => setEntryColumn('total')}
+                  >
+                    Total ✎
+                  </button>
+                </div>
+                <div className="receipt-table-scroll">
+                  {lines.map(
+                    (l: any, i: number) =>
+                      (showExcluded || l.allocation !== 'personal') && (
+                        <div className="receipt-compact-row" key={i}>
+                          <div>
+                            <input
+                              aria-label={`Line ${i + 1} description`}
+                              disabled={closed || busy}
+                              value={l.description || ''}
+                              onChange={(e) =>
+                                line(i, 'description', e.target.value)
+                              }
+                            />
+                            <div className="receipt-line-tools">
+                              <select
+                                aria-label={`Line ${i + 1} allocation`}
+                                disabled={closed || busy}
+                                value={l.allocation || 'unreviewed'}
+                                onChange={(e) =>
+                                  patchLine(i, {
+                                    allocation: e.target.value,
+                                    decision:
+                                      e.target.value === 'personal'
+                                        ? 'personal'
+                                        : l.decision === 'inventory'
+                                          ? 'inventory'
+                                          : 'expense',
+                                  })
+                                }
+                              >
+                                {[
+                                  'business',
+                                  'personal',
+                                  'split',
+                                  'unreviewed',
+                                ].map((v) => (
+                                  <option key={v} value={v}>
+                                    {v[0].toUpperCase() + v.slice(1)}
+                                  </option>
+                                ))}
+                              </select>
+                              {l.allocation === 'personal' && !closed ? (
+                                <button
+                                  className="text-button"
+                                  onClick={() =>
+                                    patchLine(i, {
+                                      allocation: 'business',
+                                      decision: 'expense',
+                                    })
+                                  }
+                                >
+                                  Restore
+                                </button>
+                              ) : (
+                                <button
+                                  className="text-button"
+                                  onClick={() =>
+                                    setActive(active === i ? -1 : i)
+                                  }
+                                >
+                                  {l.printedQuantity
+                                    ? `${l.printedQuantity} @ ${l.unitPrice ?? '—'} · `
+                                    : ''}
+                                  {l.decision === 'inventory'
+                                    ? matchedItem(l)?.name || 'Item'
+                                    : l.category || 'Category'}{' '}
+                                  · Edit details
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <input
+                            aria-label={`Line ${i + 1} subtotal`}
+                            readOnly={entryColumn !== 'subtotal'}
+                            type="number"
+                            step=".01"
+                            disabled={closed || busy}
+                            value={
+                              receiptLineCents(l) == null
+                                ? ''
+                                : receiptLineCents(l)! / 100
+                            }
+                            onChange={(e) =>
+                              patchLine(i, {
+                                amountMode: 'direct',
+                                enteredAmount: e.target.value,
+                                lineDiscount: 0,
+                              })
+                            }
+                          />
+                          <span>
+                            {money(
+                              (allocations[i]?.businessTax || 0) +
+                                (allocations[i]?.excludedTax || 0),
+                            )}
+                          </span>
+                          <input
+                            aria-label={`Line ${i + 1} total`}
+                            type="number"
+                            step=".01"
+                            disabled={closed || busy}
+                            readOnly={entryColumn !== 'total'}
+                            value={allocations[i]?.fullAmount ?? ''}
+                            onChange={(e) => enterLineTotal(i, e.target.value)}
+                          />
+                        </div>
+                      ),
+                  )}
+                </div>
+                <div className="receipt-table-total">
+                  <strong>Total</strong>
+                  <strong>{shownAmount(totals.subtotal)}</strong>
+                  <strong>{shownAmount(totals.tax)}</strong>
+                  <strong>{shownAmount(totals.total)}</strong>
+                </div>
               </div>
               {!closed && (
-                <>
-                  <p>
-                    Tax uses actual line tax first, then discounted amounts and
-                    confirmed rates. Combined tax is shared across eligible
-                    items; unknown tax treatment is labeled estimated. Discounts
-                    apply before tax. Shipping / fees remain separate.
-                  </p>
-                  <Field label="Tax, discount and fee allocation method">
-                    <select
-                      disabled={busy}
-                      value={r.adjustmentAllocation || 'proportional'}
-                      onChange={(e) =>
-                        update('adjustmentAllocation', e.target.value)
-                      }
-                    >
-                      <option value="proportional">
-                        Proportional to line amounts
-                      </option>
-                      <option value="manual">
-                        Actual / custom adjusted amount per line
-                      </option>
-                    </select>
-                  </Field>
-                  <Field label="Shipping / fee allocation">
-                    <select
-                      disabled={busy}
-                      value={r.feeAllocation || 'proportional'}
-                      onChange={(e) => update('feeAllocation', e.target.value)}
-                    >
-                      <option value="proportional">
-                        Proportional to discounted line amounts
-                      </option>
-                      <option value="business">Business lines only</option>
-                      <option value="personal">Personal lines only</option>
-                      <option value="unreviewed">Unreviewed lines only</option>
-                    </select>
-                    <small>
-                      Split lines share associated fees using the business
-                      share. Tax is allocated separately.
-                    </small>
-                  </Field>
-                  <div className="button-row">
-                    {[false, true].flatMap((selected) =>
-                      ['business', 'personal'].map((allocation) => (
-                        <button
-                          key={String(selected) + allocation}
-                          className="btn secondary"
-                          disabled={busy || (selected && !selectedLines.length)}
-                          onClick={() =>
-                            update(
-                              'lines',
-                              lines.map((l: any, i: number) =>
-                                selected && !selectedLines.includes(i)
-                                  ? l
-                                  : {
-                                      ...l,
-                                      allocation,
-                                      decision:
-                                        allocation === 'personal'
-                                          ? 'personal'
-                                          : l.decision === 'inventory'
-                                            ? 'inventory'
-                                            : 'expense',
-                                    },
-                              ),
-                            )
-                          }
-                        >
-                          Mark {selected ? 'selected' : 'all'}{' '}
-                          {allocation === 'business' ? 'Business' : 'Personal'}
-                        </button>
-                      )),
-                    )}
-                  </div>
-                  {!lines.length && (
-                    <p>
-                      No itemized lines were extracted. Add lines manually, or
-                      add one clearly described “Receipt-level allocation (not
-                      itemized)” line for the confirmed subtotal.
-                    </p>
-                  )}
-                </>
+                <button
+                  className="text-button"
+                  onClick={() => update('lines', [...lines, freshLine()])}
+                >
+                  + Insert new line
+                </button>
               )}
-              <div className="receipt-review-filters">
-                <button
-                  className={'btn secondary ' + (needsOnly ? 'active' : '')}
-                  onClick={() => {
-                    setNeedsOnly(true)
-                    setActive(
-                      lines.findIndex(
-                        (l: Partial<Item>) => receiptLineIssues(l).length,
-                      ),
-                    )
-                  }}
-                >
-                  Review needs attention ({unresolved})
-                </button>
-                <button
-                  className="btn secondary"
-                  onClick={() => setNeedsOnly(false)}
-                >
-                  View / edit all items ({lines.length})
-                </button>
-              </div>
               <label>
                 <input
                   type="checkbox"
@@ -3088,8 +3037,81 @@ function ReceiptReview({
                 />{' '}
                 Show excluded items
               </label>
+              <div className="receipt-reconciliation">
+                <label>
+                  Receipt total (from receipt)
+                  <input
+                    aria-label="Receipt total (from receipt)"
+                    placeholder="Enter the total printed on the receipt"
+                    required
+                    type="number"
+                    step=".01"
+                    disabled={closed || busy}
+                    value={r.printedTotal ?? ''}
+                    onChange={(e) => update('printedTotal', e.target.value)}
+                  />
+                </label>
+                <strong role="status">
+                  Difference{' '}
+                  {totals.difference == null ? '—' : money(totals.difference)}{' '}
+                  {totals.difference === 0 ? '✓' : '⚠'}
+                </strong>
+                {!closed && (
+                  <button
+                    className="text-button"
+                    disabled={totals.total == null}
+                    onClick={() => update('printedTotal', totals.total)}
+                  >
+                    Use calculated total ({shownAmount(totals.total)})
+                  </button>
+                )}
+              </div>
+              {lines.some((l: any) =>
+                ['personal', 'split'].includes(l.allocation),
+              ) && (
+                <div className="receipt-business-breakdown">
+                  <span>
+                    Original subtotal (read-only){' '}
+                    {shownAmount(
+                      Number(
+                        r.originalReceipt?.subtotal ??
+                          r.subtotal ??
+                          totals.subtotal,
+                      ),
+                    )}
+                  </span>
+                  <span>
+                    Less personal items: –
+                    {money(
+                      allocations
+                        .filter((l) =>
+                          ['personal', 'split'].includes(l.allocation),
+                        )
+                        .reduce(
+                          (n, l) =>
+                            n +
+                            (receiptCents(l.excludedAmount) ?? 0) -
+                            (receiptCents(l.excludedTax) ?? 0) -
+                            ((receiptCents(l.otherChargesShare) ?? 0) -
+                              (receiptCents(l.businessFees) ?? 0)),
+                          0,
+                        ) / 100,
+                    )}
+                  </span>
+                  <strong>
+                    Business subtotal {money(businessSum('businessSubtotal'))}
+                  </strong>
+                  <span>Business tax {money(businessSum('businessTax'))}</span>
+                  <strong>
+                    Business total {money(businessSum('postedAmount'))}
+                  </strong>
+                  <span>Personal total {money(amountFor('personal'))}</span>
+                </div>
+              )}
+              {taxPlan.estimated && <small>Estimated tax allocation</small>}
               {lines.map(
                 (l: any, i: number) =>
+                  active === i &&
                   (showExcluded || l.allocation !== 'personal') &&
                   (!needsOnly ||
                     receiptLineIssues(l).length ||
@@ -4157,62 +4179,6 @@ function ReceiptReview({
                     </div>
                   ),
               )}
-              <details>
-                <summary>View calculation & history</summary>
-                {r.originalReceipt && (
-                  <details>
-                    <summary>
-                      Original receipt values before review edits
-                    </summary>
-                    <p>
-                      Subtotal {shownAmount(r.originalReceipt.subtotal)} ·
-                      discounts{' '}
-                      {shownAmount(
-                        r.originalReceipt.receiptDiscount ??
-                          r.originalReceipt.discounts,
-                      )}{' '}
-                      · tax {shownAmount(r.originalReceipt.tax)} · total{' '}
-                      {shownAmount(
-                        r.originalReceipt.printedTotal ??
-                          r.originalReceipt.total,
-                      )}
-                    </p>
-                    {r.originalReceipt.lines?.map((l: any, i: number) => (
-                      <p key={i}>
-                        {l.description || `Item ${i + 1}`} ·{' '}
-                        {shownAmount(
-                          receiptLineCents(l) == null
-                            ? null
-                            : receiptLineCents(l)! / 100,
-                        )}
-                      </p>
-                    ))}
-                  </details>
-                )}
-                {r.postedLines?.map((l: any, i: number) => (
-                  <p key={i}>
-                    {l.description}: {money(l.postedAmount)} ·{' '}
-                    {l.estimatedTax
-                      ? 'estimated tax allocation'
-                      : 'allocated tax'}{' '}
-                    {l.adjustmentAllocation === 'manual'
-                      ? 'included in custom cost'
-                      : money(l.taxShare || 0)}{' '}
-                    · other charges{' '}
-                    {l.adjustmentAllocation === 'manual'
-                      ? 'included in custom cost'
-                      : money(l.otherChargesShare ?? 0)}{' '}
-                    {l.normalizedQuantity
-                      ? `· received ${l.normalizedQuantity} base units · previous unit cost ${l.priorCost} → ${l.newCost}`
-                      : ''}
-                  </p>
-                ))}
-                {r.history?.map((h: any, i: number) => (
-                  <p key={i}>
-                    {h.action} · {h.at}
-                  </p>
-                ))}
-              </details>
               {!closed && purchaseCandidates.length > 0 && (
                 <div className="finance-feedback">
                   <strong>Possible existing purchase</strong>
@@ -4224,54 +4190,6 @@ function ReceiptReview({
                     attach below if this is the same purchase.
                   </p>
                 </div>
-              )}
-              {!closed && (
-                <details>
-                  <summary>Attach to an existing purchase instead</summary>
-                  <p>
-                    This links the original receipt without changing inventory
-                    or posting another transaction. The purchase must equal only
-                    the business allocation and cannot receive new stock. Your
-                    edits are saved before attachment.
-                  </p>
-                  <label>
-                    Existing purchase
-                    <select
-                      value={matchId}
-                      onChange={(e) => setMatchId(e.target.value)}
-                    >
-                      <option value="">Choose a purchase</option>
-                      {(w.finance_transactions || [])
-                        .filter(
-                          (t) =>
-                            ['expense', 'bill'].includes(t.kind) &&
-                            !t.reversedBy &&
-                            !t.receiptId,
-                        )
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} · {t.date} · {money(t.amount)}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <button
-                    className="btn secondary"
-                    disabled={busy || !canWrite || !matchId}
-                    onClick={() =>
-                      void (async () => {
-                        const saved = await onSave('receiptDraft', r)
-                        if (saved)
-                          await onSave('receiptMatch', {
-                            id: r.id,
-                            transactionId: matchId,
-                          })
-                      })()
-                    }
-                  >
-                    Confirm attachment only
-                  </button>
-                </details>
               )}
               {duplicates.length > 0 && (
                 <div className="finance-feedback">
@@ -4300,67 +4218,153 @@ function ReceiptReview({
             </div>
           </section>
         </div>
-        {!closed && (
-          <section
-            className="receipt-total-review"
-            aria-label="Automatic receipt totals"
+        {toolsOpen && (
+          <aside
+            className="receipt-tools-drawer"
+            aria-label="Receipt details and history"
           >
-            <dl>
-              {[
-                ['Calculated subtotal', totals.subtotal],
-                ['Additional receipt discount', totals.discount],
-                [
-                  'Tax ' +
-                    (r.taxTreatment === 'inclusive' ? '(included)' : '(added)'),
-                  totals.tax,
-                ],
-                ['Shipping / fees', totals.charges],
-                ['Rounding adjustment', Number(r.adjustment || 0)],
-                ['Calculated receipt total', totals.total],
-                [
-                  'Printed / imported total',
-                  r.printedTotal == null || r.printedTotal === ''
-                    ? null
-                    : Number(r.printedTotal),
-                ],
-                ['Difference', totals.difference],
-              ].map(([label, value]) => (
-                <div key={String(label)}>
-                  <dt>{String(label)}</dt>
-                  <dd>
-                    {value == null
-                      ? String(label).startsWith('Printed')
-                        ? 'Not provided'
-                        : String(label) === 'Difference'
-                          ? '—'
-                          : 'Incomplete'
-                      : money(Number(value))}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {allocationErrors.map((e) => (
-              <p role="alert" key={e}>
-                {e}
-              </p>
-            ))}
-            {!!totals.errors.length && (
-              <ul>
-                {totals.errors.map((e) => (
-                  <li key={e}>{e}</li>
+            <button
+              className="btn secondary"
+              onClick={() => setToolsOpen(false)}
+            >
+              Back to editing
+            </button>
+            <details className="receipt-adjustments">
+              <summary>Discounts, fees & more details</summary>
+              <div className="finance-form-grid">
+                {[
+                  ['adjustmentReason', 'Rounding explanation', 'text'],
+                  ['receivedDate', 'Inventory received date', 'date'],
+                  ['receiptNumber', 'Receipt / invoice number', 'text'],
+                  ['currency', 'Printed currency (ISO code, optional)', 'text'],
+                ].map(([key, label, type]) => (
+                  <Field key={key} label={label}>
+                    <input
+                      type={type}
+                      inputMode={type === 'number' ? 'decimal' : undefined}
+                      enterKeyHint="next"
+                      step={type === 'number' ? '.01' : undefined}
+                      value={r[key] ?? ''}
+                      onChange={(e) => update(key, e.target.value)}
+                    />
+                  </Field>
                 ))}
-              </ul>
-            )}
-            {totals.difference != null && totals.difference !== 0 && (
-              <p role="alert">
-                Calculated total differs from the printed total by{' '}
-                {money(totals.difference)}. Check missing lines, discounts, tax
-                and shipping. Edit the original values, or enter an explained
-                rounding adjustment within five cents. The printed total stays
-                unchanged.
+              </div>
+              <p>
+                Only enter discounts and fees that are not already reflected in
+                the line amounts. The original receipt total is required for
+                reconciliation. Rounding is limited to five cents and requires
+                an explanation.
               </p>
+              {r.discounts != null && (
+                <p>
+                  Imported discount (already reflected):{' '}
+                  {money(Number(r.discounts))}.
+                </p>
+              )}
+            </details>{' '}
+            <details>
+              <summary>View calculation & history</summary>
+              {r.originalReceipt && (
+                <details>
+                  <summary>Original receipt values before review edits</summary>
+                  <p>
+                    Subtotal {shownAmount(r.originalReceipt.subtotal)} ·
+                    discounts{' '}
+                    {shownAmount(
+                      r.originalReceipt.receiptDiscount ??
+                        r.originalReceipt.discounts,
+                    )}{' '}
+                    · tax {shownAmount(r.originalReceipt.tax)} · total{' '}
+                    {shownAmount(
+                      r.originalReceipt.printedTotal ?? r.originalReceipt.total,
+                    )}
+                  </p>
+                  {r.originalReceipt.lines?.map((l: any, i: number) => (
+                    <p key={i}>
+                      {l.description || `Item ${i + 1}`} ·{' '}
+                      {shownAmount(
+                        receiptLineCents(l) == null
+                          ? null
+                          : receiptLineCents(l)! / 100,
+                      )}
+                    </p>
+                  ))}
+                </details>
+              )}
+              {r.postedLines?.map((l: any, i: number) => (
+                <p key={i}>
+                  {l.description}: {money(l.postedAmount)} ·{' '}
+                  {l.estimatedTax
+                    ? 'estimated tax allocation'
+                    : 'allocated tax'}{' '}
+                  {l.adjustmentAllocation === 'manual'
+                    ? 'included in custom cost'
+                    : money(l.taxShare || 0)}{' '}
+                  · other charges{' '}
+                  {l.adjustmentAllocation === 'manual'
+                    ? 'included in custom cost'
+                    : money(l.otherChargesShare ?? 0)}{' '}
+                  {l.normalizedQuantity
+                    ? `· received ${l.normalizedQuantity} base units · previous unit cost ${l.priorCost} → ${l.newCost}`
+                    : ''}
+                </p>
+              ))}
+              {r.history?.map((h: any, i: number) => (
+                <p key={i}>
+                  {h.action} · {h.at}
+                </p>
+              ))}
+            </details>
+            {!closed && (
+              <details>
+                <summary>Attach to an existing purchase instead</summary>
+                <p>
+                  This links the original receipt without changing inventory or
+                  posting another transaction. The purchase must equal only the
+                  business allocation and cannot receive new stock. Your edits
+                  are saved before attachment.
+                </p>
+                <label>
+                  Existing purchase
+                  <select
+                    value={matchId}
+                    onChange={(e) => setMatchId(e.target.value)}
+                  >
+                    <option value="">Choose a purchase</option>
+                    {(w.finance_transactions || [])
+                      .filter(
+                        (t) =>
+                          ['expense', 'bill'].includes(t.kind) &&
+                          !t.reversedBy &&
+                          !t.receiptId,
+                      )
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} · {t.date} · {money(t.amount)}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  className="btn secondary"
+                  disabled={busy || !canWrite || !matchId}
+                  onClick={() =>
+                    void (async () => {
+                      const saved = await onSave('receiptDraft', r)
+                      if (saved)
+                        await onSave('receiptMatch', {
+                          id: r.id,
+                          transactionId: matchId,
+                        })
+                    })()
+                  }
+                >
+                  Confirm attachment only
+                </button>
+              </details>
             )}
-          </section>
+          </aside>
         )}
         {confirming && (
           <section
@@ -4375,12 +4379,6 @@ function ReceiptReview({
                 purchase date before posting.
               </p>
             )}
-            <p>
-              Only the business allocation records a purchase and payment
-              through the existing Cash account posting policy. An entirely
-              personal receipt creates no business transaction or stock
-              movement.
-            </p>
             <dl>
               <div>
                 <dt>Business expense</dt>
@@ -4413,16 +4411,34 @@ function ReceiptReview({
                     : ''}
                 </p>
               ))}
-            <p>
-              Confirmation records expenses and receives the listed inventory
-              together. Saving a draft has no financial or stock effects. To use
-              an existing purchase, choose “Attach to an existing purchase
-              instead.”
-            </p>
+            <button
+              className="btn secondary"
+              onClick={() => setConfirming(false)}
+            >
+              Back to editing
+            </button>
           </section>
         )}
         <div className="finance-sticky-actions">
-          <button className="btn secondary" disabled={busy} onClick={onClose}>
+          <span className="receipt-footer-status" role="status">
+            {closed
+              ? 'Original receipt preserved'
+              : r.extractionStatus === 'processing'
+                ? 'Reading receipt…'
+                : r.printedTotal == null || r.printedTotal === ''
+                  ? 'Enter the receipt total to finish.'
+                  : canConfirm
+                    ? 'Ready to post.'
+                    : [...totals.errors, ...allocationErrors][0] ||
+                      (unresolved
+                        ? 'Review line details to finish.'
+                        : 'Check merchant, date and receipt total.')}
+          </span>
+          <button
+            className="btn secondary"
+            disabled={busy}
+            onClick={() => void navigateReceipt(onClose)}
+          >
             Close
           </button>
           {closed && r.status === 'posted' && (
@@ -4473,7 +4489,7 @@ function ReceiptReview({
                   busy ||
                   !canWrite ||
                   !lines.length ||
-                  (confirming && !canConfirm) ||
+                  !canConfirm ||
                   r.id === 'uploading' ||
                   r.extractionStatus === 'processing'
                 }
@@ -4494,11 +4510,7 @@ function ReceiptReview({
                 }}
               >
                 <Check size={17} />
-                {busy
-                  ? 'Processing…'
-                  : confirming
-                    ? 'Confirm & post'
-                    : 'Review confirmation'}
+                {busy ? 'Processing…' : confirming ? 'Confirm & post' : 'Post'}
               </button>
             </>
           )}

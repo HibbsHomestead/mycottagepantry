@@ -11,11 +11,7 @@ const posted = (r: Item) =>
   !['draft', 'pending', 'cancelled', 'failed'].includes(r.status)
 const numeric = (v: unknown) =>
   typeof v === 'number' && Number.isFinite(v) ? receiptCents(v) : null
-export function financeDashboard(
-  w: Workspace,
-  start: string,
-  end: string,
-) {
+export function financeDashboard(w: Workspace, start: string, end: string) {
   const calendarDate = (value: unknown) => {
     if (typeof value !== 'string') return ''
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
@@ -52,9 +48,7 @@ export function financeDashboard(
     if (s.fees != null)
       add(s, 'sales', 'expenses', s.fees, 'Payment processing fees')
   }
-  for (const s of (w.consignment_sales || [])
-    .filter(posted)
-    .filter(inRange)) {
+  for (const s of (w.consignment_sales || []).filter(posted).filter(inRange)) {
     add(
       s,
       'consignment_sales',
@@ -114,17 +108,14 @@ export function financeDashboard(
       records,
       value: records.some((r) => r.amount == null)
         ? null
-        : records.reduce((s, r) => s + receiptCents(r.amount)!, 0) /
-          100,
+        : records.reduce((s, r) => s + receiptCents(r.amount)!, 0) / 100,
     }
   }
   const income = metric('income'),
     expenses = metric('expenses'),
     tax = metric('tax')
   const categories = [
-    ...new Set(
-      expenses.records.map((r) => r.category || 'Missing category'),
-    ),
+    ...new Set(expenses.records.map((r) => r.category || 'Missing category')),
   ]
     .map((name) => {
       const records = expenses.records.filter(
@@ -134,8 +125,7 @@ export function financeDashboard(
         name,
         value: records.some((r) => r.amount == null)
           ? null
-          : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) /
-            100,
+          : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) / 100,
       }
     })
     .sort((a, b) => Math.abs(b.value || 0) - Math.abs(a.value || 0))
@@ -157,8 +147,7 @@ export function financeDashboard(
           key,
           records.some((r) => r.amount == null)
             ? null
-            : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) /
-              100,
+            : records.reduce((n, r) => n + receiptCents(r.amount)!, 0) / 100,
         ]
       }),
     ),
@@ -194,6 +183,7 @@ export function financeDashboard(
     )
     const inventoryLines = linked
       .filter(posted)
+      .filter((t) => !t.reversedBy && t.kind !== 'reversal')
       .flatMap((t) =>
         (t.lineSnapshots || []).filter((l: Item) => l.decision === 'inventory'),
       )
@@ -207,17 +197,18 @@ export function financeDashboard(
         ) / 100
     const withinPeriod = inRange(receipt)
     const awaitingReview = receipt.status === 'draft'
-    const reason = awaitingReview
-      ? 'Awaiting review and posting; saved document only. Open the existing receipt to review.'
-      : receipt.status === 'cancelled'
-        ? 'Cancelled receipt; excluded from financial figures.'
+    const reason =
+      receipt.status === 'cancelled'
+        ? 'Cancelled'
         : !withinPeriod
-          ? 'Receipt date is outside the selected period.'
-          : contributes.length
-            ? 'Linked posted expense details contribute once. The receipt total is not added again.'
+          ? 'Outside this period'
+          : awaitingReview
+            ? 'Needs review'
             : inventoryLines.length
-              ? 'Posted inventory purchase; recorded as an asset, not an operating expense.'
-              : 'No eligible operating expense linked; review the existing receipt and purchase details.'
+              ? 'Posted – inventory'
+              : contributes.length
+                ? 'Posted – operating expense'
+                : 'Review linked purchase'
     return {
       receipt,
       withinPeriod,
@@ -232,7 +223,71 @@ export function financeDashboard(
       inventoryLines: inventoryLines.length,
     }
   })
+  receiptRecords.sort(
+    (a, b) =>
+      String(b.receipt.date || '').localeCompare(
+        String(a.receipt.date || ''),
+      ) ||
+      String(b.receipt.createdAt || '').localeCompare(
+        String(a.receipt.createdAt || ''),
+      ),
+  )
+  // Bills affect operating expenses at posting; money spent follows their payments.
+  const cashExpenses = expenses.records.filter(
+    (e) =>
+      !(w.finance_transactions || []).some(
+        (t) =>
+          t.kind === 'bill' &&
+          (e.transactionId === t.id || e.sourceId === t.id),
+      ),
+  )
+  const billPayments = transactions
+    .filter(posted)
+    .filter((t) => t.kind === 'vendorPayment')
+  const operatingSpent = [
+    ...cashExpenses.map((e) => e.amount),
+    ...billPayments.map((t) =>
+      typeof t.amount === 'number' ? t.amount : null,
+    ),
+  ].some((n) => n == null)
+    ? null
+    : [
+        ...cashExpenses.map((e) => e.amount),
+        ...billPayments.map((t) => t.amount),
+      ].reduce<number>((sum, n) => sum + (receiptCents(n) ?? 0), 0) / 100
+  const inventoryPurchases = (w.finance_transactions || [])
+    .filter(posted)
+    .filter(inRange)
+    .filter((t) => !t.reversedBy && t.kind !== 'reversal')
+    .flatMap((t) =>
+      (t.lineSnapshots || [])
+        .filter((l: Item) => l.decision === 'inventory')
+        .map((l: Item) => ({ ...l, transactionId: t.id })),
+    )
+  const inventorySpent = inventoryPurchases.some(
+    (l: Item) => numeric(l.postedAmount) == null,
+  )
+    ? null
+    : inventoryPurchases.reduce(
+        (n: number, l: Item) => n + numeric(l.postedAmount)!,
+        0,
+      ) / 100
+  const hasPeriodRecords =
+    drafts.length > 0 ||
+    rows.length > 0 ||
+    transactions.length > 0 ||
+    receiptRecords.some((r) => r.withinPeriod)
   return {
+    operatingSpent,
+    inventorySpent,
+    inventoryPurchaseCount: new Set(
+      inventoryPurchases.map((l: Item) => l.transactionId),
+    ).size,
+    totalSpent:
+      inventorySpent == null || operatingSpent == null
+        ? null
+        : (receiptCents(inventorySpent)! + receiptCents(operatingSpent)!) / 100,
+    hasPeriodRecords,
     rows,
     daily,
     activity: transactions.map((t): Item & { exclusion: string } => ({
@@ -274,9 +329,7 @@ export function financeDashboard(
     ),
     difference:
       income.value != null && expenses.value != null
-        ? (receiptCents(income.value)! -
-            receiptCents(expenses.value)!) /
-          100
+        ? (receiptCents(income.value)! - receiptCents(expenses.value)!) / 100
         : null,
   }
 }

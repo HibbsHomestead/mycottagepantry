@@ -10,16 +10,9 @@ import {
   CircleAlert,
 } from 'lucide-react'
 import { money, type Workspace, type Item } from '@/lib/domain'
-import {
-  datePeriods,
-  dateRange,
-  type DatePeriod,
-} from '@/lib/date-ranges'
+import { datePeriods, dateRange, type DatePeriod } from '@/lib/date-ranges'
 import { ovenToday } from '@/lib/oven-dates'
-import {
-  financeDashboard,
-  type FinanceRecord,
-} from '@/lib/finance-dashboard'
+import { financeDashboard, type FinanceRecord } from '@/lib/finance-dashboard'
 
 export function FinanceDashboard({
   workspace: w,
@@ -40,13 +33,12 @@ export function FinanceDashboard({
   onReceipt: (receipt: Item) => void
   onReconcile: (transaction: Item) => void
 }) {
-  const [period, setPeriod] = useState<DatePeriod | 'All time'>(
-    'This month',
-  )
+  const [period, setPeriod] = useState<DatePeriod | 'All time'>('This month')
   const [custom, setCustom] = useState({ start: '', end: '' })
   const [drill, setDrill] = useState('')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
+  const [periodReceiptsOnly, setPeriodReceiptsOnly] = useState(false)
   const [attention, setAttention] = useState('')
   const [bucketDetail, setBucketDetail] = useState('')
   const range =
@@ -54,10 +46,7 @@ export function FinanceDashboard({
       ? { start: '0001-01-01', end: '9999-12-31' }
       : period === 'Custom'
         ? custom
-        : dateRange(
-            period,
-            new Date(ovenToday(w.settings[0]) + 'T12:00:00'),
-          )
+        : dateRange(period, new Date(ovenToday(w.settings[0]) + 'T12:00:00'))
   const valid = !!range.start && !!range.end && range.start <= range.end
   const data = financeDashboard(w, range.start, range.end)
   const value = (n: number | null, count: number) =>
@@ -67,15 +56,13 @@ export function FinanceDashboard({
         : 'Loading…'
       : !valid
         ? '—'
-        : !count
+        : !count && !data.hasPeriodRecords
           ? '—'
           : n == null
             ? 'Incomplete'
             : money(n)
   let records: FinanceRecord[] = data.rows.filter((r) =>
-    !drill || drill === 'difference'
-      ? r.metric !== 'tax'
-      : r.metric === drill,
+    !drill || drill === 'difference' ? r.metric !== 'tax' : r.metric === drill,
   )
   if (category)
     records = records.filter(
@@ -148,13 +135,9 @@ export function FinanceDashboard({
         )}
       </header>
       {loadError && (
-        <p role="alert">
-          Financial records could not load. {loadError}
-        </p>
+        <p role="alert">Financial records could not load. {loadError}</p>
       )}
-      {!ready && !loadError && (
-        <p role="status">Loading financial records…</p>
-      )}
+      {!ready && !loadError && <p role="status">Loading financial records…</p>}
       {!valid && (
         <p role="alert">
           Choose a complete date range with the start before the end.
@@ -164,22 +147,79 @@ export function FinanceDashboard({
         {valid
           ? `${period === 'All time' ? 'All recorded dates' : `${range.start} – ${range.end}`} · `
           : ''}
-        Posted records only · drafts and pending activity excluded from
-        figures.
+        Posted records only · drafts and pending activity excluded from figures.
       </p>
       {ready && valid && !loadError && (
         <>
-          {!data.expenses.records.length && (
-            <p className="finance-scope" role="status">
-              {data.drafts.length
-                ? `Receipts awaiting review: ${data.drafts.length}. No posted operating expenses recorded in this period.`
-                : 'No operating expenses recorded in this period.'}{' '}
-              {data.receiptRecords.some(
-                (r) => r.withinPeriod && r.inventoryLines > 0,
-              ) &&
-                'Posted inventory purchases are assets and appear in the receipt details below.'}
-            </p>
-          )}
+          <section className="panel" aria-label="Purchases / money spent">
+            <h3>Purchases / money spent</h3>
+            <div className="button-row">
+              <button
+                className="btn secondary"
+                onClick={() => show('expenses')}
+              >
+                Operating expenses{' '}
+                {value(data.operatingSpent, data.expenses.records.length)}
+              </button>
+              <button
+                className="btn secondary"
+                onClick={() =>
+                  document
+                    .getElementById('saved-receipts')
+                    ?.scrollIntoView({ block: 'start' })
+                }
+              >
+                Inventory purchases (assets){' '}
+                {value(data.inventorySpent, data.inventoryPurchaseCount)}
+              </button>
+              <strong>
+                Total spent{' '}
+                {value(
+                  data.totalSpent,
+                  data.expenses.records.length + data.inventoryPurchaseCount,
+                )}
+              </strong>
+            </div>
+            {!data.expenses.records.length &&
+              data.inventoryPurchaseCount > 0 && (
+                <p>
+                  No operating expenses yet.{' '}
+                  <button
+                    className="text-button"
+                    onClick={() =>
+                      document
+                        .getElementById('saved-receipts')
+                        ?.scrollIntoView({ block: 'start' })
+                    }
+                  >
+                    {data.inventoryPurchaseCount} inventory purchase
+                    {data.inventoryPurchaseCount === 1 ? '' : 's'} (
+                    {data.inventorySpent == null
+                      ? 'Incomplete'
+                      : money(data.inventorySpent)}
+                    ) recorded as stock.
+                  </button>
+                </p>
+              )}
+            {!!data.drafts.length && (
+              <div className="button-row" role="status">
+                <strong>Receipts awaiting review: {data.drafts.length}</strong>
+                <span>
+                  {data.drafts.length === 1
+                    ? '1 receipt is'
+                    : `${data.drafts.length} receipts are`}{' '}
+                  waiting for review and{' '}
+                  {data.drafts.length === 1 ? "isn't" : "aren't"} counted yet.
+                </span>
+                <button
+                  className="btn"
+                  onClick={() => onReceipt(data.drafts[0])}
+                >
+                  Review
+                </button>
+              </div>
+            )}
+          </section>
           {!!data.outsidePeriod.length && (
             <p className="finance-scope">
               {data.outsidePeriod.length} posted{' '}
@@ -216,8 +256,7 @@ export function FinanceDashboard({
                 label: 'Income less expenses',
                 n: data.difference,
                 count:
-                  data.income.records.length +
-                  data.expenses.records.length,
+                  data.income.records.length + data.expenses.records.length,
                 help: 'Recorded income minus recorded operating expenses and fees. Before cost of goods sold; this is not accounting profit or available cash.',
                 Icon: ReceiptText,
               },
@@ -243,7 +282,17 @@ export function FinanceDashboard({
                 <strong>{value(c.n, c.count)}</strong>
                 <small>
                   {!c.count
-                    ? 'No records in this period'
+                    ? data.hasPeriodRecords
+                      ? 'No posted ' +
+                        (c.key === 'expenses'
+                          ? 'operating expenses'
+                          : c.key === 'tax'
+                            ? 'sales tax'
+                            : c.key === 'income'
+                              ? 'income'
+                              : 'income or operating expenses') +
+                        ' yet'
+                      : 'No records in this period'
                     : c.key === 'difference'
                       ? 'Before cost of goods sold'
                       : 'View underlying records'}
@@ -252,10 +301,7 @@ export function FinanceDashboard({
               </button>
             ))}
           </section>
-          <div
-            className="finance-quick-actions"
-            aria-label="Quick actions"
-          >
+          <div className="finance-quick-actions" aria-label="Quick actions">
             <button
               className="btn"
               disabled={!canWrite}
@@ -293,9 +339,7 @@ export function FinanceDashboard({
               <div className="panel-heading">
                 <div>
                   <h3>Income & expenses</h3>
-                  <p>
-                    Recorded totals by {data.daily ? 'day' : 'month'}
-                  </p>
+                  <p>Recorded totals by {data.daily ? 'day' : 'month'}</p>
                 </div>
                 <span className="finance-legend">
                   <i />
@@ -319,8 +363,16 @@ export function FinanceDashboard({
                     <button
                       key={p.month}
                       className="finance-month"
-                      onMouseEnter={() => setBucketDetail(`${p.month}: Income ${p.income == null ? 'Incomplete' : money(p.income)}; expenses ${p.expenses == null ? 'Incomplete' : money(p.expenses)}`)}
-                      onFocus={() => setBucketDetail(`${p.month}: Income ${p.income == null ? 'Incomplete' : money(p.income)}; expenses ${p.expenses == null ? 'Incomplete' : money(p.expenses)}`)}
+                      onMouseEnter={() =>
+                        setBucketDetail(
+                          `${p.month}: Income ${p.income == null ? 'Incomplete' : money(p.income)}; expenses ${p.expenses == null ? 'Incomplete' : money(p.expenses)}`,
+                        )
+                      }
+                      onFocus={() =>
+                        setBucketDetail(
+                          `${p.month}: Income ${p.income == null ? 'Incomplete' : money(p.income)}; expenses ${p.expenses == null ? 'Incomplete' : money(p.expenses)}`,
+                        )
+                      }
                       onClick={() => {
                         show('difference')
                         setSearch(p.month)
@@ -351,11 +403,13 @@ export function FinanceDashboard({
                   ))}
                 </div>
               )}
-              <p role="status" className="finance-chart-note">{bucketDetail}</p>
+              <p role="status" className="finance-chart-note">
+                {bucketDetail}
+              </p>
               <p className="finance-chart-note">
-                Hover or focus for amounts; select a date bucket to see
-                its records. Negative totals use a minus marker; missing
-                amounts remain incomplete.
+                Hover or focus for amounts; select a date bucket to see its
+                records. Negative totals use a minus marker; missing amounts
+                remain incomplete.
               </p>
             </section>
             <section className="panel finance-categories">
@@ -379,9 +433,7 @@ export function FinanceDashboard({
                     <span>
                       {c.name}
                       <strong>
-                        {c.value == null
-                          ? 'Incomplete'
-                          : money(c.value)}
+                        {c.value == null ? 'Incomplete' : money(c.value)}
                       </strong>
                     </span>
                     <span className="finance-category-track">
@@ -405,8 +457,7 @@ export function FinanceDashboard({
             </div>
             <div className="finance-attention-links">
               <button onClick={() => setAttention('receipts')}>
-                <strong>{data.drafts.length}</strong> receipts awaiting
-                review
+                <strong>{data.drafts.length}</strong> receipts awaiting review
                 <ArrowRight size={15} />
               </button>
               <button onClick={() => setAttention('reconcile')}>
@@ -414,17 +465,14 @@ export function FinanceDashboard({
                 reconciled
                 <ArrowRight size={15} />
               </button>
-              <button
-                onClick={() => show('expenses', 'Missing category')}
-              >
+              <button onClick={() => show('expenses', 'Missing category')}>
                 <strong>{data.missingCategories.length}</strong> missing
                 categories
                 <ArrowRight size={15} />
               </button>
               {!!data.failures.length && (
                 <button onClick={() => setAttention('errors')}>
-                  <strong>{data.failures.length}</strong> receipt
-                  reading errors
+                  <strong>{data.failures.length}</strong> receipt reading errors
                   <ArrowRight size={15} />
                 </button>
               )}
@@ -448,8 +496,7 @@ export function FinanceDashboard({
                 </button>
               </div>
               <p className="finance-chart-note">
-                {range.start} – {range.end}; undated receipt drafts
-                included.
+                {range.start} – {range.end}; undated receipt drafts included.
               </p>
               {(attention === 'reconcile'
                 ? data.unreconciled
@@ -461,9 +508,7 @@ export function FinanceDashboard({
                   className="finance-list-row"
                   key={r.id}
                   onClick={() =>
-                    attention === 'reconcile'
-                      ? onReconcile(r)
-                      : onReceipt(r)
+                    attention === 'reconcile' ? onReconcile(r) : onReceipt(r)
                   }
                 >
                   <span>
@@ -506,8 +551,7 @@ export function FinanceDashboard({
                     : 'Recent financial records'}
                 </h3>
                 <p>
-                  {range.start} – {range.end} · {filtered.length} source
-                  rows
+                  {range.start} – {range.end} · {filtered.length} source rows
                 </p>
               </div>
               <button
@@ -549,39 +593,39 @@ export function FinanceDashboard({
                 No matching records. Try another date range or search.
               </p>
             ) : (
-              filtered
-                .slice(0, drill ? filtered.length : 8)
-                .map((r) => (
-                  <div className="finance-source-row" key={r.id}>
-                    <span className={`finance-record-icon ${r.metric}`}>
-                      {r.metric === 'income' ? (
-                        <ArrowDownLeft size={17} />
-                      ) : (
-                        <ArrowUpRight size={17} />
-                      )}
-                    </span>
-                    <span>
-                      <strong>{r.name}</strong>
-                      <small>
-                        {r.date} · {r.category || 'Missing category'} ·{' '}
-                        {r.source === 'consignment_sales'
-                          ? 'Consignment'
-                          : r.source === 'sales'
-                            ? 'Sale'
-                            : 'Expense'}
-                      </small>
-                    </span>
-                    <strong>
-                      {r.amount == null
-                        ? 'Incomplete'
-                        : money(r.amount)}
-                    </strong>
-                  </div>
-                ))
+              filtered.slice(0, drill ? filtered.length : 8).map((r) => (
+                <div className="finance-source-row" key={r.id}>
+                  <span className={`finance-record-icon ${r.metric}`}>
+                    {r.metric === 'income' ? (
+                      <ArrowDownLeft size={17} />
+                    ) : (
+                      <ArrowUpRight size={17} />
+                    )}
+                  </span>
+                  <span>
+                    <strong>{r.name}</strong>
+                    <small>
+                      {r.date} · {r.category || 'Missing category'} ·{' '}
+                      {r.source === 'consignment_sales'
+                        ? 'Consignment'
+                        : r.source === 'sales'
+                          ? 'Sale'
+                          : 'Expense'}
+                    </small>
+                  </span>
+                  <strong>
+                    {r.amount == null ? 'Incomplete' : money(r.amount)}
+                  </strong>
+                </div>
+              ))
             )}
           </section>
           {!!data.receiptRecords.length && (
-            <section className="panel" aria-label="Saved receipt inclusion">
+            <section
+              id="saved-receipts"
+              className="panel"
+              aria-label="Saved receipt inclusion"
+            >
               <div className="panel-heading">
                 <div>
                   <h3>Saved receipts & overview totals</h3>
@@ -597,58 +641,58 @@ export function FinanceDashboard({
                   Receipt inbox
                 </button>
               </div>
-              {data.receiptRecords.map((r) => (
-                <div className="finance-source-row finance-receipt-row" key={r.receipt.id}>
-                  <span>
-                    <strong>{r.receipt.vendor || r.receipt.name}</strong>
-                    <small>
-                      {r.receipt.date || 'Date needs review'} ·{' '}
-                      {r.receipt.status === 'draft'
-                        ? 'Awaiting review and posting'
-                        : r.receipt.status}{' '}
-                      · {r.receipt.id.slice(0, 8)}
-                    </small>
-                    <small>{r.reason}</small>
-                    {r.contributes && (
-                      <small>
-                        Operating expenses in this period:{' '}
-                        {r.expenseAmount == null
-                          ? 'Incomplete'
-                          : money(r.expenseAmount)}
-                      </small>
-                    )}
-                    {r.withinPeriod && r.inventoryLines > 0 && (
-                      <small>
-                        Inventory asset:{' '}
-                        {r.inventoryAmount == null
-                          ? 'Incomplete'
-                          : money(r.inventoryAmount)}
-                        . Payment activity is recorded separately.
-                      </small>
-                    )}
-                    {!r.withinPeriod && !!r.receipt.date && (
-                      <small>
-                        Outside selected period; changing the period is required
-                        to include eligible expense details.
-                      </small>
-                    )}
-                    {r.awaitingReview && (
-                      <small>
-                        Reading status: {r.receipt.extractionStatus || 'manual'}
-                        . Saved drafts do not affect totals.
-                      </small>
-                    )}
-                  </span>
-                  <button
-                    className="btn secondary"
-                    onClick={() => onReceipt(r.receipt)}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={periodReceiptsOnly}
+                  onChange={(e) => setPeriodReceiptsOnly(e.target.checked)}
+                />{' '}
+                Only selected period
+              </label>
+              {data.receiptRecords
+                .filter((r) => !periodReceiptsOnly || r.withinPeriod)
+                .map((r) => (
+                  <div
+                    className="finance-source-row finance-receipt-row"
+                    key={r.receipt.id}
                   >
-                    {r.awaitingReview
-                      ? 'Review existing receipt'
-                      : 'View existing receipt'}
-                  </button>
-                </div>
-              ))}
+                    <span>
+                      <strong>{r.receipt.vendor || r.receipt.name}</strong>
+                      <small>
+                        {r.receipt.date || 'Date needs review'} ·{' '}
+                        {r.receipt.status === 'draft'
+                          ? 'Awaiting review and posting'
+                          : r.receipt.status}{' '}
+                        · {r.receipt.id.slice(0, 8)}
+                      </small>
+                      <small>{r.reason}</small>
+                      {r.contributes && (
+                        <small>
+                          Operating expenses in this period:{' '}
+                          {r.expenseAmount == null
+                            ? 'Incomplete'
+                            : money(r.expenseAmount)}
+                        </small>
+                      )}
+                      {r.withinPeriod && r.inventoryLines > 0 && (
+                        <small>
+                          Inventory asset:{' '}
+                          {r.inventoryAmount == null
+                            ? 'Incomplete'
+                            : money(r.inventoryAmount)}
+                        </small>
+                      )}
+                    </span>
+                    <button
+                      className="btn secondary"
+                      onClick={() => onReceipt(r.receipt)}
+                    >
+                      {r.awaitingReview
+                        ? 'Review existing receipt'
+                        : 'View existing receipt'}
+                    </button>
+                  </div>
+                ))}
             </section>
           )}
           {!!data.activity.length && (
@@ -658,9 +702,9 @@ export function FinanceDashboard({
                 {data.activity.length})
               </summary>
               <p>
-                Reconciliation checks evidence independently of posting
-                status. Unreconciled posted expenses and sales still
-                contribute to the figures.
+                Reconciliation checks evidence independently of posting status.
+                Unreconciled posted expenses and sales still contribute to the
+                figures.
               </p>
               {data.activity.map((t) => (
                 <div className="finance-source-row" key={t.id}>
@@ -684,23 +728,21 @@ export function FinanceDashboard({
             <summary>How these figures are calculated</summary>
             <p>
               Income uses saved product-sale amounts excluding tax and
-              consignment commissions plus approved deductions. Expenses
-              use saved non-inventory expense rows and processing fees
-              from sales. Signed refunds and reversing expense rows
-              remain on their recorded dates. Receipt headers, matched
-              purchases, payments, owner activity, transfers and
-              processor payouts are not added again. Inventory
-              acquisitions remain assets until used; cost of goods sold
-              is not subtracted in this dashboard’s difference.
+              consignment commissions plus approved deductions. Expenses use
+              saved non-inventory expense rows and processing fees from sales.
+              Signed refunds and reversing expense rows remain on their recorded
+              dates. Receipt headers, matched purchases, payments, owner
+              activity, transfers and processor payouts are not added again.
+              Inventory acquisitions remain assets until used; cost of goods
+              sold is not subtracted in this dashboard’s difference.
             </p>
             <p>
-              Sales tax is the amount recorded as collected during this
-              period, not a calculated tax bill. Missing amounts show
-              “Incomplete”; no records show a dash; recorded zero values
-              show $0.00. These figures cover recorded business activity
-              and are not bank balances. Reconciliation status means
-              checked against evidence; it does not mean an imported
-              bank match.
+              Sales tax is the amount recorded as collected during this period,
+              not a calculated tax bill. Missing amounts show “Incomplete”; no
+              records show a dash; recorded zero values show $0.00. These
+              figures cover recorded business activity and are not bank
+              balances. Reconciliation status means checked against evidence; it
+              does not mean an imported bank match.
             </p>
           </details>
         </>

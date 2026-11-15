@@ -87,11 +87,11 @@ describe('report period boundaries', () => {
       start: '2024-02-01',
       end: '2024-02-29',
     }))
-  it('limits current periods to today', () => {
+  it('covers the full current month and limits year/quarter to today', () => {
     const today = new Date(2026, 9, 28)
     expect(dateRange('This month', today)).toEqual({
       start: '2026-10-01',
-      end: '2026-10-28',
+      end: '2026-10-31',
     })
     expect(dateRange('This quarter', today)).toEqual({
       start: '2026-10-01',

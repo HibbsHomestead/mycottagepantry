@@ -58,7 +58,7 @@ it('uploads, reads, populates review, and makes no posting request before confir
   )
   const dialog = screen.getByRole('dialog', { name: 'Review receipt' })
   await waitFor(() =>
-    expect(within(dialog).getByRole('status')).toHaveTextContent(
+    expect(within(dialog).getAllByRole('status').at(-1)!).toHaveTextContent(
       'Reading receipt',
     ),
   )
@@ -94,18 +94,15 @@ it('uploads, reads, populates review, and makes no posting request before confir
       within(dialog).getByRole('textbox', { name: 'Merchant' }),
     ).toHaveValue('The mill'),
   )
-  expect(within(dialog).getByRole('status')).toHaveTextContent(
-    'Partially extracted',
-  )
-  await user.click(within(dialog).getByRole('tab', { name: 'Line Items' }))
-  await user.click(within(dialog).getByRole('button', { name: /Flour.*Edit/ }))
+  expect(
+    within(dialog).getByText(/Couldn't read this document/),
+  ).toBeInTheDocument()
+  await user.click(within(dialog).getByRole('button', { name: /Edit details/ }))
   await user.click(within(dialog).getByText('Printed package details'))
   expect(within(dialog).getByLabelText('Printed purchase count')).toHaveValue(2)
   expect(within(dialog).getByLabelText('Receipt tax ($)')).toHaveValue(null)
   expect(fetcher).toHaveBeenCalledTimes(2)
-  expect(
-    screen.getByRole('button', { name: 'Review confirmation' }),
-  ).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled()
 })
 it('persists corrections before retry and keeps the editable review open when replacement values arrive', async () => {
   const user = userEvent.setup(),
@@ -145,7 +142,7 @@ it('persists corrections before retry and keeps the editable review open when re
   const vendor = screen.getByRole('textbox', { name: 'Merchant' })
   await user.clear(vendor)
   await user.type(vendor, 'Owner correction')
-  await user.click(screen.getByRole('button', { name: 'Retry reading' }))
+  await user.click(screen.getByRole('button', { name: 'Rescan' }))
   await screen.findByText('Review replacement values')
   expect(screen.getByRole('textbox', { name: 'Merchant' })).toHaveValue(
     'Owner correction',
@@ -202,8 +199,7 @@ it('creates a receipt-line item through the shared dialog and returns with it se
   )
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Supplier/ }))
-  await user.click(screen.getByRole('tab', { name: 'Line Items' }))
-  await user.click(screen.getByRole('button', { name: /Receipt bags.*Edit/ }))
+  await user.click(screen.getByRole('button', { name: /Edit details/ }))
   await user.selectOptions(screen.getByLabelText('Match inventory item'), 'new')
   const dialog = within(screen.getByRole('dialog', { name: 'Add Item' }))
   expect(dialog.getByLabelText('Item Type')).toHaveValue('')
@@ -268,7 +264,7 @@ it('recovers a lost confirmation response by reading the existing posted receipt
   )
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Recovered purchase/ }))
-  await user.click(screen.getByRole('button', { name: 'Review confirmation' }))
+  await user.click(screen.getByRole('button', { name: 'Post' }))
   await user.click(screen.getByRole('button', { name: 'Confirm & post' }))
   await waitFor(() =>
     expect(
@@ -318,26 +314,31 @@ it('immediately reallocates tax when excluding and restoring lines without delet
   vi.stubGlobal('fetch', fetcher)
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Tax acceptance/ }))
-  await user.click(screen.getByRole('tab', { name: 'Line Items' }))
-  const summary = within(
-    screen.getByRole('region', { name: 'Allocation summary' }),
+  expect(screen.queryByText('Business tax $2.40')).not.toBeInTheDocument()
+  await user.selectOptions(
+    screen.getByLabelText('Line 2 allocation'),
+    'personal',
   )
-  expect(summary.getByText('Business tax $2.40')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: /Mixed item.*Edit/ }))
-  await user.selectOptions(screen.getByLabelText('Allocation'), 'personal')
-  expect(summary.getByText('Business subtotal $20.00')).toBeInTheDocument()
-  expect(summary.getByText('Business tax $1.60')).toBeInTheDocument()
-  expect(summary.getByText('Business total $21.60')).toBeInTheDocument()
-  expect(summary.getByText('Personal / excluded $10.80')).toBeInTheDocument()
-  expect(summary.getByText(/Original.*\$32.40/)).toBeInTheDocument()
+  expect(screen.getByText('Business subtotal $20.00')).toBeInTheDocument()
+  expect(screen.getByText('Business tax $1.60')).toBeInTheDocument()
+  expect(screen.getByText('Business total $21.60')).toBeInTheDocument()
+  expect(screen.getByText('Personal total $10.80')).toBeInTheDocument()
+  expect(screen.getByLabelText('Receipt total (from receipt)')).toHaveValue(
+    32.4,
+  )
+  expect(screen.getByText('Less personal items: –$10.00')).toBeInTheDocument()
   await user.click(screen.getByLabelText('Show excluded items'))
-  await user.click(screen.getByRole('button', { name: 'Restore to business' }))
-  expect(summary.getByText('Business total $32.40')).toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Remove line 2' }))
-  expect(summary.getByText('Business tax $1.60')).toBeInTheDocument()
-  expect(
-    screen.getByRole('button', { name: 'Restore to business' }),
-  ).toBeInTheDocument()
+  await user.selectOptions(
+    screen.getByLabelText('Line 2 allocation'),
+    'business',
+  )
+  expect(screen.queryByText('Business tax $1.60')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Line 2 total')).toHaveValue(10.8)
+  await user.selectOptions(
+    screen.getByLabelText('Line 2 allocation'),
+    'personal',
+  )
+  expect(screen.getByText('Business tax $1.60')).toBeInTheDocument()
   expect(workspace.receipt_extractions[0].lines).toHaveLength(2)
   expect(fetcher).not.toHaveBeenCalled()
 })

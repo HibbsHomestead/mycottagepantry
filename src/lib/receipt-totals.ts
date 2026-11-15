@@ -458,3 +458,22 @@ export function receiptLineIssues(l: ReceiptValues) {
     issues.push('Confirm stock quantity / unit')
   return issues
 }
+
+/** Business-facing document amount; the merchant original remains on the receipt. */
+export function receiptBusinessTotal(r: ReceiptValues): number | null {
+  if (r.status === 'posted' && receiptCents(r.businessTotal) != null)
+    return receiptCents(r.businessTotal)! / 100
+  if (
+    r.allocationVersion === 1 ||
+    (r.lines || []).some((l: ReceiptValues) => l.allocation)
+  ) {
+    if (receiptTotals(r).total == null) return null
+    return (
+      receiptBusinessAllocations(r).reduce(
+        (n, l) => n + (receiptCents(l.postedAmount) ?? 0),
+        0,
+      ) / 100
+    )
+  }
+  return receiptCents(r.total) == null ? null : receiptCents(r.total)! / 100
+}
