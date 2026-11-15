@@ -1,5 +1,7 @@
 # Five-tier draft — Cottage Mercantile
 
+> Historical proposal. Cottage Mercantile is now owner-approved for LIVE purchase at $40/month with six total users, subject to verified provider setup, Price mapping and checkout activation. See [LIVE launch and subscriber review](./stripe-live-launch.md) for the current procedure. The draft below records the earlier state and does not describe current launch eligibility.
+
 Status: **unpublished draft**. No live Square plans, checkout links, charges, annual prices, subscription moves, access restrictions or migrations were created. Existing customer access is unchanged because global commercial restrictions remain disabled. The central configuration is `src/lib/launch-plans.ts`; the admin portal's Plans & Access section shows the same cards and matrix.
 
 ## Five-tier comparison (proposed monthly USD per business oven)

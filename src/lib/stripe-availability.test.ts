@@ -57,8 +57,12 @@ const available = async () => {
   expect(result.headers.get('cache-control')).toContain('no-store')
   return result.json()
 }
-it('keeps public presentation separate from live tier approval even with stale enabled mappings', async () => {
+it('offers approved Mercantile only with verified mapping and explicit provider activation', async () => {
   fixture.settings = settings()
+  expect(await available()).toEqual({
+    plans: ['mixing-bowl', 'cottage-mercantile'],
+  })
+  fixture.settings.configuration.mappings['cottage-mercantile'].purchase = false
   expect(await available()).toEqual({ plans: ['mixing-bowl'] })
 })
 it('never advertises live checkout from a preview or incomplete provider configuration', async () => {
@@ -79,8 +83,17 @@ it('never advertises live checkout from a preview or incomplete provider configu
 it('requires mappings verified for the connected Stripe account', async () => {
   fixture.settings = settings()
   fixture.settings.configuration.mappings['mixing-bowl'].account = 'acct_other'
+  expect(await available()).toEqual({ plans: ['cottage-mercantile'] })
+  fixture.settings = settings()
+  delete fixture.settings.configuration.mappings['mixing-bowl'].verifiedAt
+  expect(await available()).toEqual({ plans: ['cottage-mercantile'] })
+  fixture.settings.configuration.mappings['cottage-mercantile'].account =
+    'acct_other'
   expect(await available()).toEqual({ plans: [] })
   fixture.settings = settings()
+  delete fixture.settings.configuration.mappings['cottage-mercantile']
+    .verifiedAt
+  expect(await available()).toEqual({ plans: ['mixing-bowl'] })
   delete fixture.settings.configuration.mappings['mixing-bowl'].verifiedAt
   expect(await available()).toEqual({ plans: [] })
 })

@@ -20,7 +20,7 @@ vi.mock('../../netlify/lib/stripe-provider', () => ({
   validatedPrice: f.validate,
   stripeEventsRequired: ['invoice.paid'],
   stripePortalMatchesPolicy: (p: { valid: boolean }) => p.valid,
-  stripeTierPurchasable: (id: string) => id !== 'cottage-mercantile',
+  stripeTierPurchasable: () => true,
 }))
 import { setupStripeBilling } from '../../netlify/lib/stripe-setup'
 afterEach(() => {
@@ -121,7 +121,7 @@ it('reuses prices, stores webhook secret encrypted, and leaves activation and si
   expect(sql).not.toMatch(/checkout_enabled|webhook_verified_at/)
   expect(params[1]).toBe('encrypted')
   expect(JSON.stringify(params)).not.toContain('whsec_fixture')
-  expect(params[2].mappings['cottage-mercantile'].purchase).toBe(false)
+  expect(params[2].mappings['cottage-mercantile'].purchase).toBe(true)
   expect(
     f.request.mock.calls.some(([, p]) =>
       /customer|subscription|checkout/.test(p),

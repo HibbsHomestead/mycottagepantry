@@ -30,7 +30,7 @@ import {
 
 export type StripeEnvironment = 'test' | 'live'
 export const stripeApiVersion = '2025-04-30.basil'
-/** All paid tiers are owner-approved for testing; live rollout remains separate. */
+/** Tier approval never replaces provider setup, Price mapping or checkout activation. */
 export function stripeTierPurchasable(plan: unknown, e: StripeEnvironment) {
   const tier = launchPricing.plans.find((p) => p.id === plan)
   return (

@@ -591,98 +591,125 @@ it('preserves account validation and mappings when saving only a webhook secret'
   )
   expect(update[0]).toContain('webhook_verified_at=NULL,checkout_enabled=false')
 })
-it('approves the $40 six-user tier in test mode without enabling live purchase', async () => {
-  expect(stripeTierPurchasable('cottage-mercantile', 'test')).toBe(true)
-  expect(stripeTierPurchasable('cottage-mercantile', 'live')).toBe(false)
-  const c = {
-    release: vi.fn(),
-    query: vi.fn(async (sql: string) => ({
-      rows: sql.startsWith('SELECT * FROM stripe_provider_settings')
-        ? [
-            {
-              validated_at: new Date().toISOString(),
-              configuration: {},
-              ciphertext: sealStripe({ key: testKey, signing: '' }, 'test'),
-            },
-          ]
-        : [],
-    })),
-  }
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      Response.json({
-        ...price,
-        unit_amount: 4000,
-        product: {
-          active: true,
-          metadata: { cottage_pantry_tier: 'cottage-mercantile' },
-        },
-      }),
-    ),
-  )
-  const request = new Request(
-    'https://admin.mycottagepantry.com/api/admin?action=stripe',
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        environment: 'test',
-        operation: 'map',
-        plan: 'cottage-mercantile',
-        price: 'price_fixture',
-        purchase: true,
-      }),
-    },
-  )
-  await expect(
-    stripeAdminAction(
-      c,
-      request,
-      {
-        role: 'owner',
-        verified_at: new Date().toISOString(),
-        verification_method: 'totp',
-        mfa_at: new Date().toISOString(),
+it.each(['test', 'live'] as const)(
+  'maps the approved $40 six-user tier in %s without activating checkout',
+  async (environment) => {
+    expect(stripeTierPurchasable('cottage-mercantile', environment)).toBe(true)
+    const c = {
+      release: vi.fn(),
+      query: vi.fn(async (sql: string, params: unknown[] = []) => ({
+        rows:
+          sql.startsWith('SELECT * FROM stripe_provider_settings') &&
+          params[0] === environment
+            ? [
+                {
+                  validated_at: new Date().toISOString(),
+                  configuration: {},
+                  account_id: 'acct_fixture',
+                  ciphertext: sealStripe(
+                    {
+                      key:
+                        environment === 'test'
+                          ? testKey
+                          : testKey.replace('_test_', '_live_'),
+                      signing: '',
+                    },
+                    environment,
+                  ),
+                },
+              ]
+            : [],
+      })),
+    }
+    const mercantilePrice = {
+      ...price,
+      livemode: environment === 'live',
+      unit_amount: 4000,
+      product: {
+        active: true,
+        metadata: { cottage_pantry_tier: 'cottage-mercantile' },
       },
-      'fixture',
-    ),
-  ).resolves.toBeDefined()
-  expect(
-    c.query.mock.calls.some(([sql]) =>
-      sql.startsWith(
-        'UPDATE stripe_provider_settings SET configuration=$2,checkout_enabled=false',
-      ),
-    ),
-  ).toBe(true)
-  const writes = c.query.mock.calls.length
-  await expect(
-    stripeAdminAction(
-      c,
-      new Request(request.url, {
+    }
+    const transport = vi.fn(async () => Response.json(mercantilePrice))
+    vi.stubGlobal('fetch', transport)
+    const request = new Request(
+      'https://admin.mycottagepantry.com/api/admin?action=stripe',
+      {
         method: 'POST',
         body: JSON.stringify({
-          environment: 'live',
+          environment,
           operation: 'map',
           plan: 'cottage-mercantile',
           price: 'price_fixture',
           purchase: true,
         }),
-      }),
-      {
-        role: 'owner',
-        verified_at: new Date().toISOString(),
-        verification_method: 'totp',
-        mfa_at: new Date().toISOString(),
       },
-      'fixture',
-    ),
-  ).rejects.toMatchObject({ code: 'TIER_INCOMPLETE' })
-  expect(
-    c.query.mock.calls
-      .slice(writes)
-      .some(([sql]) => sql.startsWith('UPDATE stripe_provider_settings')),
-  ).toBe(false)
-})
+    )
+    await expect(
+      stripeAdminAction(
+        c,
+        request.clone(),
+        {
+          role: 'owner',
+          verified_at: new Date().toISOString(),
+          verification_method: 'totp',
+          mfa_at: new Date().toISOString(),
+        },
+        'fixture',
+      ),
+    ).resolves.toBeDefined()
+    const mapping = c.query.mock.calls.find(([sql]) =>
+      sql.startsWith(
+        'UPDATE stripe_provider_settings SET configuration=$2,checkout_enabled=false',
+      ),
+    )
+    expect(mapping?.[1]).toEqual([
+      environment,
+      {
+        mappings: {
+          'cottage-mercantile': {
+            price: 'price_fixture',
+            purchase: true,
+            verifiedAt: expect.any(String),
+            account: 'acct_fixture',
+          },
+        },
+      },
+    ])
+    expect(
+      c.query.mock.calls.some(([sql]) =>
+        sql.includes('SET checkout_enabled=true'),
+      ),
+    ).toBe(false)
+    for (const change of [
+      { unit_amount: 5000 },
+      { livemode: environment !== 'live' },
+    ]) {
+      transport.mockResolvedValueOnce(
+        Response.json({ ...mercantilePrice, ...change }),
+      )
+      const writes = c.query.mock.calls.length
+      await expect(
+        stripeAdminAction(
+          c,
+          request.clone(),
+          {
+            role: 'owner',
+            verified_at: new Date().toISOString(),
+            verification_method: 'totp',
+            mfa_at: new Date().toISOString(),
+          },
+          'fixture',
+        ),
+      ).rejects.toMatchObject({ code: 'PRICE_INVALID' })
+      expect(
+        c.query.mock.calls
+          .slice(writes)
+          .some(([sql]) => sql.startsWith('UPDATE stripe_provider_settings')),
+      ).toBe(false)
+    }
+  },
+)
 it('never starts live checkout from a preview/dev copy of enabled production settings', async () => {
   vi.stubGlobal('Netlify', {
     env: {

@@ -145,7 +145,7 @@ it('previews, applies and reloads a disposable Mercantile assignment with six se
     )
     expect(launchPricing.checkoutEnabled).toBe(false)
     expect(selectedPlan('cottage-mercantile')).toBe('cottage-mercantile')
-    expect(stripeTierPurchasable('cottage-mercantile', 'live')).toBe(false)
+    expect(stripeTierPurchasable('cottage-mercantile', 'live')).toBe(true)
   } finally {
     await db.close()
   }
