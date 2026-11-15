@@ -1,6 +1,8 @@
 .back-to-top {
   position: fixed;
-  translate: var(--back-top-x, 0px) var(--back-top-y, 0px);
+  animation: none;
+  translate: none;
+  transform: none;
   z-index: 35;
   right: max(1rem, env(safe-area-inset-right));
   bottom: calc(6.5rem + env(safe-area-inset-bottom));

@@ -801,7 +801,11 @@ function AdminView({
                       <a href={href('customers', { id: r.id })}>Manage</a>
                     ),
                   },
-                  { title: 'Active members', cell: (r) => r.active_members },
+                  {
+                    title: 'Active members / allowance',
+                    cell: (r) =>
+                      `${r.active_members} / ${r.member_allowance}${r.over_user_allowance ? ' · Over allowance; existing members preserved, additions blocked' : ''}`,
+                  },
                   { title: 'Created', cell: (r) => date(r.created_at) },
                 ]
           }

@@ -4,12 +4,7 @@ import {
   purchaseStatus,
 } from '@/lib/stripe-availability'
 import { usePricingBilling } from '@/lib/billing-client'
-import {
-  launchFeatures,
-  launchPricing,
-  planUserLabel,
-  planIncludes,
-} from '@/lib/launch-plans'
+import { launchFeatures, launchPricing, planIncludes } from '@/lib/launch-plans'
 import {
   publicPlans,
   planAudience,
@@ -141,9 +136,6 @@ export function PricingComparison() {
                 ))}
               </ul>
               <div className="plan-limits">
-                <p>
-                  <strong>{planUserLabel(plan.id)}.</strong>
-                </p>
                 {plan.users > 1 && <p>{teamAvailabilityNotice}</p>}
                 {plan.id === 'cottage-kitchen' && (
                   <p className="plan-exclusion">
@@ -210,10 +202,7 @@ export function PricingComparison() {
         tabIndex={0}
       >
         <table className="plan-details-table">
-          <caption>
-            Monthly prices, total users including the owner, and complete
-            feature comparison
-          </caption>
+          <caption>Monthly prices and complete feature comparison</caption>
           <thead>
             <tr>
               <th scope="col">Feature or limit</th>
@@ -238,18 +227,12 @@ export function PricingComparison() {
               ))}
             </tr>
             <tr>
-              <th scope="row">Total users, including the owner</th>
-              {publicPlans.map((p) => (
-                <td key={p.id}>{p.users}</td>
-              ))}
-            </tr>
-            <tr>
               <th scope="row">New team member setup</th>
               {publicPlans.map((p) => (
                 <td key={p.id}>
                   {p.users > 1
                     ? 'Coming soon · invitations and member administration'
-                    : 'Owner only'}
+                    : 'Coming soon · invitations and member administration'}
                 </td>
               ))}
             </tr>
@@ -332,9 +315,8 @@ export function PricingComparison() {
       </div>
       <p className="plan-table-note">
         Every business retains its existing records, history and exports when
-        access changes. Shared-user allowances include the owner; invitations
-        and member administration remain unfinished. No proposed record limits
-        are activated by choosing a plan.
+        access changes. Invitations and member administration remain unfinished.
+        No proposed record limits are activated by choosing a plan.
       </p>
     </section>
   )

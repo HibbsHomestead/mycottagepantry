@@ -90,16 +90,21 @@ it.each([
     401,
     'text/html',
     '<!doctype html><title>Login Redirect</title>',
-    'Site access or sign-in is required',
+    'Please sign in to continue',
   ],
   [
     200,
     'text/html',
     '<!doctype html><title>Cottage Pantry</title>',
-    'API returned a webpage',
+    'Product details could not be loaded',
   ],
-  [502, 'text/plain', 'Upstream unavailable', 'non-JSON response'],
-  [200, 'application/json', '', 'invalid or empty JSON'],
+  [
+    502,
+    'text/plain',
+    'Upstream unavailable',
+    'Product details could not be loaded',
+  ],
+  [200, 'application/json', '', 'Product details could not be loaded'],
 ])(
   'handles HTTP %s %s without a parsing exception or draft loss',
   async (status, mime, body, message) => {
@@ -1073,7 +1078,7 @@ it.each([
   ],
 ])(
   'shows ALDI %s/%s evidence and keeps the manual draft intact',
-  async (source, stage, message) => {
+  async (source, stage) => {
     const url =
       'https://www.aldi.us/store/aldi/products/20733588-emporium-selection-italian-parmesan-cheese-wedge-8-oz'
     const draft = {
@@ -1131,15 +1136,13 @@ it.each([
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Your entries are still in this form.',
     )
-    await userEvent.click(
-      screen.getByText('Technical details', { selector: 'summary' }),
-    )
-    expect(screen.getByText(message)).toBeVisible()
-    expect(screen.getByText(/Request aldi-request-ref/)).toBeVisible()
-    if (source === 'retailer')
-      expect(
-        screen.getByText(new RegExp(`HTTP ${stage === 'parse' ? 200 : 403}`)),
-      ).toBeVisible()
+    expect(screen.queryByText('Technical details')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Request aldi-request-ref|HTTP 403|HTTP 200/),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Contact support' }),
+    ).toHaveAttribute('href', '/support')
     expect(screen.getByLabelText('Product URL')).toHaveValue(url)
     expect(draft).toEqual(before)
     expect(apply).not.toHaveBeenCalled()

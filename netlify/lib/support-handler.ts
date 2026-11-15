@@ -1,3 +1,4 @@
+import { customerMessage } from '../../src/lib/customer-message'
 import { selectedWorkspace } from './verified-session'
 import { handleSupportAi } from './support-ai-handler'
 import { z } from 'zod'
@@ -582,7 +583,7 @@ export default async function supportHandler(req: Request) {
       {
         error:
           e instanceof SupportError || e instanceof AdminError
-            ? e.message
+            ? customerMessage(e)
             : e instanceof z.ZodError
               ? 'Check the required fields and try again.'
               : 'Support is temporarily unavailable. Your previous tickets remain saved. Please try again later.',

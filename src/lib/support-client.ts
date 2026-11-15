@@ -1,3 +1,4 @@
+import { customerMessage } from './customer-message'
 export class SupportRequestError extends Error {
   constructor(
     message: string,
@@ -19,7 +20,10 @@ export async function supportRequest(path = '', options: RequestInit = {}) {
   const data = await response.json().catch(() => null)
   if (!response.ok || !data)
     throw new SupportRequestError(
-      data?.error || 'Support is temporarily unavailable. Try again later.',
+      customerMessage(
+        data?.error,
+        'Support is temporarily unavailable. Try again later.',
+      ),
       response.status,
     )
   return data

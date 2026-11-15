@@ -33,33 +33,17 @@ export function SignOutAccountButton() {
 }
 
 export function AccessDiagnostics({
-  access,
   traceId,
-  events = [],
 }: {
   access?: AccountAccess | null
   traceId: string
   events?: { stage: string; result: string }[]
 }) {
-  if (!traceId) return null
-  return (
-    <details className="access-technical">
-      <summary>Technical details</summary>
-      <p>Support reference: {traceId}</p>
-      <p>This reference contains no credentials or account details.</p>
-      <pre>
-        {JSON.stringify(
-          {
-            traceId,
-            environment: access?.environment,
-            events: [...events, ...(access?.events || [])],
-          },
-          null,
-          2,
-        )}
-      </pre>
-    </details>
-  )
+  return traceId ? (
+    <a href={'/support?reference=' + encodeURIComponent(traceId)}>
+      Contact support
+    </a>
+  ) : null
 }
 export function AccountAccessStatus({
   loading,

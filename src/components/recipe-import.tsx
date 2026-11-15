@@ -1,3 +1,4 @@
+import { customerMessage } from '@/lib/customer-message'
 import { useEffect, useRef, useState } from 'react'
 import { RecipeCategorySelect } from './recipe-categories'
 import { recipeCategories } from '@/lib/recipe-categories'
@@ -248,7 +249,7 @@ export function RecipeImport({
       })
       const data = await r.json().catch(() => {
         throw new Error(
-          `The oven returned an unreadable response (HTTP ${r.status}). Your edits remain here; retry the same draft.`,
+          `The oven returned an unreadable response. Your edits remain here; retry the same draft.`,
         )
       })
       if (!r.ok) {
@@ -263,7 +264,7 @@ export function RecipeImport({
           ? data.fields.map((f: any) => `${f.path}: ${f.message}`).join(' ')
           : ''
         throw new Error(
-          `${data.error || 'Recipe import failed.'} ${fields} (HTTP ${r.status}${data.stage ? '; ' + data.stage : ''}${data.traceId ? '; reference ' + data.traceId : ''}). Your edits remain here.`,
+          `${customerMessage(data.error, 'Recipe import failed. Please try again or contact support.')} ${fields} Your edits remain here.`,
         )
       }
       if (operation === 'previewReprocess') {

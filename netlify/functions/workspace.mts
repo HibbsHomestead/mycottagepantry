@@ -1,5 +1,9 @@
+import { customerMessage } from '../../src/lib/customer-message'
 import { handlePantryCategories } from '../lib/pantry-category-handler'
-import { assertSectionCategoryAssignment, pantryCategoryView } from '../../src/lib/section-categories'
+import {
+  assertSectionCategoryAssignment,
+  pantryCategoryView,
+} from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
@@ -570,6 +574,21 @@ export default async (req: Request, context: Context) => {
     function workspaceForDevice(workspace: Workspace): Workspace {
       return {
         ...workspace,
+        receipt_extractions: workspace.receipt_extractions.map((receipt) => {
+          const view = { ...receipt }
+          delete view.extractionError
+          delete view.extractionAttempts
+          if (view.extractionMessage)
+            view.extractionMessage = customerMessage(view.extractionMessage)
+          view.history = (view.history || []).map(
+            (item: Record<string, unknown>) => {
+              const entry = { ...item }
+              delete entry.attemptId
+              return entry
+            },
+          )
+          return view
+        }),
         ledger: applyReceivedDateCorrections(
           workspace.ledger,
           workspace.settings[0],
@@ -632,7 +651,12 @@ export default async (req: Request, context: Context) => {
       countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
-      assertSectionCategoryAssignment(item, state[table]?.find(r => r.id === item.id), state, table)
+      assertSectionCategoryAssignment(
+        item,
+        state[table]?.find((r) => r.id === item.id),
+        state,
+        table,
+      )
       if (table === 'ingredients' && !countPackageWrite) {
         const previous = state.ingredients.find((i) => i.id === item.id)
         if (previous?.countPackages) item.countPackages = previous.countPackages
@@ -1054,7 +1078,8 @@ export default async (req: Request, context: Context) => {
         role,
         actor: user?.id,
       })
-    if (requestUrl.searchParams.has('pantryCategories')) return await handlePantryCategories(req, {state,role,save,client})
+    if (requestUrl.searchParams.has('pantryCategories'))
+      return await handlePantryCategories(req, { state, role, save, client })
     if (requestUrl.searchParams.has('productCategories')) {
       return await handleProductCategories(req, {
         state,
@@ -1484,7 +1509,7 @@ export default async (req: Request, context: Context) => {
                 : 'provider_unavailable',
             error:
               error instanceof PriceSearchError
-                ? error.message
+                ? customerMessage(error)
                 : 'Price provider is unavailable or rejected this lookup. Check provider setup/quota or try later. Previous results remain available.',
           },
           { status: 502, headers: { 'Cache-Control': 'private, no-store' } },
@@ -2364,7 +2389,7 @@ export default async (req: Request, context: Context) => {
         ) {
           const active = (
             await client.query(
-              'SELECT count(DISTINCT identity_id)::int AS count FROM users WHERE business_id=$1 AND active=true',
+              'SELECT count(*)::int AS count FROM (SELECT identity_id FROM users WHERE business_id=$1 AND active=true UNION SELECT identity_owner FROM businesses WHERE id=$1 AND identity_owner IS NOT NULL) members',
               [org],
             )
           ).rows[0].count
@@ -4072,7 +4097,12 @@ export default async (req: Request, context: Context) => {
               item.defaultOverhead,
               'Default overhead',
             )
-          if (item.taxRate !== undefined && item.taxRate !== null && item.taxRate !== '') item.taxRate = number(item.taxRate, 'Tax rate')
+          if (
+            item.taxRate !== undefined &&
+            item.taxRate !== null &&
+            item.taxRate !== ''
+          )
+            item.taxRate = number(item.taxRate, 'Tax rate')
           item.laborRate = number(item.laborRate ?? 18, 'Labor rate')
           item.targetMargin = number(item.targetMargin ?? 65, 'Target margin')
           if (item.taxRate > 100 || item.targetMargin >= 100)
@@ -5165,9 +5195,6 @@ export default async (req: Request, context: Context) => {
     }
     return Response.json(
       {
-        ...(error instanceof ProductImportFailure
-          ? { diagnostics: error.diagnostics }
-          : {}),
         ...(saveTrace ? { traceId: saveTrace } : {}),
         ...(importTrace ? { traceId: importTrace, stage: importStage } : {}),
         ...(importValidation ? { fields: importValidation } : {}),
@@ -5192,9 +5219,9 @@ export default async (req: Request, context: Context) => {
           : importDatabaseError
             ? 'The database could not save this import. Your edits remain open. Retry with the same draft and use the reference if the problem continues.'
             : databaseUnavailable
-              ? 'The oven database is not ready. Complete database provisioning and migrations for this environment, then retry. No item changes were saved.'
+              ? 'Your business is temporarily unavailable. Please try again or contact support. No item changes were saved.'
               : error instanceof Error
-                ? error.message
+                ? customerMessage(error)
                 : 'Unable to update oven.',
       },
       {

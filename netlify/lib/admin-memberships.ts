@@ -106,11 +106,11 @@ export async function adminMembership(
     if (tier && tier.users !== null) {
       const count = (
         await c.query(
-          'SELECT count(DISTINCT identity_id)::int AS count FROM users WHERE business_id=$1 AND active=true',
+          'SELECT count(*)::int AS count FROM (SELECT identity_id FROM users WHERE business_id=$1 AND active=true UNION SELECT identity_owner FROM businesses WHERE id=$1 AND identity_owner IS NOT NULL) members',
           [input.businessId],
         )
       ).rows[0].count
-      if (count >= tier.users)
+      if (member.identity_id !== business.identity_owner && count >= tier.users)
         throw new AdminError(
           409,
           'MEMBER_LIMIT',

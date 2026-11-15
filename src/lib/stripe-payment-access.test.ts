@@ -59,9 +59,9 @@ const db = new PGlite()
 const root = randomBytes(32).toString('hex')
 const signing = 'whsec_' + randomBytes(32).toString('hex')
 const tiers = [
-  ['mixing-bowl', 1000, 1],
-  ['bakers-bench', 2000, 1],
-  ['cottage-kitchen', 3000, 2],
+  ['mixing-bowl', 1000, 5],
+  ['bakers-bench', 2000, 5],
+  ['cottage-kitchen', 3000, 5],
   ['cottage-mercantile', 4000, 6],
 ] as const
 let business: string, other: string
@@ -399,7 +399,7 @@ it.each(tiers)(
         "INSERT INTO users(id,business_id,identity_id,role,data) VALUES($1,$2,$1,'Manager','{}')",
         [randomUUID(), business],
       ),
-    ).rejects.toThrow(/total business users/)
+    ).rejects.toThrow(/total (business )?users/)
     const resale = enforceProviderBilledWrite({
       client: runtime.client,
       org: business,

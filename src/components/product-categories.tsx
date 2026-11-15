@@ -20,7 +20,6 @@ import {
   categoryEndpoint,
   categoryConfigurationSchema,
   categoryTaxConfigurationSchema,
-  categoryValidationFields,
   readCategoryResponse,
   type CategoryConfiguration as Configuration,
 } from '@/lib/product-category-response'
@@ -38,11 +37,11 @@ function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
   useEffect(() => {
     callback.current = onConfig
   }, [onConfig])
-  const accept = (raw: unknown, status: number) => {
+  const accept = (raw: unknown) => {
     const core = categoryConfigurationSchema.safeParse(raw)
     if (!core.success)
       throw new Error(
-        `Invalid category response (HTTP ${status}; ${categoryEndpoint}; fields: ${categoryValidationFields(core.error)}).`,
+        'Product categories could not be loaded. Please retry or contact support.',
       )
     const tax = categoryTaxConfigurationSchema.safeParse(raw)
     const next: Configuration = {
@@ -55,14 +54,12 @@ function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
     setTaxError(
       tax.success
         ? ''
-        : `Tax settings could not be read (HTTP ${status}; ${categoryEndpoint}; fields: ${categoryValidationFields(tax.error)}). Saved tax settings are unchanged; no tax rate is assumed.`,
+        : 'Tax settings could not be loaded. Please retry or contact support. Saved tax settings are unchanged; no tax rate is assumed.',
     )
     callback.current({
       productCategories: next.categories,
       categoryConfigRevision: next.revision,
-      ...(tax.success
-        ? { categoryTaxMappings: tax.data.mappings }
-        : {}),
+      ...(tax.success ? { categoryTaxMappings: tax.data.mappings } : {}),
     })
     return next
   }
@@ -75,7 +72,7 @@ function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
           signal: controller.signal,
         })
         const raw = await readCategoryResponse(response)
-        if (!controller.signal.aborted) accept(raw, response.status)
+        if (!controller.signal.aborted) accept(raw)
       } catch (cause) {
         if (!controller.signal.aborted) {
           setReady(false)
@@ -103,7 +100,7 @@ function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...payload, expectedRevision: data.revision }),
       })
-      return accept(await readCategoryResponse(response), response.status)
+      return accept(await readCategoryResponse(response))
     } catch (e) {
       setError((e as Error).message)
     } finally {

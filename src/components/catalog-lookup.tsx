@@ -25,8 +25,7 @@ export async function catalogRequest(body: unknown, signal?: AbortSignal) {
   const data = await res.json().catch(() => null)
   if (!res.ok || data?.version !== 1)
     throw new ProductImportFailure(
-      data?.error ||
-        `Catalog request failed (HTTP ${res.status}). Retry; your draft is preserved.`,
+      data?.error || `Catalog request failed. Retry; your draft is preserved.`,
       {
         requestedAt: new Date().toISOString(),
         requestedUrl: '',

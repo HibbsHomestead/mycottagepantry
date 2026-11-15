@@ -1,3 +1,4 @@
+import { customerMessage } from '../../src/lib/customer-message'
 import { SessionError } from '../lib/verified-session'
 import { requireLegacyAdmin } from '../lib/platform-admin-legacy'
 import { AdminError } from '../lib/platform-admin-core'
@@ -222,7 +223,7 @@ export default async (request: Request) => {
       {
         code: known ? error.code : 'REGISTRATION_REQUEST_FAILED',
         error: known
-          ? error.message
+          ? customerMessage(error)
           : 'The request could not be completed. Check the form and try again.',
       },
       { status: known ? error.status : 503, headers },

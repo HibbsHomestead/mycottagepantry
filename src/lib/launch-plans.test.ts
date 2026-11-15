@@ -23,10 +23,10 @@ it('keeps approved paid prices, proposed Free, total seats and closed commercial
   expect(
     launchPricing.plans.map((p) => [p.name, p.monthlyUsd, p.users]),
   ).toEqual([
-    ['Free', 0, 1],
-    ['Mixing Bowl', 10, 1],
-    ['Baker’s Bench', 20, 1],
-    ['Cottage Kitchen', 30, 2],
+    ['Free', 0, 5],
+    ['Mixing Bowl', 10, 5],
+    ['Baker’s Bench', 20, 5],
+    ['Cottage Kitchen', 30, 5],
     ['Cottage Mercantile', 40, 6],
   ])
   expect(

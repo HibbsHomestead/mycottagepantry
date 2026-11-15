@@ -52,7 +52,7 @@ it('shows verified billing and routes existing subscribers only to reviewed chan
     screen.getByText(/\$30.00 USD per business \/ month/),
   ).toBeInTheDocument()
   expect(
-    screen.getAllByText(/2 total users, including the owner/).length,
+    screen.getAllByText(/5 total users, including the owner/).length,
   ).toBeGreaterThan(0)
   expect(
     screen.getByText('2 active users, including the owner'),
@@ -79,7 +79,7 @@ it('discloses provider proration and access changes before confirmation, then wa
       fromMonthlyCents: 3000,
       toMonthlyCents: 4000,
       amountDue: 437,
-      fromUsers: 2,
+      fromUsers: 5,
       toUsers: 6,
       seatUsage: 2,
       expiresAt: '2027-01-01',
@@ -102,7 +102,7 @@ it('discloses provider proration and access changes before confirmation, then wa
   expect(dialog).toHaveTextContent('Cottage Kitchen → Cottage Mercantile')
   expect(dialog).toHaveTextContent('$40.00 USD/month per business')
   expect(dialog).toHaveTextContent('$4.37 USD · Stripe preview')
-  expect(dialog).toHaveTextContent('2 → 6 total users, including the owner')
+  expect(dialog).toHaveTextContent('5 → 6 total users, including the owner')
   expect(dialog).toHaveTextContent(
     'Invitations and member administration are Coming soon',
   )

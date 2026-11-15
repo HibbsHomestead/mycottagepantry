@@ -1,3 +1,4 @@
+import { customerMessage } from './customer-message'
 import { z } from 'zod'
 import {
   categoryListSchema,
@@ -42,39 +43,30 @@ export function categoryValidationFields(error: z.ZodError) {
 /** Keep HTTP, authentication and response-format failures distinguishable. */
 export async function readCategoryResponse(response: Response) {
   const mime = response.headers.get('content-type')?.split(';')[0].trim()
-  const location = `HTTP ${response.status}; ${categoryEndpoint}`
   if (!['application/json', 'application/problem+json'].includes(mime || '')) {
     throw new Error(
       [401, 403].includes(response.status)
-        ? `Site access or sign-in is required (${location}). Complete sign-in on this site, then retry.`
-        : `The category service returned a non-JSON response (${location}).`,
+        ? 'Please sign in to continue, then retry.'
+        : 'Product categories could not be loaded. Please try again or contact support.',
     )
   }
   let raw: unknown
   try {
     raw = await response.json()
   } catch {
-    throw new Error(`The category service returned invalid JSON (${location}).`)
+    throw new Error(
+      'Product categories could not be loaded. Please try again or contact support.',
+    )
   }
   if (!response.ok) {
     const error = z
       .object({ error: z.string(), code: z.string().optional() })
       .safeParse(raw)
-    const code =
-      error.success &&
-      [
-        'SIGN_IN_REQUIRED',
-        'EMAIL_UNVERIFIED',
-        'IDENTITY_UNAVAILABLE',
-        'WORKSPACE_SELECTION_REQUIRED',
-        'ONBOARDING_REQUIRED',
-        'WORKSPACE_SETUP_REQUIRED',
-        'WORKSPACE_REQUEST_FAILED',
-      ].includes(error.data.code || '')
-        ? `; ${error.data.code}`
-        : ''
     throw new Error(
-      `${error.success ? error.data.error : 'The category request failed.'} (${location}${code})`,
+      customerMessage(
+        error.success ? error.data.error : null,
+        'Product categories could not be loaded. Please try again or contact support.',
+      ),
     )
   }
   return raw

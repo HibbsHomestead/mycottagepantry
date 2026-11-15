@@ -25,9 +25,9 @@ function VerificationAccount() {
       actions={
         <>
           <p>
-            Your session is recognized, but the provider has not confirmed this
-            account’s email. Logging in again with the same account does not
-            verify it.
+            Check your email to finish setting up your account. Open the
+            confirmation link in your inbox or spam folder, then check your
+            account status here.
           </p>
           <button className="public-button" onClick={account.retry}>
             Check account status
@@ -58,15 +58,15 @@ function VerificationContent({
           <p>
             {recovery
               ? 'Enter your account email to request a link for choosing a new password.'
-              : 'Verify your email using the provider confirmation link, then log in to continue business setup. Free needs no payment method. Approved paid plans continue to Stripe checkout after verified account and business setup; your plan choice alone does not grant paid access.'}
+              : 'Open the confirmation link in your email, then log in to continue setting up your business. Free needs no payment method. Paid plans continue to checkout after account setup.'}
           </p>
           {recovery ? (
             <PasswordRecoveryRequest />
           ) : (
             <p className="registration-notice">
-              Signup requests a confirmation email when required by the
-              provider. This page does not send or resend it. No email has been
-              requested from this page.
+              Check the inbox and spam folder for the email address you used to
+              sign up. If the confirmation email is missing or the address is
+              wrong, contact support for help.
             </p>
           )}
           <p>
@@ -81,7 +81,7 @@ function VerificationContent({
                 Return to login
               </a>
             )}
-            <a className="public-text-link" href="/help">
+            <a className="public-text-link" href="/support">
               Need help?
             </a>
           </div>

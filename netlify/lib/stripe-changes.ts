@@ -130,7 +130,7 @@ export async function stripeChangeContext(
 export async function stripeSeatUsage(c: RegistrationClient, business: string) {
   const row = (
     await c.query(
-      'SELECT count(*)::int AS count FROM users WHERE business_id=$1 AND active=true',
+      'SELECT count(*)::int AS count FROM (SELECT identity_id FROM users WHERE business_id=$1 AND active=true UNION SELECT identity_owner FROM businesses WHERE id=$1 AND identity_owner IS NOT NULL) members',
       [business],
     )
   ).rows[0]
@@ -357,10 +357,7 @@ export async function stripeChangePreview(
     fingerprint: fingerprint(sub),
     prorationDate,
     periodEnd: item.current_period_end,
-    fromUsers:
-      billing.entitlement_policy === 'legacy'
-        ? null
-        : planUserLimit(current.id),
+    fromUsers: planUserLimit(current.id),
     toUsers: planUserLimit(target.id),
     seatUsage,
     fromMonthlyCents: current.monthlyUsd * 100,
@@ -410,12 +407,13 @@ export function publicStripeChange(change: any) {
     status: change.status,
     effectiveAt: change.effective_at,
     expiresAt: change.expires_at,
-    errorCode: change.error_code,
     ...Object.fromEntries(
       Object.entries(change.preview || {}).filter(
         ([key]) => !['fingerprint'].includes(key),
       ),
     ),
+    fromUsers: planUserLimit(change.from_plan),
+    toUsers: planUserLimit(change.to_plan),
   }
 }
 

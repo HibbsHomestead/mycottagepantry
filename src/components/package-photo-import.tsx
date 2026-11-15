@@ -195,7 +195,7 @@ export function PackagePhotoImport({
                 setFailure({ code: data?.code, status: res.status })
                 throw new Error(
                   data?.error ||
-                    `Photo reading failed (HTTP ${res.status}). Retry; your draft is preserved.`,
+                    `Photo reading failed. Retry; your draft is preserved.`,
                 )
               }
               const result = photoEvidenceSchema.parse({

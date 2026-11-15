@@ -1,3 +1,4 @@
+import { customerMessage } from '../../src/lib/customer-message'
 import { deploymentRuntime } from '../lib/runtime-environment'
 import { adminTransaction } from '../lib/platform-admin-core'
 import { stripeSettings } from '../lib/stripe-provider'
@@ -149,7 +150,7 @@ export default async (request: Request) => {
     return Response.json(
       {
         error: known
-          ? error.message
+          ? customerMessage(error)
           : 'Billing is temporarily unavailable. Existing access is preserved.',
         code: known ? error.code : 'BILLING_UNAVAILABLE',
       },

@@ -140,10 +140,7 @@ export async function stripeOwnerView(
     changeBlockedReason,
     subscription,
     seatUsage,
-    includedUsers:
-      access.access?.entitlementPolicy === 'legacy'
-        ? null
-        : planUserLimit(access.plan || 'free'),
+    includedUsers: planUserLimit(access.plan || 'free'),
     changes: changes.map(publicStripeChange),
     changePlans: hasSubscription
       ? stripePlanAvailability(

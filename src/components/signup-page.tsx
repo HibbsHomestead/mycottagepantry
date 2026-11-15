@@ -2,12 +2,7 @@ import { useAccountAccess } from '@/lib/account-access-client'
 import { AccountAccessStatus } from './account-access-status'
 import { PublicSite } from './public-site'
 import { signupSteps } from '@/lib/registration'
-import {
-  launchPricing,
-  planVisible,
-  planUserLabel,
-  type PlanId,
-} from '@/lib/launch-plans'
+import { launchPricing, planVisible, type PlanId } from '@/lib/launch-plans'
 import { signupPlan, signupPlanHref } from '@/lib/signup-plan'
 import { signupPlanRequest } from '@/lib/signup-plan-client'
 import {
@@ -160,7 +155,7 @@ export function SignupPage() {
                           {purchaseStatus(availability, p.id)}
                         </span>
                         <span className="signup-plan-scope">
-                          {planUserLabel(p.id)}. {planAudience[p.id]}{' '}
+                          {planAudience[p.id]}{' '}
                           {p.users > 1 && teamAvailabilityNotice}
                           {p.id === 'bakers-bench' &&
                             ' Advanced planning is Partial; reporting-period comparisons are Coming soon.'}

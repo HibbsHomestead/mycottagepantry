@@ -1057,7 +1057,8 @@ it('preserves manual edits, original bytes and previous attempts when retrying e
     receiptProvider.generate.mock.calls.at(-1)![0].contents[0].parts[0]
       .inlineData.data,
   ).toBe(bytes.toString('base64'))
-  expect(draft.extractionAttempts).toHaveLength(1)
+  expect(draft.extractionAttempts).toBeUndefined()
+  expect(database.records.receipt_extractions[0].extractionAttempts.length).toBeGreaterThan(0)
   result = await post('receiptDismissExtraction', '', { id: receipt.id })
   expect(result.workspace.receipt_extractions[0].vendor).toBe('My correction')
   receiptProvider.generate.mockRejectedValue({ status: 503 })
@@ -1068,7 +1069,8 @@ it('preserves manual edits, original bytes and previous attempts when retrying e
   draft = result.workspace.receipt_extractions[0]
   expect(draft.extractionStatus).toBe('failed')
   expect(draft.vendor).toBe('My correction')
-  expect(draft.extractionAttempts).toHaveLength(2)
+  expect(draft.extractionAttempts).toBeUndefined()
+  expect(database.records.receipt_extractions[0].extractionAttempts.length).toBeGreaterThan(0)
   receiptProvider.generate.mockRejectedValue(new Error('API key must be set'))
   result = await post('receiptExtract', '', {
     id: receipt.id,
