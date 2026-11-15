@@ -1,8 +1,5 @@
 import { Fragment } from 'react'
-import {
-  useStripePurchaseAvailability,
-  purchaseStatus,
-} from '@/lib/stripe-availability'
+import { useStripePurchaseAvailability } from '@/lib/stripe-availability'
 import { usePricingBilling } from '@/lib/billing-client'
 import { launchFeatures, launchPricing, planIncludes } from '@/lib/launch-plans'
 import {
@@ -11,7 +8,6 @@ import {
   planCardFeatures,
   featurePresentation,
   featureGroups,
-  teamAvailabilityNotice,
 } from '@/lib/plan-presentation'
 import { signupPlanHref } from '@/lib/signup-plan'
 
@@ -44,17 +40,31 @@ export function PricingComparison() {
           <p className="public-eyebrow">Plans &amp; pricing</p>
           <h1 id="plan-comparison-title">Find your place in the pantry.</h1>
         </div>
-        <p>
-          Monthly USD pricing per business. Compare what works today, with
-          Partial and Coming soon capabilities clearly marked.
-        </p>
+        <p>Choose a plan for your food, handmade, or homestead business.</p>
       </div>
-      <p className="registration-notice plan-launch-notice">
-        {business ? `Billing for ${business.workspace.name}. ` : ''}Free setup
-        requires email verification and valid business details, with no payment
-        method. Paid access starts only after verified billing. Proposed record
-        limits are not active.
-      </p>
+      <p>USD, per business · billed monthly</p>
+      {business && <p>Billing for {business.workspace.name}.</p>}
+      {!business?.hasSubscription &&
+        !availability.loading &&
+        publicPlans.some(
+          (p) => p.monthlyUsd > 0 && !availability.plans.includes(p.id),
+        ) && (
+          <p className="registration-notice" role="status">
+            {availability.error
+              ? 'Purchase availability could not be checked. Refresh to try again.'
+              : 'Some paid plans are currently unavailable for checkout here.'}{' '}
+            <a href="https://mycottagepantry.com/pricing">
+              Check purchase options on our main site
+            </a>
+            .
+          </p>
+        )}
+      {actionBlockedReason && (
+        <p className="registration-notice">
+          Open <a href="/oven/billing">Billing &amp; Subscription</a> to review
+          your account before changing plans.
+        </p>
+      )}
       {owner.member && (
         <p className="registration-notice">
           The business owner manages billing. Ask the owner to choose or change
@@ -99,7 +109,7 @@ export function PricingComparison() {
             : business?.hasSubscription
               ? `${plan.monthlyUsd > currentPrice ? 'Upgrade' : 'Downgrade'} to ${plan.name}`
               : plan.id === 'free'
-                ? 'Get Started Free'
+                ? 'Get started free'
                 : `Choose ${plan.name}`
           return (
             <article
@@ -108,22 +118,10 @@ export function PricingComparison() {
               aria-labelledby={`plan-${plan.id}`}
             >
               <div className="plan-card-top">
-                <p className="public-eyebrow">
-                  {isCurrent
-                    ? 'Your current plan'
-                    : plan.id === 'cottage-mercantile'
-                      ? 'Make, stock & sell'
-                      : 'A place for your business'}
-                </p>
                 <h3 id={`plan-${plan.id}`}>{plan.name}</h3>
                 <p className="plan-price">
                   <strong>${plan.monthlyUsd}</strong>
-                  <span>
-                    {' '}
-                    USD / month
-                    <br />
-                    per business
-                  </span>
+                  <span>/month</span>
                 </p>
                 <p className="plan-audience">{planAudience[plan.id]}</p>
               </div>
@@ -135,31 +133,7 @@ export function PricingComparison() {
                   </li>
                 ))}
               </ul>
-              <div className="plan-limits">
-                {plan.users > 1 && <p>{teamAvailabilityNotice}</p>}
-                {plan.id === 'cottage-kitchen' && (
-                  <p className="plan-exclusion">
-                    Excludes resale and consignment.
-                  </p>
-                )}
-                {plan.id === 'bakers-bench' && (
-                  <p>
-                    Advanced planning is Partial; reporting-period comparisons
-                    are Coming soon.
-                  </p>
-                )}
-              </div>
               <footer className="plan-card-footer">
-                <p className="plan-status" role="status">
-                  {isCurrent
-                    ? 'Current plan'
-                    : actionBlockedReason
-                      ? actionBlockedReason
-                      : business?.hasSubscription && !available
-                        ? changeAvailability?.reason ||
-                          'This change is currently unavailable.'
-                        : purchaseStatus(availability, plan.id)}
-                </p>
                 {canAct ? (
                   <a className="public-button" href={href}>
                     {label}
@@ -175,24 +149,23 @@ export function PricingComparison() {
                           : 'Currently unavailable'}
                   </button>
                 )}
-                <p className="plan-cta-note">
-                  {business?.hasSubscription
-                    ? 'Review timing, access and any provider-previewed charge before confirmation.'
-                    : plan.id === 'free'
-                      ? 'Create your account and verify your email.'
-                      : 'Keep your plan choice through signup, then complete secure Stripe checkout after business setup.'}
-                </p>
               </footer>
             </article>
           )
         })}
       </div>
+      <a
+        className="public-text-link plan-compare-link"
+        href="#plan-details-title"
+      >
+        Compare all features
+      </a>
       <div className="plan-table-heading">
         <h3 id="plan-details-title">A closer look at each plan</h3>
         <p>
           Included means implemented and within the plan’s scope. Partial tools
           have limitations; Coming soon tools are unfinished. Scroll across on
-          smaller screens.
+          smaller screens. Cottage Kitchen excludes resale and consignment.
         </p>
       </div>
       <div
@@ -209,7 +182,7 @@ export function PricingComparison() {
               {publicPlans.map((p) => (
                 <th scope="col" key={p.id}>
                   {p.name}
-                  <span>${p.monthlyUsd} USD/month per business</span>
+                  <span>${p.monthlyUsd}/month</span>
                 </th>
               ))}
             </tr>
@@ -230,9 +203,7 @@ export function PricingComparison() {
               <th scope="row">New team member setup</th>
               {publicPlans.map((p) => (
                 <td key={p.id}>
-                  {p.users > 1
-                    ? 'Coming soon · invitations and member administration'
-                    : 'Coming soon · invitations and member administration'}
+                  Coming soon · invitations and member administration
                 </td>
               ))}
             </tr>
@@ -254,7 +225,7 @@ export function PricingComparison() {
                   {planIncludes(p.id, 'recipeImport') ? (
                     '20/hour; 100 active drafts per business'
                   ) : (
-                    <span aria-label="Not included">—</span>
+                    <span aria-label="Not included">Not included</span>
                   )}
                 </td>
               ))}
@@ -266,7 +237,7 @@ export function PricingComparison() {
                   {planIncludes(p.id, 'handmadeDesigns') ? (
                     '1–100 material lines'
                   ) : (
-                    <span aria-label="Not included">—</span>
+                    <span aria-label="Not included">Not included</span>
                   )}
                 </td>
               ))}
@@ -288,7 +259,9 @@ export function PricingComparison() {
                         return (
                           <td key={p.id}>
                             {cell.status === 'excluded' ? (
-                              <span aria-label="Not included">—</span>
+                              <span aria-label="Not included">
+                                Not included
+                              </span>
                             ) : (
                               <>
                                 <span

@@ -16,13 +16,12 @@ export const subscriptionChangePolicy = {
 } as const
 
 export const planAudience: Record<PlanId, string> = {
-  free: 'For food makers getting their costs and records in order.',
-  'mixing-bowl': 'The everyday toolkit for a solo food business.',
-  'bakers-bench': 'The solo toolkit with advanced planning in development.',
-  'cottage-kitchen':
-    'For food and handmade businesses. Excludes resale and consignment.',
+  free: 'Start organizing your costs and business records.',
+  'mixing-bowl': 'Everyday tools for a solo food business.',
+  'bakers-bench': 'Build on the essentials as your food business grows.',
+  'cottage-kitchen': 'For businesses making food and handmade goods.',
   'cottage-mercantile':
-    'For businesses making and selling food, handmade goods, resale and consignment stock.',
+    'For businesses making and selling food, handmade goods, and resale items.',
 }
 export const teamAvailabilityNotice =
   'Invitations and member administration are Coming soon. Included users can use existing individual logins and shared-business memberships; you cannot invite or manage additional members in the app yet.'
@@ -46,8 +45,8 @@ const cardFeatures: Record<PlanId, readonly FeatureId[]> = {
     'recipeImport',
     'labels',
     'finance',
-    'multiBatchPlanning',
-    'periodComparisons',
+    'inventory',
+    'production',
   ],
   'cottage-kitchen': [
     'recipeCosting',
@@ -72,6 +71,8 @@ export function planCardFeatures(plan: PlanId) {
       label: launchFeatures.find((f) => f.id === id)!.label,
       ...featurePresentation(plan, id),
     }))
+    .filter((feature) => feature.status === 'implemented')
+    .slice(0, 5)
 }
 
 export function featurePresentation(plan: PlanId, id: FeatureId) {

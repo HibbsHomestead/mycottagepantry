@@ -5,11 +5,8 @@ import { signupSteps } from '@/lib/registration'
 import { launchPricing, planVisible, type PlanId } from '@/lib/launch-plans'
 import { signupPlan, signupPlanHref } from '@/lib/signup-plan'
 import { signupPlanRequest } from '@/lib/signup-plan-client'
-import {
-  useStripePurchaseAvailability,
-  purchaseStatus,
-} from '@/lib/stripe-availability'
-import { planAudience, teamAvailabilityNotice } from '@/lib/plan-presentation'
+import { useStripePurchaseAvailability } from '@/lib/stripe-availability'
+import { planAudience } from '@/lib/plan-presentation'
 import { useSyncExternalStore, useState, type FormEvent } from 'react'
 import './registration.css'
 
@@ -94,17 +91,9 @@ export function SignupPage() {
           ))}
         </ol>
         <div className="registration-paper">
-          <p className="public-eyebrow">A little room for your business</p>
-          <h1 id="signup-title">Get Started</h1>
+          <h1 id="signup-title">Get started</h1>
           <p className="registration-lead">
-            A thoughtful oven for the business behind your baking.
-          </p>
-          <p>
-            Review <a href="/pricing">View Plans</a> for monthly pricing and
-            feature availability. Choose your plan, create an account and verify
-            your email, then enter your business details. Available paid plans
-            continue to secure Stripe checkout. Free needs no payment method. A
-            plan choice alone never grants paid access.
+            Choose a plan for your food, handmade, or homestead business.
           </p>
           {(error || invalidSelection) && (
             <p role="alert">{error || invalidSelection}</p>
@@ -113,9 +102,9 @@ export function SignupPage() {
             <div role="status">
               <h2>Check your email</h2>
               <p>
-                The provider accepted the signup request. Follow its
-                verification email, then log in here to continue. Delivery has
-                not been independently confirmed.
+                Follow the verification link in your email, then log in to
+                continue. If it hasn’t arrived, check your spam folder or visit
+                Help for support.
               </p>
               <p>
                 Your chosen plan is kept for when you return after verification.
@@ -129,7 +118,7 @@ export function SignupPage() {
                 {launchPricing.plans
                   .filter((p) => planVisible(p.id))
                   .map((p) => (
-                    <label key={p.id} className="check-label">
+                    <label key={p.id} className="signup-plan-card">
                       <input
                         type="radio"
                         name="plan-choice"
@@ -150,29 +139,35 @@ export function SignupPage() {
                         }}
                       />
                       <span>
-                        {p.name} — ${p.monthlyUsd} USD/month per business
-                        <span className="signup-plan-scope">
-                          {purchaseStatus(availability, p.id)}
+                        <strong className="signup-plan-name">{p.name}</strong>
+                        <span className="signup-plan-price">
+                          ${p.monthlyUsd}
+                          <span>/month</span>
                         </span>
                         <span className="signup-plan-scope">
-                          {planAudience[p.id]}{' '}
-                          {p.users > 1 && teamAvailabilityNotice}
-                          {p.id === 'bakers-bench' &&
-                            ' Advanced planning is Partial; reporting-period comparisons are Coming soon.'}
+                          {planAudience[p.id]}
                         </span>
                       </span>
                     </label>
                   ))}
-                <p role="status">
-                  {plan === 'free'
-                    ? 'Free setup requires email verification and valid business details. Proposed record and feature limits are not active.'
-                    : plan && availability.plans.includes(plan)
-                      ? 'Your plan choice is saved through email verification and business setup. Complete Stripe checkout afterward; paid access starts only after verified billing.'
-                      : plan
-                        ? `${purchaseStatus(availability, plan)} You may create an account, but this selection does not grant paid access.`
-                        : 'Choose a listed plan.'}
-                </p>
               </fieldset>
+              <div className="signup-plan-links">
+                <span>Prices in USD, per business.</span>
+                <a href="/pricing#plan-details-title">Compare plans</a>
+              </div>
+              {plan &&
+                plan !== 'free' &&
+                !availability.loading &&
+                !availability.plans.includes(plan) && (
+                  <p role="status">
+                    Checkout for this plan is currently unavailable here. You
+                    can still create an account.{' '}
+                    <a href="https://mycottagepantry.com/pricing">
+                      Check purchase options on our main site
+                    </a>
+                    .
+                  </p>
+                )}
               <label>
                 Email
                 <input
@@ -192,19 +187,25 @@ export function SignupPage() {
                   minLength={8}
                   required
                   disabled={busy}
+                  aria-describedby="signup-password-help"
                 />
               </label>
-              <p>
-                Your email and password are sent to the existing authentication
-                provider to create your account. No policy acceptance is
-                recorded by this form.
+              <p id="signup-password-help">
+                Use at least eight characters for your password.
+              </p>
+              <p className="signup-payment-note">
+                {plan === 'free'
+                  ? 'No payment method required.'
+                  : plan && availability.plans.includes(plan)
+                    ? 'Payment details are entered securely at checkout.'
+                    : null}
               </p>
               <button
                 className="public-button"
                 type="submit"
                 disabled={busy || !plan}
               >
-                {busy ? 'Creating account…' : 'Get Started'}
+                {busy ? 'Creating account…' : 'Continue'}
               </button>
             </form>
           )}

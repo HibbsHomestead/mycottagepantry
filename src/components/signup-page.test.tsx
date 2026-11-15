@@ -30,7 +30,7 @@ beforeEach(() => {
 it('offers registration with clear availability without checkout or fake policy acceptance', () => {
   render(<SignupPage />)
   expect(
-    screen.getByRole('heading', { name: 'Get Started' }),
+    screen.getByRole('heading', { name: 'Get started' }),
   ).toBeInTheDocument()
   expect(screen.getByLabelText('Email')).toBeInTheDocument()
   expect(screen.getByLabelText('Password')).toBeInTheDocument()
@@ -46,7 +46,7 @@ it('requests provider signup and waits for verification without claiming deliver
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'new@example.invalid')
   await user.type(screen.getByLabelText('Password'), 'synthetic-password')
-  await user.click(screen.getByRole('button', { name: 'Get Started' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   await waitFor(() =>
     expect(auth.signup).toHaveBeenCalledWith(
       'new@example.invalid',
@@ -58,7 +58,7 @@ it('requests provider signup and waits for verification without claiming deliver
     await screen.findByRole('heading', { name: 'Check your email' }),
   ).toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent(
-    'Delivery has not been independently confirmed',
+    'Follow the verification link in your email',
   )
 })
 it('directs an existing account to login without showing raw provider errors', async () => {
@@ -69,7 +69,7 @@ it('directs an existing account to login without showing raw provider errors', a
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'existing@example.invalid')
   await user.type(screen.getByLabelText('Password'), 'synthetic-password')
-  await user.click(screen.getByRole('button', { name: 'Get Started' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'already have an account, log in',
   )
@@ -83,22 +83,20 @@ it('directs an existing account to login without showing raw provider errors', a
 it('preserves a paid plan choice while ignoring browser prices', async () => {
   history.replaceState({}, '', '/signup?plan=mixing-bowl&price=1')
   render(<SignupPage />)
-  expect(
-    screen.getByRole('radio', { name: /Mixing Bowl — \$10 USD/ }),
-  ).toBeChecked()
+  expect(screen.getByRole('radio', { name: /Mixing Bowl.*\$10/ })).toBeChecked()
   expect(screen.getByRole('radio', { name: /Baker’s Bench/ })).toBeEnabled()
   expect(screen.getByRole('radio', { name: /Cottage Kitchen/ })).toBeEnabled()
   expect(
     screen.getByRole('radio', { name: /Cottage Mercantile/ }),
   ).toBeEnabled()
   expect(
-    screen.getByText(/A plan choice alone never grants paid access/),
+    screen.getByRole('link', { name: 'Compare plans' }),
   ).toBeInTheDocument()
   auth.signup.mockResolvedValue({ id: 'new' })
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'selected@example.invalid')
   await user.type(screen.getByLabelText('Password'), 'synthetic-password')
-  await user.click(screen.getByRole('button', { name: 'Get Started' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   expect(plans.request).toHaveBeenCalledWith({
     action: 'prepare',
     planId: 'mixing-bowl',
@@ -114,7 +112,7 @@ it('shows the approved $40 tier selected without activating a purchase', () => {
   history.replaceState({}, '', '/signup?plan=cottage-mercantile')
   render(<SignupPage />)
   expect(
-    screen.getByRole('radio', { name: /Cottage Mercantile — \$40 USD/ }),
+    screen.getByRole('radio', { name: /Cottage Mercantile.*\$40/ }),
   ).toBeChecked()
   expect(
     screen.queryByRole('button', { name: /checkout|subscribe|pay/i }),
@@ -129,7 +127,7 @@ it('shows the approved $40 tier selected without activating a purchase', () => {
 it('does not substitute Free for an invalid plan or create an account if saving the preference fails', async () => {
   history.replaceState({}, '', '/signup?plan=unknown')
   const view = render(<SignupPage />)
-  expect(screen.getByRole('button', { name: 'Get Started' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   expect(screen.getByRole('alert')).toHaveTextContent(
     'No different plan was selected',
   )
@@ -140,7 +138,7 @@ it('does not substitute Free for an invalid plan or create an account if saving 
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'selected@example.invalid')
   await user.type(screen.getByLabelText('Password'), 'synthetic-password')
-  await user.click(screen.getByRole('button', { name: 'Get Started' }))
+  await user.click(screen.getByRole('button', { name: 'Continue' }))
   expect(await screen.findByRole('alert')).toBeInTheDocument()
   expect(auth.signup).not.toHaveBeenCalled()
 })

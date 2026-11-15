@@ -79,14 +79,6 @@ it('shows the website to signed-out visitors and an obvious oven link to signed-
 })
 it('compares approved prices, verified purchase availability, user allowances and partial/planned features', async () => {
   render(<PricingPage />)
-  expect(
-    screen.getByText(/Paid access starts only after verified billing/),
-  ).toBeInTheDocument()
-  expect(
-    await screen.findByText(
-      /setup requires email verification and valid business details/,
-    ),
-  ).toBeInTheDocument()
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
   expect(screen.queryByText(/Join the beta/)).not.toBeInTheDocument()
   await screen.findByRole('link', { name: 'Choose Cottage Mercantile' })
@@ -103,10 +95,10 @@ it('compares approved prices, verified purchase availability, user allowances an
     const card = within(comparison)
       .getByRole('heading', { name })
       .closest('article')!
-    expect(card).toHaveTextContent(price + ' USD / month')
+    expect(card).toHaveTextContent(price + '/month')
     expect(
       within(card).getByRole('link', {
-        name: id === 'free' ? 'Get Started Free' : `Choose ${name}`,
+        name: id === 'free' ? 'Get started free' : `Choose ${name}`,
       }),
     ).toHaveAttribute('href', `/signup?plan=${id}&returnTo=%2Foven%2Fbilling`)
   }
@@ -115,7 +107,7 @@ it('compares approved prices, verified purchase availability, user allowances an
   expect(comparison).not.toHaveTextContent(
     /total users|including the owner|unlimited users/i,
   )
-  expect(comparison).toHaveTextContent('Excludes resale and consignment')
+  expect(comparison).toHaveTextContent('excludes resale and consignment')
   expect(comparison).toHaveTextContent('Proposed record limits are not active')
   expect(
     [...comparison.querySelectorAll('.plan-status')].filter((n) =>
@@ -195,7 +187,7 @@ it('opens accessible phone navigation and offers registration', async () => {
   await userEvent.click(toggle)
   expect(toggle).toHaveAttribute('aria-expanded', 'true')
   expect(
-    screen.getByRole('heading', { name: 'Get Started' }),
+    screen.getByRole('heading', { name: 'Get started' }),
   ).toBeInTheDocument()
   expect(screen.getByLabelText('Email')).toBeInTheDocument()
 })
