@@ -592,6 +592,13 @@ export function WorkspaceApp() {
   useEffect(() => {
     if (!ready) return
     const query = new URLSearchParams()
+    if (route.section === 'Handmade') {
+      const current = parseWorkspaceHash(window.location.hash).query
+      for (const key of ['product', 'edit']) {
+        const value = current.get(key)
+        if (value) query.set(key, value)
+      }
+    }
     if (search) query.set('search', search)
     if (filter !== route.filter) query.set('filter', filter)
     const hash =
@@ -2027,6 +2034,7 @@ export function WorkspaceApp() {
               mutate={mutate}
               open={open}
               tab={route.tab}
+              onDirtyChange={(dirty) => { workflowDirty.current = dirty }}
               onWorkspace={setState}
             />
           )}
