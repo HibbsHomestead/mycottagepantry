@@ -1,3 +1,7 @@
+import {
+  canonicalCategoryName,
+  consolidateCategories,
+} from './category-consolidation'
 import { categoryDetailsShape, categoryOrder } from './category-details'
 import { z } from 'zod'
 import type { Item, Workspace } from './domain'
@@ -45,26 +49,29 @@ const defaults: [string, RecipeIconName][] = [
   ['Cheesecakes', 'cheesecake'],
   ['Candy & Confections', 'candy'],
   ['Frostings, Icings & Glazes', 'frosting'],
-  ['Fillings', 'filling'],
+  ['Preps, Fillings & Toppings', 'filling'],
   ['Sauces & Spreads', 'spread'],
   ['Jams & Preserves', 'jam'],
   ['Seasonings & Dry Mixes', 'seasoning'],
   ['Snacks & Savory', 'savory'],
   ['Beverages', 'drink'],
   ['Other', 'other'],
-  // Keep the original options and their existing assignments.
-  ['Breads', 'bread'],
-  ['Cakes', 'cake'],
-  ['Preps & fillings', 'filling'],
 ]
 const legacyId = (name: string) =>
   'recipe-' + encodeURIComponent(recipeCategoryKey(name))
 export function recipeCategories(workspace: Workspace): RecipeCategory[] {
+  workspace = structuredClone({
+    settings: workspace.settings || [],
+    recipes: workspace.recipes || [],
+    products: [],
+  })
+  consolidateCategories(workspace)
   const saved = recipeCategoryListSchema.parse(
     workspace.settings?.[0]?.recipeCategories || [],
   )
   const result = [...saved]
   const add = (name: string, icon: RecipeIconName) => {
+    name = canonicalCategoryName(name)
     const key = recipeCategoryKey(name)
     if (
       !key ||
@@ -90,8 +97,15 @@ export function recipeCategories(workspace: Workspace): RecipeCategory[] {
 }
 export function recipeCategory(recipe: Item, categories: RecipeCategory[]) {
   if (recipe.recipeCategoryId)
-    return categories.find((c) => c.id === recipe.recipeCategoryId)
-  const key = recipeCategoryKey(recipe.category || '')
+    return (
+      categories.find((c) => c.id === recipe.recipeCategoryId) ||
+      categories.find((c) =>
+        [c.name, ...c.previousNames].some(
+          (n) => legacyId(n) === recipe.recipeCategoryId,
+        ),
+      )
+    )
+  const key = recipeCategoryKey(canonicalCategoryName(recipe.category || ''))
   return categories.find((c) =>
     [c.name, ...c.previousNames].some((n) => recipeCategoryKey(n) === key),
   )

@@ -334,6 +334,9 @@ export function WorkspaceApp() {
   const deliberateUnits = useRef(new Set<string>())
   const labelUnsaved = useRef(false)
   const workflowDirty = useRef(false)
+  const [productDetailReturn, setProductDetailReturn] = useState<string | null>(
+    null,
+  )
   const [kitContext, setKitContext] = useState<string | null>(null)
   const [kitEditorReturn, setKitEditorReturn] = useState<string | null>(null)
   const [route, setRoute] = useState(() => destination('Dashboard'))
@@ -816,7 +819,30 @@ export function WorkspaceApp() {
       setBusy(false)
     }
   }
+  function returnToProductDetails() {
+    const product = state.products.find((p) => p.id === productDetailReturn)
+    if (!product) return
+    if (
+      navigationGuard.current() &&
+      !window.confirm(
+        'This page has unsaved changes. Discard changes and continue?',
+      )
+    )
+      return
+    labelUnsaved.current = false
+    workflowDirty.current = false
+    setFormDirty(false)
+    go('Products', 'All Products')
+    open('product-detail', product)
+  }
   function open(kind: string, item?: Item) {
+    if (
+      modal === 'product-detail' &&
+      selected &&
+      ['product', 'recipe-detail', 'batch'].includes(kind)
+    )
+      setProductDetailReturn(selected.id)
+    if (kind === 'product-detail') setProductDetailReturn(null)
     if (kind === 'product-detail' && modal !== 'product-detail')
       setKitContext(null)
     const resolution = state.settings[0]?.effectiveAccess
@@ -1576,6 +1602,13 @@ export function WorkspaceApp() {
         <main
           className={`app-page${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
+          {page === 'Labels' &&
+            productDetailReturn &&
+            state.products.some((p) => p.id === productDetailReturn) && (
+              <Btn secondary onClick={returnToProductDetails}>
+                Back to product details
+              </Btn>
+            )}
           {route.section === 'Purchasing' && (
             <FinanceNavigation
               active={route.tab}
@@ -3171,16 +3204,34 @@ export function WorkspaceApp() {
         }}
       >
         <DialogContent
+          showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
           className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
         >
           {modal === 'product-detail' && selected ? (
-            <ItemDetailHeader name={selected.name}>
-              Everything you need to keep your business in good order.
+            <ItemDetailHeader name={selected.name} close>
+              {selected.category ||
+                (selected.workflow === 'resale'
+                  ? 'Resale product'
+                  : selected.workflow === 'kit'
+                    ? 'Product kit'
+                    : selected.workflow === 'handmade'
+                      ? 'Handmade product'
+                      : 'Food product')}
             </ItemDetailHeader>
           ) : (
             <DialogHeader>
+              {productDetailReturn &&
+                ['product', 'recipe-detail', 'batch'].includes(modal || '') && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={returnToProductDetails}
+                  >
+                    Back to product details
+                  </button>
+                )}
               <div className="eyebrow">COTTAGE PANTRY · YOUR OVEN</div>
               <DialogTitle>
                 {(
@@ -5136,6 +5187,40 @@ export function WorkspaceApp() {
               item={selected}
               assets={state.graphic_assets || []}
               kind="product"
+              footer={
+                selected.workflow === 'handmade' ? (
+                  <p className="table-note">
+                    <button
+                      className="text-button"
+                      onClick={() => open('product', selected)}
+                    >
+                      Open bill of materials
+                    </button>
+                    {selected.bom
+                      ? ` · Version ${selected.bom.version}`
+                      : ' · Legacy design needs review'}
+                  </p>
+                ) : (
+                  <p className="table-note product-detail-recipe">
+                    Connected recipe:{' '}
+                    {recipes.find((r) => r.id === selected.recipeId)?.name ||
+                      'Not linked — current recipe cost unavailable'}
+                    {recipes.find((r) => r.id === selected.recipeId) && (
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          open(
+                            'recipe-detail',
+                            recipes.find((r) => r.id === selected.recipeId)!,
+                          )
+                        }
+                      >
+                        Open recipe
+                      </button>
+                    )}
+                  </p>
+                )
+              }
               photoDetails={
                 selected.workflow === 'kit' ? (
                   <>
@@ -5188,6 +5273,7 @@ export function WorkspaceApp() {
                               secondary
                               small
                               onClick={() => {
+                                setProductDetailReturn(selected.id)
                                 setLabelProduct(selected.id)
                                 setLabelDesign(label.id)
                                 setModal(null)
@@ -5226,12 +5312,10 @@ export function WorkspaceApp() {
                             }
                           </Btn>
                         )}
-                      <Btn onClick={() => open('product', selected)}>
-                        Edit Product
-                      </Btn>
                       <Btn
                         secondary
                         onClick={() => {
+                          setProductDetailReturn(selected.id)
                           setLabelProduct(selected.id)
                           setLabelDesign('')
                           setLabelCreateRequest((n) => n + 1)
@@ -5242,55 +5326,25 @@ export function WorkspaceApp() {
                         Create label
                       </Btn>
                     </div>
-                    {selected.workflow === 'handmade' ? (
-                      <p className="table-note">
-                        <button
-                          className="text-button"
-                          onClick={() => open('product', selected)}
-                        >
-                          Open bill of materials
-                        </button>
-                        {selected.bom
-                          ? ` · Version ${selected.bom.version}`
-                          : ' · Legacy design needs review'}
-                      </p>
-                    ) : (
-                      <p className="table-note product-detail-recipe">
-                        Connected recipe:{' '}
-                        {recipes.find((r) => r.id === selected.recipeId)
-                          ?.name ||
-                          'Not linked — current recipe cost unavailable'}
-                        {recipes.find((r) => r.id === selected.recipeId) && (
-                          <button
-                            className="text-button"
-                            onClick={() =>
-                              open(
-                                'recipe-detail',
-                                recipes.find(
-                                  (r) => r.id === selected.recipeId,
-                                )!,
-                              )
-                            }
-                          >
-                            Open recipe
-                          </button>
-                        )}
-                      </p>
-                    )}
                   </>
                 )
               }
             >
-              {selected.workflow !== 'resale' && (
-                <div className="button-row">
+              <div className="button-row product-detail-toolbar">
+                {selected.workflow !== 'kit' && (
+                  <Btn onClick={() => open('product', selected)}>
+                    Edit Product
+                  </Btn>
+                )}
+                {selected.workflow !== 'resale' && (
                   <Btn
                     disabled={!ready}
                     onClick={() => open('batch', selected)}
                   >
                     {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
                   </Btn>
-                </div>
-              )}
+                )}
+              </div>
               {selected.workflow === 'kit' ? (
                 <KitCostCards
                   product={selected}

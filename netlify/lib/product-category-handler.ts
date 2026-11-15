@@ -1,3 +1,4 @@
+import { canonicalCategoryName } from '../../src/lib/category-consolidation'
 import {
   categoryDetailsShape,
   categoryScopeSchema,
@@ -79,7 +80,7 @@ export async function handleProductCategories(
       throw new Error('This saved category is unavailable in this oven.')
     const name =
       typeof input.category?.name === 'string'
-        ? input.category.name.trim().replace(/\s+/g, ' ')
+        ? canonicalCategoryName(input.category.name).replace(/\s+/g, ' ')
         : ''
     if (!name || name.length > 100)
       throw new Error('Enter a category name of 1–100 characters.')
@@ -89,7 +90,8 @@ export async function handleProductCategories(
         scope: categoryScopeSchema.optional(),
       })
       .parse({ ...previous, ...input.category })
-    if (!previous && !details.scope) throw new Error('Choose a section for this category.')
+    if (!previous && !details.scope)
+      throw new Error('Choose a section for this category.')
     if (previous?.scope && details.scope !== previous.scope)
       throw new Error('A saved category cannot move to another section.')
     if (

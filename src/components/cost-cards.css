@@ -7,7 +7,7 @@
   grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
 }
 .item-detail-dialog {
-  height: min(810px, 90dvh);
+  height: auto;
   align-content: start;
 }
 .cost-card {

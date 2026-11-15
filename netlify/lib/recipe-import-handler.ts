@@ -1,3 +1,7 @@
+import {
+  categoryAliases,
+  exactCategoryKey,
+} from '../../src/lib/category-consolidation'
 import { aiEnabled } from './feature-flags'
 import { parseCookBook } from '../../src/lib/cookbook'
 import { cookBookArchive } from './cookbook'
@@ -383,6 +387,14 @@ export async function handleRecipeImport(req: Request, c: Context) {
       },
       supersedesRecipeId:
         body.duplicateDecision === 'version' ? body.targetRecipeId : null,
+    }
+    if (
+      !recipe.recipeCategoryId &&
+      categoryAliases[exactCategoryKey(draft.importedCategory || '')]
+    ) {
+      recipe.category =
+        categoryAliases[exactCategoryKey(draft.importedCategory)]
+      recipe.categoryNeedsReview = false
     }
     c.stage?.('recipe_write')
     assignRecipeCategory(recipe, undefined, recipeCategories(state))

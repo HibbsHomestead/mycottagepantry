@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--surface-soft);
+  background: transparent;
   color: var(--muted);
   width: 48px;
   height: 48px;

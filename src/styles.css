@@ -3524,3 +3524,116 @@ main > .recipe-grid {
   justify-content: flex-end;
   gap: 4px 12px;
 }
+
+/* Product details use the available desktop width; one dialog scroll surface. */
+.app-dialog.wide-dialog.item-detail-dialog {
+  width: min(1080px, calc(100vw - 40px));
+  max-width: min(1080px, calc(100vw - 40px)) !important;
+  max-height: calc(100dvh - 40px);
+  height: auto;
+  padding: 20px 24px !important;
+  gap: 12px;
+  scroll-padding-block: 64px 24px;
+}
+.item-detail-dialog [data-slot='dialog-header'] {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  padding: 4px 36px 10px 0;
+  background: var(--card);
+  gap: 2px;
+}
+.item-detail-dialog [data-slot='dialog-header'] .eyebrow {
+  display: none;
+}
+.item-detail-dialog [data-slot='dialog-close'] {
+  position: sticky;
+  bottom: 0;
+  margin: 0 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  opacity: 1;
+  z-index: 3;
+}
+.item-detail-dialog .product-detail-layout {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 12px 24px;
+}
+.item-detail-dialog .product-detail-photo.pantry-photo {
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  max-height: 250px;
+}
+.item-detail-dialog .product-detail-information {
+  gap: 10px;
+}
+.item-detail-dialog .pricing-summary {
+  gap: 10px;
+  margin: 0;
+}
+.item-detail-dialog .cost-card {
+  padding: 9px 10px;
+}
+.item-detail-dialog .product-detail-footer {
+  grid-column: 1 / -1;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.item-detail-dialog .product-detail-footer p {
+  margin: 0;
+}
+.item-detail-dialog .product-linked-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.item-detail-dialog .product-linked-label > span {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .app-dialog.wide-dialog.item-detail-dialog {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px);
+    padding: 16px !important;
+  }
+  .item-detail-dialog .product-detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .item-detail-dialog [data-slot='dialog-header'] {
+    top: -16px;
+  }
+  .item-detail-dialog .product-detail-media {
+    grid-row: auto;
+  }
+  .item-detail-dialog .product-linked-label {
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+  .item-detail-dialog .product-linked-label > span {
+    grid-column: 1 / -1;
+  }
+}
+/* Loaded media blends into its card; missing-image placeholders stay distinct. */
+.app-shell .pantry-photo:has(img),
+.pantry-photo:has(img) {
+  background: transparent;
+}
+.item-detail-dialog [data-slot='dialog-header'] > .product-header-close {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  bottom: auto;
+  margin: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+.product-card-photo-first .pantry-card-photo-button .pantry-photo:has(img),
+.app-shell .pantry-photo.photo-box:has(img) {
+  background: transparent;
+}

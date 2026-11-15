@@ -1,3 +1,4 @@
+import { canonicalCategoryName } from '../../src/lib/category-consolidation'
 import { randomUUID } from 'node:crypto'
 import type { Item, Workspace } from '../../src/lib/domain'
 import {
@@ -46,7 +47,7 @@ export async function handlePantryCategories(
         ...previous,
         ...input.category,
         id: previous?.id || randomUUID(),
-        name: String(input.category?.name || '')
+        name: canonicalCategoryName(String(input.category?.name || ''))
           .trim()
           .replace(/\s+/g, ' '),
         needsReview: false,

@@ -1,0 +1,15 @@
+{
+  "status": "Read-only pre-deployment counts; migration has not run",
+  "businesses": 8,
+  "visibleCategorizedRecords": 277,
+  "legacyTextAssignments": {
+    "breads": 10,
+    "cakes": 0,
+    "fillings": 0,
+    "preps & fillings": 26
+  },
+  "projectedReassignments": {
+    "Breads & Rolls": 15,
+    "Preps, Fillings & Toppings": 26
+  }
+}

@@ -23,7 +23,16 @@ export function PantryPhoto({
   recipeCategories?: RecipeCategory[]
 }) {
   const [failed, setFailed] = useState('')
-  const src = assets.find((a) => a.id === item.imageAssetId)?.fileUrl
+  const asset = assets.find((a) => a.id === item.imageAssetId)
+  const originalSrc = asset?.fileUrl
+  const previewWidth = className.includes('detail-photo')
+    ? 800
+    : kind !== 'pantry' || className.includes('card')
+      ? 480
+      : 128
+  const src = originalSrc?.startsWith('/api/workspace?asset=')
+    ? `${originalSrc}&imageWidth=${previewWidth}`
+    : originalSrc
   const category =
     kind === 'recipe'
       ? recipeCategory(
@@ -53,6 +62,9 @@ export function PantryPhoto({
           src={src}
           alt={`Photo of ${item.name}`}
           loading="lazy"
+          decoding="async"
+          width={asset?.widthPx || 400}
+          height={asset?.heightPx || 300}
           onError={() => setFailed(src)}
         />
       ) : kind === 'recipe' && item.workflow !== 'handmade' ? (

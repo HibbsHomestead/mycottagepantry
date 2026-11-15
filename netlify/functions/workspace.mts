@@ -1,3 +1,7 @@
+import {
+  consolidateCategories,
+  canonicalCategoryName,
+} from '../../src/lib/category-consolidation'
 import { bookSummary, planBookkeeping } from '../../src/lib/checkbook'
 import { customerMessage } from '../../src/lib/customer-message'
 import {
@@ -701,6 +705,8 @@ export default async (req: Request, context: Context) => {
       countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
+      if (table === 'ingredients' && typeof item.category === 'string')
+        item.category = canonicalCategoryName(item.category)
       assertSectionCategoryAssignment(
         item,
         state[table]?.find((r) => r.id === item.id),
@@ -1113,6 +1119,38 @@ export default async (req: Request, context: Context) => {
       )
       state[table] = r.rows.map((r: any) =>
         r.added_at ? { ...r.data, addedAt: r.added_at } : r.data,
+      )
+    }
+    // The business row is locked above. Normalize only category metadata, never
+    // run general record saves (which may recalculate stock or costing).
+    const categorySettingsBefore = JSON.stringify(state.settings[0])
+    const categoryCleanup = consolidateCategories(state)
+    for (const { table, item } of categoryCleanup.changes) {
+      await client.query(
+        `UPDATE ${table} SET data=$1::jsonb WHERE business_id=$2 AND id=$3`,
+        [JSON.stringify(item), org, item.id],
+      )
+    }
+    if (
+      JSON.stringify(state.settings[0]) !== categorySettingsBefore ||
+      categoryCleanup.changes.length
+    ) {
+      const settings = state.settings[0]
+      settings.categoryConsolidationCounts = Object.fromEntries(
+        [
+          ...new Set([
+            ...Object.keys(settings.categoryConsolidationCounts || {}),
+            ...Object.keys(categoryCleanup.counts),
+          ]),
+        ].map((key) => [
+          key,
+          Number(settings.categoryConsolidationCounts?.[key] || 0) +
+            (categoryCleanup.counts[key] || 0),
+        ]),
+      )
+      await client.query(
+        'UPDATE settings SET data=$1::jsonb WHERE business_id=$2 AND id=$3',
+        [JSON.stringify(settings), org, settings.id],
       )
     }
     if (requestUrl.searchParams.has('bookFrom'))
@@ -1855,10 +1893,25 @@ export default async (req: Request, context: Context) => {
         type: 'arrayBuffer',
       })
       if (!bytes) throw new Error('Graphic file is unavailable.')
+      const previewWidth = Number(requestUrl.searchParams.get('imageWidth'))
+      const preview =
+        [128, 480, 800].includes(previewWidth) &&
+        ['image/png', 'image/jpeg', 'image/webp'].includes(asset.fileType)
+          ? await sharp(Buffer.from(bytes), { limitInputPixels: 40000000 })
+              .rotate()
+              .resize({
+                width: previewWidth,
+                height: previewWidth,
+                fit: 'inside',
+                withoutEnlargement: true,
+              })
+              .webp({ quality: 85 })
+              .toBuffer()
+          : null
       await client.query('COMMIT')
-      return new Response(bytes, {
+      return new Response(preview ? new Uint8Array(preview) : bytes, {
         headers: {
-          'Content-Type': asset.fileType,
+          'Content-Type': preview ? 'image/webp' : asset.fileType,
           'Cache-Control': 'private, no-store',
           'X-Content-Type-Options': 'nosniff',
           'Content-Security-Policy': "default-src 'none'",
@@ -4258,7 +4311,7 @@ export default async (req: Request, context: Context) => {
               recipeCost(item, state.ingredients, state.recipes) / item.yield,
             compoundRecipeId: item.id,
             usedAs: 'ingredient',
-            category: prep?.category || 'Preps & fillings',
+            category: prep?.category || 'Preps, Fillings & Toppings',
             threshold: prep?.threshold || 0,
             allergens: prep?.allergens || [],
             reviewed: prep?.reviewed || false,
