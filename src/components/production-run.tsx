@@ -15,7 +15,9 @@ export function ProductionRun({
   edit,
   startComponent,
   busy,
+  role = 'Owner',
 }: {
+  role?: string
   state: Workspace
   run?: Item
   productId?: string
@@ -42,12 +44,14 @@ export function ProductionRun({
   const [usage, setUsage] = useState<Record<string, string>>({})
   const [materialWaste, setMaterialWaste] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
+  const [reversalReason, setReversalReason] = useState('')
   const saving = useRef(false)
   const p =
     run?.definition?.product || state.products.find((p) => p.id === product)
   const recipe =
     run?.definition?.recipe || state.recipes.find((r) => r.id === p?.recipeId)
   const kit = p?.workflow === 'kit'
+  const handmade = p?.workflow === 'handmade'
   const terminal = ['completed', 'canceled'].includes(run?.status)
   const scheduled = run?.status === 'scheduled'
   let definition: Item | undefined,
@@ -150,6 +154,7 @@ export function ProductionRun({
         materialWaste,
         usage,
         ...(labor !== '' ? { laborMinutes: Number(labor) } : {}),
+        reason: reversalReason,
       })
     } catch (e) {
       setError((e as Error).message)
@@ -164,14 +169,17 @@ export function ProductionRun({
           {run?.name} · {run?.status}
         </p>
         <p>
-          {run?.actualYield ?? run?.quantity} selling packages ·{' '}
+          {run?.actualYield ?? run?.quantity}{' '}
+          {handmade ? 'finished units' : 'selling packages'} ·{' '}
           {money(run?.historicalCost || 0)}
         </p>
         <details>
           <summary>Recorded requirements and cost</summary>
           <p>
-            {run?.definition?.recipe?.name || 'Kit assembly'} · definition saved
-            when planned.
+            {run?.definition?.bom
+              ? `Bill of materials · version ${run.definition.bom.version}`
+              : run?.definition?.recipe?.name || 'Kit assembly'}{' '}
+            · definition saved when planned.
           </p>
           <div className="table-scroll">
             <table>
@@ -198,14 +206,51 @@ export function ProductionRun({
           <p>
             Labor: {money(run?.costSnapshot?.labor || 0)} · Packaging:{' '}
             {money(run?.costSnapshot?.packagingCost || 0)} · Output waste:{' '}
-            {run?.waste || 0} packages
+            {run?.waste || 0} units · Overhead:{' '}
+            {money(run?.costSnapshot?.overhead || 0)}
           </p>
           {run?.wasteReason && <p>{run.wasteReason}</p>}
         </details>
         <p>
-          Completed stock movements are immutable. Automatic reversal and
-          disassembly are unavailable.
+          Recorded costs and stock movements are immutable. Corrections create
+          compensating entries.
         </p>
+        {handmade &&
+          run?.status === 'completed' &&
+          (state.ledger.some(
+            (l) => l.id === 'production-reversal-' + run.id,
+          ) ? (
+            <p>
+              This production run was reversed. Its original snapshot remains
+              available.
+            </p>
+          ) : (
+            ['Owner', 'Manager'].includes(role) && (
+              <div>
+                <label>
+                  Reason for whole-run reversal
+                  <input
+                    value={reversalReason}
+                    onChange={(e) => setReversalReason(e.target.value)}
+                  />
+                </label>
+                <p>
+                  Reversal removes the original output and restores its consumed
+                  materials at recorded costs. Downstream stock consumption
+                  blocks reversal. Create a new run for corrected production.
+                </p>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  disabled={busy || !reversalReason.trim()}
+                  onClick={() => act('productionReverse')}
+                >
+                  Reverse production run
+                </button>
+              </div>
+            )
+          ))}
+        {error && <p role="alert">{error}</p>}
       </section>
     )
   return (
@@ -238,8 +283,10 @@ export function ProductionRun({
           >
             <option value="">Choose product</option>
             {state.products
-              .filter((p) =>
-                ['food', 'kit', 'handmade'].includes(workflowOf(p)),
+              .filter(
+                (p) =>
+                  ['food', 'kit', 'handmade'].includes(workflowOf(p)) &&
+                  !p.archived,
               )
               .map((p) => (
                 <option key={p.id} value={p.id}>
@@ -250,7 +297,11 @@ export function ProductionRun({
           </select>
         </label>
         <label>
-          {kit ? 'Kits to assemble' : 'Selling packages to produce'}
+          {kit
+            ? 'Kits to assemble'
+            : handmade
+              ? 'Finished units to produce'
+              : 'Selling packages to produce'}
           <input
             type="number"
             min="1"
@@ -416,6 +467,12 @@ export function ProductionRun({
           </label>
         </fieldset>
       )}
+      {definition?.bom?.instructions && (
+        <section>
+          <h3>Production instructions</h3>
+          <p>{definition.bom.instructions}</p>
+        </section>
+      )}
       {setupError && <p role="alert">{setupError}</p>}
       {p && !scheduled && (
         <div className="button-row">
@@ -489,9 +546,11 @@ export function ProductionRun({
         <section>
           <h3>{kit ? 'Assembly requirements' : 'Production requirements'}</h3>
           <p>
-            {kit
-              ? 'Uses existing finished stock. Component manufacturing is separate.'
-              : `${result.multiplier.toFixed(4)} recipe batches · ${quantity} requested selling packages`}
+            {definition?.bom
+              ? `${result.multiplier.toFixed(4)} BOM runs · ${quantity} planned finished units`
+              : kit
+                ? 'Uses existing finished stock. Component manufacturing is separate.'
+                : `${result.multiplier.toFixed(4)} recipe batches · ${quantity} requested selling packages`}
           </p>
           <div className="table-scroll">
             <table>
@@ -563,7 +622,12 @@ export function ProductionRun({
           </p>
           <details>
             <summary>
-              Calculation details{scheduled ? ' and actual ingredient use' : ''}
+              Calculation details
+              {scheduled
+                ? handmade
+                  ? ' and actual component use'
+                  : ' and actual ingredient use'
+                : ''}
             </summary>
             <p>
               Stock costs are locked at completion. Selling price is excluded.
@@ -576,9 +640,10 @@ export function ProductionRun({
                   (l) =>
                     l.kind === 'ingredient' &&
                     l.source.ingredientId &&
-                    !definition?.product.packagingLines?.some(
-                      (p: Item) => p.ingredientId === l.itemId,
-                    ),
+                    (handmade ||
+                      !definition?.product.packagingLines?.some(
+                        (p: Item) => p.ingredientId === l.itemId,
+                      )),
                 )
                 .map((l) => (
                   <div key={l.id} className="form-grid">

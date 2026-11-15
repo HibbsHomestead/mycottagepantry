@@ -1,3 +1,4 @@
+import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
 import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
@@ -2459,6 +2460,13 @@ export default async (req: Request, context: Context) => {
             `${record.id}: ${correction.previousDate} → ${correction.receivedDate}. ${correction.reason}`,
           )
         }
+      } else if (
+        await handleHandmadeMaterial(action, table, data, {
+          ...stockContext(),
+          audit,
+        })
+      ) {
+        // Material receipts share the protected stock ledger.
       } else if (
         await handleProduction(action, table, data, {
           ...stockContext(),

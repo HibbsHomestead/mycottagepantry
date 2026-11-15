@@ -1,3 +1,4 @@
+import { HandmadeProductEditor } from './handmade-workspace'
 import { ProductLinkImport } from './product-link-import'
 import { ProductEditor } from './product-editor'
 import { InventoryProductFields } from './inventory-product-fields'
@@ -61,6 +62,12 @@ type WorkflowProps = Parameters<typeof ProductEditor>[0]
  * Products and Inventory. Other workflow kinds keep their dedicated forms.
  */
 export function ProductWorkflowDialog(props: WorkflowProps) {
+  if (
+    props.kind.startsWith('trade-product') &&
+    props.kind !== 'trade-product-resale' &&
+    props.item?.workflow !== 'resale'
+  )
+    return <HandmadeProductEditor {...props} />
   return props.kind.startsWith('trade-product') ? (
     <ProductEditor {...props} />
   ) : (
@@ -226,8 +233,8 @@ function WorkflowDialog({
   )
   const title = isDesign
     ? item
-      ? 'Edit Recipe'
-      : 'Create handmade design'
+      ? 'Review original bill of materials'
+      : 'Create handmade bill of materials'
     : isMaterial
       ? 'Receive a new craft material'
       : isRun
@@ -424,7 +431,9 @@ function WorkflowDialog({
               </>
             )}
             {(isDesign || isMaterial) && (
-              <Field label={isDesign ? 'Design name' : 'Material name'}>
+              <Field
+                label={isDesign ? 'Bill of materials name' : 'Material name'}
+              >
                 {input('name', 'text', true)}
               </Field>
             )}
