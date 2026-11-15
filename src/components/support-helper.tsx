@@ -380,9 +380,7 @@ export function SupportHelper({
                       ? 'Change proposed — approval required'
                       : `Proposal ${p.status}`}
                 </strong>
-                <p>
-                  Business: {p.business_id} · Settings: {p.target_id}
-                </p>
+                <p>Business timezone setting</p>
                 <p>
                   Timezone: {p.before.timezone || 'Default (America/Chicago)'} →{' '}
                   {p.after.timezone}
@@ -433,8 +431,8 @@ export function SupportHelper({
       )}
       {ready && !policy.enabled && (
         <p role="status">
-          AI support is in private evaluation or paused. Help guides and Contact
-          support remain available.
+          AI assistance is unavailable for this business right now. You can use
+          the help guides or contact support.
         </p>
       )}
       {ready && (
@@ -499,7 +497,11 @@ export function SupportHelper({
           {attach && (
             <details open>
               <summary>Review diagnostic attachment</summary>
-              <pre>{JSON.stringify(diagnostics, null, 2)}</pre>
+              <p>
+                Includes the page, time, app version and a sanitized error
+                report for support. It excludes business records and
+                credentials.
+              </p>
               <small>
                 Only allowlisted error details, app version, page and time. No
                 raw error text or business records.
@@ -618,13 +620,10 @@ export function SupportHelper({
                 />
                 Include these sanitized diagnostics with my support request
               </label>
-              <pre>
-                {JSON.stringify(
-                  attach ? diagnostics : chat?.diagnostics,
-                  null,
-                  2,
-                )}
-              </pre>
+              <p>
+                Includes the diagnostic attachment you selected, shared
+                privately with authorized support staff.
+              </p>
             </>
           )}
           <p>

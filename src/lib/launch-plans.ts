@@ -21,7 +21,7 @@ export const launchPricing = {
       publication: 'draft',
       name: 'Free',
       monthlyUsd: 0,
-      users: 1,
+      users: 5,
       caption: 'A place to start',
       description: 'A small working toolkit. No credit card required.',
       highlights: [
@@ -42,7 +42,7 @@ export const launchPricing = {
       publication: 'draft',
       name: 'Mixing Bowl',
       monthlyUsd: 10,
-      users: 1,
+      users: 5,
       caption: 'The complete solo-business toolkit',
       description:
         'For day-to-day operations. Core functionality belongs here.',
@@ -64,7 +64,7 @@ export const launchPricing = {
       publication: 'draft',
       name: 'Baker’s Bench',
       monthlyUsd: 20,
-      users: 1,
+      users: 5,
       caption: 'Advanced planning · proposal',
       description:
         'Everything in Mixing Bowl, with proposed tools for planning ahead.',
@@ -83,20 +83,20 @@ export const launchPricing = {
       publication: 'draft',
       name: 'Cottage Kitchen',
       monthlyUsd: 30,
-      users: 2,
-      caption: 'Run your business together — includes two users.',
+      users: 5,
+      caption: 'Run your business together.',
       description:
-        'The program’s intended features except resale and consignment, for two total business users including the owner.',
+        'The program’s intended features except resale and consignment, for your business.',
       highlights: [
         'Costing, inventory, labels, sales, expenses and existing reports',
         'Handmade designs, material costing and production',
         'Fabric yardage and separate remnants',
-        'Individual logins and shared-business access for two total users, including the owner',
+        'Individual logins and shared-business access',
         'Coming soon: invitations, member administration and advanced planning',
         'Excludes the resale and consignment modules',
       ],
       caveat:
-        'Includes two total users including the owner. Invitations and membership administration are Coming soon; shared permissions remain partial. Purchase availability depends on verified provider configuration.',
+        'Invitations and membership administration are Coming soon; shared permissions remain partial. Purchase availability depends on verified provider configuration.',
     },
     {
       id: 'cottage-mercantile',
@@ -110,17 +110,17 @@ export const launchPricing = {
       caption:
         'The complete Cottage Pantry program — including resale, consignment, and business team access.',
       description:
-        'The full intended program for food, handmade, resale and consignment businesses. Includes five users plus the owner (six total).',
+        'The full intended program for food, handmade, resale and consignment businesses.',
       highlights: [
         'Resale merchandise, pack/case receiving, starting inventory & separate purchase/selling prices',
         'Fabric yardage with separate width, fractional lengths & remnant pieces without double counting',
         'Handmade designs, material/labor/packaging costing, production usage, waste & finished-goods additions',
         'Receipt matching across ingredients, materials, packaging and resale stock',
         'Proposed: yarn length/weight stock, dye lots, storage locations & purchase orders',
-        'Consignment stock, sales, refunds and consignor payouts; six total business users including the owner',
+        'Consignment stock, sales, refunds and consignor payouts',
       ],
       caveat:
-        'Approved for Stripe TEST and LIVE purchase at $40/month with six total users, subject to verified provider setup, Price mapping and checkout activation. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented.',
+        'Approved for Stripe TEST and LIVE purchase at $40/month, subject to verified provider setup, Price mapping and checkout activation. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented.',
     },
   ],
 } as const

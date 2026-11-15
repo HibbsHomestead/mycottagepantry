@@ -1,3 +1,4 @@
+import { customerMessage } from './customer-message'
 import {
   ProductImportFailure,
   type ProductImportDiagnostics,
@@ -103,17 +104,17 @@ export async function readImportResponse(response: Response) {
   if (!['application/json', 'application/problem+json'].includes(mime)) {
     if ([401, 403].includes(response.status))
       throw new Error(
-        `Site access or sign-in is required (HTTP ${response.status}). Open Cottage Pantry in another tab, complete the site-access sign-in, then retry here. Your unsaved form stays open.`,
+        'Please sign in to continue, then retry. Your unsaved form stays open.',
       )
     if (
       response.status === 404 ||
       (response.ok && /<!doctype|<html/i.test(text))
     )
       throw new Error(
-        `The product-import API returned a webpage instead of JSON (HTTP ${response.status}). The deployed /api/workspace function or routing needs repair.`,
+        'Product details could not be loaded. Please retry or enter them manually. Contact support if it continues.',
       )
     throw new Error(
-      `The product-import service returned ${text.trim() ? 'a non-JSON response' : 'an empty response'} (HTTP ${response.status}). Retry shortly; if it continues, check the function deployment.`,
+      'Product details could not be loaded. Please retry or enter them manually. Contact support if it continues.',
     )
   }
   let data: any
@@ -121,7 +122,7 @@ export async function readImportResponse(response: Response) {
     data = JSON.parse(text)
   } catch {
     throw new Error(
-      `The product-import service returned invalid or empty JSON (HTTP ${response.status}). Retry shortly; if it continues, check the function logs.`,
+      'Product details could not be loaded. Please retry or enter them manually. Contact support if it continues.',
     )
   }
   if (!response.ok && data?.code === 'PRODUCT_HUMAN_VERIFICATION')
@@ -129,7 +130,7 @@ export async function readImportResponse(response: Response) {
   if (!response.ok && data?.diagnostics && Array.isArray(data.diagnostics.hops))
     throw new ProductImportFailure(
       typeof data.error === 'string'
-        ? data.error
+        ? customerMessage(data.error)
         : 'Product details could not be retrieved.',
       data.diagnostics as ProductImportDiagnostics,
       response.headers.get('retry-after') || undefined,
@@ -139,7 +140,7 @@ export async function readImportResponse(response: Response) {
   if (!response.ok)
     throw new ProductImportFailure(
       typeof data?.error === 'string'
-        ? data.error
+        ? customerMessage(data.error)
         : 'The product-import request failed. Retry or enter details manually.',
       {
         requestedAt: new Date().toISOString(),

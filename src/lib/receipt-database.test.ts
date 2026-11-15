@@ -297,7 +297,7 @@ it('discards provider results when the signed-in session expires during reading'
     (r: Item) => r.id === receipt.id,
   )
   expect(saved.vendor).toBe('')
-  expect(saved.extractionAttempts).toHaveLength(1)
+  expect(saved.extractionAttempts).toBeUndefined()
   expect(saved.fileHash).toBe(receipt.fileHash)
 })
 it('discards provider results when oven write access is revoked during reading', async () => {
@@ -327,7 +327,7 @@ it('discards provider results when oven write access is revoked during reading',
     (r: Item) => r.id === receipt.id,
   )
   expect(saved.vendor).toBe('')
-  expect(saved.extractionAttempts).toHaveLength(1)
+  expect(saved.extractionAttempts).toBeUndefined()
 })
 it('receives a mixed inventory receipt with a resale variant, persists stable links, and audits date corrections without new postings', async () => {
   let result = await request('receiptManual', {})

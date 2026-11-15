@@ -39,6 +39,8 @@ function client(primary = false, missing = false, reactivate = false) {
                 },
               ],
         }
+      if (sql.includes('UNION SELECT identity_owner'))
+        return { rows: [{ count: 5 }] }
       if (sql.includes('count(*)::int')) return { rows: [{ count: 0 }] }
       if (sql.startsWith('SELECT plan_id,status'))
         return {

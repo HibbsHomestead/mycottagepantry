@@ -150,7 +150,11 @@ it('retains the selected ID and draft after retryable loading or save failures, 
     ).toHaveValue('Bread · Food'),
   )
   await userEvent.click(screen.getByRole('button', { name: 'Add category' }))
-  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
+  if (!screen.getByLabelText('Section').hasAttribute('disabled'))
+    await userEvent.selectOptions(
+      screen.getByLabelText('Section'),
+      'food-products',
+    )
   await userEvent.type(screen.getByLabelText('Category name'), 'Bread')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification', { exact: true }),
@@ -373,7 +377,11 @@ it('uses honest loading and permission-error states, then offers first-category 
     await screen.findByRole('button', { name: 'Add Your First Category' }),
   )
   expect(screen.getByRole('button', { name: 'Save category' })).toBeDisabled()
-  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
+  if (!screen.getByLabelText('Section').hasAttribute('disabled'))
+    await userEvent.selectOptions(
+      screen.getByLabelText('Section'),
+      'food-products',
+    )
   await userEvent.type(screen.getByLabelText('Category name'), 'Bread')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification', { exact: true }),
@@ -449,7 +457,14 @@ it('keeps category creation independent of malformed tax settings without replac
       const input = JSON.parse(String(init.body))
       expect(input).toEqual({
         operation: 'saveCategory',
-        category: { name: 'Gift boxes', classification: 'non_food', description:'',parentId:null,displayOrder:0,scope:'food-products' },
+        category: {
+          name: 'Gift boxes',
+          classification: 'non_food',
+          description: '',
+          parentId: null,
+          displayOrder: 0,
+          scope: 'food-products',
+        },
         expectedRevision: 1,
       })
       return Response.json({
@@ -468,7 +483,7 @@ it('keeps category creation independent of malformed tax settings without replac
   render(<ProductCategoryManager canManage onConfig={onConfig} />)
   expect(await screen.findByRole('heading', { name: 'Bread' })).toBeVisible()
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'fields: rates.0.ratePercent',
+    'Tax settings could not be loaded',
   )
   expect(screen.getByRole('alert')).toHaveTextContent('no tax rate is assumed')
   await userEvent.click(
@@ -479,7 +494,11 @@ it('keeps category creation independent of malformed tax settings without replac
     screen.getByRole('button', { name: 'Save category tax mappings' }),
   ).toBeDisabled()
   await userEvent.click(screen.getByRole('button', { name: 'Add Category' }))
-  if (!screen.getByLabelText('Section').hasAttribute('disabled')) await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
+  if (!screen.getByLabelText('Section').hasAttribute('disabled'))
+    await userEvent.selectOptions(
+      screen.getByLabelText('Section'),
+      'food-products',
+    )
   await userEvent.type(screen.getByLabelText('Category name'), 'Gift boxes')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification'),
@@ -536,13 +555,18 @@ it('retains the loaded list, category form and tax draft through a failed retry,
     screen.getByLabelText('Category name'),
     'Unsaved gift boxes',
   )
-  await userEvent.selectOptions(screen.getByLabelText('Section'),'food-products')
+  await userEvent.selectOptions(
+    screen.getByLabelText('Section'),
+    'food-products',
+  )
   await userEvent.selectOptions(
     screen.getByLabelText('Classification'),
     'non_food',
   )
   await userEvent.click(screen.getByRole('button', { name: 'Save category' }))
-  expect(screen.getAllByRole('alert')[0]).toHaveTextContent('HTTP 400')
+  expect(screen.getAllByRole('alert')[0]).toHaveTextContent(
+    'Category settings changed.',
+  )
   await userEvent.click(
     screen.getAllByRole('button', { name: 'Retry category list' })[0],
   )
@@ -560,7 +584,9 @@ it('retains the loaded list, category form and tax draft through a failed retry,
       ),
     ),
   )
-  expect(screen.getAllByRole('alert')[0]).toHaveTextContent('HTTP 503')
+  expect(screen.getAllByRole('alert')[0]).toHaveTextContent(
+    'Service temporarily unavailable',
+  )
   expect(screen.getByRole('heading', { name: 'Bread' })).toBeVisible()
   expect(screen.getByRole('button', { name: 'Add Category' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Save category' })).toBeDisabled()
@@ -584,14 +610,18 @@ it.each([
   [
     401,
     { error: 'Log in on this site.', code: 'SIGN_IN_REQUIRED' },
-    'SIGN_IN_REQUIRED',
+    'Log in on this site.',
   ],
   [
     403,
     { error: 'Verify your account email.', code: 'EMAIL_UNVERIFIED' },
-    'EMAIL_UNVERIFIED',
+    'Verify your account email.',
   ],
-  [200, { ...configured(), categories: null }, 'fields: categories'],
+  [
+    200,
+    { ...configured(), categories: null },
+    'Product categories could not be loaded',
+  ],
 ])(
   'distinguishes HTTP %s and response-shape failures without clearing the product draft',
   async (status, response, detail) => {
@@ -604,7 +634,9 @@ it.each([
     )
     render(<Harness />)
     expect(await screen.findByRole('alert')).toHaveTextContent(detail)
-    expect(screen.getByRole('alert')).toHaveTextContent(`HTTP ${status}`)
+    expect(screen.getByRole('alert')).not.toHaveTextContent(
+      /HTTP|SIGN_IN_REQUIRED|EMAIL_UNVERIFIED/,
+    )
     expect(screen.getByRole('button', { name: 'Add category' })).toBeDisabled()
     await userEvent.clear(screen.getByLabelText('Product name'))
     await userEvent.type(screen.getByLabelText('Product name'), 'Still unsaved')
@@ -635,7 +667,9 @@ it('recovers tax controls after a tax-only retry without assuming or saving a re
       onConfig={onConfig}
     />,
   )
-  expect(await screen.findByRole('alert')).toHaveTextContent('fields: rates')
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Tax settings could not be loaded',
+  )
   const select = screen.getByLabelText('Food configured tax treatment')
   expect(select).toBeDisabled()
   expect(screen.queryByText(/No tax treatments configured/)).toBeNull()
@@ -663,7 +697,7 @@ it.each([
         status: 401,
         headers: { 'Content-Type': 'text/html' },
       }),
-    'Site access or sign-in is required',
+    'Please sign in to continue',
     'HTTP 401',
   ],
   [
@@ -672,7 +706,7 @@ it.each([
         status: 404,
         headers: { 'Content-Type': 'text/html' },
       }),
-    'non-JSON response',
+    'Product categories could not be loaded',
     'HTTP 404',
   ],
   [
@@ -681,7 +715,7 @@ it.each([
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
-    'invalid JSON',
+    'Product categories could not be loaded',
     'HTTP 200',
   ],
 ])(
@@ -696,7 +730,7 @@ it.each([
     )
     render(<Harness />)
     expect(await screen.findByRole('alert')).toHaveTextContent(detail)
-    expect(screen.getByRole('alert')).toHaveTextContent(status)
+    expect(screen.getByRole('alert')).not.toHaveTextContent(status)
     expect(screen.getByLabelText('Product name')).toBeEnabled()
     await userEvent.click(
       screen.getByRole('button', { name: 'Retry category list' }),

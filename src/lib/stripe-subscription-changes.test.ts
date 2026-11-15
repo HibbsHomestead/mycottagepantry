@@ -374,7 +374,7 @@ it('previews actual proration, updates the same subscription once, and preserves
     toPlan: 'cottage-mercantile',
     amountDue: 437,
     toMonthlyCents: 4000,
-    fromUsers: 2,
+    fromUsers: 5,
     toUsers: 6,
     kind: 'upgrade',
   })
@@ -507,7 +507,7 @@ it('rejects a changed amount or expired preview without changing the subscriptio
 it('schedules a downgrade at renewal, retains paid access, caps new seats and allows cancelling the schedule', async () => {
   await confirm((await preview()).id)
   const change = await preview('cottage-kitchen')
-  expect(change).toMatchObject({ amountDue: 0, kind: 'downgrade', toUsers: 2 })
+  expect(change).toMatchObject({ amountDue: 0, kind: 'downgrade', toUsers: 5 })
   const result = await confirm(change.id)
   expect(result.billing.plan).toBe('cottage-mercantile')
   expect(result.changes[0].status).toBe('scheduled')
@@ -526,12 +526,17 @@ it('schedules a downgrade at renewal, retains paid access, caps new seats and al
     "INSERT INTO users(id,business_id,identity_id,role,data) VALUES('seat2',$1,'seat2','Manager','{}')",
     [business],
   )
+  for (let i = 3; i <= 5; i++)
+    await db.query(
+      "INSERT INTO users(id,business_id,identity_id,role,data) VALUES($1,$2,$1,'Manager','{}')",
+      ['seat' + i, business],
+    )
   await expect(
     db.query(
-      "INSERT INTO users(id,business_id,identity_id,role,data) VALUES('seat3',$1,'seat3','Manager','{}')",
+      "INSERT INTO users(id,business_id,identity_id,role,data) VALUES('seat6',$1,'seat6','Manager','{}')",
       [business],
     ),
-  ).rejects.toThrow(/scheduled plan allows 2/)
+  ).rejects.toThrow(/scheduled plan allows 5/)
   const cancelled = await ok({ action: 'cancel_pending', confirmed: true })
   expect(cancelled.changes[0].status).toBe('cancelled')
   expect(sub.schedule).toBeNull()
@@ -540,7 +545,7 @@ it('schedules a downgrade at renewal, retains paid access, caps new seats and al
 
 it('blocks an over-seat downgrade without removing users or records', async () => {
   await confirm((await preview()).id)
-  for (let i = 2; i <= 3; i++)
+  for (let i = 2; i <= 6; i++)
     await db.query(
       "INSERT INTO users(id,business_id,identity_id,role,data) VALUES($1,$2,$1,'Manager','{}')",
       ['seat' + i, business],
@@ -558,7 +563,7 @@ it('blocks an over-seat downgrade without removing users or records', async () =
         [business],
       )
     ).rows,
-  ).toHaveLength(3)
+  ).toHaveLength(6)
   expect(
     writes.filter((w) => w.path === '/subscription_schedules'),
   ).toHaveLength(0)

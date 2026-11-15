@@ -1,3 +1,4 @@
+import { FloatingControls } from '@/components/floating-controls'
 import { BackToTop } from '@/components/back-to-top'
 import '../styles.css'
 import '../workspace.css'
@@ -21,7 +22,7 @@ export function mountScreenshotWorkspace() {
   createRoot(host).render(
     <TooltipProvider>
       <WorkspaceApp />
-      <BackToTop />
+      <FloatingControls />
       <Toaster />
     </TooltipProvider>,
   )

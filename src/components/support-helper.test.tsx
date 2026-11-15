@@ -171,7 +171,7 @@ it('shows the exact server proposal and sends approval only after an explicit bu
   const approve = await screen.findByRole('button', {
     name: 'Approve exact change to America/New_York',
   })
-  expect(screen.getByText(/Settings: settings-one/)).toBeInTheDocument()
+  expect(screen.getByText(/Business timezone setting/)).toBeInTheDocument()
   expect(api.mock.calls.some((c) => c[1]?.action === 'confirm')).toBe(false)
   api.mockResolvedValueOnce({
     stage: 'Fix verified',

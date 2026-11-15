@@ -1,11 +1,14 @@
+import { customerMessage } from '@/lib/customer-message'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { BusinessTaxFields } from './business-tax-fields'
 import './business-details.css'
-import { ScopedCategorySelect, SectionCategoryTools, pantryCategoryScope } from './section-categories'
-import { HandmadeWorkspace } from './handmade-workspace'
 import {
-  RecipeCategoryManager,
-} from './recipe-categories'
+  ScopedCategorySelect,
+  SectionCategoryTools,
+  pantryCategoryScope,
+} from './section-categories'
+import { HandmadeWorkspace } from './handmade-workspace'
+import { RecipeCategoryManager } from './recipe-categories'
 import {
   recipeCategories,
   recipeCategory,
@@ -316,7 +319,8 @@ export function WorkspaceApp() {
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
-  const categorySettings = (patch: Partial<Item>) => setState(w => workspaceCategorySettings(w, patch))
+  const categorySettings = (patch: Partial<Item>) =>
+    setState((w) => workspaceCategorySettings(w, patch))
   const [draft, setDraft] = useState<Record<string, any>>({}),
     [lines, setLines] = useState<any[]>([])
   const [appearancePreview, setAppearancePreview] = useState<Appearance | null>(
@@ -647,7 +651,7 @@ export function WorkspaceApp() {
       hasLoadedWorkspace.current = true
       setReady(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Oven could not connect.')
+      setError(customerMessage(e))
       if (!hasLoadedWorkspace.current) setReady(false)
     }
   }
@@ -707,7 +711,7 @@ export function WorkspaceApp() {
       }).catch((error) => {
         if (ingredientTrace)
           throw new Error(
-            `${isPackaging(data) ? 'Packaging' : 'Ingredient'} save request could not complete. Your draft is preserved. Retry with the same form to avoid duplicates; reference ${ingredientTrace}.`,
+            `${isPackaging(data) ? 'Packaging' : 'Ingredient'} save request could not complete. Your draft is preserved. Retry with the same form to avoid duplicates; contact support if it continues.`,
           )
         throw error
       })
@@ -716,14 +720,12 @@ export function WorkspaceApp() {
         result = await readWorkspaceJsonWithDiagnostics(res)
       } catch {
         throw new Error(
-          `The oven returned an unreadable response (HTTP ${res.status}${ingredientTrace ? '; reference ' + ingredientTrace : ''}). Your draft is still here. Check the connection and retry.`,
+          'Your business could not be loaded. Your draft is still here. Please retry or contact support.',
         )
       }
       if (!res.ok)
         throw new Error(
-          action === 'save' && table === 'ingredients'
-            ? `${result.error || `${isPackaging(data) ? 'Packaging' : 'Ingredient'} save failed.`} (HTTP ${res.status}; ${result.code || 'SAVE_FAILED'}${result.traceId || ingredientTrace ? '; reference ' + (result.traceId || ingredientTrace) : ''}). Your draft is preserved.`
-            : result.error,
+          customerMessage(result.error) + ' Your draft is preserved.',
         )
       if (
         action === 'save' &&
@@ -734,7 +736,7 @@ export function WorkspaceApp() {
           ))
       ) {
         throw new Error(
-          `The save response did not confirm this ${isPackaging(data) ? 'packaging' : 'ingredient'}. Your draft is preserved; retry this same form rather than creating another. Reference ${ingredientTrace}.`,
+          `The save response did not confirm this ${isPackaging(data) ? 'packaging' : 'ingredient'}. Your draft is preserved; retry this same form rather than creating another. Contact support if it continues.`,
         )
       }
       if (action === 'save' && table === 'products' && data.id) {
@@ -1714,7 +1716,9 @@ export function WorkspaceApp() {
                   >
                     {({ actions, labelSelection }) => (
                       <PantryInventory
-                        canManageCategories={ready && ['Owner','Manager'].includes(role)}
+                        canManageCategories={
+                          ready && ['Owner', 'Manager'].includes(role)
+                        }
                         onCategorySettings={categorySettings}
                         workspace={state}
                         actions={actions}
@@ -1748,13 +1752,13 @@ export function WorkspaceApp() {
                           if (ready)
                             void mutate('pantryView', 'settings', {
                               view,
-                            }).catch((e) => toast.error(e.message))
+                            }).catch((e) => toast.error(customerMessage(e)))
                         }}
                         savedSort={business.currentPantrySort}
                         onSort={(sort) => {
                           if (ready)
                             void mutate('pantrySort', 'settings', sort).catch(
-                              (e) => toast.error(e.message),
+                              (e) => toast.error(customerMessage(e)),
                             )
                         }}
                         filter={filter}
@@ -1855,7 +1859,12 @@ export function WorkspaceApp() {
                     ))}
                   </select>
                 </label>
-                <SectionCategoryTools workspace={state} scope="recipes" canManage={ready && ['Owner','Manager'].includes(role)} onSettings={categorySettings} />
+                <SectionCategoryTools
+                  workspace={state}
+                  scope="recipes"
+                  canManage={ready && ['Owner', 'Manager'].includes(role)}
+                  onSettings={categorySettings}
+                />
               </div>
               <div className="recipe-grid">
                 {filtered(recipes)
@@ -2011,14 +2020,37 @@ export function WorkspaceApp() {
                       </button>
                     </div>
                   )}
-                  <SectionCategoryTools workspace={state} scope={sub === 'Handmade' ? 'handmade-products' : sub === 'Resale' ? 'resale-products' : sub === 'Kits' ? 'kits' : 'food-products'} canManage={ready && ['Owner','Manager'].includes(role)} onSettings={categorySettings} value={productCategoryFilter} onFilter={setProductCategoryFilter} />
+                  <SectionCategoryTools
+                    workspace={state}
+                    scope={
+                      sub === 'Handmade'
+                        ? 'handmade-products'
+                        : sub === 'Resale'
+                          ? 'resale-products'
+                          : sub === 'Kits'
+                            ? 'kits'
+                            : 'food-products'
+                    }
+                    canManage={ready && ['Owner', 'Manager'].includes(role)}
+                    onSettings={categorySettings}
+                    value={productCategoryFilter}
+                    onFilter={setProductCategoryFilter}
+                  />
                   <ProductCards
-                    products={filtered(products).filter(p=>productCategoryFilter==='all' || (productCategoryFilter==='uncategorized' ? !p.productCategoryId : p.productCategoryId===productCategoryFilter)).filter((p) =>
-                      sub === 'Kits'
-                        ? workflowOf(p) === 'kit'
-                        : !['Food', 'Handmade', 'Resale'].includes(sub) ||
-                          workflowOf(p) === sub.toLowerCase(),
-                    )}
+                    products={filtered(products)
+                      .filter(
+                        (p) =>
+                          productCategoryFilter === 'all' ||
+                          (productCategoryFilter === 'uncategorized'
+                            ? !p.productCategoryId
+                            : p.productCategoryId === productCategoryFilter),
+                      )
+                      .filter((p) =>
+                        sub === 'Kits'
+                          ? workflowOf(p) === 'kit'
+                          : !['Food', 'Handmade', 'Resale'].includes(sub) ||
+                            workflowOf(p) === sub.toLowerCase(),
+                      )}
                     workspace={state}
                     open={open}
                   />
@@ -2033,7 +2065,9 @@ export function WorkspaceApp() {
               mutate={mutate}
               open={open}
               tab={route.tab}
-              onDirtyChange={(dirty) => { workflowDirty.current = dirty }}
+              onDirtyChange={(dirty) => {
+                workflowDirty.current = dirty
+              }}
               onWorkspace={setState}
             />
           )}
@@ -3293,7 +3327,16 @@ export function WorkspaceApp() {
                             'supply',
                           ])}
                         </Field>
-                        <ScopedCategorySelect workspace={state} scope={pantryCategoryScope(draft)} item={draft as Item} canManage={ready && ['Owner','Manager'].includes(role)} onSettings={categorySettings} onChange={change} />
+                        <ScopedCategorySelect
+                          workspace={state}
+                          scope={pantryCategoryScope(draft)}
+                          item={draft as Item}
+                          canManage={
+                            ready && ['Owner', 'Manager'].includes(role)
+                          }
+                          onSettings={categorySettings}
+                          onChange={change}
+                        />
                       </div>
                     </section>
                     <section className="form-step ingredient-purchase">
@@ -3743,7 +3786,14 @@ export function WorkspaceApp() {
                     change={change}
                   />
                   <div className="form-grid">
-                    <ScopedCategorySelect workspace={state} scope="recipes" item={draft as Item} canManage={ready && ['Owner','Manager'].includes(role)} onSettings={categorySettings} onChange={change} />
+                    <ScopedCategorySelect
+                      workspace={state}
+                      scope="recipes"
+                      item={draft as Item}
+                      canManage={ready && ['Owner', 'Manager'].includes(role)}
+                      onSettings={categorySettings}
+                      onChange={change}
+                    />
                     <Field label="Description">{input('description')}</Field>
                     <Field label="Batch yield">
                       {input('yield', 'number')}
@@ -4711,26 +4761,63 @@ export function WorkspaceApp() {
                   <Field label="Business name">{input('name')}</Field>
                   <div className="form-grid">
                     <Field label="Owner name">{input('owner')}</Field>
-                    <Field label="Business email">{input('email','email')}</Field>
+                    <Field label="Business email">
+                      {input('email', 'email')}
+                    </Field>
                   </div>
                   <Field label="Business address">{input('address')}</Field>
                   <div className="form-grid">
-                    <Field label="State / jurisdiction">{input('jurisdiction')}</Field>
-                    <Field label="Oven timezone (IANA)"><input value={draft.timezone || 'America/Chicago'} onChange={e=>change('timezone',e.target.value)} placeholder="America/Chicago" /></Field>
+                    <Field label="State / jurisdiction">
+                      {input('jurisdiction')}
+                    </Field>
+                    <Field label="Oven timezone (IANA)">
+                      <input
+                        value={draft.timezone || 'America/Chicago'}
+                        onChange={(e) => change('timezone', e.target.value)}
+                        placeholder="America/Chicago"
+                      />
+                    </Field>
                   </div>
-                  <BusinessTaxFields business={draft as Item} onChange={change} />
+                  <BusinessTaxFields
+                    business={draft as Item}
+                    onChange={change}
+                  />
                   <details className="business-advanced">
                     <summary>Costing defaults</summary>
                     <div className="form-grid">
-                      <Field label="Labor rate ($ / h)">{input('laborRate','number')}</Field>
-                      <Field label="Target margin (%)">{input('targetMargin','number')}</Field>
-                      <Field label="Business default overhead">{input('defaultOverhead','number')}</Field>
-                      <Field label="Default overhead method">{select('overheadMode',[{value:'batch',label:'Flat per batch'},{value:'unit',label:'Flat per finished item'},{value:'percent',label:'Percent of direct costs'}])}</Field>
+                      <Field label="Labor rate ($ / h)">
+                        {input('laborRate', 'number')}
+                      </Field>
+                      <Field label="Target margin (%)">
+                        {input('targetMargin', 'number')}
+                      </Field>
+                      <Field label="Business default overhead">
+                        {input('defaultOverhead', 'number')}
+                      </Field>
+                      <Field label="Default overhead method">
+                        {select('overheadMode', [
+                          { value: 'batch', label: 'Flat per batch' },
+                          { value: 'unit', label: 'Flat per finished item' },
+                          {
+                            value: 'percent',
+                            label: 'Percent of direct costs',
+                          },
+                        ])}
+                      </Field>
                     </div>
                   </details>
                   <details className="business-advanced">
                     <summary>Cottage-food disclaimer</summary>
-                    <Field label="Cottage-food disclaimer" hint="Customize and review with your local authority."><textarea rows={3} value={draft.disclaimer || ''} onChange={e=>change('disclaimer',e.target.value)} /></Field>
+                    <Field
+                      label="Cottage-food disclaimer"
+                      hint="Customize and review with your local authority."
+                    >
+                      <textarea
+                        rows={3}
+                        value={draft.disclaimer || ''}
+                        onChange={(e) => change('disclaimer', e.target.value)}
+                      />
+                    </Field>
                   </details>
                 </div>
               )}

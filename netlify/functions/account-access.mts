@@ -13,8 +13,16 @@ export default async (request: Request) => {
     )
   const access = await resolveAccountAccess(request)
   // States are a successful resolution contract; transport errors remain separate.
-  return Response.json(access, {
-    headers: { ...headers, 'X-Access-Trace': access.traceId },
-  })
+  return Response.json(
+    {
+      ...access,
+      reason: '',
+      events: [],
+      environment: { origin: '', deploymentId: null, context: null },
+    },
+    {
+      headers: { ...headers, 'X-Access-Trace': access.traceId },
+    },
+  )
 }
 export const config: Config = { path: '/api/account-access' }

@@ -233,11 +233,7 @@ export function StripeOwnerBilling({
             </div>
             <div>
               <dt>Included users</dt>
-              <dd>
-                {data.includedUsers === null
-                  ? `Historical allowance: no numeric cap recorded. Current public tier: ${planUserLabel((currentPlan || 'free') as PlanId)}.`
-                  : planUserLabel((currentPlan || 'free') as PlanId)}
-              </dd>
+              <dd>{planUserLabel((currentPlan || 'free') as PlanId)}</dd>
             </div>
             <div>
               <dt>Current seat usage</dt>
@@ -248,7 +244,7 @@ export function StripeOwnerBilling({
               </dd>
             </div>
             <div>
-              <dt>Verified paid through</dt>
+              <dt>Paid through</dt>
               <dd>{date(data.billing?.paidThrough)}</dd>
             </div>
             <div>
@@ -256,7 +252,7 @@ export function StripeOwnerBilling({
               <dd>{tier(data.access?.plan)?.name || 'Unassigned'}</dd>
             </div>
             <div>
-              <dt>Last billing verification</dt>
+              <dt>Billing last updated</dt>
               <dd>{date(data.billing?.lastReconciled)}</dd>
             </div>
           </dl>

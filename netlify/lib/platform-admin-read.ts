@@ -251,7 +251,7 @@ export async function readAdministration(
     const rows = (
       await c.query(
         `SELECT b.id,b.business_name,b.identity_owner,b.created_at,w.plan_id,w.status AS billing_status,w.source,
-      (SELECT count(*)::int FROM users u WHERE u.business_id=b.id AND u.active=true) AS active_members FROM businesses b
+      (SELECT count(*)::int FROM (SELECT u.identity_id FROM users u WHERE u.business_id=b.id AND u.active=true UNION SELECT b.identity_owner) members) AS active_members FROM businesses b
       LEFT JOIN workspace_billing w ON w.business_id=b.id WHERE ${where} ORDER BY b.created_at DESC,b.id LIMIT $2 OFFSET $3`,
         [search, pageSize, offset],
       )
@@ -265,8 +265,17 @@ export async function readAdministration(
           [row.id],
         )
       ).rows[0]
+      const resolved = effectiveAccess(
+        billing as BillingPolicyRow | null,
+        grant,
+        row.identity_owner,
+      )
+      const allowance =
+        launchPricing.plans.find((p) => p.id === resolved.plan)?.users ?? 5
       resolvedRows.push({
         ...row,
+        member_allowance: allowance,
+        over_user_allowance: row.active_members > allowance,
         effective: effectiveAccess(
           billing as BillingPolicyRow | null,
           grant,
@@ -293,7 +302,7 @@ export async function readAdministration(
       pricing: launchPricing,
       features: launchFeatures,
       assignments,
-      note: 'Five approved presentation tiers; paid activation remains gated. Kitchen includes two total users and excludes resale/consignment. Mercantile includes five users plus the owner (six total). Public comparison, plan selection and internal assignment are approved. All paid tiers are approved for Stripe TEST and LIVE purchase, subject to validated provider setup, Price mappings and separate checkout activation. Visibility does not enable live charges.',
+      note: 'Five approved presentation tiers; purchase availability follows verified provider controls. Free, Mixing Bowl, Baker’s Bench and Kitchen include five total users including the business owner. Kitchen excludes resale/consignment. Mercantile includes five users plus the owner (six total). Public comparison, plan selection and internal assignment are approved. All paid tiers are approved for Stripe TEST and LIVE purchase, subject to validated provider setup, Price mappings and separate checkout activation. Visibility does not enable live charges.',
     }
   }
   if (input.section === 'billing') {

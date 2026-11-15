@@ -108,7 +108,7 @@ export const supportKnowledge = [
     href: '/oven/billing',
     terms:
       'bill billing stripe square payment subscription plan tier checkout charge cancel mercantile',
-    text: 'The owner reviews billing under Settings. Provider checkout and billing portal availability depend on separate server controls. Stripe test mode is not a live subscription or charge. Internal administrator assignments are separate from paid checkout. Cottage Mercantile allows six total users including the owner and includes implemented resale and consignment features. A suspension still blocks access despite a manual assignment. With your consent, the AI can inspect recorded plan and integration status when your business role permits it. Recorded status is not live payment verification. AI cannot charge, change a plan, cancel subscriptions or remove a suspension. Contact support for account-specific review; never attach payment details.',
+    text: 'The owner reviews billing under Settings. Provider checkout and billing portal availability depend on separate server controls. Stripe test mode is not a live subscription or charge. Internal administrator assignments are separate from paid checkout. Your business user allowance appears in Settings. Cottage Mercantile includes implemented resale and consignment features. A suspension still blocks access despite a manual assignment. With your consent, the AI can inspect recorded plan and integration status when your business role permits it. Recorded status is not live payment verification. AI cannot charge, change a plan, cancel subscriptions or remove a suspension. Contact support for account-specific review; never attach payment details.',
   },
   {
     id: 'mobile',

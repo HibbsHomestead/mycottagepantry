@@ -128,7 +128,12 @@ for (const operation of ['save', 'approve'] as const) {
     })
     expect(button).toBeEnabled() // A missing conversion is not an approval rule.
     await user.click(button)
-    expect(await screen.findByRole('alert')).toHaveTextContent('401')
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Sign in again to save.',
+    )
+    expect(screen.getByRole('alert')).not.toHaveTextContent(
+      /401|SIGN_IN_REQUIRED/,
+    )
     expect(screen.getByRole('alert').closest('footer')).not.toBeNull()
     expect(
       screen.getByRole('link', { name: /Sign in again in a new tab/ }),

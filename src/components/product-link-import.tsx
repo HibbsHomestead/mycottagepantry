@@ -506,7 +506,7 @@ export function ProductLinkImport({
             ? 'Enter a valid product URL.'
             : e instanceof ProductHumanVerificationError
               ? 'Walmart import requires verification.'
-              : `Product details unavailable${e instanceof ProductImportFailure && e.diagnostics.hops.at(-1)?.status ? ` (HTTP ${e.diagnostics.hops.at(-1)!.status})` : ''}. Your entries are preserved. Retry or enter details manually.`
+              : `Product details unavailable. Your entries are preserved. Retry or enter details manually.`
           : amazon
             ? 'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.'
             : (e as Error).message +
@@ -972,31 +972,7 @@ export function ProductLinkImport({
               </p>
             )
           )}
-          <details>
-            <summary>Technical details</summary>
-            <p>
-              {diagnostics?.source === 'retailer'
-                ? diagnostics.stage === 'parse'
-                  ? 'Product page was retrieved, but its details could not be imported.'
-                  : 'Upstream page request failed.'
-                : diagnostics?.source === 'network'
-                  ? 'Product page could not be retrieved; no retailer HTTP response was confirmed.'
-                  : 'Import request failed; retailer HTTP source is not confirmed.'}
-            </p>
-            <p>
-              {diagnostics?.requestedAt}{' '}
-              {diagnostics?.requestId && ` · Request ${diagnostics.requestId}`}
-            </p>
-            {diagnostics?.hops.map((hop, i) => (
-              <div key={i}>
-                <p>
-                  {hop.url} · HTTP {hop.status} · {hop.at}
-                </p>
-                <p>{hop.bodySummary}</p>
-                <pre>{JSON.stringify(hop.headers, null, 2)}</pre>
-              </div>
-            ))}
-          </details>
+          <a href="/support">Contact support</a>
         </div>
       )}
       {!lookupPanel && (verificationUrl || error) && (

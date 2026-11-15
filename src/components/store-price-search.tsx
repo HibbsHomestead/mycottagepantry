@@ -2,7 +2,7 @@ export async function readPriceResponse(response: Response) {
   const mime = response.headers.get('content-type') || ''
   if (!mime.includes('application/json'))
     throw new Error(
-      `Price comparison returned an unexpected response (HTTP ${response.status}). Check sign-in or try again later.`,
+      `Price comparison returned an unexpected response. Check sign-in or try again later.`,
     )
   let value: any
   try {

@@ -112,8 +112,9 @@ it('compares approved prices, verified purchase availability, user allowances an
   }
   expect(comparison).not.toHaveTextContent(/\$25|\$50|annual|trial/i)
   expect(comparison).toHaveTextContent('Cottage Mercantile')
-  expect(comparison).toHaveTextContent('2 total users, including the owner')
-  expect(comparison).toHaveTextContent('6 total users, including the owner')
+  expect(comparison).not.toHaveTextContent(
+    /total users|including the owner|unlimited users/i,
+  )
   expect(comparison).toHaveTextContent('Excludes resale and consignment')
   expect(comparison).toHaveTextContent('Proposed record limits are not active')
   expect(

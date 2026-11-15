@@ -1,3 +1,4 @@
+import { customerMessage } from '../../src/lib/customer-message'
 import type { Config, Context } from '@netlify/functions'
 import { getDatabase } from '@netlify/database'
 import { ZodError } from 'zod'
@@ -93,7 +94,7 @@ export default async (request: Request, context: Context) => {
             ? 'INVALID_PLAN_INPUT'
             : 'PLAN_SELECTION_UNAVAILABLE',
         error: known
-          ? error.message
+          ? customerMessage(error)
           : invalid
             ? 'Check the plan selection. Prices and access cannot be supplied by this form.'
             : 'Your plan choice could not be saved. Please retry; no account or subscription was created by this request.',

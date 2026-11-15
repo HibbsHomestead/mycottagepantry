@@ -58,10 +58,10 @@ type ChatRow = {
   ticket_id: string | null
   expires_at: string
 }
-const view = (r: ChatRow) => ({
+const view = (r: ChatRow, includeDiagnostics = false) => ({
   id: r.id,
   messages: r.messages,
-  diagnostics: r.diagnostics,
+  diagnostics: includeDiagnostics ? r.diagnostics : null,
   ticketId: r.ticket_id,
   expiresAt: r.expires_at,
   contextTicketId: (r as ChatRow & { context_ticket_id?: string })
@@ -166,7 +166,7 @@ export async function handleSupportAi(
           return {
             policy: p,
             usage,
-            conversations: conversations.map(view),
+            conversations: conversations.map((r) => view(r, true)),
             actions: [],
             metering: (
               await c.query(
@@ -721,7 +721,7 @@ export async function handleSupportAi(
       : []
     return {
       conversation: {
-        ...view(updated),
+        ...view(updated, staff),
         corrections: staff ? [] : await correctionList(c, actor, updated.id),
       },
       providerFailed: !answer,

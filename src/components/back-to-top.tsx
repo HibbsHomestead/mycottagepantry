@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { ArrowUp } from 'lucide-react'
 import './back-to-top.css'
 
@@ -13,60 +7,6 @@ export function scrollableElement(element: HTMLElement) {
     element.scrollHeight > element.clientHeight + 1 &&
     /(auto|scroll|overlay)/.test(getComputedStyle(element).overflowY)
   )
-}
-function keepButtonClear(
-  button: HTMLButtonElement | null,
-  root?: HTMLElement | null,
-) {
-  if (!button || button.hidden) return
-  const rect = button.getBoundingClientRect()
-  if (!rect.width) return
-  const base = {
-    left:
-      rect.left -
-      (parseFloat(button.style.getPropertyValue('--back-top-x')) || 0),
-    top:
-      rect.top -
-      (parseFloat(button.style.getPropertyValue('--back-top-y')) || 0),
-  }
-  const bounds = root?.getBoundingClientRect()
-  const left = Math.max(8, bounds?.left || 0),
-    top = Math.max(8, bounds?.top || 0)
-  const controls = Array.from(
-    (root || document.body).querySelectorAll<HTMLElement>(
-      'button,a,input,select,textarea,summary,[role="button"],[contenteditable="true"]',
-    ),
-  )
-    .filter(
-      (el) => el !== button && getComputedStyle(el).visibility !== 'hidden',
-    )
-    .map((el) => el.getBoundingClientRect())
-    .filter(
-      (r) =>
-        r.width > 0 &&
-        r.height > 0 &&
-        r.right > left &&
-        r.left < innerWidth &&
-        r.bottom > top &&
-        r.top < innerHeight,
-    )
-  const clear = (x: number, y: number) =>
-    controls.every(
-      (r) =>
-        base.left + x + rect.width + 6 <= r.left ||
-        base.left + x - 6 >= r.right ||
-        base.top + y + rect.height + 6 <= r.top ||
-        base.top + y - 6 >= r.bottom,
-    )
-  for (let y = 0; base.top + y >= top + 8; y -= 46) {
-    for (const x of [0, left + 8 - base.left]) {
-      if (clear(x, y)) {
-        button.style.setProperty('--back-top-x', x + 'px')
-        button.style.setProperty('--back-top-y', y + 'px')
-        return
-      }
-    }
-  }
 }
 export function BackToTop({
   scope,
@@ -99,7 +39,7 @@ export function BackToTop({
         (root
           ? root.contains(element)
           : !element.closest(
-              '[role="dialog"], nav, aside, [role="menu"], [role="listbox"]',
+              '[role="dialog"], nav, aside, .floating-assistant-panel, [role="menu"], [role="listbox"]',
             )) &&
         (element === document.scrollingElement || scrollableElement(element))
       )
@@ -128,7 +68,6 @@ export function BackToTop({
         !!current &&
           current.scrollTop >= Math.max(160, current.clientHeight * 0.9),
       )
-      keepButtonClear(buttonRef.current, root)
     }
     update()
     document.addEventListener('scroll', update, true)
@@ -146,9 +85,6 @@ export function BackToTop({
       window.removeEventListener('resize', update)
     }
   }, [scope])
-  useLayoutEffect(() => {
-    keepButtonClear(buttonRef.current, scope?.current)
-  }, [scope, visible, active])
   // A sticky zero-height dock stays inside the focus trap and outside footer actions.
   const button = (
     <button

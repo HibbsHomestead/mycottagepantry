@@ -1,3 +1,4 @@
+import { billingRequest } from '@/lib/billing-client'
 import { CategoryTaxSettings } from './product-categories'
 import { StripeOwnerBilling } from './stripe-owner-billing'
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
@@ -530,6 +531,7 @@ export function SettingsWorkspace({
           )}
           {selected === 'Team & Roles' && (
             <>
+              {isOwner && <TeamAllowance />}
               <p>
                 Access stays scoped to this business. Invitations and member
                 administration are not yet available.
@@ -618,5 +620,52 @@ function DataMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function TeamAllowance() {
+  const [usage, setUsage] = useState<{
+    seatUsage: number
+    includedUsers: number
+  } | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => {
+    let active = true
+    billingRequest()
+      .then((data) => {
+        if (active) {
+          setUsage({
+            seatUsage: data.seatUsage,
+            includedUsers: data.includedUsers,
+          })
+          setFailed(false)
+        }
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [attempt])
+  if (failed)
+    return (
+      <p role="alert">
+        Team usage could not be loaded.{' '}
+        <button type="button" onClick={() => setAttempt((v) => v + 1)}>
+          Try again
+        </button>{' '}
+        or <a href="/support">contact support</a>.
+      </p>
+    )
+  if (!usage) return <p role="status">Loading team usage…</p>
+  return (
+    <p role="status">
+      {usage.seatUsage} of {usage.includedUsers} total users, including the
+      owner.
+      {usage.seatUsage >= usage.includedUsers &&
+        ' This business has reached its user allowance. Existing members remain active. Contact support to review memberships.'}
+    </p>
   )
 }
