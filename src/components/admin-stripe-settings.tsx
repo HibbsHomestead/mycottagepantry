@@ -1,6 +1,7 @@
 import { AdminStepUp } from './admin-step-up'
 import { useState } from 'react'
 import type { AdminMetadata } from '@/lib/platform-admin-types'
+import { subscriptionChangePolicy } from '@/lib/plan-presentation'
 
 type Props = {
   data: AdminMetadata
@@ -696,13 +697,14 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
             : `Approve policies for ${environment.toUpperCase()} before activating checkout.`}
         </p>
         <p>
-          Supported policy for explicit approval: no trials; access through
-          verified paid coverage only; no additional failed-payment grace; no
-          automated downgrades, plan changes or proration. Cancellation requires
-          separate review. The portal supports payment details and invoice
-          history; plan changes and cancellations must be disabled in its Stripe
-          configuration. Other policies remain unresolved and their actions stay
-          blocked.
+          Provider portal policy: no trials; access through verified paid
+          coverage only; no additional failed-payment grace. The portal supports
+          payment details and invoice history; plan changes and cancellations
+          stay disabled in its Stripe configuration. Owners review subscription
+          changes inside Billing &amp; Subscription. Upgrades:{' '}
+          {subscriptionChangePolicy.upgrade} Downgrades and cancellation:{' '}
+          {subscriptionChangePolicy.downgrade} Existing checkout activation does
+          not need to be reset for this workflow.
         </p>
         <label>
           Reviewed Stripe portal configuration ID

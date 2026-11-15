@@ -1223,10 +1223,6 @@
 .plan-comparison {
   padding-block: 32px 56px;
 }
-.public-site .pricing-page-intro {
-  padding-top: 45px;
-  padding-bottom: 20px;
-}
 .plan-comparison-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1266,7 +1262,8 @@
   gap: 48px;
   align-items: end;
 }
-.plan-comparison-heading h2 {
+.plan-comparison-heading h1 {
+  font-size: clamp(2rem, 3.5vw, 3.25rem);
   margin-bottom: 20px;
 }
 .plan-card-free {
@@ -1342,6 +1339,39 @@
   padding: 12px 8px;
   justify-content: center;
 }
+.plan-card-current {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.plan-card-footer button.public-button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.plan-details-table small {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  margin-top: 0.4rem;
+  line-height: 1.5;
+}
+.plan-details-table .plan-group th {
+  background: color-mix(in srgb, var(--primary) 10%, var(--background));
+  color: var(--primary);
+  position: static;
+}
+.plan-group th > span {
+  position: sticky;
+  left: 16px;
+  display: inline-block;
+}
+.feature-state {
+  font-weight: 600;
+}
+.feature-state-needs_refinement,
+.feature-state-planned,
+.feature-state-launch_review {
+  font-size: 0.85rem;
+}
 .plan-card .plan-cta-note {
   margin: 12px 0 0;
   font-size: 14px;
@@ -1351,7 +1381,8 @@
   margin-top: 56px;
 }
 .plan-table-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 76vh;
   border: 1px solid var(--border);
   border-radius: 14px;
 }
@@ -1360,6 +1391,7 @@
   outline-offset: 4px;
 }
 .plan-details-table {
+  table-layout: fixed;
   width: 100%;
   min-width: 1080px !important;
   border-collapse: separate;
@@ -1380,6 +1412,8 @@
 .plan-details-table th,
 .plan-details-table td {
   display: table-cell;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
 }
 .plan-details-table caption {
   text-align: left;
@@ -1395,8 +1429,14 @@
   min-width: 160px;
 }
 .plan-details-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   color: var(--primary);
   background: var(--background);
+}
+.plan-details-table thead th:first-child {
+  z-index: 3;
 }
 .plan-details-table thead span {
   display: block;
@@ -1413,6 +1453,7 @@
   left: 0;
   background: var(--background);
   min-width: 230px;
+  width: 230px;
   max-width: 260px;
   border-right: 1px solid var(--border);
   z-index: 1;
@@ -1444,6 +1485,7 @@
   }
   .plan-details-table th:first-child {
     min-width: 160px;
+    width: 160px;
     max-width: 180px;
   }
 }

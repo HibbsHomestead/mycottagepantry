@@ -53,6 +53,7 @@ export const sectionTabs: Record<string, string[]> = {
   ],
   Settings: [
     'Business Profile',
+    'Billing & Subscription',
     'Appearance',
     'Taxes',
     'Integrations',

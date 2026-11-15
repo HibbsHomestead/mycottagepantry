@@ -58,7 +58,7 @@ function VerificationContent({
           <p>
             {recovery
               ? 'Enter your account email to request a link for choosing a new password.'
-              : 'Verify your email using the provider confirmation link, then log in to continue business oven setup. Setup requires approved Terms and Privacy. Paid checkout is not yet available.'}
+              : 'Verify your email using the provider confirmation link, then log in to continue business setup. Free needs no payment method. Approved paid plans continue to Stripe checkout after verified account and business setup; your plan choice alone does not grant paid access.'}
           </p>
           {recovery ? (
             <PasswordRecoveryRequest />

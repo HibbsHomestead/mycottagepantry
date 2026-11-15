@@ -1,11 +1,6 @@
 import { deploymentRuntime } from '../lib/runtime-environment'
 import { adminTransaction } from '../lib/platform-admin-core'
-import { launchPricing } from '../../src/lib/launch-plans'
-import {
-  stripeSettings,
-  stripeTierPurchasable,
-  stripeCheckoutEnabled,
-} from '../lib/stripe-provider'
+import { stripeSettings } from '../lib/stripe-provider'
 import { z, ZodError } from 'zod'
 import {
   registrationActor,
@@ -21,6 +16,12 @@ import {
 } from '../lib/stripe-subscriptions'
 import { AdminError } from '../lib/platform-admin-core'
 import { limitedBody } from '../lib/support-core'
+import { stripePlanAvailability } from '../lib/stripe-availability'
+import {
+  stripeChangePreview,
+  stripeConfirmChange,
+  stripeCancelPending,
+} from '../lib/stripe-changes'
 export default async (request: Request) => {
   const headers = {
     'Cache-Control': 'private, no-store',
@@ -33,30 +34,23 @@ export default async (request: Request) => {
       request.method === 'GET' &&
       new URL(request.url).searchParams.get('view') === 'availability'
     ) {
-      const plans = await adminTransaction(async (c) => {
+      const tiers = await adminTransaction(async (c) => {
         const settings = await stripeSettings(c, 'live')
-        if (
-          deploymentRuntime().context !== 'production' ||
-          !stripeCheckoutEnabled(settings, 'live') ||
-          !settings.validated_at ||
-          settings.configuration?.apiError ||
-          !settings.webhook_verified_at ||
-          !settings.configuration?.policy
+        return stripePlanAvailability(
+          settings,
+          'live',
+          deploymentRuntime().context === 'production',
         )
-          return []
-        return launchPricing.plans
-          .filter(
-            (p) =>
-              p.assignable &&
-              stripeTierPurchasable(p.id, 'live') &&
-              settings.configuration?.mappings?.[p.id]?.verifiedAt &&
-              settings.configuration?.mappings?.[p.id]?.account ===
-                settings.account_id &&
-              settings.configuration?.mappings?.[p.id]?.purchase,
-          )
-          .map((p) => p.id)
       })
-      return Response.json({ plans }, { headers })
+      return Response.json(
+        {
+          plans: tiers.filter((p) => p.purchasable).map((p) => p.id),
+          ...(new URL(request.url).searchParams.get('details') === '1'
+            ? { tiers }
+            : {}),
+        },
+        { headers },
+      )
     }
     const actor = await registrationActor(false, request)
     if (
@@ -73,10 +67,18 @@ export default async (request: Request) => {
       request.method === 'POST'
         ? z
             .object({
-              action: z.enum(['checkout', 'refresh', 'portal']),
+              action: z.enum([
+                'checkout',
+                'refresh',
+                'portal',
+                'preview_change',
+                'confirm_change',
+                'cancel_pending',
+              ]),
               environment: z.enum(['test', 'live']).optional(),
               plan: z.string().max(100).optional(),
               confirmed: z.boolean().optional(),
+              changeId: z.uuid().optional(),
             })
             .strict()
             .parse(JSON.parse((await limitedBody(request, 2000)).toString()))
@@ -100,11 +102,40 @@ export default async (request: Request) => {
         ),
       )
     }
+    if (input?.action === 'confirm_change') {
+      if (!input.confirmed || !input.changeId)
+        throw new RegistrationError(
+          400,
+          'CONFIRMATION_REQUIRED',
+          'Review the provider preview and confirm this subscription change.',
+        )
+      await registrationTransaction(actor, (c) =>
+        stripeConfirmChange(c, actor, input.changeId!, true),
+      )
+    }
     const result = await registrationTransaction(actor, async (c) => {
       await c.query("SELECT set_config('app.billing_worker','true',true)")
       if (!input) return stripeOwnerView(c, actor)
       if (input.action === 'refresh') return stripeRefresh(c, actor)
       if (input.action === 'portal') return stripePortal(c, actor)
+      if (input.action === 'preview_change') {
+        await stripeRefresh(c, actor)
+        return stripeChangePreview(c, actor, input.plan || '')
+      }
+      if (input.action === 'confirm_change') {
+        await stripeConfirmChange(c, actor, input.changeId!)
+        return stripeRefresh(c, actor)
+      }
+      if (input.action === 'cancel_pending') {
+        if (!input.confirmed)
+          throw new RegistrationError(
+            400,
+            'CONFIRMATION_REQUIRED',
+            'Confirm that you want to keep the current subscription.',
+          )
+        await stripeCancelPending(c, actor)
+        return stripeRefresh(c, actor)
+      }
       return stripeCheckout(c, actor, {
         environment: input.environment || 'test',
         plan: input.plan || '',

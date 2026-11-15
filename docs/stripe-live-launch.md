@@ -1,27 +1,23 @@
-# LIVE launch and subscriber review
+# LIVE billing and subscription management
 
-Cottage Mercantile is owner-approved for LIVE purchase at $40 USD per business per month with six total users, including the owner. Tier approval does not activate checkout or change existing subscriptions. Partial and planned features remain identified as such.
+LIVE checkout is already enabled. A read-only check of the production public availability endpoint on November 15, 2026 returned Mixing Bowl, Baker’s Bench, Cottage Kitchen and Cottage Mercantile as purchasable. Cottage Mercantile remains $40 USD per business per month with six total users including the owner. No tier had a missing purchase approval or validated recurring Price mapping in that check.
 
-After this change is published, open Platform Admin → Billing → Stripe on the production administrator site and select **LIVE**. Under **Tier and recurring Price mappings**, choose Cottage Mercantile and use its existing validated LIVE recurring Price for $40 USD/month. Select **Approve LIVE purchase availability for this mapped tier** and **Validate and save mapping**. Saving a mapping disables new checkout until activation is confirmed again. Existing subscribers keep their linked prices.
+Do not repeat initial launch setup, resave working mappings, replace credentials, reconfigure the webhook, or reset checkout activation to use the new billing interface. Those settings and existing subscriptions were preserved. Partial and Coming soon capabilities remain labeled; invitations and member administration are unfinished.
 
-## Complete the existing subscriber review
+Owners open **Settings → Billing & Subscription** or `/oven/billing`. The page refreshes provider state on entry and after a portal return. It shows subscription price/status, renewal or end date, verified paid access, active users and scheduled changes. A selected application plan is not evidence of payment. Other members cannot access billing controls or launch a billing portal; the server verifies the selected business membership on every request.
 
-This is a written record of the account owner's review; the field does not perform a migration or cancel anything.
+The existing Stripe Customer Portal remains limited to payment methods and invoices. Its existing disabled subscription actions are preserved. Plan changes use the separately versioned in-app policy `immediate-prorated-renewal-v1`, with explicit owner review and confirmation:
 
-1. Open the Stripe Dashboard for the account selling Cottage Pantry subscriptions. Switch to **LIVE**, then open **Billing → Subscriptions**. Review all statuses, including past-due and canceled subscriptions, and check for unfinished subscription checkouts.
-2. If a previous provider such as Square was used for software subscriptions, review its current subscription and unfinished-checkout records too. Customer retail sales integrations are separate from these software subscriptions.
-3. In Cottage Pantry, open **Required policies and activation review**. In **Existing subscriber review and activation decision**, record the date, which records/providers you checked, what you found, how existing subscribers retain their current billing, and your decision to enable new LIVE checkout.
+- Upgrades update the linked subscription immediately after Stripe confirms payment. The confirmation displays Stripe’s invoice preview, including the immediate prorated amount or credit. A changed amount requires a new preview; a pending or failed payment does not grant the new tier.
+- Downgrades keep paid access until renewal and schedule the destination Price on the same subscription. There is no immediate proration. Selecting Free schedules cancellation at renewal. Supported pending changes can be cancelled or resumed before their effective date.
+- A destination allowance includes the owner. Existing active membership usage must fit before a change is accepted. The pending allowance also prevents new memberships exceeding the future limit. Existing users and business records are never removed automatically. The owner must resolve excess memberships with support while member administration is unfinished.
 
-If you actually found no existing subscribers or unfinished checkouts, adapt this example to your review:
+Historical Square billing policies and untouched subscribers’ saved entitlement policies remain unchanged. Externally created or edited schedules, custom unsupported terms, and externally scheduled cancellations require support review. Cancelled subscriptions with remaining paid coverage cannot start another checkout until that coverage ends.
 
-> Reviewed Stripe LIVE subscriptions and unfinished subscription checkouts on [date]. No existing subscribers or unfinished checkouts found. No previous-provider subscriptions require migration. I approve new LIVE checkout, including Cottage Mercantile at $40/month for six total users including the owner.
+`node scripts/verify-subscription-frontend.mjs` verifies the local frontend through Netlify dev on port 8889. It reads only public production availability; authentication, billing and payment responses in the browser use disposable TEST fixtures. Automated database tests likewise use synthetic TEST subscriptions with a mocked Stripe transport. They do not charge cards or modify hosted subscriptions.
 
-If records exist, describe them accurately and preserve their current provider, subscription and payment history. Do not reuse the empty-account example or recreate subscribers in Stripe.
+No provider configuration change was identified as necessary for existing LIVE purchases. The new change workflow uses Stripe invoice previews, subscription updates and subscription schedules. Hosted TEST API permission checks and authenticated post-deployment owner verification still need a usable hosted TEST session; mocked tests do not establish those results. Preserve the current LIVE configuration while completing them.
 
-## Activate checkout
+`node scripts/audit-public-plans.mjs https://mycottagepantry.com` audits the hosted signed-out frontend, including initial HTML, hydrated cards, signup selection for every tier, verified purchase actions, mobile overflow, sticky feature labels and browser errors. It never submits signup or checkout and blocks unexpected mutation requests. Pass a preview URL to audit that release instead. Preview deployments correctly explain that LIVE purchases are available on the production site; do not enable LIVE checkout in a preview to make that message disappear.
 
-Confirm the LIVE API connection, signed webhook delivery and intended purchase mappings are verified. If LIVE policies are not configured, review them, retain the saved `bpc_…` portal ID, enter **APPROVE POLICIES** in **Policy approval confirmation** and select **Approve policies**.
-
-After completing the subscriber review, enter **ENABLE LIVE CHECKOUT** in **LIVE checkout confirmation** and select **Confirm checkout activation**. Refresh connection status and confirm **New checkout: Enabled**. Production requires recorded TEST subscription linking, verified business access and a billing portal launch followed by reconciliation. Missing evidence must be completed using the disposable test business before retrying activation.
-
-Activation requires the signed-in administrator's recent verification. This code change does not write a production activation flag or establish a hosted LIVE payment.
+The November 15 hosted audit passed against the revised preview. Production still served an older release with stale initial purchase notices, old signup wording, no Partial comparison labels, and React hydration errors. After hydration, all four production paid buttons were available and their approved prices/user allowances were correct. No missing tier approval or validated LIVE mapping was identified. Publishing the current production-context implementation remained the observed frontend blocker; promoting preview-context artifacts would retain preview-only purchase restrictions and is not a substitute.

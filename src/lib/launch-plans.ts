@@ -7,6 +7,8 @@ export const launchPricing = {
   currency: 'USD',
   interval: 'month',
   unit: 'business oven',
+  // Legacy proposal flag, not runtime Stripe checkout activation. Purchase
+  // availability is read from verified provider settings on the server.
   checkoutEnabled: false,
   signupEnabled: true,
   restrictionsEnabled: false,
@@ -20,18 +22,18 @@ export const launchPricing = {
       name: 'Free',
       monthlyUsd: 0,
       users: 1,
-      caption: 'A proposed place to start',
+      caption: 'A place to start',
       description: 'A small working toolkit. No credit card required.',
       highlights: [
-        '5 active recipes and 5 active products',
+        'Recipes and product pricing; proposed record limits are not active',
         'Ingredient & packaging cost records; complete costing',
         'Recipe/product links and pricing tools',
-        '10 active stock-tracked items; cost-only records do not count',
+        'Stock records; proposed stock count limits are not active',
         'Individual batches with stock coverage review required',
         'Standard label layouts, essential customization & data export',
       ],
       caveat:
-        'Free is a proposal, not an available signup. Safe stock coverage, active-record limits and standard-label scope need implementation and testing. Sales, expenses and business reports are outside this draft Free scope.',
+        'Free setup requires email verification and valid business details, with no payment method. Proposed count limits are not active. Free batch coverage and standard-label scope remain partial. Sales, expenses and business reports are outside Free scope.',
     },
     {
       id: 'mixing-bowl',
@@ -72,7 +74,7 @@ export const launchPricing = {
         'Proposed: expanded reports & period comparisons',
       ],
       caveat:
-        'The advanced additions are not launch-ready. The current batch overview needs refinement; period comparisons are not implemented. There is not enough verified upgrade value to recommend this plan for launch yet.',
+        'Advanced planning and consolidated requirements remain partial; reporting-period comparisons are Coming soon. Purchase availability depends on verified provider configuration.',
     },
     {
       id: 'cottage-kitchen',
@@ -94,7 +96,7 @@ export const launchPricing = {
         'Excludes the resale and consignment modules',
       ],
       caveat:
-        'Invitations and membership administration are not implemented. Permissions need further review and testing. Cottage Kitchen is not ready for purchase.',
+        'Includes two total users including the owner. Invitations and membership administration are Coming soon; shared permissions remain partial. Purchase availability depends on verified provider configuration.',
     },
     {
       id: 'cottage-mercantile',

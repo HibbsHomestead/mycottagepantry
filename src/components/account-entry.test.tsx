@@ -31,7 +31,11 @@ vi.mock('@/lib/signup-plan-client', () => ({
 }))
 beforeEach(() => {
   history.replaceState({}, '', '/login')
-  vi.stubGlobal('fetch', transport)
+  vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
+    url.includes('view=availability')
+      ? Promise.resolve(Response.json({ plans: [] }))
+      : transport(url, options),
+  )
   transport.mockReset()
   selection.resume.mockReset().mockResolvedValue(null)
   sdk.handleAuthCallback.mockReset()
@@ -59,8 +63,12 @@ it('waits for slow initialization without showing onboarding or permitting a com
     }),
   )
   render(<LoginPage />)
-  expect(screen.getByRole('heading', { name: 'Opening your oven…' })).toBeVisible()
-  expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('heading', { name: 'Opening your oven…' }),
+  ).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Log in' }),
+  ).not.toBeInTheDocument()
   expect(transport).not.toHaveBeenCalled()
   complete(null)
   transport.mockResolvedValue(Response.json(accessFixture('signed_out')))
@@ -187,7 +195,7 @@ it.each(['', '?plan=retired-plan', '?plan=cottage-kitchen'])(
     transport.mockResolvedValue(Response.json(accessFixture('workspace')))
     selection.resume.mockRejectedValue(
       new Error(
-        'Your saved plan choice is unavailable or expired. Choose your intended plan again.',
+        'Your saved plan choice is unavailable or expired. Choose your plan again.',
       ),
     )
     render(<LoginPage />)
@@ -198,9 +206,7 @@ it.each(['', '?plan=retired-plan', '?plan=cottage-kitchen'])(
     )
     expect(selection.resume).not.toHaveBeenCalled()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(
-      screen.queryByText('Choose your intended plan again'),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose your plan again')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('link', {
         name: 'Open your existing business with its current access',
@@ -227,6 +233,40 @@ it('preserves an intentional billing return without making billing a login prere
     expect(accountNavigation.replace).toHaveBeenCalledWith(
       expect.stringMatching(
         /^\/oven\/billing\?accessTrace=[a-f0-9-]+&returnTo=%2Foven%2Fbilling$/,
+      ),
+    ),
+  )
+  expect(selection.resume).not.toHaveBeenCalled()
+})
+it('carries an approved paid choice to an explicit billing return for an existing member', async () => {
+  history.replaceState(
+    {},
+    '',
+    '/login?returnTo=%2Foven%2Fbilling&plan=cottage-mercantile',
+  )
+  transport.mockResolvedValue(Response.json(accessFixture('workspace')))
+  render(<LoginPage />)
+  await waitFor(() =>
+    expect(accountNavigation.replace).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\/oven\/billing\?accessTrace=[a-f0-9-]+&plan=cottage-mercantile&returnTo=%2Foven%2Fbilling$/,
+      ),
+    ),
+  )
+  expect(selection.resume).not.toHaveBeenCalled()
+})
+it('retains a selected paid tier while an existing account completes email verification', async () => {
+  history.replaceState(
+    {},
+    '',
+    '/signup?plan=cottage-mercantile&returnTo=%2Foven%2Fbilling',
+  )
+  transport.mockResolvedValue(Response.json(accessFixture('email_unverified')))
+  render(<SignupPage />)
+  await waitFor(() =>
+    expect(accountNavigation.replace).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\/verify-email\?accessTrace=[a-f0-9-]+&plan=cottage-mercantile&returnTo=%2Foven%2Fbilling$/,
       ),
     ),
   )

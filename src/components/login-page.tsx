@@ -8,6 +8,7 @@ import {
   readAccountAccess,
   accessTraceId,
   navigateAccount,
+  billingPlanForReturn,
 } from '@/lib/account-access-client'
 import {
   accessDestination,
@@ -77,7 +78,14 @@ export function LoginPage() {
             destination,
             reference.current,
             returnTo,
-            selection?.planId,
+            selection?.planId ||
+              (destination.startsWith('/oven/billing') ||
+              value.status === 'email_unverified'
+                ? billingPlanForReturn(
+                    location.search,
+                    value.status === 'email_unverified',
+                  )
+                : undefined),
             router
               ? (href) => {
                   void router.navigate({ href, replace: true })

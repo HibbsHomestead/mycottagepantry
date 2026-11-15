@@ -5,6 +5,7 @@ import {
 import { test, expect } from '@playwright/test'
 import { demoData } from '../src/lib/demo'
 import { systemLabelTemplates } from '../src/lib/label-studio'
+import { installPublicPlanFixture } from './public-plan-fixture'
 
 test('captures actual app views using only deterministic demonstration records', async ({
   page,
@@ -64,9 +65,10 @@ test('captures actual app views using only deterministic demonstration records',
   }
 })
 
-test('public pages disclose plan availability and expose no workspace data or checkout controls', async ({
+test('public pages use verified plan availability and expose no workspace data', async ({
   page,
 }) => {
+  await installPublicPlanFixture(page)
   let workspaceRequests = 0
   await page.route('**/api/workspace*', (route) => {
     workspaceRequests++
@@ -132,24 +134,28 @@ test('public pages disclose plan availability and expose no workspace data or ch
       if (path === '/pricing') {
         await expect(
           page.getByRole('heading', {
-            name: 'Your business, in good order.',
+            name: 'Find your place in the pantry.',
             exact: true,
           }),
         ).toBeVisible()
         await expect(
-          page.getByText(
-            /Your chosen plan is saved; registration collects no payment/,
-          ),
+          page.getByText(/Paid access starts only after verified billing/),
         ).toBeVisible()
         await expect(page.locator('.plan-card')).toHaveCount(5)
         await expect(page.locator('main')).toContainText('Cottage Mercantile')
-        await expect(page.locator('main')).toContainText(
-          'Paid plans are not yet available for purchase',
+        await expect(page.locator('main')).not.toContainText(
+          'not yet available for purchase',
         )
         await expect(
-          page.locator('main a[href="/signup"]').first(),
+          page.getByRole('link', {
+            name: 'Choose Cottage Mercantile',
+            exact: true,
+          }),
         ).toBeVisible()
-        await expect(page.locator('main a[href="/login"]')).toBeVisible()
+        await expect(
+          page.locator('main a[href^="/signup?plan=free"]').first(),
+        ).toBeVisible()
+        await expect(page.locator('a[href="/login"]').first()).toBeAttached()
         await expect(page.locator('a[href*="checkout"]')).toHaveCount(0)
         await page.evaluate(() => {
           window.scrollTo(0, 0)

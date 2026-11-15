@@ -35,11 +35,13 @@ const settings = () => ({
     policy: {},
     mappings: {
       'mixing-bowl': {
+        price: 'price_mixing',
         purchase: true,
         verifiedAt: '2026-11-14',
         account: 'acct_fixture',
       },
       'cottage-mercantile': {
+        price: 'price_mercantile',
         purchase: true,
         verifiedAt: '2026-11-14',
         account: 'acct_fixture',
@@ -103,4 +105,23 @@ it('never treats old automatic launch readiness as explicit live checkout approv
   delete fixture.settings.configuration.liveCheckoutApprovedAt
   fixture.settings.configuration.hostedLaunchReady = true
   expect(await available()).toEqual({ plans: [] })
+})
+
+it('explains the precise tier blocker without exposing provider identifiers', async () => {
+  fixture.settings = settings()
+  delete fixture.settings.configuration.mappings['mixing-bowl'].verifiedAt
+  const response = await handler(
+    new Request(
+      'https://mycottagepantry.com/api/stripe/billing?view=availability&details=1',
+    ),
+  )
+  const result = await response.json()
+  expect(
+    result.tiers.find((p: { id: string }) => p.id === 'mixing-bowl'),
+  ).toMatchObject({
+    purchasable: false,
+    reason: 'A validated recurring Price mapping is missing for this tier.',
+  })
+  expect(JSON.stringify(result)).not.toMatch(/acct_|price_|ciphertext|secret/)
+  expect(result.plans).toContain('cottage-mercantile')
 })

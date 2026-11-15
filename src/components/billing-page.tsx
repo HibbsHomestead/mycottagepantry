@@ -9,8 +9,8 @@ export function BillingPage() {
       <section className="registration-shell">
         <div className="registration-paper">
           <p className="public-eyebrow">Settings</p>
-          <h1>Subscription &amp; Billing</h1>
-          <StripeOwnerBilling />
+          <h1>Billing &amp; Subscription</h1>
+          <StripeOwnerBilling embedded />
         </div>
       </section>
     </PublicSite>

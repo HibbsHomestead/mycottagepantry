@@ -1,3 +1,13 @@
+# Current status
+
+This is a historical pricing review. Its disabled-checkout and undecided-Mercantile-seat statements below have been superseded. Current subscription behavior is documented in [LIVE billing and subscription management](./stripe-live-launch.md).
+
+All five public tiers now use the approved monthly prices and total-user allowances: Free $0/1, Mixing Bowl $10/1, Baker’s Bench $20/1, Cottage Kitchen $30/2, and Cottage Mercantile $40/6, including the owner. Production's verified availability endpoint reports all four paid tiers as purchasable. Public purchase availability is read from verified Stripe configuration; it is never inferred from a saved signup preference. Invitations and member administration remain unfinished.
+
+The revised frontend and detailed availability endpoint are present in the latest hosted preview. A read-only visitor audit found the production release still serving the older signup/comparison copy and stale server-rendered purchase notices, despite all four paid purchase buttons becoming available after hydration. Publishing the current implementation in production, rather than changing Stripe activation or Price mappings, resolves that release mismatch.
+
+---
+
 # Approved upper-tier clarification and pricing review
 
 The owner approved the five-tier public presentation and subsequently clarified the intended upper-tier allocations. This decision supersedes the earlier recommendation to make Kitchen a solo plan or leave its upgrade value unresolved. Free, Mixing Bowl and Baker’s Bench retain their existing definitions and approved $0/$10/$20 monthly USD prices.

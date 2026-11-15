@@ -210,7 +210,6 @@ test('paid preference resumes through existing verified business setup without g
           monthlyUsd: 30,
           currency: 'USD',
           interval: 'month',
-          paidActivationAvailable: false,
         },
       },
     }),

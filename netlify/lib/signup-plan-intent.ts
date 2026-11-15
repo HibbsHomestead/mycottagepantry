@@ -100,7 +100,7 @@ export async function resumeSignupIntent(
     throw new RegistrationError(
       409,
       'PLAN_SELECTION_EXPIRED',
-      'Your saved plan choice is unavailable or expired. Choose your intended plan again; no plan or access was changed.',
+      'Your saved plan choice is unavailable or expired. Choose your plan again; no plan or access was changed.',
     )
   const selection = details(row.plan_id)
   await client.query(
