@@ -1,3 +1,4 @@
+import { HandmadeWorkspace } from './handmade-workspace'
 import {
   RecipeCategoryManager,
   RecipeCategorySelect,
@@ -46,11 +47,7 @@ import { foodProduct } from '@/lib/inventory-product'
 import { ProductWorkflowDialog } from './product-workflow-dialog'
 import { FabricDialog } from './fabric-dialog'
 import { isFabric, supportsExpiry } from '@/lib/fabric'
-import {
-  FinishedInventory,
-  HandmadeProduction,
-  PurchaseStockReceipts,
-} from './finished-inventory'
+import { FinishedInventory, PurchaseStockReceipts } from './finished-inventory'
 import { ProductCategoryManager } from './product-categories'
 import { workflowOf } from '@/lib/product-workflows'
 import {
@@ -203,6 +200,7 @@ const navigation = [
   { name: 'Inventory', icon: Package },
   { name: 'Recipes', icon: BookOpen },
   { name: 'Products', icon: Tag },
+  { name: 'Handmade', icon: Package },
   { name: 'Production', icon: CookingPot },
   { name: 'Sales', icon: TrendingUp },
   { name: 'Purchasing', icon: Receipt },
@@ -1570,25 +1568,27 @@ export function WorkspaceApp() {
               <p>
                 {page === 'Dashboard'
                   ? 'Here’s what needs your attention today.'
-                  : page === 'Pantry'
-                    ? 'Track what you have, what it costs, and what needs restocking.'
-                    : page === 'Recipes'
-                      ? 'Cost food recipes and handmade designs with the inputs and labor they use.'
-                      : page === 'Products & Pricing'
-                        ? sub === 'Categories'
-                          ? 'Organize products and review their inherited tax treatment.'
-                          : 'Build prices that cover your costs and support your profit goals.'
-                        : page === 'Production'
-                          ? 'Plan production and keep every completed run traceable.'
-                          : page === 'Finances' && sub === 'Tax center'
-                            ? 'Track tax collected, review what is due, and export records for filing.'
-                            : page === 'Finances'
-                              ? 'Keep sales, costs, and business profit in clear view.'
-                              : page === 'Settings'
-                                ? 'Make this oven work for your business.'
-                                : page === 'Reports'
-                                  ? 'Turn your business records into useful answers.'
-                                  : 'Create labels with your branding and the product details you can verify.'}
+                  : page === 'Handmade'
+                    ? 'Purchase materials, cost your bills of materials, and track finished work.'
+                    : page === 'Pantry'
+                      ? 'Track what you have, what it costs, and what needs restocking.'
+                      : page === 'Recipes'
+                        ? 'Cost food recipes with their inputs and labor. Handmade bills of materials have their own workspace.'
+                        : page === 'Products & Pricing'
+                          ? sub === 'Categories'
+                            ? 'Organize products and review their inherited tax treatment.'
+                            : 'Build prices that cover your costs and support your profit goals.'
+                          : page === 'Production'
+                            ? 'Plan production and keep every completed run traceable.'
+                            : page === 'Finances' && sub === 'Tax center'
+                              ? 'Track tax collected, review what is due, and export records for filing.'
+                              : page === 'Finances'
+                                ? 'Keep sales, costs, and business profit in clear view.'
+                                : page === 'Settings'
+                                  ? 'Make this oven work for your business.'
+                                  : page === 'Reports'
+                                    ? 'Turn your business records into useful answers.'
+                                    : 'Create labels with your branding and the product details you can verify.'}
               </p>
             </div>
             <div className="heading-actions">
@@ -1803,22 +1803,6 @@ export function WorkspaceApp() {
           )}
           {page === 'Recipes' && (
             <>
-              {['Owner', 'Manager'].includes(role) && (
-                <div className="toolbar">
-                  <button
-                    className="btn secondary"
-                    onClick={() => open('trade-design')}
-                  >
-                    Create handmade design
-                  </button>
-                  <button
-                    className="btn secondary"
-                    onClick={() => open('trade-material')}
-                  >
-                    Add Item
-                  </button>
-                </div>
-              )}
               <div className="toolbar">
                 <div className="search-field">
                   <Search size={17} />
@@ -1832,7 +1816,10 @@ export function WorkspaceApp() {
                 <Btn secondary onClick={() => open('recipe-import')}>
                   <Upload size={16} /> Import recipe
                 </Btn>
-                <Badge>{recipes.length} recipes & preps</Badge>
+                <Badge>
+                  {recipes.filter((r) => r.workflow !== 'handmade').length}{' '}
+                  recipes & preps
+                </Badge>
                 <Btn secondary onClick={() => exportData('recipes')}>
                   <Download size={16} />
                   Export
@@ -1867,6 +1854,7 @@ export function WorkspaceApp() {
               </div>
               <div className="recipe-grid">
                 {filtered(recipes)
+                  .filter((r) => r.workflow !== 'handmade')
                   .filter(
                     (r) =>
                       recipeCategoryFilter === 'all' ||
@@ -2032,9 +2020,18 @@ export function WorkspaceApp() {
               )}
             </>
           )}
+          {page === 'Handmade' && (
+            <HandmadeWorkspace
+              workspace={state}
+              role={role}
+              mutate={mutate}
+              open={open}
+              tab={route.tab}
+              onWorkspace={setState}
+            />
+          )}
           {page === 'Production' && (
             <>
-              <HandmadeProduction workspace={state} role={role} open={open} />
               {sub === 'Waste / adjustments' ? (
                 <>
                   <div className="info-banner">
@@ -4865,6 +4862,7 @@ export function WorkspaceApp() {
           ) : null}
           {modal === 'production' && (
             <ProductionRun
+              role={role}
               key={selected?.id || draft.productId || 'new'}
               state={state}
               run={selected || undefined}
@@ -5077,24 +5075,41 @@ export function WorkspaceApp() {
                         Create label
                       </Btn>
                     </div>
-                    <p className="table-note product-detail-recipe">
-                      Connected recipe:{' '}
-                      {recipes.find((r) => r.id === selected.recipeId)?.name ||
-                        'Not linked — current recipe cost unavailable'}
-                      {recipes.find((r) => r.id === selected.recipeId) && (
+                    {selected.workflow === 'handmade' ? (
+                      <p className="table-note">
                         <button
                           className="text-button"
-                          onClick={() =>
-                            open(
-                              'recipe-detail',
-                              recipes.find((r) => r.id === selected.recipeId)!,
-                            )
-                          }
+                          onClick={() => open('product', selected)}
                         >
-                          Open recipe
+                          Open bill of materials
                         </button>
-                      )}
-                    </p>
+                        {selected.bom
+                          ? ` · Version ${selected.bom.version}`
+                          : ' · Legacy design needs review'}
+                      </p>
+                    ) : (
+                      <p className="table-note product-detail-recipe">
+                        Connected recipe:{' '}
+                        {recipes.find((r) => r.id === selected.recipeId)
+                          ?.name ||
+                          'Not linked — current recipe cost unavailable'}
+                        {recipes.find((r) => r.id === selected.recipeId) && (
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              open(
+                                'recipe-detail',
+                                recipes.find(
+                                  (r) => r.id === selected.recipeId,
+                                )!,
+                              )
+                            }
+                          >
+                            Open recipe
+                          </button>
+                        )}
+                      </p>
+                    )}
                   </>
                 )
               }

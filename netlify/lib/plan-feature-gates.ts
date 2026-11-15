@@ -103,6 +103,8 @@ export function requestFeatures({
       if (['sales', 'expenses'].includes(body?.table)) out.add('finance')
       break
     }
+    case 'handmadeMaterialSave':
+    case 'handmadeMaterialReceive':
     case 'fabricUpdate':
       out.add('fabricInventory')
       break
@@ -126,6 +128,7 @@ export function requestFeatures({
     case 'productionSave':
     case 'productionComplete':
     case 'productionCancel':
+    case 'productionReverse':
     case 'complete':
       out.add(wf === 'handmade' ? 'handmadeProduction' : 'production')
       break

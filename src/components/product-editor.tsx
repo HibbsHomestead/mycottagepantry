@@ -350,25 +350,27 @@ export function ProductEditor({
         Each size or color is its own product with its own stock and SKU. Use
         the same group name to link variants.
       </p>
-      <ProductLinkImport
-        settings={workspace.settings[0]}
-        draft={draft}
-        existing={editing}
-        onWorkspace={onWorkspace}
-        onBusyChange={setImportBusy}
-        onVendorsChange={(vendors) => onWorkspace({ ...workspace, vendors })}
-        apply={(patch) => {
-          setDirty(true)
-          setDraft((d) => ({
-            ...d,
-            ...patch,
-            // Imported details never change which record is edited.
-            id: d.id,
-            workflow: d.workflow,
-            ...(patch.vendorId ? { supplierId: patch.vendorId } : {}),
-          }))
-        }}
-      />
+      {resale && (
+        <ProductLinkImport
+          settings={workspace.settings[0]}
+          draft={draft}
+          existing={editing}
+          onWorkspace={onWorkspace}
+          onBusyChange={setImportBusy}
+          onVendorsChange={(vendors) => onWorkspace({ ...workspace, vendors })}
+          apply={(patch) => {
+            setDirty(true)
+            setDraft((d) => ({
+              ...d,
+              ...patch,
+              // Imported details never change which record is edited.
+              id: d.id,
+              workflow: d.workflow,
+              ...(patch.vendorId ? { supplierId: patch.vendorId } : {}),
+            }))
+          }}
+        />
+      )}
       <InventoryProductFields value={draft} change={change} />
     </>
   )

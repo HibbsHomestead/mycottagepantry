@@ -1,3 +1,4 @@
+import { validateHandmadeBom } from '../../src/lib/handmade'
 import { applyProductTemplateDraft } from '../../src/lib/label-preview'
 import { libraryArtwork } from '../../src/lib/artwork-library'
 import { validateDate } from '../../src/lib/domain'
@@ -148,6 +149,10 @@ export async function consumeFinishedSale(
 ) {
   if (!tracksFinishedStock(product)) return false
   const quantity = number(sale.quantity, 'Items sold', 0.000001)
+  if (product.workflow === 'handmade' && product.stockCostKnown !== true)
+    throw new Error(
+      'Finished inventory cost is unknown. Review the stock basis before selling.',
+    )
   const cost = number(product.cost || 0, 'Stock basis')
   sale.costSnapshot = {
     perPackage: cost,
@@ -369,11 +374,24 @@ export async function handleProductWorkflow(
       delete item.taxAssignments
     }
     if (item.workflow === 'handmade') {
+      if (!item.bom && existingProduct?.bom) item.bom = existingProduct.bom
       const design = state.recipes.find(
         (r) => r.id === item.recipeId && r.workflow === 'handmade',
       )
-      if (!design) throw new Error('Choose a saved handmade design.')
-      productCosting(item, state)
+      if (item.bom) {
+        item.recipeId = existingProduct?.recipeId || null
+        validateHandmadeBom(item.bom, state)
+        const previousBom = existingProduct?.bom
+        item.bom = {
+          ...item.bom,
+          version:
+            JSON.stringify({ ...previousBom, version: undefined }) ===
+            JSON.stringify({ ...item.bom, version: undefined })
+              ? previousBom.version
+              : Number(previousBom?.version || 0) + 1,
+        }
+      } else if (!design) throw new Error('Choose a saved bill of materials.')
+      // Incomplete cost data may be saved for review; production rejects it.
     } else item.recipeId = null
     await save('products', item)
     await audit(
