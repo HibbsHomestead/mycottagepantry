@@ -1,3 +1,4 @@
+import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { useState } from 'react'
 import { ovenTimestamp } from '@/lib/oven-dates'
 import { receivedDateReview } from '@/lib/received-dates'
@@ -363,7 +364,7 @@ export function PurchaseStockReceipts({
                 <th>Acquisition cost</th>
                 <th>Received date</th>
                 <th>Purchase date</th>
-                <th>Source</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -398,7 +399,17 @@ export function PurchaseStockReceipts({
                     </button>
                   </td>
                   <td>{l.purchaseDate || 'Not recorded'}</td>
-                  <td>{l.sourceId || l.id}</td>
+                  <td>
+                    {['Owner', 'Manager', 'Read-only Accountant'].includes(
+                      role,
+                    ) ? (
+                      <RecordLink kind="purchase" id={l.id}>
+                        View purchase
+                      </RecordLink>
+                    ) : (
+                      'Stock receipt'
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -440,6 +451,22 @@ export function PurchaseStockReceipts({
               Received date: {record.receivedDate || record.date} · Purchase
               date: {record.purchaseDate || 'Not recorded'}
             </p>
+            {['Owner', 'Manager', 'Read-only Accountant'].includes(role) &&
+              (purchaseTransactions(workspace, record).length ? (
+                purchaseTransactions(workspace, record).map((t) => (
+                  <p key={t.id}>
+                    <RecordLink
+                      kind="finance"
+                      id={t.id}
+                      onOpen={() => setRecord(null)}
+                    >
+                      View in Finance · {t.date} · {money(t.amount)}
+                    </RecordLink>
+                  </p>
+                ))
+              ) : (
+                <p>No financial entry linked</p>
+              ))}
             {record.dateCorrection && (
               <p>
                 Original date: {record.originalReceivedDate}. Approved{' '}

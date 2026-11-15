@@ -1,3 +1,4 @@
+import { LinkedPurchaseRecords } from './linked-purchase-records'
 import { Checkbook, FinanceNavigation } from './checkbook'
 import { customerMessage } from '@/lib/customer-message'
 import { workspaceCategorySettings } from '@/lib/section-categories'
@@ -24,6 +25,7 @@ import {
 } from '@/lib/inventory-error-details'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
+import './workspace-standard.css'
 import { OvenLoading } from './oven-loading'
 import { restoreIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
@@ -566,6 +568,7 @@ export function WorkspaceApp() {
     labelUnsaved.current || workflowDirty.current || !!(modal && formDirty)
   useEffect(() => {
     const navigate = () => {
+      if (lastHash.current && lastHash.current === window.location.hash) return
       const next = parseWorkspaceHash(window.location.hash)
       if (
         navigationGuard.current() &&
@@ -583,7 +586,14 @@ export function WorkspaceApp() {
       setModal(null)
       setFormDirty(false)
       workflowDirty.current = false
-      applyRoute(next, next.query)
+      const linkedNavigation =
+        next.query.has('linked') ||
+        parseWorkspaceHash(lastHash.current || '').query.has('linked')
+      if (
+        !linkedNavigation ||
+        destinationHash(next) !== destinationHash(routeRef.current)
+      )
+        applyRoute(next, next.query)
       const canonical =
         destinationHash(next) +
         (next.query.size ? '?' + next.query.toString() : '')
@@ -592,9 +602,14 @@ export function WorkspaceApp() {
       lastHash.current = canonical
     }
     navigate()
+    const rememberLinkedLocation = () => {
+      lastHash.current = window.location.hash
+    }
+    window.addEventListener('linkedrecord', rememberLinkedLocation)
     window.addEventListener('popstate', navigate)
     window.addEventListener('hashchange', navigate)
     return () => {
+      window.removeEventListener('linkedrecord', rememberLinkedLocation)
       window.removeEventListener('popstate', navigate)
       window.removeEventListener('hashchange', navigate)
     }
@@ -1559,8 +1574,16 @@ export function WorkspaceApp() {
           </div>
         </header>
         <main
-          className={`app-page${route.section === 'Finance' ? ' finance-page' : ''}`}
+          className={`app-page${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
+          {route.section === 'Purchasing' && (
+            <FinanceNavigation
+              active={route.tab}
+              workspace={state}
+              onNavigate={(tab) => go('Purchasing', tab)}
+              purchasing
+            />
+          )}
           {route.section === 'Finance' &&
             ['Owner', 'Manager', 'Read-only Accountant'].includes(role) && (
               <FinanceNavigation
@@ -1580,9 +1603,9 @@ export function WorkspaceApp() {
           )}
           <div className="page-heading">
             <div>
-              <span className="eyebrow">
-                {page === 'Dashboard' ? business.name : 'COTTAGE PANTRY'}
-              </span>
+              {route.section === 'Purchasing' && (
+                <span className="eyebrow">COTTAGE PANTRY</span>
+              )}
               <h1>
                 {page === 'Dashboard'
                   ? `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}.`
@@ -1593,29 +1616,31 @@ export function WorkspaceApp() {
                       : route.section}
               </h1>
               <p>
-                {page === 'Dashboard'
-                  ? 'Here’s what needs your attention today.'
-                  : page === 'Handmade'
-                    ? 'Purchase materials, cost your bills of materials, and track finished work.'
-                    : page === 'Pantry'
-                      ? 'Track what you have, what it costs, and what needs restocking.'
-                      : page === 'Recipes'
-                        ? 'Cost food recipes with their inputs and labor. Handmade bills of materials have their own workspace.'
-                        : page === 'Products & Pricing'
-                          ? sub === 'Categories'
-                            ? 'Organize products and review their inherited tax treatment.'
-                            : 'Build prices that cover your costs and support your profit goals.'
-                          : page === 'Production'
-                            ? 'Plan production and keep every completed run traceable.'
-                            : page === 'Finances' && sub === 'Tax center'
-                              ? 'Track tax collected, review what is due, and export records for filing.'
-                              : page === 'Finances'
-                                ? 'Keep sales, costs, and business profit in clear view.'
-                                : page === 'Settings'
-                                  ? 'Make this oven work for your business.'
-                                  : page === 'Reports'
-                                    ? 'Turn your business records into useful answers.'
-                                    : 'Create labels with your branding and the product details you can verify.'}
+                {route.section === 'Purchasing'
+                  ? 'Review receipts, record purchases, and track incoming stock.'
+                  : page === 'Dashboard'
+                    ? 'Here’s what needs your attention today.'
+                    : page === 'Handmade'
+                      ? 'Purchase materials, cost your bills of materials, and track finished work.'
+                      : page === 'Pantry'
+                        ? 'Track what you have, what it costs, and what needs restocking.'
+                        : page === 'Recipes'
+                          ? 'Cost food recipes with their inputs and labor. Handmade bills of materials have their own workspace.'
+                          : page === 'Products & Pricing'
+                            ? sub === 'Categories'
+                              ? 'Organize products and review their inherited tax treatment.'
+                              : 'Build prices that cover your costs and support your profit goals.'
+                            : page === 'Production'
+                              ? 'Plan production and keep every completed run traceable.'
+                              : page === 'Finances' && sub === 'Tax center'
+                                ? 'Track tax collected, review what is due, and export records for filing.'
+                                : page === 'Finances'
+                                  ? 'Keep sales, costs, and business profit in clear view.'
+                                  : page === 'Settings'
+                                    ? 'Make this oven work for your business.'
+                                    : page === 'Reports'
+                                      ? 'Turn your business records into useful answers.'
+                                      : 'Create labels with your branding and the product details you can verify.'}
               </p>
             </div>
             <div className="heading-actions">
@@ -1626,14 +1651,19 @@ export function WorkspaceApp() {
                     Add Item
                   </Btn>
                 )}
-              {page === 'Finances' && route.section !== 'Finance' && (
-                <Btn secondary onClick={() => go('Finances', 'Receipt inbox')}>
-                  <Receipt size={17} />
-                  Upload receipt
-                </Btn>
-              )}
+              {page === 'Finances' &&
+                !['Finance', 'Purchasing'].includes(route.section) && (
+                  <Btn
+                    secondary
+                    onClick={() => go('Finances', 'Receipt inbox')}
+                  >
+                    <Receipt size={17} />
+                    Upload receipt
+                  </Btn>
+                )}
               {!(
-                route.section === 'Finance' && pageAction?.[1] === 'transaction'
+                ['Finance', 'Purchasing'].includes(route.section) &&
+                pageAction?.[1] === 'transaction'
               ) &&
                 page !== 'Dashboard' &&
                 page !== 'Settings' &&
@@ -1658,6 +1688,7 @@ export function WorkspaceApp() {
           </div>
           {!!sectionTabs[route.section]?.length &&
             route.section !== 'Finance' &&
+            route.section !== 'Purchasing' &&
             route.section !== 'Labels' &&
             route.section !== 'Settings' && (
               <nav
@@ -2323,7 +2354,7 @@ export function WorkspaceApp() {
               role={role}
             />
           )}
-          {route.section === 'Finance' && (
+          {['Finance', 'Purchasing'].includes(route.section) && (
             <FinanceWorkspace
               workspace={state}
               onWorkspace={(workspace) => {
@@ -2338,18 +2369,33 @@ export function WorkspaceApp() {
               onCreatePantryItem={(kind) => open(kind)}
             />
           )}
+          {['Finance', 'Purchasing'].includes(route.section) && (
+            <LinkedPurchaseRecords
+              workspace={state}
+              role={role}
+              onReceipt={(id) => setFinanceReceiptEntry('receipt:' + id)}
+            />
+          )}
+          {route.section === 'Purchasing' &&
+            ['Owner', 'Manager'].includes(role) && (
+              <div className="book-actions button-row">
+                <Btn
+                  disabled={!ready}
+                  onClick={() => setFinanceReceiptEntry('receiptUpload')}
+                >
+                  Upload receipt
+                </Btn>
+                <Btn
+                  secondary
+                  disabled={!ready}
+                  onClick={() => setFinanceReceiptEntry('purchaseManual')}
+                >
+                  Record purchase
+                </Btn>
+              </div>
+            )}
           {page === 'Finances' && (
             <>
-              {sub === 'Receipt inbox' && (
-                <PurchaseStockReceipts
-                  correctDate={(data) =>
-                    mutate('receivedDateCorrection', 'ledger', data)
-                  }
-                  workspace={state}
-                  role={role}
-                  open={open}
-                />
-              )}
               {[
                 'Overview',
                 'Register',
@@ -2369,6 +2415,9 @@ export function WorkspaceApp() {
                   role={role}
                   onSectionChange={(section) => go('Finances', section)}
                   onReceipts={() => go('Finances', 'Receipt inbox')}
+                  onViewReceipt={(id) =>
+                    setFinanceReceiptEntry('receipt:' + id)
+                  }
                   onUploadReceipt={() =>
                     setFinanceReceiptEntry('receiptUpload')
                   }
@@ -2384,25 +2433,37 @@ export function WorkspaceApp() {
               ) : ['Receipt inbox', 'Money activity', 'Consignment'].includes(
                   sub,
                 ) ? (
-                <FinanceWorkspace
-                  workspace={state}
-                  onWorkspace={(workspace) => {
-                    setState(workspace)
-                    setError('')
-                  }}
-                  section={sub}
-                  onNavigate={(section) =>
-                    section === 'Reports'
-                      ? go('Reports')
-                      : go('Finances', section)
-                  }
-                  ready={ready}
-                  loadError={error}
-                  role={role}
-                  initialEntry={financeEntry}
-                  onEntryOpened={() => setFinanceEntry('')}
-                  onCreatePantryItem={(kind) => open(kind)}
-                />
+                <>
+                  <FinanceWorkspace
+                    workspace={state}
+                    onWorkspace={(workspace) => {
+                      setState(workspace)
+                      setError('')
+                    }}
+                    section={sub}
+                    onNavigate={(section) =>
+                      section === 'Reports'
+                        ? go('Reports')
+                        : go('Finances', section)
+                    }
+                    ready={ready}
+                    loadError={error}
+                    role={role}
+                    initialEntry={financeEntry}
+                    onEntryOpened={() => setFinanceEntry('')}
+                    onCreatePantryItem={(kind) => open(kind)}
+                  />
+                  {sub === 'Receipt inbox' && (
+                    <PurchaseStockReceipts
+                      correctDate={(data) =>
+                        mutate('receivedDateCorrection', 'ledger', data)
+                      }
+                      workspace={state}
+                      role={role}
+                      open={open}
+                    />
+                  )}
+                </>
               ) : sub === 'Sales' || sub === 'Expenses' ? (
                 <>
                   <div className="toolbar">

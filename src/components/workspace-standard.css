@@ -1,0 +1,154 @@
+/* Purchasing supplies the existing tokens, controls and neutral surfaces.
+   Compact only the surrounding workspace; keep its reference page unchanged. */
+.main-shell > main.app-page.workspace-standard {
+  padding-top: 18px;
+  margin-inline: 0;
+}
+.workspace-standard .page-heading {
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.workspace-standard .page-heading p {
+  margin-top: 6px;
+}
+.workspace-standard .heading-actions {
+  flex-wrap: wrap;
+}
+.workspace-standard .section-tabs {
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+}
+.workspace-standard .section-tabs a {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+}
+.workspace-standard .section-tabs a.active {
+  background: var(--primary);
+  color: var(--primary-foreground, #fff);
+}
+.workspace-standard .toolbar {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.workspace-standard .pantry-summary {
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.workspace-standard .pantry-summary > span {
+  padding: 14px 16px;
+  border-radius: var(--radius-panel);
+}
+.workspace-standard .inventory-tabs {
+  margin-bottom: 12px;
+}
+.workspace-standard .panel-heading {
+  padding: 16px 20px;
+}
+.workspace-standard .book-header {
+  margin-bottom: 12px;
+}
+.workspace-standard .book-header h2 {
+  font-size: 24px;
+}
+.workspace-standard .book-panel {
+  padding: 20px;
+  margin: 14px 0;
+}
+.workspace-standard .book-filters {
+  margin: 12px 0;
+}
+.workspace-standard .dashboard-preview {
+  gap: 16px;
+}
+.workspace-standard .dashboard-welcome {
+  padding: 16px 20px;
+  gap: 16px;
+  border-radius: var(--radius-panel);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.workspace-standard .dashboard-welcome h2 {
+  font-size: 22px;
+  margin: 0;
+}
+.workspace-standard .dashboard-metric {
+  border-radius: var(--radius-panel);
+}
+.workspace-standard .dashboard-metric > button {
+  padding: 16px;
+}
+.workspace-standard .settings-workspace {
+  gap: 20px;
+}
+.workspace-standard .settings-nav {
+  align-self: start;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--card);
+}
+.workspace-standard .settings-nav button.active {
+  color: var(--primary-foreground, #fff);
+  background: var(--primary);
+}
+.workspace-standard .studio-nav {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+.workspace-standard .studio-gallery-heading {
+  margin: 16px 0;
+}
+@media (max-width: 700px) {
+  body:has(.floating-controls) .main-shell > main.app-page.workspace-standard {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .workspace-standard .page-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .workspace-standard .heading-actions {
+    max-width: 100%;
+  }
+  .workspace-standard .dashboard-welcome {
+    padding: 16px;
+  }
+  .workspace-standard .book-actions {
+    gap: 8px;
+  }
+  .workspace-standard .book-actions > button {
+    flex: 1 1 140px;
+  }
+}
+.workspace-standard .inventory-filter-actions {
+  margin-bottom: 12px;
+}
+.workspace-standard .pantry-v2 .toolbar .search-field {
+  flex: 1 1 220px;
+  min-width: min(220px, 100%);
+}
+.workspace-standard .pantry-v2 .toolbar {
+  column-gap: 10px;
+}
+.workspace-standard .pantry-v2 .table-note {
+  margin: 8px 0;
+}
+@media (max-width: 700px) {
+  .workspace-standard .settings-nav {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+  .workspace-standard .settings-nav button {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 190px;
+  }
+}

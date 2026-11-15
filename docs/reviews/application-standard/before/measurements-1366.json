@@ -1,0 +1,101 @@
+{
+  "dashboard": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 0
+  },
+  "inventory": {
+    "firstRowY": 776,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "recipes": {
+    "firstRowY": 465,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "products": {
+    "firstRowY": 652,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "handmade": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "production": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "sales": {
+    "firstRowY": 422,
+    "visibleRows": 4,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "labels": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 0
+  },
+  "finance": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "settings": {
+    "firstRowY": null,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  },
+  "purchasing": {
+    "firstRowY": 1026,
+    "visibleRows": 0,
+    "headerBottom": 203,
+    "pageX": 254,
+    "overflow": false,
+    "font": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "navs": 1
+  }
+}
