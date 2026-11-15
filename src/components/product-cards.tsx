@@ -37,7 +37,7 @@ function cardCost(product: Item, workspace: Workspace) {
       }
     }
   }
-  if (product.workflow === 'handmade' && product.bom) {
+  if (product.workflow === 'handmade') {
     try {
       return { cost: handmadeEstimate(product, workspace).unit }
     } catch (error) {
@@ -245,6 +245,18 @@ export function ProductCards({
                 </dd>
               </dl>
               {reason && <p className="muted">{reason}</p>}
+              {product.workflow === 'handmade' && !product.bom && (
+                <p className="muted">Legacy BOM needs review.</p>
+              )}
+              {product.workflow === 'handmade' &&
+                !pricing &&
+                cost !== undefined && (
+                  <p className="muted">
+                    {!Number.isFinite(price)
+                      ? 'Add a selling price to calculate margin.'
+                      : 'Configure category tax treatment to calculate margin.'}
+                  </p>
+                )}
               {product.workflow === 'kit' && (
                 <KitProductList
                   product={product}
@@ -276,7 +288,9 @@ export function ProductCards({
                   on hand ·{' '}
                   {product.stockCostKnown
                     ? money(product.cost) + ' average stock cost'
-                    : 'Awaiting receipt / production'}
+                    : product.workflow === 'handmade'
+                      ? 'Inventory valuation needs review'
+                      : 'Awaiting receipt / production'}
                 </p>
               )}
             </div>

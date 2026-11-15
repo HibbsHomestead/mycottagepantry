@@ -1,5 +1,17 @@
+import * as Tabs from '@radix-ui/react-tabs'
 import { isFabric } from '../lib/fabric'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ProductCards } from './product-cards'
+import { ItemDetailLayout } from './item-detail-layout'
+import { invalidEditorTabs } from './item-editor-shell'
+import { productCategoryName } from '../lib/product-categories'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from './ui/dropdown-menu'
+import { MoreHorizontal } from 'lucide-react'
 import { money, type Item, type Workspace } from '../lib/domain'
 import { handmadeBom, handmadeEstimate, handmadeUnits } from '../lib/handmade'
 import {
@@ -11,7 +23,6 @@ import {
 } from './ui/dialog'
 import { ItemImagesPanel } from './item-images-panel'
 import { ProductCategorySelector } from './product-categories'
-import { PantryPhoto } from './pantry-photo'
 import './handmade-workspace.css'
 
 type Mutate = (action: string, table: string, data: Item) => Promise<unknown>
@@ -22,6 +33,7 @@ type Props = {
   open: (kind: string, item?: Item) => void
   tab: string
   onWorkspace: (w: Workspace) => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 export function HandmadeWorkspace({
   workspace: w,
@@ -29,7 +41,49 @@ export function HandmadeWorkspace({
   mutate,
   open,
   tab,
+  onWorkspace,
+  onDirtyChange,
 }: Props) {
+  const [location, setLocation] = useState(() =>
+    typeof window === 'undefined' ? '' : window.location.hash,
+  )
+  useEffect(() => {
+    if (window.location.hash !== location) setLocation(window.location.hash)
+  })
+  const dirty = useRef(false)
+  useEffect(() => {
+    const sync = () => {
+      const next = window.location.hash
+      dirty.current = false
+      setLocation(next)
+    }
+    window.addEventListener('hashchange', sync)
+    window.addEventListener('popstate', sync)
+    const unload = (e: BeforeUnloadEvent) => {
+      if (dirty.current) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', unload)
+    return () => {
+      window.removeEventListener('hashchange', sync)
+      window.removeEventListener('popstate', sync)
+      window.removeEventListener('beforeunload', unload)
+    }
+  }, [])
+  const params = new URLSearchParams(location.split('?')[1])
+  const productId = params.get('product')
+  const product = w.products.find(
+    (p) => p.id === productId && p.workflow === 'handmade',
+  )
+  const go = (p?: Item, edit = '') => {
+    window.location.hash =
+      '#Handmade/Products%20%26%20Bills%20of%20Materials' +
+      (p
+        ? '?product=' + encodeURIComponent(p.id) + (edit ? '&edit=' + edit : '')
+        : '')
+  }
   const [editing, setEditing] = useState<Item | null>(null)
   const [mode, setMode] = useState('')
   const products = w.products.filter((p) => p.workflow === 'handmade')
@@ -57,13 +111,60 @@ export function HandmadeWorkspace({
     )
     setMode(receipt ? 'receive' : 'material')
   }
+  if (productId)
+    return (
+      <div className="handmade-workspace">
+        <nav className="breadcrumb" aria-label="Handmade breadcrumb">
+          <a href="#Handmade/Overview">Handmade</a>
+          <span>/</span>
+          <a href="#Handmade/Products%20%26%20Bills%20of%20Materials">
+            Products
+          </a>
+          <span>/</span>
+          <strong>{product?.name || 'Product unavailable'}</strong>
+        </nav>
+        {!product ? (
+          <section className="panel">
+            <h2>Product unavailable</h2>
+            <p>
+              This handmade product is no longer available in this workspace.
+            </p>
+          </section>
+        ) : params.has('edit') ? (
+          <HandmadeProductEditor
+            key={product.id}
+            item={product}
+            workspace={w}
+            role={role}
+            mutate={async (...args) => {
+              await mutate(args[0], args[1], args[2] as Item)
+            }}
+            onWorkspace={onWorkspace}
+            onDirty={(v) => {
+              dirty.current = v
+              onDirtyChange?.(v)
+            }}
+            close={() => go(product)}
+            inline
+            initialTab={params.get('edit') || 'product'}
+          />
+        ) : (
+          <HandmadeProductDetail
+            key={product.id}
+            product={product}
+            w={w}
+            manage={manage}
+            open={open}
+            edit={(t) => go(product, t)}
+          />
+        )}
+      </div>
+    )
   return (
     <div className="handmade-workspace">
       <section className="handmade-intro">
         <div>
-          <span className="eyebrow">THE MAKER’S WORKBENCH</span>
           <h2>{tab}</h2>
-          <p>Materials in. Finished work out. Know what every piece costs.</p>
         </div>
         <div className="button-row">
           {manage && (
@@ -96,7 +197,9 @@ export function HandmadeWorkspace({
               <span>Materials at reorder level</span>
             </div>
             <div>
-              <strong>{products.filter((p) => !estimate(p)).length}</strong>
+              <strong>
+                {products.filter((p) => !p.bom || !estimate(p)).length}
+              </strong>
               <span>Products needing cost review</span>
             </div>
           </div>
@@ -201,98 +304,24 @@ export function HandmadeWorkspace({
         'Products & Bills of Materials',
         'Finished Inventory',
       ].includes(tab) && (
-        <section className="panel">
-          <h3>
-            {tab === 'Finished Inventory'
-              ? 'Finished goods · recorded valuation'
-              : 'Products & bills of materials'}
-          </h3>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Product / variant</th>
-                  <th>Finished stock</th>
-                  <th>Selling price</th>
-                  <th>Estimated unit cost</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => {
-                  const c = estimate(p)
-                  return (
-                    <tr key={p.id}>
-                      <td>
-                        <div className="handmade-product">
-                          <PantryPhoto
-                            item={p}
-                            assets={w.graphic_assets}
-                            kind="product"
-                          />
-                          <span>
-                            <strong>{p.name}</strong>
-                            <small>
-                              {p.variantGroup} {p.variant} · {p.sku}{' '}
-                              {p.archived && ' · Archived'}
-                            </small>
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        {p.quantity || 0} units
-                        <small>
-                          {p.stockCostKnown
-                            ? `${money(Number(p.quantity || 0) * Number(p.cost))} inventory value · ${money(p.cost)}/unit weighted average`
-                            : 'Inventory cost needs review'}
-                        </small>
-                      </td>
-                      <td>{money(p.price)}</td>
-                      <td>
-                        {c ? money(c.unit) : 'Cost incomplete'}
-                        {c && (
-                          <HandmadeMargin product={p} unitCost={c.unit} w={w} />
-                        )}
-                      </td>
-                      <td>
-                        <div className="button-row">
-                          {manage && (
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('trade-product', p)}
-                            >
-                              Edit BOM
-                            </button>
-                          )}
-                          {manage && !p.archived && (
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('production', p)}
-                            >
-                              Production run
-                            </button>
-                          )}
-                          <button
-                            className="btn secondary"
-                            onClick={() =>
-                              open('sale', {
-                                id: crypto.randomUUID(),
-                                name: p.name,
-                                productId: p.id,
-                                quantity: 1,
-                              })
-                            }
-                          >
-                            Record sale
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <section className="handmade-products">
+          {tab !== 'Products & Bills of Materials' && (
+            <h3>
+              {tab === 'Finished Inventory'
+                ? 'Finished goods · recorded valuation'
+                : 'Products & bills of materials'}
+            </h3>
+          )}
+          <ProductCards
+            products={products}
+            workspace={w}
+            open={(kind, p) => {
+              if (kind === 'product-detail') go(p)
+              else if (kind === 'product' || kind === 'trade-product')
+                go(p, 'product')
+              else open(kind, p)
+            }}
+          />
           {!products.length && (
             <p>
               Create a handmade product with its own BOM. No food recipe is
@@ -627,6 +656,8 @@ export function HandmadeProductEditor({
   onWorkspace,
   close,
   onDirty,
+  inline = false,
+  initialTab = 'product',
 }: {
   item: Item | null
   workspace: Workspace
@@ -639,7 +670,32 @@ export function HandmadeProductEditor({
   onWorkspace: (w: Workspace) => void
   close: () => void
   onDirty: (dirty: boolean) => void
+  inline?: boolean
+  initialTab?: string
 }) {
+  const [activeTab, setActiveTab] = useState(
+    ['product', 'bom', 'costing'].includes(initialTab) ? initialTab : 'product',
+  )
+  const [dirty, setDirty] = useState(false)
+  const dismiss = () => {
+    if (
+      !busy &&
+      (!dirty || window.confirm('Discard unsaved changes to this product?'))
+    ) {
+      onDirty(false)
+      close()
+    }
+  }
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (dirty) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
   const [d, setD] = useState<Item>(() => ({
     id: crypto.randomUUID(),
     name: '',
@@ -666,10 +722,12 @@ export function HandmadeProductEditor({
   const saving = useRef(false)
   const manage = ['Owner', 'Manager'].includes(role)
   const change = (k: string, value: unknown) => {
+    setDirty(true)
     onDirty(true)
     setD((v) => ({ ...v, [k]: value }))
   }
   const changeBom = (k: string, value: unknown) => {
+    setDirty(true)
     onDirty(true)
     setBom((v) => ({ ...v, [k]: value }))
   }
@@ -679,6 +737,8 @@ export function HandmadeProductEditor({
       <input
         type={type}
         step={type === 'number' ? 'any' : undefined}
+        min={type === 'number' ? (k === 'output' ? 1 : 0) : undefined}
+        max={k === 'scrapPercent' ? 100 : undefined}
         required={[
           'name',
           'price',
@@ -711,273 +771,352 @@ export function HandmadeProductEditor({
       'lines',
       lines.map((l, n) => (n === index ? { ...l, ...patch } : l)),
     )
-  return (
-    <Dialog
-      open
-      onOpenChange={(v) => {
-        if (!v && !busy) {
-          onDirty(false)
-          close()
-        }
-      }}
-    >
-      <DialogContent className="app-dialog wide-dialog handmade-editor">
-        <DialogHeader>
-          <DialogTitle>
-            {item
-              ? 'Edit handmade product & BOM'
-              : 'Create handmade product & BOM'}
-          </DialogTitle>
-          <DialogDescription>
-            Each product and variant has its own bill of materials and stock.
-            Saving changes never rewrites completed runs or moves inventory.
-          </DialogDescription>
-        </DialogHeader>
-        <form
-          className="app-form"
-          onSubmit={async (e) => {
-            e.preventDefault()
-            if (saving.current) return
-            saving.current = true
-            setBusy(true)
-            setError('')
-            try {
-              await mutate('save', 'products', {
-                ...d,
-                bom: { ...bom, legacy: undefined },
-                workflow: 'handmade',
-              })
-              onDirty(false)
-              close()
-            } catch (e) {
-              setError((e as Error).message)
-            } finally {
-              saving.current = false
-              setBusy(false)
-            }
-          }}
-        >
-          <fieldset disabled={busy || !manage}>
-            <h3>Product details</h3>
-            <div className="form-grid">
-              {field('Product name', 'name')}
-              {field('Selling price', 'price', 'number')}
-              {field('SKU', 'sku')}
-              {field('Variant group (optional)', 'variantGroup')}
-              {field('Variant / size / color (optional)', 'variant')}
-              <label>
-                Status
-                <select
-                  value={d.archived ? 'archived' : 'active'}
-                  onChange={(e) =>
-                    change('archived', e.target.value === 'archived')
-                  }
-                >
-                  <option value="active">Active</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </label>
-            </div>
-            <label>
-              Description
-              <textarea
-                value={d.description || ''}
-                onChange={(e) => change('description', e.target.value)}
-              />
-            </label>
-            <ProductCategorySelector
-              business={w.settings[0]}
-              product={d}
-              canManage={manage}
-              onChange={change}
-              onConfig={(patch) =>
-                onWorkspace({
-                  ...w,
-                  settings: w.settings.map((s, i) =>
-                    i === 0 ? { ...s, ...patch } : s,
-                  ),
-                })
-              }
-              openTaxSettings={() =>
-                window.open(
-                  '/oven#Settings/Taxes',
-                  '_blank',
-                  'noopener,noreferrer',
-                )
-              }
-            />
-            <ItemImagesPanel
-              value={d}
-              assets={w.graphic_assets || []}
-              canUpload={manage}
-              disabled={busy}
-              onChange={change}
-              onWorkspace={onWorkspace}
-              onBusy={setBusy}
-            />
-            <h3>Bill of materials</h3>
-            {!item?.bom && item?.recipeId && (
-              <p>
-                Legacy design retained. Saving creates a product-owned BOM;
-                existing production and sale links stay intact.
-              </p>
-            )}
-            <div className="form-grid">
-              {field(
-                'Finished units per production run',
-                'output',
-                'number',
-                true,
-              )}
-              {field(
-                'Expected material scrap allowance (%)',
-                'scrapPercent',
-                'number',
-                true,
-              )}
-            </div>
-            {lines.map((l, index) => (
-              <div className="handmade-bom-line" key={index}>
+  const content = (
+    <div className="handmade-editor">
+      <h2>
+        {item ? 'Edit handmade product & BOM' : 'Create handmade product & BOM'}
+      </h2>
+      <p className="muted">
+        Save updates the product and BOM together. Inventory and completed runs
+        stay unchanged.
+      </p>
+      <form
+        className="app-form"
+        noValidate
+        onSubmit={async (e) => {
+          e.preventDefault()
+          const invalid = invalidEditorTabs(e.currentTarget, 'product')
+          if (invalid.length) {
+            setActiveTab(invalid[0])
+            setError('Review the highlighted fields before saving.')
+            return
+          }
+          if (!c) {
+            setActiveTab('bom')
+            setError(costError)
+            return
+          }
+          if (saving.current) return
+          saving.current = true
+          setBusy(true)
+          setError('')
+          try {
+            await mutate('save', 'products', {
+              ...d,
+              bom: { ...bom, legacy: undefined },
+              workflow: 'handmade',
+            })
+            setDirty(false)
+            onDirty(false)
+            close()
+          } catch (e) {
+            setError((e as Error).message)
+          } finally {
+            saving.current = false
+            setBusy(false)
+          }
+        }}
+      >
+        <fieldset disabled={busy || !manage}>
+          <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+            <Tabs.List
+              className="add-item-tabs product-editor-tabs"
+              aria-label="Product sections"
+            >
+              {[
+                ['product', 'Product'],
+                ['bom', 'Bill of Materials'],
+                ['costing', 'Labor & Costing'],
+              ].map(([id, label]) => (
+                <Tabs.Trigger key={id} value={id} type="button">
+                  {label}
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+            <Tabs.Content
+              value="product"
+              forceMount
+              hidden={activeTab !== 'product'}
+              data-product-tab="product"
+              className="product-editor-panel"
+            >
+              <h3>Product details</h3>
+              <div className="form-grid">
+                {field('Product name', 'name')}
+                {field('Selling price', 'price', 'number')}
+                {field('SKU', 'sku')}
+                {field('Variant group (optional)', 'variantGroup')}
+                {field('Variant / size / color (optional)', 'variant')}
                 <label>
-                  Material or shared packaging
+                  Status
                   <select
-                    required
-                    value={l.ingredientId}
-                    onChange={(e) => {
-                      const i = inputs.find((i) => i.id === e.target.value)
-                      updateLine(index, {
-                        ingredientId: e.target.value,
-                        unit: i?.unit || 'each',
-                      })
-                    }}
-                  >
-                    <option value="">Choose component</option>
-                    {inputs.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name}
-                        {i.usedAs === 'packaging' ? ' · Shared packaging' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Quantity
-                  <input
-                    required
-                    type="number"
-                    min="0.000001"
-                    step="any"
-                    value={l.quantity}
+                    value={d.archived ? 'archived' : 'active'}
                     onChange={(e) =>
-                      updateLine(index, { quantity: e.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  Unit
-                  <select
-                    value={l.unit}
-                    onChange={(e) =>
-                      updateLine(index, { unit: e.target.value })
+                      change('archived', e.target.value === 'archived')
                     }
                   >
-                    {[...new Set([...handmadeUnits, l.unit])].map((u) => (
-                      <option key={u}>{u}</option>
-                    ))}
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
                   </select>
                 </label>
-                <span>
-                  {c?.lines[index]
-                    ? money(c.lines[index].cost)
-                    : 'Needs review'}
-                </span>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  aria-label={`Remove BOM line ${index + 1}`}
-                  onClick={() =>
-                    changeBom(
-                      'lines',
-                      lines.filter((_, i) => i !== index),
-                    )
-                  }
-                >
-                  Remove
-                </button>
               </div>
-            ))}
+              <label>
+                Description
+                <textarea
+                  value={d.description || ''}
+                  onChange={(e) => change('description', e.target.value)}
+                />
+              </label>
+              <ProductCategorySelector
+                business={w.settings[0]}
+                product={d}
+                canManage={manage}
+                onChange={change}
+                onConfig={(patch) =>
+                  onWorkspace({
+                    ...w,
+                    settings: w.settings.map((s, i) =>
+                      i === 0 ? { ...s, ...patch } : s,
+                    ),
+                  })
+                }
+                openTaxSettings={() =>
+                  window.open(
+                    '/oven#Settings/Taxes',
+                    '_blank',
+                    'noopener,noreferrer',
+                  )
+                }
+              />
+              <ItemImagesPanel
+                value={d}
+                assets={w.graphic_assets || []}
+                labelArtwork={false}
+                canUpload={manage}
+                disabled={busy}
+                onChange={change}
+                onWorkspace={onWorkspace}
+                onBusy={setBusy}
+              />
+            </Tabs.Content>
+            <Tabs.Content
+              value="bom"
+              forceMount
+              hidden={activeTab !== 'bom'}
+              data-product-tab="bom"
+              className="product-editor-panel"
+            >
+              <h3>Bill of materials</h3>
+              {!item?.bom && item?.recipeId && (
+                <p>
+                  Legacy design retained. Saving creates a product-owned BOM;
+                  existing production and sale links stay intact.
+                </p>
+              )}
+              <div className="form-grid">
+                {field(
+                  'Finished units per production run',
+                  'output',
+                  'number',
+                  true,
+                )}
+                {field(
+                  'Expected material scrap allowance (%)',
+                  'scrapPercent',
+                  'number',
+                  true,
+                )}
+              </div>
+              <div className="handmade-bom-head" aria-hidden="true">
+                <span>Material / packaging</span>
+                <span>Quantity</span>
+                <span>Unit</span>
+                <span>Unit cost</span>
+                <span>Extended</span>
+                <span />
+              </div>
+              {lines.map((l, index) => (
+                <div className="handmade-bom-line" key={index}>
+                  <label>
+                    Material or shared packaging
+                    <select
+                      required
+                      value={l.ingredientId}
+                      onChange={(e) => {
+                        const i = inputs.find((i) => i.id === e.target.value)
+                        updateLine(index, {
+                          ingredientId: e.target.value,
+                          unit: i?.unit || 'each',
+                        })
+                      }}
+                    >
+                      <option value="">Choose component</option>
+                      {inputs.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name}
+                          {i.usedAs === 'packaging'
+                            ? ' · Shared packaging'
+                            : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Quantity
+                    <input
+                      required
+                      type="number"
+                      min="0.000001"
+                      step="any"
+                      value={l.quantity}
+                      onChange={(e) =>
+                        updateLine(index, { quantity: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Unit
+                    <select
+                      value={l.unit}
+                      onChange={(e) =>
+                        updateLine(index, { unit: e.target.value })
+                      }
+                    >
+                      {[...new Set([...handmadeUnits, l.unit])].map((u) => (
+                        <option key={u}>{u}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="handmade-calculated">
+                    <small>Stock unit cost</small>
+                    {(() => {
+                      const i = inputs.find((i) => i.id === l.ingredientId)
+                      return i && !i.needsCostSetup && i.cost != null
+                        ? money(i.cost) + '/' + i.unit
+                        : 'Cost missing'
+                    })()}
+                  </span>
+                  <span className="handmade-calculated">
+                    <small>Extended cost</small>
+                    {c?.lines[index]
+                      ? money(c.lines[index].cost)
+                      : 'Needs review'}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    aria-label={`Remove BOM line ${index + 1}`}
+                    onClick={() =>
+                      changeBom(
+                        'lines',
+                        lines.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() =>
+                  changeBom('lines', [
+                    ...lines,
+                    { ingredientId: '', quantity: 1, unit: 'each' },
+                  ])
+                }
+              >
+                Add material
+              </button>
+              <label>
+                Production instructions & notes
+                <textarea
+                  value={bom.instructions || ''}
+                  onChange={(e) => changeBom('instructions', e.target.value)}
+                />
+              </label>
+            </Tabs.Content>
+            <Tabs.Content
+              value="costing"
+              forceMount
+              hidden={activeTab !== 'costing'}
+              data-product-tab="costing"
+              className="product-editor-panel"
+            >
+              <h3>Labor & production overhead</h3>
+              <div className="form-grid">
+                {field(
+                  'Direct labor minutes per run',
+                  'laborMinutes',
+                  'number',
+                  true,
+                )}
+                {field('Direct labor hourly rate', 'laborRate', 'number', true)}
+                {field(
+                  'Allocated production overhead per run',
+                  'overhead',
+                  'number',
+                  true,
+                )}
+              </div>
+              <p>
+                Enter zero explicitly for excluded labor or overhead. Selling
+                expenses, processing fees and outbound shipping are excluded.
+              </p>
+            </Tabs.Content>
+          </Tabs.Root>
+        </fieldset>
+        <section className="calculation-box">
+          <h3>Estimated production cost</h3>
+          {c ? (
+            <>
+              <HandmadeCostSummary cost={c} />
+              <p>
+                {Number(bom.laborMinutes) === 0 || Number(bom.laborRate) === 0
+                  ? 'Labor excluded. '
+                  : 'Configured labor included. '}
+                {Number(bom.overhead) === 0
+                  ? 'Overhead excluded.'
+                  : 'Configured overhead included.'}
+              </p>
+              <HandmadeMargin product={d} unitCost={c.unit} w={w} />
+            </>
+          ) : (
+            <p>Cost incomplete: {costError}</p>
+          )}
+        </section>
+        {error && <p role="alert">{error}</p>}
+        <footer className="product-editor-actions">
+          <div className="product-editor-buttons">
             <button
               type="button"
               className="btn secondary"
-              onClick={() =>
-                changeBom('lines', [
-                  ...lines,
-                  { ingredientId: '', quantity: 1, unit: 'each' },
-                ])
-              }
+              disabled={busy}
+              onClick={dismiss}
             >
-              Add BOM component
+              Cancel
             </button>
-            <h3>Labor & production overhead</h3>
-            <div className="form-grid">
-              {field(
-                'Direct labor minutes per run',
-                'laborMinutes',
-                'number',
-                true,
-              )}
-              {field('Direct labor hourly rate', 'laborRate', 'number', true)}
-              {field(
-                'Allocated production overhead per run',
-                'overhead',
-                'number',
-                true,
-              )}
-            </div>
-            <p>
-              Enter zero explicitly for excluded labor or overhead. Selling
-              expenses, processing fees and outbound shipping are excluded.
-            </p>
-            <label>
-              Production instructions & notes
-              <textarea
-                value={bom.instructions || ''}
-                onChange={(e) => changeBom('instructions', e.target.value)}
-              />
-            </label>
-          </fieldset>
-          <section className="calculation-box">
-            <h3>Estimated production cost</h3>
-            {c ? (
-              <>
-                <p>
-                  Materials {money(c.materials)} · Packaging{' '}
-                  {money(c.packaging)} · Direct labor {money(c.labor)} ·
-                  Overhead {money(c.overhead)}
-                </p>
-                <p>
-                  Total run {money(c.total)} ·{' '}
-                  <strong>{money(c.unit)} per sellable unit</strong>
-                </p>
-                <p>
-                  {Number(bom.laborMinutes) === 0 || Number(bom.laborRate) === 0
-                    ? 'Labor excluded. '
-                    : 'Configured labor included. '}
-                  {Number(bom.overhead) === 0
-                    ? 'Overhead excluded.'
-                    : 'Configured overhead included.'}
-                </p>
-                <HandmadeMargin product={d} unitCost={c.unit} w={w} />
-              </>
-            ) : (
-              <p>Cost incomplete: {costError}</p>
-            )}
-          </section>
-          {error && <p role="alert">{error}</p>}
-          <button className="btn" disabled={busy || !manage}>
-            {busy ? 'Saving…' : 'Save product & bill of materials'}
-          </button>
-        </form>
+            <button className="btn" disabled={busy || !manage}>
+              {busy ? 'Saving…' : 'Save product & bill of materials'}
+            </button>
+          </div>
+        </footer>
+      </form>
+    </div>
+  )
+  return inline ? (
+    <section className="panel handmade-edit-page">{content}</section>
+  ) : (
+    <Dialog open onOpenChange={(v) => !v && dismiss()}>
+      <DialogContent className="app-dialog wide-dialog">
+        <DialogHeader>
+          <DialogTitle>Handmade product</DialogTitle>
+          <DialogDescription>
+            Product details, bill of materials and estimated costs.
+          </DialogDescription>
+        </DialogHeader>
+        {content}
       </DialogContent>
     </Dialog>
   )
@@ -994,20 +1133,324 @@ function HandmadeMargin({
   w: Workspace
 }) {
   try {
+    if (product.price == null || product.price === '')
+      throw new Error('Price missing')
     const p = profitability(product, unitCost, w.settings[0])
     return (
       <p>
         Selling price {money(product.price)} · Estimated gross profit{' '}
-        {money(p.profit)}/unit · Gross margin {p.margin.toFixed(1)}% (profit ÷
-        tax-exclusive revenue). Before selling expenses.
+        {money(p.profit)}/unit · Gross margin {p.margin.toFixed(1)}%. Before
+        selling expenses, excluding tax.
       </p>
     )
   } catch {
     return (
       <p>
-        Estimated margin needs a selling price and configured category tax
-        treatment.
+        {product.price == null || product.price === ''
+          ? 'Add a selling price to calculate margin.'
+          : 'Configure category tax treatment to calculate margin.'}
       </p>
     )
   }
+}
+
+function HandmadeProductDetail({
+  product: p,
+  w,
+  manage,
+  open,
+  edit,
+}: {
+  product: Item
+  w: Workspace
+  manage: boolean
+  open: Props['open']
+  edit: (tab: string) => void
+}) {
+  const [tab, setTab] = useState('Overview')
+  let cost: ReturnType<typeof handmadeEstimate> | undefined,
+    reason = ''
+  try {
+    cost = handmadeEstimate(p, w)
+  } catch (e) {
+    reason = (e as Error).message
+  }
+  const bom = handmadeBom(p, w)
+  const runs = w.batches.filter((r) => r.productId === p.id)
+  const movements = w.ledger.filter((r) => r.productId === p.id)
+  const sales = w.sales.filter(
+    (r) =>
+      r.productId === p.id || r.lines?.some((l: Item) => l.productId === p.id),
+  )
+  return (
+    <>
+      <header className="handmade-detail-header">
+        <div>
+          <h2>{p.name}</h2>
+          <p className="muted">
+            {[
+              p.variantGroup,
+              p.variant,
+              p.sku,
+              productCategoryName(p, w.settings[0]),
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Handmade product'}
+          </p>
+          <span className={`status ${p.archived ? 'amber' : 'green'}`}>
+            {p.archived ? 'Archived' : 'Active'}
+          </span>
+        </div>
+        <div className="button-row">
+          {manage && (
+            <>
+              <button className="btn secondary" onClick={() => edit('product')}>
+                Edit product
+              </button>
+              <button className="btn secondary" onClick={() => edit('bom')}>
+                Edit BOM
+              </button>
+              {!p.archived && (
+                <button className="btn" onClick={() => open('production', p)}>
+                  Start production run
+                </button>
+              )}
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="btn secondary"
+                aria-label="More product actions"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem
+                onSelect={() =>
+                  open('sale', {
+                    id: crypto.randomUUID(),
+                    name: p.name,
+                    productId: p.id,
+                    quantity: 1,
+                  })
+                }
+              >
+                Record sale
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => open('label-preview', p)}>
+                Preview label
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => open('label-print', p)}>
+                Print label
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+      <section className="panel">
+        <ItemDetailLayout item={p} assets={w.graphic_assets} kind="product">
+          <dl className="handmade-facts">
+            <dt>Selling price</dt>
+            <dd>
+              {p.price == null || p.price === ''
+                ? 'Price missing'
+                : money(p.price)}
+            </dd>
+            <dt>Finished stock</dt>
+            <dd>{p.quantity || 0} units</dd>
+            <dt>Estimated unit cost</dt>
+            <dd>{cost ? money(cost.unit) : 'Cost incomplete'}</dd>
+            <dt>Inventory unit cost</dt>
+            <dd>
+              {p.stockCostKnown ? money(p.cost) : 'Valuation needs review'}
+            </dd>
+          </dl>
+          {cost && <HandmadeMargin product={p} unitCost={cost.unit} w={w} />}
+          {!p.bom && (
+            <p className="form-hint">
+              Legacy BOM needs review. Save a product-owned BOM before new
+              production.
+            </p>
+          )}
+          {reason && <p className="form-hint">Cost incomplete: {reason}</p>}
+          {!p.stockCostKnown && (
+            <p className="form-hint">
+              Finished inventory valuation needs review.
+            </p>
+          )}
+        </ItemDetailLayout>
+      </section>
+      <div
+        className="section-tabs"
+        role="tablist"
+        aria-label="Handmade product details"
+      >
+        {[
+          'Overview',
+          'Bill of Materials & Costing',
+          'Production History',
+          'Inventory & Sales',
+        ].map((t) => (
+          <button
+            className="btn secondary"
+            type="button"
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      <section className="panel" role="tabpanel" aria-label={tab}>
+        <h3>{tab}</h3>
+        {tab === 'Overview' && (
+          <>
+            <p>{p.description || 'No description added.'}</p>
+            <p>
+              {bom?.output || 'Unconfigured'} finished units per production run
+              {p.variant ? ` · ${p.variant}` : ''}
+            </p>
+          </>
+        )}
+        {tab === 'Bill of Materials & Costing' && (
+          <>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Material / packaging</th>
+                    <th>Quantity</th>
+                    <th>Unit</th>
+                    <th>Extended cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bom?.lines?.map((l: Item, i: number) => (
+                    <tr key={i}>
+                      <td>
+                        {w.ingredients.find((m) => m.id === l.ingredientId)
+                          ?.name || 'Unavailable material'}
+                      </td>
+                      <td>{l.quantity}</td>
+                      <td>{l.unit}</td>
+                      <td>
+                        {cost?.lines[i]
+                          ? money(cost.lines[i].cost)
+                          : 'Needs review'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <HandmadeCostSummary cost={cost} />
+            <p>Scrap allowance: {bom?.scrapPercent ?? 'Not configured'}%</p>
+            <p>{bom?.instructions || 'No production instructions added.'}</p>
+            <details>
+              <summary>Estimate basis</summary>
+              <p>
+                Current material costs include the configured scrap allowance.
+                Labor and overhead use the saved BOM allocations. Zero
+                allocations exclude those costs. Selling expenses are excluded.
+                Completed production retains its recorded cost snapshot.
+              </p>
+            </details>
+          </>
+        )}
+        {tab === 'Production History' && (
+          <>
+            {runs.length ? (
+              runs.map((r) => (
+                <div className="handmade-run" key={r.id}>
+                  <span>
+                    <strong>{r.name}</strong>
+                    <small>
+                      {r.date} · {r.status} ·{' '}
+                      {r.status === 'completed'
+                        ? `${r.actualYield} finished units · ${money(r.historicalCost)} recorded cost`
+                        : `${r.quantity || r.yield} planned units`}
+                    </small>
+                  </span>
+                  <button
+                    className="btn secondary"
+                    onClick={() => open('batch-detail', r)}
+                  >
+                    Review run
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p>No production runs recorded for this product.</p>
+            )}
+          </>
+        )}
+        {tab === 'Inventory & Sales' && (
+          <>
+            <p>
+              {p.quantity || 0} finished units ·{' '}
+              {p.stockCostKnown
+                ? `${money(Number(p.quantity || 0) * Number(p.cost))} recorded inventory value`
+                : 'Inventory valuation needs review'}
+            </p>
+            <h4>Sales</h4>
+            {sales.length ? (
+              sales.map((r) => (
+                <p key={r.id}>
+                  {r.date} · {r.quantity} units · {money(r.total ?? r.amount)}
+                </p>
+              ))
+            ) : (
+              <p>No sales recorded for this product.</p>
+            )}
+            <h4>Stock movements</h4>
+            {movements.length ? (
+              movements.map((r) => (
+                <p key={r.id}>
+                  {r.date} · {r.type} · {r.quantity} units
+                </p>
+              ))
+            ) : (
+              <p>No product stock movements recorded.</p>
+            )}
+            <details>
+              <summary>Inventory costing</summary>
+              <p>
+                Finished goods retain perpetual weighted-average valuation. COGS
+                is recorded when units are sold. Editing a product or BOM does
+                not move stock or rewrite historical costs.
+              </p>
+            </details>
+          </>
+        )}
+      </section>
+    </>
+  )
+}
+
+function HandmadeCostSummary({
+  cost,
+}: {
+  cost?: ReturnType<typeof handmadeEstimate>
+}) {
+  return (
+    <dl className="handmade-facts">
+      {[
+        ['Materials', cost?.materials],
+        ['Packaging', cost?.packaging],
+        ['Labor', cost?.labor],
+        ['Overhead', cost?.overhead],
+        ['Total production cost', cost?.total],
+        ['Cost per finished unit', cost?.unit],
+      ].map(([label, value]) => (
+        <div key={label as string}>
+          <dt>{label}</dt>
+          <dd>{value == null ? 'Incomplete' : money(Number(value))}</dd>
+        </div>
+      ))}
+    </dl>
+  )
 }

@@ -1,9 +1,10 @@
+import userEvent from '@testing-library/user-event'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { HandmadeWorkspace, HandmadeProductEditor } from './handmade-workspace'
 import { demoData } from '../lib/demo'
 
-it('keeps handmade products independent of food recipes and store-page imports', () => {
+it('keeps handmade products independent of food recipes and store-page imports', async () => {
   render(
     <HandmadeProductEditor
       item={null}
@@ -15,6 +16,7 @@ it('keeps handmade products independent of food recipes and store-page imports',
       onDirty={vi.fn()}
     />,
   )
+  await userEvent.click(screen.getByRole('tab', { name: /^Bill of Materials$/ }))
   expect(
     screen.getByRole('heading', { name: 'Bill of materials' }),
   ).toBeVisible()
@@ -26,7 +28,7 @@ it('keeps handmade products independent of food recipes and store-page imports',
     screen.queryByLabelText('Saved handmade design'),
   ).not.toBeInTheDocument()
   expect(screen.getByText(/Cost incomplete:/)).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Add BOM component' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Add material' }))
   expect(screen.getByLabelText('Material or shared packaging')).toBeVisible()
 })
 it('saves dedicated material details without food fields or changing stock', async () => {
