@@ -108,3 +108,103 @@ it('keeps percent storage, compound/inclusive calculations and explicit zero dis
     ),
   ).toEqual([])
 })
+
+it('maps a deliberate scoped selection to legacy mirrors without changing item type or stock', () => {
+  const w = demoData()
+  w.settings[0].pantryCategories = [
+    { id: 'special-flour', name: 'Specialty flour', scope: 'food-ingredients' },
+  ]
+  const previous = w.ingredients[0]
+  const next = { ...previous, sectionCategoryId: 'special-flour' }
+  assertSectionCategoryAssignment(next, previous, w, 'ingredients')
+  expect(next).toEqual({
+    ...previous,
+    sectionCategoryId: 'special-flour',
+    categoryId: 'special-flour',
+    category: 'Specialty flour',
+  })
+})
+it('preserves untouched conflicting assignments and resolves a legacy writer through the scoped category list', async () => {
+  const { pantryCategoryConflict } = await import('./section-categories')
+  const w = demoData()
+  const previous = {
+    ...w.ingredients[0],
+    usedAs: 'ingredient',
+    sectionCategoryId: 'sugar-sweeteners',
+    categoryId: 'flour-grains',
+    category: 'Flour & grains',
+  }
+  const unchanged = { ...previous }
+  assertSectionCategoryAssignment(unchanged, previous, w, 'ingredients')
+  expect(unchanged).toEqual(previous)
+  expect(pantryCategoryConflict(unchanged, w)).toContain('differs')
+  const next = {
+    ...previous,
+    categoryId: 'dairy-eggs',
+    category: 'Dairy & eggs',
+  }
+  assertSectionCategoryAssignment(next, previous, w, 'ingredients')
+  expect(next.sectionCategoryId).toBe('dairy-eggs')
+  expect(next.usedAs).toBe(previous.usedAs)
+  expect(pantryCategoryConflict(next, w)).toBe('')
+})
+it('rejects ambiguous legacy changes instead of overwriting a scoped assignment', () => {
+  const w = demoData()
+  w.settings[0].pantryCategories = [
+    { id: 'a', name: 'Shared', scope: 'food-ingredients' },
+    { id: 'b', name: 'Shared', scope: 'food-ingredients', parentId: 'a' },
+  ]
+  const previous = { ...w.ingredients[0], sectionCategoryId: 'flour-grains' }
+  expect(() =>
+    assertSectionCategoryAssignment(
+      { ...previous, category: 'Shared' },
+      previous,
+      w,
+      'ingredients',
+    ),
+  ).toThrow(/needs review/)
+})
+
+it('projects legacy and renamed category labels consistently without writing or mutating records', async () => {
+  const { pantryCategoryView, workspaceCategorySettings } =
+    await import('./section-categories')
+  const w = demoData()
+  const original = structuredClone(w)
+  const previous = w.ingredients[0]
+  const view = pantryCategoryView(previous, w)
+  expect(view.sectionCategoryId).toBe('flour-grains')
+  expect(view.categoryId).toBe('flour-grains')
+  const next = workspaceCategorySettings(
+    { ...w, ingredients: [view] },
+    {
+      pantryCategories: [
+        {
+          id: 'flour-grains',
+          name: 'Milled grains',
+          scope: 'food-ingredients',
+          previousNames: ['Flour & grains'],
+        },
+      ],
+    },
+  )
+  expect(next.ingredients[0].category).toBe('Milled grains')
+  expect(next.ingredients[0]).toEqual({
+    ...previous,
+    sectionCategoryId: 'flour-grains',
+    categoryId: 'flour-grains',
+    category: 'Milled grains',
+  })
+  expect(w).toEqual(original)
+})
+it('retains and flags legacy ID/label conflicts before scoped categories existed', async () => {
+  const { pantryCategoryView, pantryCategoryConflict } =
+    await import('./section-categories')
+  const w = demoData()
+  const previous = {
+    ...w.ingredients[0],
+    categoryId: 'sugar-sweeteners',
+    category: 'Flour & grains',
+  }
+  expect(pantryCategoryConflict(previous, w)).toContain('differs')
+  expect(pantryCategoryView(previous, w)).toBe(previous)
+})

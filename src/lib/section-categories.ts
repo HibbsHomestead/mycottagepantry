@@ -31,6 +31,7 @@ export type SectionCategory = {
   classification?: 'food' | 'non_food' | null
   icon?: string
   needsReview?: boolean
+  previousNames?: string[]
 }
 const legacyId = (scope: string, name: string) =>
   'pantry-' + scope + '-' + encodeURIComponent(name)
@@ -117,6 +118,64 @@ export function recordsInScope(w: Workspace, scope: CategoryScope) {
       ? w.products.filter((p) => productCategoryScope(p) === scope)
       : w.ingredients.filter((i) => pantryCategoryScope(i) === scope)
 }
+/** One classification, with legacy labels retained as compatibility mirrors.
+ * Conflicts on untouched records remain visible until a deliberate selection. */
+export function pantryCategoryConflict(item: Item, w: Workspace) {
+  if (!item.sectionCategoryId) {
+    const legacy = pantryCategories.find((c) => c.value === item.categoryId)
+    return legacy && item.category && legacy.label !== item.category
+      ? `Saved Category “${item.category}” differs from legacy classification “${legacy.label}”. Choose Category to confirm; saved assignments are preserved until then.`
+      : ''
+  }
+  const current = sectionCategories(w, pantryCategoryScope(item)).find(
+    (c) => c.id === item.sectionCategoryId,
+  )
+  const legacy =
+    item.categoryId !== item.sectionCategoryId
+      ? pantryCategories.find((c) => c.value === item.categoryId)?.label
+      : undefined
+  const labels = [item.category, legacy].filter(Boolean)
+  return current &&
+    labels.some(
+      (label) =>
+        label !== current.name && !current.previousNames?.includes(label),
+    )
+    ? `Saved Category “${current.name}” differs from legacy classification “${[...new Set(labels)].join(' / ')}”. Choose Category to confirm; saved assignments are preserved until then.`
+    : ''
+}
+export function syncPantryCategory(item: Item, category?: SectionCategory) {
+  item.sectionCategoryId = category?.id || ''
+  item.category = category?.name || ''
+  // Arbitrary scoped IDs are intentional: the fixed legacy list cannot express custom categories.
+  item.categoryId = category?.id || ''
+  if (item.usedAs === 'material') item.materialCategory = category?.name || ''
+}
+/** Resolve legacy labels at the read boundary; no database or stock write. */
+export function pantryCategoryView(item: Item, w: Workspace): Item {
+  if (pantryCategoryConflict(item, w)) return item
+  const scope = pantryCategoryScope(item)
+  const id = assignedCategoryId(item, w, scope)
+  const category = sectionCategories(w, scope).find((c) => c.id === id)
+  if (!category) return item
+  const view = { ...item }
+  syncPantryCategory(view, category)
+  return view
+}
+export function workspaceCategorySettings(
+  w: Workspace,
+  patch: Partial<Item>,
+): Workspace {
+  const next: Workspace = {
+    ...w,
+    settings: w.settings.map((s, n) => (n === 0 ? { ...s, ...patch } : s)),
+  }
+  return patch.pantryCategories
+    ? {
+        ...next,
+        ingredients: next.ingredients.map((i) => pantryCategoryView(i, next)),
+      }
+    : next
+}
 export function assertSectionCategoryAssignment(
   item: Item,
   previous: Item | undefined,
@@ -129,8 +188,42 @@ export function assertSectionCategoryAssignment(
       ? productCategoryScope(item)
       : pantryCategoryScope(item)
   const key = table === 'products' ? 'productCategoryId' : 'sectionCategoryId'
+  // Resolve legacy writers through the same scoped list, without guessing conflicts.
+  if (table === 'ingredients') {
+    const selectedChanged =
+      item.sectionCategoryId !== undefined &&
+      item.sectionCategoryId !== previous?.sectionCategoryId
+    const legacyChanged =
+      previous &&
+      (item.category !== previous.category ||
+        item.categoryId !== previous.categoryId)
+    const selected = sectionCategories(w, scope).find(
+      (c) => c.id === item.sectionCategoryId,
+    )
+    const confirmed =
+      selected &&
+      item.categoryId === selected.id &&
+      item.category === selected.name
+    if (!selectedChanged && legacyChanged && !confirmed) {
+      const label =
+        item.categoryId !== previous.categoryId
+          ? pantryCategories.find((c) => c.value === item.categoryId)?.label ||
+            item.category
+          : item.category
+      const matches = sectionCategories(w, scope).filter(
+        (c) => c.name === label && c.active !== false,
+      )
+      if (matches.length !== 1)
+        throw new Error(
+          'Category assignment needs review. Choose one Category in this section.',
+        )
+      syncPantryCategory(item, matches[0])
+    }
+  }
   // Older editors and stock operations must retain the saved assignment.
   if (previous && item[key] === undefined) item[key] = previous[key]
+  if (table === 'ingredients' && item[key] === '' && previous?.[key])
+    syncPantryCategory(item)
   if (
     !item[key] ||
     (item[key] === previous?.[key] &&
@@ -143,6 +236,7 @@ export function assertSectionCategoryAssignment(
   const category = sectionCategories(w, scope).find((c) => c.id === item[key])
   if (!category || category.active === false)
     throw new Error('Choose an active category from this section and business.')
+  if (table === 'ingredients') syncPantryCategory(item, category)
 }
 export function categorySettingsPatch(
   scope: CategoryScope,

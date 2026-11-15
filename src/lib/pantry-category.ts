@@ -20,7 +20,9 @@ export function pantryCategoryId(item: Record<string, unknown>) {
 }
 
 export const isPackaging = (item: Record<string, unknown>) =>
-  pantryCategoryId(item) === 'packaging'
+  item.usedAs
+    ? item.usedAs === 'packaging'
+    : pantryCategoryId(item) === 'packaging'
 
 export function selectPantryCategory(
   draft: Record<string, unknown>,
@@ -28,6 +30,7 @@ export function selectPantryCategory(
   existing: boolean,
   deliberateUnits: ReadonlySet<string> = new Set(),
 ) {
+  if (draft.sectionCategoryId === categoryId) return { ...draft, categoryId }
   const category = pantryCategories.find((c) => c.value === categoryId)
   if (!category) return draft
   const next: Record<string, unknown> = {

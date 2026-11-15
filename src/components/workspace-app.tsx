@@ -1,3 +1,4 @@
+import { workspaceCategorySettings } from '@/lib/section-categories'
 import { BusinessTaxFields } from './business-tax-fields'
 import './business-details.css'
 import { ScopedCategorySelect, SectionCategoryTools, pantryCategoryScope } from './section-categories'
@@ -62,7 +63,6 @@ import { ProductCategorySelector } from './product-categories'
 import { AppUpdateNotice } from './app-update-notice'
 import {
   isPackaging,
-  pantryCategories,
   pantryCategoryId,
   selectPantryCategory,
 } from '@/lib/pantry-category'
@@ -316,7 +316,7 @@ export function WorkspaceApp() {
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
-  const categorySettings = (patch: Partial<Item>) => setState(w=>({...w,settings:w.settings.map((b,i)=>i===0 ? {...b,...patch} : b)}))
+  const categorySettings = (patch: Partial<Item>) => setState(w => workspaceCategorySettings(w, patch))
   const [draft, setDraft] = useState<Record<string, any>>({}),
     [lines, setLines] = useState<any[]>([])
   const [appearancePreview, setAppearancePreview] = useState<Appearance | null>(
@@ -3292,9 +3292,6 @@ export function WorkspaceApp() {
                             'packaging',
                             'supply',
                           ])}
-                        </Field>
-                        <Field label="Inventory group">
-                          {select('categoryId', [...pantryCategories])}
                         </Field>
                         <ScopedCategorySelect workspace={state} scope={pantryCategoryScope(draft)} item={draft as Item} canManage={ready && ['Owner','Manager'].includes(role)} onSettings={categorySettings} onChange={change} />
                       </div>

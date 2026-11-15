@@ -688,3 +688,107 @@
     transform: translate(-50%, -50%);
   }
 }
+
+/* Compact editor chrome; only the body scrolls vertically. */
+.ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-detail-header {
+  padding: 14px 20px 10px;
+}
+.ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-title-row {
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.ingredient-modal-shell:has(.ingredient-edit-grid)
+  .ingredient-title-row
+  .pantry-photo {
+  width: 48px;
+  height: 48px;
+  flex-basis: 48px;
+}
+.ingredient-detail-header .ingredient-setup-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-width: 0;
+  padding: 0 0 2px;
+  border: 0;
+  gap: 6px;
+}
+.ingredient-detail-header .ingredient-setup-tabs .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  word-break: normal;
+  overflow-wrap: normal;
+  font-size: max(var(--interface-text-min, 0px), 13px);
+  min-height: 38px;
+}
+.ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-detail-body {
+  padding: 16px 20px;
+}
+.ingredient-edit-grid .ingredient-edit-identity-fields > .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px 16px;
+}
+.ingredient-edit-grid .scoped-category-select {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.ingredient-barcode-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ingredient-barcode-entry input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.ingredient-barcode-entry .btn {
+  flex: 0 0 auto;
+  padding-inline: 10px;
+}
+.ingredient-edit-grid {
+  row-gap: 12px;
+}
+.ingredient-detail-body .ingredient-edit-grid .ingredient-section {
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.ingredient-edit-grid .ingredient-import-tools {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.ingredient-edit-grid .ingredient-import-tools > summary {
+  padding: 4px 0 10px;
+}
+.ingredient-import-tools .find-product-panel {
+  padding: 12px;
+}
+.ingredient-import-tools .find-product-panel > strong {
+  display: none;
+}
+.ingredient-import-tools .product-link-entry {
+  gap: 8px;
+}
+.ingredient-import-tools .ingredient-secondary-lookup {
+  margin-top: 8px;
+}
+@media (max-width: 760px) {
+  .ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-detail-header {
+    padding: 12px;
+  }
+  .ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-detail-body {
+    padding: 12px;
+  }
+  .ingredient-edit-grid .ingredient-edit-identity-fields > .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ingredient-import-tools .product-link-entry {
+    flex-direction: row;
+    align-items: end;
+  }
+  .ingredient-import-tools .product-link-entry > button {
+    max-width: 110px;
+  }
+}

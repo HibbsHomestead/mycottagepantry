@@ -1,3 +1,4 @@
+import { pantryCategoryConflict } from '@/lib/section-categories'
 import { useEffect, useRef, useState } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import {
@@ -495,6 +496,8 @@ export function ScopedCategorySelect({
       onChange('productCategoryId', category?.id || '')
     else {
       onChange('sectionCategoryId', category?.id || '')
+      onChange('category', category?.name || '')
+      onChange('categoryId', category?.id || '')
       if (scope === 'handmade-materials')
         onChange('materialCategory', category?.name || '')
     }
@@ -550,6 +553,22 @@ export function ScopedCategorySelect({
             ))}
         </select>
       </label>
+      {pantryCategoryConflict(item, workspace) &&
+        !scope.endsWith('products') &&
+        scope !== 'recipes' && (
+          <p className="form-hint warning-text" role="status">
+            {pantryCategoryConflict(item, workspace)}{' '}
+            {current && current.active !== false && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => select(current)}
+              >
+                Confirm selected category
+              </button>
+            )}
+          </p>
+        )}
       {current?.description && (
         <p className="form-hint">{current.description}</p>
       )}

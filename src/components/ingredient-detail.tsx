@@ -1,3 +1,4 @@
+import { workspaceCategorySettings } from '@/lib/section-categories'
 import { ScopedCategorySelect, pantryCategoryScope } from './section-categories'
 import { IngredientPurchaseSetup } from './ingredient-purchase-setup'
 import { InventoryReviewNotice } from './inventory-review'
@@ -16,12 +17,7 @@ import { IngredientCostCards } from './ingredient-cost-cards'
 import { foodProduct } from '@/lib/inventory-product'
 import { ovenToday } from '@/lib/oven-dates'
 import { InventoryProductFields } from './inventory-product-fields'
-import {
-  isPackaging,
-  pantryCategories,
-  pantryCategoryId,
-  selectPantryCategory,
-} from '@/lib/pantry-category'
+import { isPackaging, selectPantryCategory } from '@/lib/pantry-category'
 import { BarcodeScanner } from './barcode-scanner'
 import { ProductLinkImport } from './product-link-import'
 import {
@@ -214,7 +210,7 @@ export function IngredientDetail({
         reviewFocus.current = undefined
       }
     }
-  }, [editing, offerEdit])
+  }, [editing, offerEdit, editTab, error])
   useLayoutEffect(() => {
     if (!discard) return
     if (contentRef.current) contentRef.current.scrollTop = 0
@@ -596,6 +592,29 @@ export function IngredientDetail({
                 <X size={22} />
               </button>
             </div>
+            {editing && (
+              <div
+                className="ingredient-setup-tabs"
+                aria-label="Ingredient editor sections"
+              >
+                {[
+                  ['details', 'Details & Costing'],
+                  ['labels', 'Images & Label Info'],
+                  ['stock', 'Stock & Other Details'],
+                  ['conversions', 'Unit Conversions'],
+                ].map(([key, label]) => (
+                  <button
+                    type="button"
+                    className={editTab === key ? 'btn' : 'btn secondary'}
+                    aria-pressed={editTab === key}
+                    key={key}
+                    onClick={() => setEditTab(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </header>
         )}
         <div className="ingredient-detail-body" ref={contentRef}>
@@ -646,6 +665,23 @@ export function IngredientDetail({
           {editing || offerEdit ? (
             <form
               id="ingredient-editor"
+              onInvalidCapture={(event) => {
+                const field = event.target as HTMLInputElement
+                const section = field.closest('.ingredient-conversions-tab')
+                  ? 'conversions'
+                  : field.closest(
+                        '.ingredient-edit-labels, .ingredient-edit-identity-photo',
+                      )
+                    ? 'labels'
+                    : field.closest('.ingredient-edit-secondary')
+                      ? 'stock'
+                      : 'details'
+                setEditTab(section)
+                setError(
+                  field.validationMessage || 'Review the highlighted field.',
+                )
+                requestAnimationFrame(() => field.focus())
+              }}
               onSubmit={(e) => {
                 e.preventDefault()
                 if (
@@ -704,27 +740,6 @@ export function IngredientDetail({
                 <div
                   className={`ingredient-detail-grid ingredient-tab-${editTab} ${packaging ? 'packaging-edit-grid' : 'ingredient-edit-grid'}`}
                 >
-                  <div
-                    className="ingredient-setup-tabs"
-                    aria-label="Ingredient editor sections"
-                  >
-                    {[
-                      ['details', 'Details & Costing'],
-                      ['labels', 'Images & Label Info'],
-                      ['stock', 'Stock & Other Details'],
-                      ['conversions', 'Unit Conversions'],
-                    ].map(([key, label]) => (
-                      <button
-                        type="button"
-                        className={editTab === key ? 'btn' : 'btn secondary'}
-                        aria-pressed={editTab === key}
-                        key={key}
-                        onClick={() => setEditTab(key)}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
                   {editTab === 'conversions' && (
                     <section className="ingredient-section ingredient-conversions-tab">
                       <h3>Unit Conversions</h3>
@@ -833,20 +848,24 @@ export function IngredientDetail({
                       />
                     </section>
                   )}
-                  <div className="product-link-panel ingredient-import-tools">
+                  <details className="ingredient-import-tools">
+                    <summary>Find product details</summary>
                     <ProductLinkImport
                       lookupPanel
                       afterLookup={(selectUrl) => (
-                        <IngredientLookupTools
-                          draft={draft}
-                          workspace={w}
-                          existing
-                          onScan={
-                            packaging ? () => setScanning(true) : undefined
-                          }
-                          onSourceUrl={selectUrl}
-                          apply={applyImport}
-                        />
+                        <details className="ingredient-secondary-lookup">
+                          <summary>Barcode, catalog & photo lookup</summary>
+                          <IngredientLookupTools
+                            draft={draft}
+                            workspace={w}
+                            existing
+                            onScan={
+                              packaging ? () => setScanning(true) : undefined
+                            }
+                            onSourceUrl={selectUrl}
+                            apply={applyImport}
+                          />
+                        </details>
                       )}
                       populateDraft={food}
                       vendors={w.vendors}
@@ -860,7 +879,7 @@ export function IngredientDetail({
                       }
                       apply={applyImport}
                     />
-                  </div>
+                  </details>
                   {packaging && (
                     <InventoryProductFields value={draft} change={change} />
                   )}
@@ -873,31 +892,16 @@ export function IngredientDetail({
                         </Field>
                         <div className="form-grid">
                           <Field label="Brand">{input('brand')}</Field>
-                          <Field label="Inventory group">
-                            <select
-                              aria-label="Inventory group"
-                              value={pantryCategoryId(draft) || '__custom'}
-                              onChange={(e) =>
-                                change('categoryId', e.target.value)
-                              }
-                            >
-                              {!pantryCategories.some(
-                                (c) => c.value === pantryCategoryId(draft),
-                              ) && (
-                                <option
-                                  value={pantryCategoryId(draft) || '__custom'}
-                                >
-                                  {draft.category || 'Uncategorized'}
-                                </option>
-                              )}
-                              {pantryCategories.map((c) => (
-                                <option key={c.value} value={c.value}>
-                                  {c.label}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <ScopedCategorySelect workspace={w} scope={pantryCategoryScope(draft)} item={draft} canManage={canEdit} onSettings={patch=>onWorkspace({...w,settings:w.settings.map((b,n)=>n===0 ? {...b,...patch} : b)})} onChange={change} />
+                          <ScopedCategorySelect
+                            workspace={w}
+                            scope={pantryCategoryScope(draft)}
+                            item={draft}
+                            canManage={canEdit}
+                            onSettings={(patch) =>
+                              onWorkspace(workspaceCategorySettings(w, patch))
+                            }
+                            onChange={change}
+                          />
                           <Field label="Preferred vendor">
                             <select
                               value={
@@ -937,21 +941,23 @@ export function IngredientDetail({
                             </select>
                           </Field>
                           <Field label="Default barcode">
-                            {input('barcode')}
-                            {!packaging && (
-                              <button
-                                type="button"
-                                className="btn secondary"
-                                onClick={() => setScanning(true)}
-                              >
-                                Scan barcode
-                              </button>
-                            )}
+                            <div className="ingredient-barcode-entry">
+                              {input('barcode')}
+                              {!packaging && (
+                                <button
+                                  type="button"
+                                  className="btn secondary"
+                                  onClick={() => setScanning(true)}
+                                >
+                                  Scan barcode
+                                </button>
+                              )}
+                            </div>
                           </Field>
+                          {!packaging && (
+                            <Field label="Internal SKU">{input('sku')}</Field>
+                          )}
                         </div>
-                        {!packaging && (
-                          <Field label="Internal SKU">{input('sku')}</Field>
-                        )}
                       </div>
                       <div className="ingredient-edit-identity-photo">
                         <ItemPhotoField
@@ -974,7 +980,7 @@ export function IngredientDetail({
                   <div className="ingredient-edit-columns">
                     <div className="ingredient-edit-primary">
                       <section className="ingredient-section">
-                        <h3>Details & Costing</h3>
+                        <h3>Purchase & costing</h3>
                         <IngredientPurchaseSetup
                           original={i}
                           draft={draft}
