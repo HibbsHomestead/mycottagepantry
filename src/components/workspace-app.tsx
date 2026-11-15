@@ -1,4 +1,11 @@
 import {
+  ApplicationPage,
+  PageOverviewOutlet,
+  PageActionsOutlet,
+  PageActions,
+  PageOverview,
+} from './application-page'
+import {
   SectionNavigation,
   SectionWorkspace,
   SectionContent,
@@ -1592,7 +1599,7 @@ export function WorkspaceApp() {
             </DropdownMenu>
           </div>
         </header>
-        <main
+        <ApplicationPage
           className={`app-page${route.section === 'Inventory' ? ' inventory-layout-page' : ''}${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
           {page === 'Labels' &&
@@ -1601,24 +1608,6 @@ export function WorkspaceApp() {
               <Btn secondary onClick={returnToProductDetails}>
                 Back to product details
               </Btn>
-            )}
-          {route.section === 'Purchasing' && (
-            <FinanceNavigation
-              active={route.tab}
-              workspace={state}
-              onNavigate={(tab) => go('Purchasing', tab)}
-              purchasing
-            />
-          )}
-          {route.section === 'Finance' &&
-            ['Owner', 'Manager', 'Read-only Accountant'].includes(role) && (
-              <FinanceNavigation
-                active={route.tab}
-                workspace={state}
-                onNavigate={(tab) =>
-                  go(tab === 'Receipt inbox' ? 'Finances' : 'Finance', tab)
-                }
-              />
             )}
           {error && (
             <div className="connection-note" role="alert">
@@ -1669,43 +1658,8 @@ export function WorkspaceApp() {
                                       : 'Create labels with your branding and the product details you can verify.'}
               </p>
             </div>
-            <div className="heading-actions">
-              {page === 'Finances' &&
-                !['Finance', 'Purchasing'].includes(route.section) && (
-                  <Btn
-                    secondary
-                    onClick={() => go('Finances', 'Receipt inbox')}
-                  >
-                    <Receipt size={17} />
-                    Upload receipt
-                  </Btn>
-                )}
-              {!(
-                ['Finance', 'Purchasing'].includes(route.section) &&
-                pageAction?.[1] === 'transaction'
-              ) &&
-                route.section !== 'Inventory' &&
-                page !== 'Dashboard' &&
-                page !== 'Settings' &&
-                page !== 'Labels' &&
-                !(page === 'Products & Pricing' && sub === 'Categories') &&
-                sub !== 'Finished Goods' &&
-                pageAction && (
-                  <Btn
-                    onClick={() =>
-                      pageAction[1] === 'print'
-                        ? window.print()
-                        : pageAction[1] === 'export'
-                          ? exportData('sales')
-                          : open(pageAction[1])
-                    }
-                  >
-                    <Plus size={18} />
-                    {pageAction[0]}
-                  </Btn>
-                )}
-            </div>
           </div>
+          <PageOverviewOutlet />
           {route.section === 'Inventory' && (
             <PantrySummary
               ingredients={ingredients.filter((i) =>
@@ -1724,11 +1678,27 @@ export function WorkspaceApp() {
           <SectionWorkspace
             enabled={
               !!sectionTabs[route.section]?.length &&
-              !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
-                route.section,
-              )
+              !['Labels', 'Settings'].includes(route.section)
             }
           >
+            {route.section === 'Purchasing' && (
+              <FinanceNavigation
+                active={route.tab}
+                workspace={state}
+                onNavigate={(tab) => go('Purchasing', tab)}
+                purchasing
+              />
+            )}
+            {route.section === 'Finance' &&
+              ['Owner', 'Manager', 'Read-only Accountant'].includes(role) && (
+                <FinanceNavigation
+                  active={route.tab}
+                  workspace={state}
+                  onNavigate={(tab) =>
+                    go(tab === 'Receipt inbox' ? 'Finances' : 'Finance', tab)
+                  }
+                />
+              )}
             {!!sectionTabs[route.section]?.length &&
               !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
                 route.section,
@@ -1759,11 +1729,48 @@ export function WorkspaceApp() {
             <SectionContent
               enabled={
                 !!sectionTabs[route.section]?.length &&
-                !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
-                  route.section,
-                )
+                !['Labels', 'Settings'].includes(route.section)
               }
             >
+              <PageActionsOutlet />
+              <div className="heading-actions">
+                {page === 'Finances' &&
+                  !['Finance', 'Purchasing'].includes(route.section) && (
+                    <Btn
+                      secondary
+                      onClick={() => go('Finances', 'Receipt inbox')}
+                    >
+                      <Receipt size={17} />
+                      Upload receipt
+                    </Btn>
+                  )}
+                {!(
+                  ['Finance', 'Purchasing'].includes(route.section) &&
+                  pageAction?.[1] === 'transaction'
+                ) &&
+                  route.section !== 'Inventory' &&
+                  page !== 'Dashboard' &&
+                  page !== 'Settings' &&
+                  (page !== 'Products & Pricing' || sub === 'Kits') &&
+                  page !== 'Labels' &&
+                  !(page === 'Products & Pricing' && sub === 'Categories') &&
+                  sub !== 'Finished Goods' &&
+                  pageAction && (
+                    <Btn
+                      onClick={() =>
+                        pageAction[1] === 'print'
+                          ? window.print()
+                          : pageAction[1] === 'export'
+                            ? exportData('sales')
+                            : open(pageAction[1])
+                      }
+                    >
+                      <Plus size={18} />
+                      {pageAction[0]}
+                    </Btn>
+                  )}
+              </div>
+
               {page === 'Dashboard' && (
                 <WorkspaceDashboard
                   workspace={state}
@@ -2111,40 +2118,46 @@ export function WorkspaceApp() {
                             onChange={(e) => setSearch(e.target.value)}
                           />
                         </div>
-                        <Btn secondary onClick={() => exportData('products')}>
-                          <Download size={16} />
-                          Export products
-                        </Btn>
+                        <PageActions>
+                          {' '}
+                          <Btn secondary onClick={() => exportData('products')}>
+                            <Download size={16} />
+                            Export products
+                          </Btn>
+                        </PageActions>
                       </div>
-                      {sub !== 'Kits' &&
-                        ['Owner', 'Manager'].includes(role) && (
-                          <div className="toolbar">
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('kit')}
-                            >
-                              Create kit
-                            </button>
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('product')}
-                            >
-                              Create food product
-                            </button>
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('trade-product')}
-                            >
-                              Create handmade product
-                            </button>
-                            <button
-                              className="btn secondary"
-                              onClick={() => open('trade-product-resale')}
-                            >
-                              Create resale product
-                            </button>
-                          </div>
-                        )}
+                      <PageActions>
+                        {' '}
+                        {sub !== 'Kits' &&
+                          ['Owner', 'Manager'].includes(role) && (
+                            <div className="toolbar">
+                              <button
+                                className="btn secondary"
+                                onClick={() => open('kit')}
+                              >
+                                Create kit
+                              </button>
+                              <button
+                                className="btn secondary"
+                                onClick={() => open('product')}
+                              >
+                                Create food product
+                              </button>
+                              <button
+                                className="btn secondary"
+                                onClick={() => open('trade-product')}
+                              >
+                                Create handmade product
+                              </button>
+                              <button
+                                className="btn secondary"
+                                onClick={() => open('trade-product-resale')}
+                              >
+                                Create resale product
+                              </button>
+                            </div>
+                          )}
+                      </PageActions>
                       <SectionCategoryTools
                         workspace={state}
                         scope={
@@ -2465,24 +2478,27 @@ export function WorkspaceApp() {
                   onReceipt={(id) => setFinanceReceiptEntry('receipt:' + id)}
                 />
               )}
-              {route.section === 'Purchasing' &&
-                ['Owner', 'Manager'].includes(role) && (
-                  <div className="book-actions button-row">
-                    <Btn
-                      disabled={!ready}
-                      onClick={() => setFinanceReceiptEntry('receiptUpload')}
-                    >
-                      Upload receipt
-                    </Btn>
-                    <Btn
-                      secondary
-                      disabled={!ready}
-                      onClick={() => setFinanceReceiptEntry('purchaseManual')}
-                    >
-                      Record purchase
-                    </Btn>
-                  </div>
-                )}
+              <PageActions>
+                {' '}
+                {route.section === 'Purchasing' &&
+                  ['Owner', 'Manager'].includes(role) && (
+                    <div className="book-actions button-row">
+                      <Btn
+                        disabled={!ready}
+                        onClick={() => setFinanceReceiptEntry('receiptUpload')}
+                      >
+                        Upload receipt
+                      </Btn>
+                      <Btn
+                        secondary
+                        disabled={!ready}
+                        onClick={() => setFinanceReceiptEntry('purchaseManual')}
+                      >
+                        Record purchase
+                      </Btn>
+                    </div>
+                  )}
+              </PageActions>
               {page === 'Finances' && (
                 <>
                   {[
@@ -2674,36 +2690,38 @@ export function WorkspaceApp() {
                     </>
                   ) : (
                     <>
-                      <section className="stat-grid">
-                        <Stat
-                          title="Sales · excluding tax"
-                          value={money(totalSales)}
-                          icon={<Wallet size={18} />}
-                          foot="All recorded October sales"
-                          trend="Revenue"
-                        />
-                        <Stat
-                          title="Estimated COGS"
-                          value={money(cogs)}
-                          icon={<CookingPot size={18} />}
-                          foot="Historical when available"
-                          trend="Cost of sales"
-                        />
-                        <Stat
-                          title="Operating expenses"
-                          value={money(operating + fees + consignmentFees)}
-                          icon={<Receipt size={18} />}
-                          foot="Excludes inventory purchases"
-                          trend="Expenses"
-                        />
-                        <Stat
-                          title="Estimated net profit"
-                          value={money(netProfit)}
-                          icon={<TrendingUp size={18} />}
-                          foot={`${(totalSales + commissionIncome > 0 ? (netProfit / (totalSales + commissionIncome)) * 100 : 0).toFixed(1)}% net margin`}
-                          trend="After expenses"
-                        />
-                      </section>
+                      <PageOverview>
+                        <section className="stat-grid">
+                          <Stat
+                            title="Sales · excluding tax"
+                            value={money(totalSales)}
+                            icon={<Wallet size={18} />}
+                            foot="All recorded October sales"
+                            trend="Revenue"
+                          />
+                          <Stat
+                            title="Estimated COGS"
+                            value={money(cogs)}
+                            icon={<CookingPot size={18} />}
+                            foot="Historical when available"
+                            trend="Cost of sales"
+                          />
+                          <Stat
+                            title="Operating expenses"
+                            value={money(operating + fees + consignmentFees)}
+                            icon={<Receipt size={18} />}
+                            foot="Excludes inventory purchases"
+                            trend="Expenses"
+                          />
+                          <Stat
+                            title="Estimated net profit"
+                            value={money(netProfit)}
+                            icon={<TrendingUp size={18} />}
+                            foot={`${(totalSales + commissionIncome > 0 ? (netProfit / (totalSales + commissionIncome)) * 100 : 0).toFixed(1)}% net margin`}
+                            trend="After expenses"
+                          />
+                        </section>
+                      </PageOverview>
                       <div className="finance-grid">
                         <section className="panel">
                           <div className="panel-heading">
@@ -3064,7 +3082,7 @@ export function WorkspaceApp() {
               )}
             </SectionContent>
           </SectionWorkspace>
-        </main>
+        </ApplicationPage>
       </div>
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         {navigation.slice(0, 4).map(({ name, icon: Icon }) => (

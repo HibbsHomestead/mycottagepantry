@@ -1,3 +1,4 @@
+import { PageOverview, PageActions } from './application-page'
 import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
 import { RecordLink } from './linked-purchase-records'
 import { customerMessage } from '@/lib/customer-message'
@@ -333,31 +334,34 @@ export function Checkbook({
             <h2>{tab}</h2>
           </div>
         </header>
-        <div className="button-row book-actions" aria-label="Finance actions">
-          {onUploadReceipt && (
-            <button disabled={!canWrite} onClick={onUploadReceipt}>
-              Upload receipt
+        <PageActions>
+          {' '}
+          <div className="button-row book-actions" aria-label="Finance actions">
+            {onUploadReceipt && (
+              <button disabled={!canWrite} onClick={onUploadReceipt}>
+                Upload receipt
+              </button>
+            )}
+            {onRecordTransaction && (
+              <button disabled={!canWrite} onClick={onRecordTransaction}>
+                Record a transaction
+              </button>
+            )}
+            <button disabled={!canWrite} onClick={() => open('income')}>
+              + Money in
             </button>
-          )}
-          {onRecordTransaction && (
-            <button disabled={!canWrite} onClick={onRecordTransaction}>
-              Record a transaction
+            <button disabled={!canWrite} onClick={() => open('expense')}>
+              + Money out
             </button>
-          )}
-          <button disabled={!canWrite} onClick={() => open('income')}>
-            + Money in
-          </button>
-          <button disabled={!canWrite} onClick={() => open('expense')}>
-            + Money out
-          </button>
-          <button
-            className="secondary"
-            disabled={!canWrite}
-            onClick={() => open('transfer')}
-          >
-            Transfer
-          </button>
-        </div>
+            <button
+              className="secondary"
+              disabled={!canWrite}
+              onClick={() => open('transfer')}
+            >
+              Transfer
+            </button>
+          </div>
+        </PageActions>
         {error && (
           <p role="alert" className="error">
             {error}
@@ -422,30 +426,32 @@ export function Checkbook({
             </form>
             {tab === 'Overview' && (
               <>
-                <div className="book-stats">
-                  {[
-                    ['Money in this month', b.monthMoneyIn],
-                    ['Money out this month', b.monthMoneyOut],
-                    ['Net profit this month', b.monthProfit],
-                    ['Net profit year to date', b.yearProfit],
-                    ['Receipts needing review', b.receiptsNeedingReview],
-                  ].map(([label, value]) => (
-                    <article key={label as string}>
-                      <span>{label}</span>
-                      <strong>
-                        {label === 'Receipts needing review'
-                          ? value
-                          : money(value as number)}
-                      </strong>
-                      <small>
-                        {label === 'Net profit year to date'
-                          ? today.slice(0, 4) + '-01-01'
-                          : today.slice(0, 7) + '-01'}{' '}
-                        – {today}
-                      </small>
-                    </article>
-                  ))}
-                </div>
+                <PageOverview>
+                  <div className="book-stats">
+                    {[
+                      ['Money in this month', b.monthMoneyIn],
+                      ['Money out this month', b.monthMoneyOut],
+                      ['Net profit this month', b.monthProfit],
+                      ['Net profit year to date', b.yearProfit],
+                      ['Receipts needing review', b.receiptsNeedingReview],
+                    ].map(([label, value]) => (
+                      <article key={label as string}>
+                        <span>{label}</span>
+                        <strong>
+                          {label === 'Receipts needing review'
+                            ? value
+                            : money(value as number)}
+                        </strong>
+                        <small>
+                          {label === 'Net profit year to date'
+                            ? today.slice(0, 4) + '-01-01'
+                            : today.slice(0, 7) + '-01'}{' '}
+                          – {today}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                </PageOverview>
                 <div className="book-panel">
                   <h3>Your accounts</h3>
                   <div className="book-stats">

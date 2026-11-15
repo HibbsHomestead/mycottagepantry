@@ -1,3 +1,4 @@
+import { PageOverview, PageActions } from './application-page'
 import { useState } from 'react'
 import {
   ArrowDownLeft,
@@ -233,107 +234,112 @@ export function FinanceDashboard({
               </button>
             </p>
           )}
-          <section className="finance-summary" aria-label="At a glance">
-            {[
-              {
-                key: 'income',
-                label: 'Recorded income',
-                n: data.income.value,
-                count: data.income.records.length,
-                help: 'Product sales excluding tax, after recorded refunds and discounts, plus consignment commission income. Payouts and transfers excluded.',
-                Icon: ArrowDownLeft,
-              },
-              {
-                key: 'expenses',
-                label: 'Recorded expenses',
-                n: data.expenses.value,
-                count: data.expenses.records.length,
-                help: 'Operating expense rows plus sale processing fees. Inventory purchases and owner draws excluded. Bills are included when recorded, not again when paid.',
-                Icon: ArrowUpRight,
-              },
-              {
-                key: 'difference',
-                label: 'Income less expenses',
-                n: data.difference,
-                count:
-                  data.income.records.length + data.expenses.records.length,
-                help: 'Recorded income minus recorded operating expenses and fees. Before cost of goods sold; this is not accounting profit or available cash.',
-                Icon: ReceiptText,
-              },
-              {
-                key: 'tax',
-                label: 'Sales tax collected',
-                n: data.tax.value,
-                count: data.tax.records.length,
-                help: 'Tax on recorded product and consignment sales, including recorded refund adjustments. This period’s collections, not the outstanding liability.',
-                Icon: FileText,
-              },
-            ].map((c) => (
+          <PageOverview>
+            <section className="finance-summary" aria-label="At a glance">
+              {[
+                {
+                  key: 'income',
+                  label: 'Recorded income',
+                  n: data.income.value,
+                  count: data.income.records.length,
+                  help: 'Product sales excluding tax, after recorded refunds and discounts, plus consignment commission income. Payouts and transfers excluded.',
+                  Icon: ArrowDownLeft,
+                },
+                {
+                  key: 'expenses',
+                  label: 'Recorded expenses',
+                  n: data.expenses.value,
+                  count: data.expenses.records.length,
+                  help: 'Operating expense rows plus sale processing fees. Inventory purchases and owner draws excluded. Bills are included when recorded, not again when paid.',
+                  Icon: ArrowUpRight,
+                },
+                {
+                  key: 'difference',
+                  label: 'Income less expenses',
+                  n: data.difference,
+                  count:
+                    data.income.records.length + data.expenses.records.length,
+                  help: 'Recorded income minus recorded operating expenses and fees. Before cost of goods sold; this is not accounting profit or available cash.',
+                  Icon: ReceiptText,
+                },
+                {
+                  key: 'tax',
+                  label: 'Sales tax collected',
+                  n: data.tax.value,
+                  count: data.tax.records.length,
+                  help: 'Tax on recorded product and consignment sales, including recorded refund adjustments. This period’s collections, not the outstanding liability.',
+                  Icon: FileText,
+                },
+              ].map((c) => (
+                <button
+                  className={`finance-summary-card ${c.key}`}
+                  key={c.key}
+                  title={c.help}
+                  onClick={() => show(c.key)}
+                >
+                  <span>
+                    <c.Icon size={17} />
+                    {c.label}
+                  </span>
+                  <strong>{value(c.n, c.count)}</strong>
+                  <small>
+                    {!c.count
+                      ? data.hasPeriodRecords
+                        ? 'No posted ' +
+                          (c.key === 'expenses'
+                            ? 'operating expenses'
+                            : c.key === 'tax'
+                              ? 'sales tax'
+                              : c.key === 'income'
+                                ? 'income'
+                                : 'income or operating expenses') +
+                          ' yet'
+                        : 'No records in this period'
+                      : c.key === 'difference'
+                        ? 'Before cost of goods sold'
+                        : 'View underlying records'}
+                    <ArrowRight size={14} />
+                  </small>
+                </button>
+              ))}
+            </section>
+          </PageOverview>
+          <PageActions>
+            {' '}
+            <div className="finance-quick-actions" aria-label="Quick actions">
               <button
-                className={`finance-summary-card ${c.key}`}
-                key={c.key}
-                title={c.help}
-                onClick={() => show(c.key)}
+                className="btn"
+                disabled={!canWrite}
+                onClick={() => onNavigate('Receipt inbox')}
               >
-                <span>
-                  <c.Icon size={17} />
-                  {c.label}
-                </span>
-                <strong>{value(c.n, c.count)}</strong>
-                <small>
-                  {!c.count
-                    ? data.hasPeriodRecords
-                      ? 'No posted ' +
-                        (c.key === 'expenses'
-                          ? 'operating expenses'
-                          : c.key === 'tax'
-                            ? 'sales tax'
-                            : c.key === 'income'
-                              ? 'income'
-                              : 'income or operating expenses') +
-                        ' yet'
-                      : 'No records in this period'
-                    : c.key === 'difference'
-                      ? 'Before cost of goods sold'
-                      : 'View underlying records'}
-                  <ArrowRight size={14} />
-                </small>
+                <ReceiptText size={17} />
+                Scan / upload receipt
               </button>
-            ))}
-          </section>
-          <div className="finance-quick-actions" aria-label="Quick actions">
-            <button
-              className="btn"
-              disabled={!canWrite}
-              onClick={() => onNavigate('Receipt inbox')}
-            >
-              <ReceiptText size={17} />
-              Scan / upload receipt
-            </button>
-            <button
-              className="btn secondary"
-              disabled={!canWrite}
-              onClick={() => onAction('expense')}
-            >
-              <Plus size={17} />
-              Add expense
-            </button>
-            <button
-              className="btn secondary"
-              disabled={!canWrite}
-              onClick={() => onAction('sale')}
-            >
-              <Plus size={17} />
-              Record sale
-            </button>
-            <button
-              className="btn secondary"
-              onClick={() => onNavigate('Reports')}
-            >
-              <FileText size={17} />
-              View reports
-            </button>
-          </div>
+              <button
+                className="btn secondary"
+                disabled={!canWrite}
+                onClick={() => onAction('expense')}
+              >
+                <Plus size={17} />
+                Add expense
+              </button>
+              <button
+                className="btn secondary"
+                disabled={!canWrite}
+                onClick={() => onAction('sale')}
+              >
+                <Plus size={17} />
+                Record sale
+              </button>
+              <button
+                className="btn secondary"
+                onClick={() => onNavigate('Reports')}
+              >
+                <FileText size={17} />
+                View reports
+              </button>
+            </div>
+          </PageActions>
           <div className="finance-visual-grid">
             <section className="panel finance-trend">
               <div className="panel-heading">

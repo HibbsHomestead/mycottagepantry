@@ -1,0 +1,90 @@
+/* One outer flow: heading, optional overview, then navigation and content. */
+.main-shell > main.application-page {
+  display: block;
+  margin-inline: 0;
+  padding-top: 1.125rem;
+  min-width: 0;
+}
+.application-page > .page-heading {
+  margin-bottom: 1rem;
+}
+.application-page .page-overview:empty,
+.application-page .page-action-toolbar:empty,
+.application-page .heading-actions:empty {
+  display: none;
+}
+.application-page .page-overview {
+  margin-bottom: 1rem;
+}
+.application-page
+  .page-overview
+  > :is(.book-stats, .finance-summary, .handmade-summary) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+.application-page .section-workspace > .book-nav {
+  position: sticky;
+  top: 5.625rem;
+  padding: 0.5rem;
+  margin: 0;
+  width: auto;
+  min-width: 0;
+}
+.application-page :is(.page-action-toolbar, .heading-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
+}
+.application-page
+  .page-action-toolbar
+  > :is(.book-actions, .toolbar, .button-row) {
+  display: contents;
+}
+.application-page .section-workspace-content {
+  min-width: 0;
+}
+.application-page .section-workspace-content > .info-banner {
+  margin-block: 0.75rem;
+}
+@media (max-width: 1000px) {
+  .application-page .section-workspace > .book-nav {
+    position: static;
+    margin-bottom: 0.75rem;
+  }
+}
+.application-page .page-action-toolbar > .finance-quick-actions {
+  display: contents;
+}
+:root .application-page .book-header h2 {
+  font-size: var(--text-section);
+}
+.application-page .page-overview > .book-stats {
+  grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr));
+}
+.application-page .page-overview > .book-stats article {
+  padding: 1rem;
+}
+/* Finance's action buttons also retain their styling outside the register. */
+.application-page .page-action-toolbar .book-actions > button {
+  padding: 0.625rem 0.875rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--primary);
+  border-radius: 0.5rem;
+  background: var(--primary);
+  color: var(--primary-foreground, #fff);
+  font-weight: 600;
+  cursor: pointer;
+}
+.application-page .page-action-toolbar .book-actions > button.secondary {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border-control);
+}
+.application-page .page-action-toolbar .book-actions > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
