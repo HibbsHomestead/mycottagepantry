@@ -1,4 +1,4 @@
-import { Checkbook } from './checkbook'
+import { Checkbook, FinanceNavigation } from './checkbook'
 import { customerMessage } from '@/lib/customer-message'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { BusinessTaxFields } from './business-tax-fields'
@@ -209,8 +209,8 @@ const navigation = [
   { name: 'Production', icon: CookingPot },
   { name: 'Sales', icon: TrendingUp },
   { name: 'Purchasing', icon: Receipt },
-  { name: 'Labels', icon: StickyNote },
   { name: 'Finance', icon: Wallet },
+  { name: 'Labels', icon: StickyNote },
   { name: 'Settings', icon: Settings },
 ]
 const dateLabel = (date: string) =>
@@ -310,6 +310,8 @@ export function WorkspaceApp() {
     [previewProduct, setPreviewProduct] = useState<Item | null>(null),
     [previewLabelId, setPreviewLabelId] = useState(''),
     [financeEntry, setFinanceEntry] = useState(''),
+    [receiptRevision, setReceiptRevision] = useState(0),
+    [financeReceiptEntry, setFinanceReceiptEntry] = useState(''),
     [formError, setFormError] = useState('')
   const selected =
     modal === 'product-detail' && selectedRecord
@@ -1556,7 +1558,19 @@ export function WorkspaceApp() {
             </DropdownMenu>
           </div>
         </header>
-        <main>
+        <main
+          className={route.section === 'Finance' ? 'finance-page' : undefined}
+        >
+          {route.section === 'Finance' &&
+            ['Owner', 'Manager', 'Read-only Accountant'].includes(role) && (
+              <FinanceNavigation
+                active={route.tab}
+                workspace={state}
+                onNavigate={(tab) =>
+                  go(tab === 'Receipt inbox' ? 'Finances' : 'Finance', tab)
+                }
+              />
+            )}
           {error && (
             <div className="connection-note" role="alert">
               <TriangleAlert size={16} />
@@ -1612,13 +1626,16 @@ export function WorkspaceApp() {
                     Add Item
                   </Btn>
                 )}
-              {page === 'Finances' && (
+              {page === 'Finances' && route.section !== 'Finance' && (
                 <Btn secondary onClick={() => go('Finances', 'Receipt inbox')}>
                   <Receipt size={17} />
                   Upload receipt
                 </Btn>
               )}
-              {page !== 'Dashboard' &&
+              {!(
+                route.section === 'Finance' && pageAction?.[1] === 'transaction'
+              ) &&
+                page !== 'Dashboard' &&
                 page !== 'Settings' &&
                 page !== 'Labels' &&
                 !(page === 'Products & Pricing' && sub === 'Categories') &&
@@ -1640,6 +1657,7 @@ export function WorkspaceApp() {
             </div>
           </div>
           {!!sectionTabs[route.section]?.length &&
+            route.section !== 'Finance' &&
             route.section !== 'Labels' &&
             route.section !== 'Settings' && (
               <nav
@@ -2305,6 +2323,21 @@ export function WorkspaceApp() {
               role={role}
             />
           )}
+          {route.section === 'Finance' && (
+            <FinanceWorkspace
+              workspace={state}
+              onWorkspace={(workspace) => {
+                setState(workspace)
+                setReceiptRevision((n) => n + 1)
+              }}
+              section="Upload receipt"
+              ready={ready}
+              role={role}
+              initialEntry={financeReceiptEntry}
+              onEntryOpened={() => setFinanceReceiptEntry('')}
+              onCreatePantryItem={(kind) => open(kind)}
+            />
+          )}
           {page === 'Finances' && (
             <>
               {sub === 'Receipt inbox' && (
@@ -2321,6 +2354,8 @@ export function WorkspaceApp() {
                 'Overview',
                 'Register',
                 'Accounts',
+                'Bills',
+                'Invoices',
                 'Mileage',
                 'Bookkeeping reports',
                 'Settings / Categories',
@@ -2334,6 +2369,13 @@ export function WorkspaceApp() {
                   role={role}
                   onSectionChange={(section) => go('Finances', section)}
                   onReceipts={() => go('Finances', 'Receipt inbox')}
+                  onUploadReceipt={() =>
+                    setFinanceReceiptEntry('receiptUpload')
+                  }
+                  onRecordTransaction={() =>
+                    setFinanceReceiptEntry('transaction')
+                  }
+                  receiptRevision={receiptRevision}
                   onLegacySale={() => {
                     setFinanceEntry('sale')
                     go('Finances', 'Advanced')

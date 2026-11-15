@@ -1,3 +1,4 @@
+import { customerMessage } from '@/lib/customer-message'
 import { FinanceDashboard } from './finance-dashboard'
 import { bookAccounts } from '@/lib/checkbook'
 import {
@@ -172,7 +173,8 @@ export function FinanceWorkspace({
     [statement, setStatement] = useState<Item | null>(null),
     [journal, setJournal] = useState<Item | null>(null),
     [exportType, setExportType] = useState('Current tab'),
-    [picker, setPicker] = useState(false)
+    [picker, setPicker] = useState(false),
+    [uploadOpen, setUploadOpen] = useState(false)
   const entryDrafts = useRef<
     Record<string, { action: string; data: Record<string, any> }>
   >({})
@@ -180,7 +182,8 @@ export function FinanceWorkspace({
   const saving = useRef(false)
   useEffect(() => {
     if (initialEntry) {
-      if (initialEntry === 'transaction') setPicker(true)
+      if (initialEntry === 'receiptUpload') setUploadOpen(true)
+      else if (initialEntry === 'transaction') setPicker(true)
       else if (initialEntry === 'sale')
         open('simpleSale', {
           saleLines: [
@@ -252,12 +255,15 @@ export function FinanceWorkspace({
         delete entryDrafts.current[activeType.current]
         setModal('')
         setReceipt(null)
+        setUploadOpen(false)
         setReview(false)
       }
       setMessage(
         action === 'receiptDraft'
           ? 'Draft saved. Nothing has been posted.'
-          : 'Saved successfully.',
+          : action === 'receiptPost'
+            ? 'Receipt posted.'
+            : 'Saved successfully.',
       )
       return result
     } catch (e) {
@@ -292,7 +298,7 @@ export function FinanceWorkspace({
       }
       setError(
         e instanceof Error
-          ? e.message
+          ? customerMessage(e)
           : 'Unable to save. The draft is preserved. Reopen the receipt to check its status before retrying.',
       )
     } finally {
@@ -375,7 +381,7 @@ export function FinanceWorkspace({
     } catch (e) {
       setError(
         e instanceof Error
-          ? e.message
+          ? customerMessage(e)
           : 'Receipt upload or reading failed. The saved original remains in your inbox.',
       )
       setReceipt((r) =>
@@ -482,6 +488,78 @@ export function FinanceWorkspace({
       (s) => s.date?.slice(0, 7) === today().slice(0, 7),
     ),
     owed = owners.reduce((a, o) => a + consignmentBalance(w, o.id), 0)
+  const uploadPanel = (
+    <>
+      <div
+        className="panel action-banner finance-upload"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (e.dataTransfer.files[0]) void upload(e.dataTransfer.files[0])
+        }}
+      >
+        <div className="action-banner-icon">
+          <Receipt size={24} />
+        </div>
+        <div className="action-banner-copy">
+          <h2>Keep receipts with your records.</h2>
+          <p>
+            Upload an original, review the extracted details, then confirm.
+            Nothing posts until you approve it.
+          </p>
+          <small>
+            JPG, PNG, HEIC or PDF · up to 4 MiB · up to 20 PDF pages · private
+            originals
+          </small>
+          <small>
+            Receipt reading uses Google via Netlify. Document contents are sent
+            for processing and incur metered usage. Up to 10 readings per oven
+            per day; 3 per receipt.
+          </small>
+        </div>
+        <div className="button-row action-banner-actions">
+          <label className="btn">
+            <Upload size={17} /> Upload receipt
+            <input
+              aria-label="Upload receipt"
+              type="file"
+              accept=".jpg,.jpeg,.png,.heic,.heif,.pdf"
+              disabled={!canWrite || busy}
+              onChange={(e) => {
+                if (e.target.files?.[0]) void upload(e.target.files[0])
+                e.target.value = ''
+              }}
+              className="sr-only"
+            />
+          </label>
+          <label className="btn secondary">
+            <Camera size={17} /> Take photo
+            <input
+              aria-label="Take receipt photo"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={!canWrite || busy}
+              className="sr-only"
+              onChange={(e) => {
+                if (e.target.files?.[0]) void upload(e.target.files[0])
+              }}
+            />
+          </label>
+          <button
+            className="btn secondary"
+            disabled={!canWrite || busy}
+            onClick={async () => {
+              const result = await run('receiptManual', {}, false)
+              if (result) setReceipt(result.receipt_extractions.at(-1) || null)
+            }}
+          >
+            Add manually
+          </button>
+        </div>
+      </div>
+    </>
+  )
   return (
     <div className="finance-workspace">
       {error && (
@@ -494,7 +572,45 @@ export function FinanceWorkspace({
           {message}
         </p>
       )}
-      {section === 'Overview' ? (
+      {section === 'Upload receipt' ? (
+        <Dialog
+          open={uploadOpen}
+          onOpenChange={(open) => {
+            if (!busy) setUploadOpen(open)
+          }}
+        >
+          <DialogContent
+            className="finance-dialog finance-upload-dialog"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              document
+                .querySelector<HTMLButtonElement>('.book-actions button')
+                ?.focus({ preventScroll: true })
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>Upload receipt</DialogTitle>
+              <DialogDescription>
+                Upload and review a receipt without leaving Finance. Nothing
+                posts until you confirm.
+              </DialogDescription>
+            </DialogHeader>
+            {error && (
+              <p role="alert" className="finance-feedback error">
+                {error}
+              </p>
+            )}
+            {uploadPanel}
+            <button
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => setUploadOpen(false)}
+            >
+              Cancel
+            </button>
+          </DialogContent>
+        </Dialog>
+      ) : section === 'Overview' ? (
         <FinanceDashboard
           workspace={w}
           ready={ready}
@@ -528,75 +644,7 @@ export function FinanceWorkspace({
         />
       ) : section === 'Receipt inbox' ? (
         <>
-          <div
-            className="panel action-banner finance-upload"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              if (e.dataTransfer.files[0]) void upload(e.dataTransfer.files[0])
-            }}
-          >
-            <div className="action-banner-icon">
-              <Receipt size={24} />
-            </div>
-            <div className="action-banner-copy">
-              <h2>Keep receipts with your records.</h2>
-              <p>
-                Upload an original, review the extracted details, then confirm.
-                Nothing posts until you approve it.
-              </p>
-              <small>
-                JPG, PNG, HEIC or PDF · up to 4 MiB · up to 20 PDF pages ·
-                private originals
-              </small>
-              <small>
-                Receipt reading uses Google via Netlify. Document contents are
-                sent for processing and incur metered usage. Up to 10 readings
-                per oven per day; 3 per receipt.
-              </small>
-            </div>
-            <div className="button-row action-banner-actions">
-              <label className="btn">
-                <Upload size={17} /> Upload receipt
-                <input
-                  aria-label="Upload receipt"
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.heic,.heif,.pdf"
-                  disabled={!canWrite || busy}
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) void upload(e.target.files[0])
-                    e.target.value = ''
-                  }}
-                  className="sr-only"
-                />
-              </label>
-              <label className="btn secondary">
-                <Camera size={17} /> Take photo
-                <input
-                  aria-label="Take receipt photo"
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  disabled={!canWrite || busy}
-                  className="sr-only"
-                  onChange={(e) => {
-                    if (e.target.files?.[0]) void upload(e.target.files[0])
-                  }}
-                />
-              </label>
-              <button
-                className="btn secondary"
-                disabled={!canWrite || busy}
-                onClick={async () => {
-                  const result = await run('receiptManual', {}, false)
-                  if (result)
-                    setReceipt(result.receipt_extractions.at(-1) || null)
-                }}
-              >
-                Add manually
-              </button>
-            </div>
-          </div>
+          {uploadPanel}
           <div className="panel">
             <div className="panel-heading">
               <div>
@@ -1192,11 +1240,13 @@ export function FinanceWorkspace({
           </div>
         </>
       )}
-      <p className="finance-disclaimer">
-        For recordkeeping, not legal, tax, payroll, or accounting advice.
-        Consult a qualified accountant or tax professional about consignment
-        agreements, sales tax, 1099 reporting, and local requirements.
-      </p>
+      {section !== 'Upload receipt' && (
+        <p className="finance-disclaimer">
+          For recordkeeping, not legal, tax, payroll, or accounting advice.
+          Consult a qualified accountant or tax professional about consignment
+          agreements, sales tax, 1099 reporting, and local requirements.
+        </p>
+      )}
       <Dialog open={picker} onOpenChange={setPicker}>
         <DialogContent className="finance-dialog">
           <DialogHeader>
@@ -2103,7 +2153,10 @@ export function FinanceWorkspace({
             localReceiptFile ? () => void upload(localReceiptFile) : undefined
           }
           onClose={() => {
-            if (!busy) setReceipt(null)
+            if (!busy) {
+              setReceipt(null)
+              setUploadOpen(false)
+            }
           }}
           onSave={async (action, data) => {
             if (action === 'receiptExtract') {
@@ -2128,7 +2181,7 @@ export function FinanceWorkspace({
               } catch (e) {
                 setError(
                   e instanceof Error
-                    ? e.message
+                    ? customerMessage(e)
                     : 'Reading failed. Your entries are preserved.',
                 )
                 setReceipt(
