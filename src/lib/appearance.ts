@@ -6,7 +6,7 @@ export const accentThemes = [
     primary: brandPurple,
     accent: mixColor(brandPurple, '#ffffff', 0.91),
     dark: mixColor(brandPurple, '#ffffff', 0.72),
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'plum',
@@ -14,7 +14,7 @@ export const accentThemes = [
     primary: '#742b60',
     accent: '#eedff0',
     dark: '#edb7df',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'orchard',
@@ -22,7 +22,7 @@ export const accentThemes = [
     primary: '#20583f',
     accent: '#deebdf',
     dark: '#9bddb6',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'berry',
@@ -30,7 +30,7 @@ export const accentThemes = [
     primary: '#a02956',
     accent: '#f8e0e8',
     dark: '#ffb0cb',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'blueberry',
@@ -38,7 +38,7 @@ export const accentThemes = [
     primary: '#344dba',
     accent: '#e3e8fd',
     dark: '#bcc9ff',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'terracotta',
@@ -46,7 +46,7 @@ export const accentThemes = [
     primary: '#99452f',
     accent: '#f6e8e8',
     dark: '#f4bc9e',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'midnight',
@@ -54,7 +54,7 @@ export const accentThemes = [
     primary: '#353e7e',
     accent: '#e6e3f6',
     dark: '#c4baff',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
   {
     id: 'ink',
@@ -62,14 +62,17 @@ export const accentThemes = [
     primary: '#343b43',
     accent: '#e5e9ed',
     dark: '#ccd4df',
-    background: '#f5f6fa',
+    background: '#f8fafc',
   },
 ] as const
 export type Appearance = {
   theme: (typeof accentThemes)[number]['id']
   mode: 'light' | 'dark' | 'system'
 }
-export const defaultAppearance: Appearance = { theme: 'cottage', mode: 'light' }
+export const defaultAppearance: Appearance = {
+  theme: 'cottage',
+  mode: 'light',
+}
 export function validateAppearance(value: unknown): Appearance {
   const a = value as Appearance
   if (
@@ -108,15 +111,15 @@ export function appearanceVariables(
     '--primary-ink': dark ? '#211b24' : '#ffffff',
     '--accent-soft': dark ? mixColor(t.primary, '#22252c', 0.78) : t.accent,
     '--background': dark ? '#17191e' : t.background,
-    '--foreground': dark ? '#f2f1f6' : '#242734',
+    '--foreground': dark ? '#f2f1f6' : '#111827',
     '--card': dark ? '#22252c' : '#ffffff',
-    '--surface-soft': dark ? '#2b2e36' : '#f0f2f7',
-    '--border': dark ? '#424650' : '#e1e5ed',
-    '--muted': dark ? '#b9bdc9' : '#606879',
+    '--surface-soft': dark ? '#2b2e36' : '#f1f5f9',
+    '--border': dark ? '#424650' : '#e2e8f0',
+    '--muted': dark ? '#b9bdc9' : '#475569',
     '--success': dark ? '#a4e7bd' : '#226342',
     '--success-bg': dark ? '#203e31' : '#edf6f2',
     '--warning': dark ? '#ffdc95' : t.id === 'berry' ? '#855017' : '#805309',
-    '--warning-bg': dark ? '#30343e' : '#f0f2f7',
+    '--warning-bg': dark ? '#44351b' : '#fffbeb',
     '--danger': dark ? '#ffb9c3' : '#a02b43',
     '--danger-bg': dark ? '#482b34' : '#fbe4e9',
     '--info': dark ? '#b4d6ff' : '#27589e',

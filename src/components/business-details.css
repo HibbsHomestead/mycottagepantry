@@ -100,7 +100,7 @@
   padding: 24px !important;
 }
 .business-details-dialog .form-hint {
-  font-size: 13px;
+  font-size: var(--text-caption, 14px);
 }
 .business-tax-fields > .tax-combined-summary {
   margin: 8px 0;

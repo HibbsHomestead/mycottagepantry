@@ -675,7 +675,7 @@
   line-height: 1.2;
 }
 .studio-brand-preview > span {
-  font-size: 10px;
+  font-size: var(--text-caption, 14px);
   letter-spacing: 2px;
 }
 .studio-brand-colors {

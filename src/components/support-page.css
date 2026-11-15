@@ -396,7 +396,7 @@
 }
 .support-ticket-details dl {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-caption, 14px);
 }
 .support-ticket-details dt {
   color: var(--muted);
@@ -466,7 +466,7 @@
     max-height: none;
   }
   .support-field input[type='file'] {
-    font-size: 12px;
+    font-size: var(--text-caption, 14px);
     padding: 10px 4px;
   }
 }

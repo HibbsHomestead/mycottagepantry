@@ -36,7 +36,7 @@
 }
 .billing-facts dt,
 .billing-overview span:first-child {
-  font-size: 0.85rem;
+  font-size: var(--text-caption, 14px);
   color: var(--muted-foreground);
 }
 .billing-facts dd {
