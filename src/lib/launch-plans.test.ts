@@ -42,7 +42,7 @@ it('keeps approved paid prices, proposed Free, total seats and closed commercial
   expect(
     launchPricing.plans.find((p) => p.id === 'cottage-mercantile')
       ?.stripeLiveApproved,
-  ).toBe(false)
+  ).toBe(true)
   expect(launchPricing.checkoutEnabled).toBe(false)
   expect(launchPricing.signupEnabled).toBe(true)
   expect(launchPricing.restrictionsEnabled).toBe(false)

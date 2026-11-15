@@ -79,6 +79,8 @@ The production schedule, when deployed there with protected test configuration, 
 
 ## Remaining account setup and live rollout
 
+For the owner-approved LIVE rollout, including Cottage Mercantile, follow [LIVE launch and subscriber review](./stripe-live-launch.md). The instructions below describe the preceding TEST phase.
+
 Automatic setup supplies Price mappings, portal configuration and a protected webhook secret using the configured Stripe credential. Real test checkout, access and portal evidence still require verification in the deployed application.
 
 Do not enable LIVE checkout during this test phase. A later rollout must separately verify live account settings and tax/customer-facing terms, review existing production Square subscribers, preserve their subscriptions and reconciliation, and approve live activation after test evidence. Never recreate existing subscribers automatically. Disabling new checkout is the rollback; keep credential encryption, webhooks, subscription history, and reconciliation available for already-linked customers.

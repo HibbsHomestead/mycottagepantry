@@ -6,7 +6,7 @@ import { launchPricing } from '@/lib/launch-plans'
 
 vi.mock('./admin-step-up', () => ({ AdminStepUp: () => null }))
 
-it('separates visible tier, sandbox authorization, missing mapping and live approval', async () => {
+it('allows the approved Mercantile LIVE mapping while keeping missing setup and activation visible', async () => {
   render(
     <AdminStripeSettings
       data={{ tiers: launchPricing.plans, rows: [], encryptionReady: true }}
@@ -25,15 +25,16 @@ it('separates visible tier, sandbox authorization, missing mapping and live appr
     screen.getByLabelText('Tier', { exact: true }),
     'cottage-mercantile',
   )
-  expect(tier).toHaveTextContent('live tier approval required')
+  expect(tier).toHaveTextContent('LIVE tier approved')
   expect(
     screen.getByRole('checkbox', {
       name: /Approve LIVE purchase availability/,
     }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   expect(
     screen.getByText(/Cottage Mercantile · \$40 USD\/month · six total users/),
-  ).toBeInTheDocument()
+  ).toHaveTextContent('the tier is approved for LIVE purchase')
+  expect(screen.getByText(/New checkout:/)).toHaveTextContent('Disabled')
   await user.selectOptions(screen.getByLabelText('Environment'), 'test')
   expect(
     screen.getByRole('checkbox', {
@@ -493,6 +494,12 @@ it('clears confirmations and restores the correct saved portal when switching en
   )
   await user.selectOptions(screen.getByLabelText('Environment'), 'live')
   expect(screen.getByLabelText('LIVE checkout confirmation')).toHaveValue('')
+  expect(
+    screen.getByLabelText('Existing subscriber review and activation decision'),
+  ).toHaveAccessibleDescription(/In Stripe, switch to LIVE/)
+  expect(
+    screen.getByText(/If you confirmed there are no existing subscribers/),
+  ).toHaveTextContent('If records exist, describe them')
   expect(screen.getByLabelText('Policy approval confirmation')).toHaveValue('')
   expect(
     screen.getByLabelText('Reviewed Stripe portal configuration ID'),

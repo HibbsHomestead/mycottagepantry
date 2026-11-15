@@ -98,9 +98,9 @@ export const launchPricing = {
     },
     {
       id: 'cottage-mercantile',
-      /** Public comparison and plan selection are approved; live checkout stays gated. */
+      /** Owner-approved launch; provider setup and checkout activation remain separate. */
       assignable: true,
-      stripeLiveApproved: false,
+      stripeLiveApproved: true,
       publication: 'published',
       name: 'Cottage Mercantile',
       monthlyUsd: 40,
@@ -118,7 +118,7 @@ export const launchPricing = {
         'Consignment stock, sales, refunds and consignor payouts; six total business users including the owner',
       ],
       caveat:
-        'Approved for Stripe test-mode checkout at $40/month with six total users. Live purchase remains disabled pending launch review. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented.',
+        'Approved for Stripe TEST and LIVE purchase at $40/month with six total users, subject to verified provider setup, Price mapping and checkout activation. Variants, returns, purchasing, yarn, lots, locations, usage history and profitability views are partial; activity reports and sales integration are not implemented.',
     },
   ],
 } as const

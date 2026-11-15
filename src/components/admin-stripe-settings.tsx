@@ -610,10 +610,10 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           amount. Existing subscribers retain their linked price.
         </p>
         <p>
-          All four paid tiers are approved for test checkout. Cottage Mercantile
-          includes five users plus the owner (six total); its live checkout
-          remains disabled pending launch review. Internal assignments are
-          separate from test purchase approval.
+          All four paid tiers are approved for TEST and LIVE purchase, subject
+          to verified setup, Price mapping and checkout activation. Cottage
+          Mercantile includes five users plus the owner (six total). Internal
+          assignments are separate from purchase approval.
         </p>
         <div className="stripe-tier-list">
           {(data?.tiers || []).map((tier: AdminMetadata) => (
@@ -681,10 +681,10 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
         {environment === 'live' && plan === 'cottage-mercantile' && (
           <p role="status">
             Cottage Mercantile · $40 USD/month · six total users, including the
-            owner: live launch approval is required before mapped live purchases
-            can be authorized. This approval does not enable checkout; provider
-            activation and completed sandbox evidence remain separate. Public
-            visibility and TEST mapping need no further tier approval.
+            owner: the tier is approved for LIVE purchase. Select its validated
+            LIVE recurring Price, approve purchase availability and save the
+            mapping. Then complete LIVE checkout activation below. Saving a
+            mapping disables new checkout until activation is confirmed again.
           </p>
         )}
       </details>
@@ -756,14 +756,35 @@ export function AdminStripeSettings({ data: initial, request }: Props) {
           activation checks use evidence recorded in that deployment's database.
         </p>
         {environment === 'live' && (
-          <label>
-            Existing subscriber review and activation decision
-            <textarea
-              value={review}
-              placeholder="Record the existing subscriber review and LIVE activation decision."
-              onChange={(e) => setReview(e.target.value)}
-            />
-          </label>
+          <>
+            <label>
+              Existing subscriber review and activation decision
+              <textarea
+                value={review}
+                placeholder="Record what you reviewed, what you found, and your LIVE activation decision."
+                aria-describedby="stripe-subscriber-review-help"
+                onChange={(e) => setReview(e.target.value)}
+              />
+            </label>
+            <div id="stripe-subscriber-review-help">
+              <p>
+                In Stripe, switch to LIVE and open Billing → Subscriptions.
+                Review all subscription statuses and any unfinished subscription
+                checkouts. Also review any previous billing provider you used.
+                Record the review date, your findings and whether you approve
+                LIVE checkout. Preserve existing subscriptions; do not recreate
+                or move them as part of this activation.
+              </p>
+              <p>
+                If you confirmed there are no existing subscribers or unfinished
+                checkouts, you can write: “Reviewed live subscriptions and
+                unfinished checkouts on [date]. None found, including with any
+                previous provider used. I approve LIVE checkout, including
+                Cottage Mercantile at $40/month for six total users.” If records
+                exist, describe them and how their current billing is preserved.
+              </p>
+            </div>
+          </>
         )}
         <p>
           {environment === 'live'
