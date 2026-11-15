@@ -1,3 +1,5 @@
+import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
+import { RecordLink } from './linked-purchase-records'
 import { customerMessage } from '@/lib/customer-message'
 import {
   useEffect,
@@ -42,6 +44,7 @@ export function Checkbook({
   ready,
   role,
   onReceipts,
+  onViewReceipt,
   onLegacySale,
   onUploadReceipt,
   onRecordTransaction,
@@ -53,6 +56,7 @@ export function Checkbook({
   ready: boolean
   role: string
   onReceipts: () => void
+  onViewReceipt?: (id: string) => void
   onLegacySale: () => void
   onUploadReceipt?: () => void
   onRecordTransaction?: () => void
@@ -67,16 +71,23 @@ export function Checkbook({
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState(''),
-    [query, setQuery] = useState(''),
+    [query, setQuery] = useWorkspaceFilter('bookSearch'),
     [receiptPhoto, setReceiptPhoto] = useState<File | null>(null),
-    [account, setAccount] = useState(''),
-    [category, setCategory] = useState(''),
-    [cleared, setCleared] = useState(''),
-    [from, setFrom] = useState(today.slice(0, 7) + '-01'),
-    [to, setTo] = useState(today),
+    [account, setAccount] = useWorkspaceFilter('bookAccount'),
+    [category, setCategory] = useWorkspaceFilter('bookCategory'),
+    [cleared, setCleared] = useWorkspaceFilter('bookCleared'),
+    [from, setFrom] = useWorkspaceFilter('bookFrom', today.slice(0, 7) + '-01'),
+    [to, setTo] = useWorkspaceFilter('bookTo', today),
     [csvRows, setCsvRows] = useState<Record<string, string>[]>([]),
     [mapping, setMapping] = useState({ date: '', name: '', amount: '' }),
     [selected, setSelected] = useState<string[]>([])
+  const detailReceipts = (w.receipt_extractions || []).filter(
+    (r) =>
+      r.id === d.receiptId ||
+      (d.transactionId &&
+        (r.transactionId === d.transactionId ||
+          r.matchedTransactionId === d.transactionId)),
+  )
   const openedSubscriptionPayment = useRef(false)
   const refreshAfterReceipt = useEffectEvent(() => {
     void refresh()
@@ -319,9 +330,7 @@ export function Checkbook({
       <div className="book-main">
         <header className="book-header">
           <div>
-            <span className="book-eyebrow">COTTAGE PANTRY / FINANCE</span>
             <h2>{tab}</h2>
-            <p>A clear picture of your money, one line at a time.</p>
           </div>
         </header>
         <div className="button-row book-actions" aria-label="Finance actions">
@@ -695,9 +704,9 @@ export function Checkbook({
                               {r.receiptId ? (
                                 <button
                                   className="book-link"
-                                  onClick={onReceipts}
+                                  onClick={() => onViewReceipt?.(r.receiptId)}
                                 >
-                                  📎 Receipt
+                                  View receipt
                                 </button>
                               ) : r.receiptUrl ? (
                                 <a
@@ -1387,17 +1396,40 @@ export function Checkbook({
                       View invoice or receipt
                     </a>
                   )}
-                  {d.receiptId && (
+                  {w.ledger
+                    .filter(
+                      (l) =>
+                        l.type === 'purchase_receipt' &&
+                        ((d.transactionId &&
+                          l.transactionId === d.transactionId) ||
+                          (d.receiptId && l.receiptId === d.receiptId)),
+                    )
+                    .map((l) => (
+                      <p key={l.id}>
+                        <RecordLink
+                          kind="purchase"
+                          id={l.id}
+                          onOpen={() => setModal('')}
+                        >
+                          View purchase · {l.name}
+                        </RecordLink>
+                      </p>
+                    ))}
+                  {detailReceipts.map((detailReceipt) => (
                     <button
+                      key={detailReceipt.id}
                       type="button"
                       onClick={() => {
                         setModal('')
-                        onReceipts()
+                        onViewReceipt?.(detailReceipt.id)
                       }}
                     >
-                      Open receipt
+                      View receipt
+                      {detailReceipts.length > 1
+                        ? ` · ${detailReceipt.vendor || detailReceipt.name}`
+                        : ''}
                     </button>
-                  )}
+                  ))}
                   <p>
                     Corrections keep the original transaction. For receipt or
                     product sales changes, use the linked source workflow.
@@ -1594,40 +1626,46 @@ export function FinanceNavigation({
   active,
   workspace,
   onNavigate,
+  purchasing = false,
 }: {
+  purchasing?: boolean
   active: string
   workspace: Workspace
   onNavigate: (tab: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
   const settings = workspace.bookkeeping?.[0]?.settings
-  const tabs = [
-    'Overview',
-    'Register',
-    'Accounts',
-    ...(settings?.bills ? ['Bills'] : []),
-    ...(settings?.invoices ? ['Invoices'] : []),
-    'Mileage',
-    'Reports',
-    'Settings / Categories',
-    'Advanced',
-    'Advanced reports',
-    'Receipt inbox',
-  ]
+  const tabs = purchasing
+    ? ['Purchases & Receipts', 'Suppliers', 'Purchase Orders']
+    : [
+        'Overview',
+        'Register',
+        'Accounts',
+        ...(settings?.bills ? ['Bills'] : []),
+        ...(settings?.invoices ? ['Invoices'] : []),
+        'Mileage',
+        'Reports',
+        'Settings / Categories',
+        'Advanced',
+        'Advanced reports',
+        'Receipt inbox',
+      ]
   return (
     <aside
       className="book-nav"
-      aria-label="Finance sections"
+      aria-label={purchasing ? 'Purchasing sections' : 'Finance sections'}
       data-expanded={expanded}
     >
-      <span className="book-eyebrow">YOUR BUSINESS, BALANCED</span>
-      <h2>Bookkeeping</h2>
+      <span className="book-eyebrow">
+        {purchasing ? 'RECEIPTS & RESTOCKING' : 'YOUR BUSINESS, BALANCED'}
+      </span>
+      <h2>{purchasing ? 'Purchasing' : 'Bookkeeping'}</h2>
       <button
         className="book-nav-toggle"
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
       >
-        Bookkeeping · {active}
+        {purchasing ? 'Purchasing' : 'Bookkeeping'} · {active}
       </button>
       <div className="book-nav-links">
         {tabs.map((tab) => (

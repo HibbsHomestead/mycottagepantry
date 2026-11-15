@@ -1,3 +1,5 @@
+import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
+import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { customerMessage } from '@/lib/customer-message'
 import { FinanceDashboard } from './finance-dashboard'
 import { bookAccounts } from '@/lib/checkbook'
@@ -162,7 +164,26 @@ export function FinanceWorkspace({
 }) {
   const [tab, setTab] = useState('Consignors'),
     [receipt, setReceipt] = useState<Item | null>(null),
-    [needsReviewOnly, setNeedsReviewOnly] = useState(false),
+    [reviewFilter, setReviewFilter] = useWorkspaceFilter(
+      'receiptReview',
+      '',
+      section === 'Receipt inbox',
+    ),
+    [receiptSearch, setReceiptSearch] = useWorkspaceFilter(
+      'receiptSearch',
+      '',
+      section === 'Receipt inbox',
+    ),
+    [receiptFrom, setReceiptFrom] = useWorkspaceFilter(
+      'receiptFrom',
+      '',
+      section === 'Receipt inbox',
+    ),
+    [receiptTo, setReceiptTo] = useWorkspaceFilter(
+      'receiptTo',
+      '',
+      section === 'Receipt inbox',
+    ),
     [localReceiptFile, setLocalReceiptFile] = useState<File | null>(null),
     [modal, setModal] = useState(''),
     [draft, setDraft] = useState<Record<string, any>>({}),
@@ -175,6 +196,9 @@ export function FinanceWorkspace({
     [exportType, setExportType] = useState('Current tab'),
     [picker, setPicker] = useState(false),
     [uploadOpen, setUploadOpen] = useState(false)
+  const needsReviewOnly = reviewFilter === '1'
+  const setNeedsReviewOnly = (value: boolean) =>
+    setReviewFilter(value ? '1' : '')
   const entryDrafts = useRef<
     Record<string, { action: string; data: Record<string, any> }>
   >({})
@@ -182,7 +206,16 @@ export function FinanceWorkspace({
   const saving = useRef(false)
   useEffect(() => {
     if (initialEntry) {
-      if (initialEntry === 'receiptUpload') setUploadOpen(true)
+      if (initialEntry.startsWith('receipt:'))
+        setReceipt(
+          w.receipt_extractions?.find((r) => r.id === initialEntry.slice(8)) ||
+            null,
+        )
+      else if (initialEntry === 'purchaseManual') {
+        void run('receiptManual', {}, false).then((result) => {
+          if (result) setReceipt(result.receipt_extractions.at(-1) || null)
+        })
+      } else if (initialEntry === 'receiptUpload') setUploadOpen(true)
       else if (initialEntry === 'transaction') setPicker(true)
       else if (initialEntry === 'sale')
         open('simpleSale', {
@@ -591,7 +624,7 @@ export function FinanceWorkspace({
             <DialogHeader>
               <DialogTitle>Upload receipt</DialogTitle>
               <DialogDescription>
-                Upload and review a receipt without leaving Finance. Nothing
+                Upload and review a receipt without leaving this page. Nothing
                 posts until you confirm.
               </DialogDescription>
             </DialogHeader>
@@ -644,11 +677,33 @@ export function FinanceWorkspace({
         />
       ) : section === 'Receipt inbox' ? (
         <>
-          {uploadPanel}
           <div className="panel">
             <div className="panel-heading">
               <div>
                 <h2>Receipt inbox</h2>
+                <div className="book-filters">
+                  <Field label="Search receipts">
+                    <input
+                      value={receiptSearch}
+                      onChange={(e) => setReceiptSearch(e.target.value)}
+                      placeholder="Supplier or receipt reference"
+                    />
+                  </Field>
+                  <Field label="From">
+                    <input
+                      type="date"
+                      value={receiptFrom}
+                      onChange={(e) => setReceiptFrom(e.target.value)}
+                    />
+                  </Field>
+                  <Field label="To">
+                    <input
+                      type="date"
+                      value={receiptTo}
+                      onChange={(e) => setReceiptTo(e.target.value)}
+                    />
+                  </Field>
+                </div>
                 <p>
                   <button
                     className="btn secondary"
@@ -669,7 +724,15 @@ export function FinanceWorkspace({
             ) : (
               <div className="finance-list">
                 {[...receipts]
-                  .filter((r) => !needsReviewOnly || r.status === 'draft')
+                  .filter(
+                    (r) =>
+                      (!needsReviewOnly || r.status === 'draft') &&
+                      (!receiptFrom || r.date >= receiptFrom) &&
+                      (!receiptTo || r.date <= receiptTo) &&
+                      `${r.vendor || r.name} ${r.receiptNumber || ''}`
+                        .toLowerCase()
+                        .includes(receiptSearch.toLowerCase()),
+                  )
                   .map((r) => (
                     <button
                       className="finance-list-row finance-list-row--receipt"
@@ -709,6 +772,20 @@ export function FinanceWorkspace({
                   ))}
               </div>
             )}
+            {!!receipts.length &&
+              !receipts.some(
+                (r) =>
+                  (!needsReviewOnly || r.status === 'draft') &&
+                  (!receiptFrom || r.date >= receiptFrom) &&
+                  (!receiptTo || r.date <= receiptTo) &&
+                  `${r.vendor || r.name} ${r.receiptNumber || ''}`
+                    .toLowerCase()
+                    .includes(receiptSearch.toLowerCase()),
+              ) && (
+                <p className="finance-empty">
+                  No receipts match these filters.
+                </p>
+              )}
             <p className="panel-note">
               Email forwarding is not connected. Upload files or use your phone
               camera.
@@ -2660,6 +2737,34 @@ function ReceiptReview({
               : 'Unsaved draft'}
           </DialogDescription>
           <div className="receipt-header-actions">
+            {purchaseTransactions(w, { ...r, receiptId: r.id }).length > 1 ? (
+              <details className="receipt-finance-links">
+                <summary>
+                  View in Finance (
+                  {purchaseTransactions(w, { ...r, receiptId: r.id }).length})
+                </summary>
+                {purchaseTransactions(w, { ...r, receiptId: r.id }).map((t) => (
+                  <p key={t.id}>
+                    <RecordLink kind="finance" id={t.id} onOpen={onClose}>
+                      {t.date} · {money(t.amount)}
+                    </RecordLink>
+                  </p>
+                ))}
+              </details>
+            ) : (
+              <>
+                {purchaseTransactions(w, { ...r, receiptId: r.id }).map((t) => (
+                  <RecordLink
+                    key={t.id}
+                    kind="finance"
+                    id={t.id}
+                    onOpen={onClose}
+                  >
+                    View in Finance · {t.date}
+                  </RecordLink>
+                ))}
+              </>
+            )}
             <button
               className="text-button receipt-mobile-preview-toggle"
               onClick={viewReceipt}

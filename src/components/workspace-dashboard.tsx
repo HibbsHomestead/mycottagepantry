@@ -44,12 +44,7 @@ export function WorkspaceDashboard({
         aria-label="Welcome and quick actions"
       >
         <div>
-          <span className="eyebrow">A LITTLE ORDER. MORE ROOM TO CREATE.</span>
-          <h2>Your pantry, at a glance.</h2>
-          <p>
-            Keep the next bake moving, from what’s on the shelf to what’s on the
-            schedule.
-          </p>
+          <h2>Quick actions</h2>
         </div>
         <div
           className="dashboard-quick-actions"

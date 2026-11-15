@@ -518,3 +518,14 @@ main.finance-page {
     order: -1;
   }
 }
+
+@media (max-width: 700px) {
+  body:has(.floating-controls) .main-shell > main.purchasing-page {
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+  .purchasing-page .book-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+}

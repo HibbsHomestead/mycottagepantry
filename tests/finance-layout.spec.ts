@@ -50,7 +50,7 @@ for (const width of [1440, 2560, 1280, 390])
     await expect(
       page.getByRole('dialog', { name: 'Upload receipt' }),
     ).toBeVisible()
-    await expect(page).toHaveURL(/#Finance\/Overview$/)
+    await expect(page).toHaveURL(/#Finance\/Overview\?bookFrom=2026-10-01$/)
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(from).toHaveValue('2026-10-01')
     await expect(

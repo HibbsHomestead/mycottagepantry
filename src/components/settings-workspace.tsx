@@ -156,7 +156,6 @@ export function SettingsWorkspace({
       </nav>
       <div className="settings-content">
         <section className="panel settings-section">
-          <span className="eyebrow">OVEN SETTINGS</span>
           <h2>{selected}</h2>
           {selected === 'Billing & Subscription' &&
             (isOwner ? (
