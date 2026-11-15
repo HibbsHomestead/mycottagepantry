@@ -378,3 +378,95 @@
     font-size: 27px;
   }
 }
+
+/* Help desk: navigation, queue, conversation, and ticket context. */
+.support-mobile-views {
+  display: none;
+}
+.support-ticket-nav {
+  display: grid;
+  gap: 8px;
+}
+.support-ticket-nav button {
+  justify-content: start;
+}
+.support-ticket-nav button[aria-pressed='true'] {
+  background: var(--primary);
+  color: var(--card);
+}
+.support-ticket-details dl {
+  margin: 0;
+  font-size: 13px;
+}
+.support-ticket-details dt {
+  color: var(--muted);
+  margin-top: 18px;
+}
+.support-ticket-details dd {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.support-unread {
+  color: var(--primary) !important;
+}
+.support-message.internal {
+  background: #fff6dd;
+  border-left: 4px solid #aa7b24;
+}
+.support-message.support {
+  border-left: 4px solid var(--primary);
+}
+.admin-main-support .support-desk {
+  grid-template-columns: 150px minmax(210px, 0.9fr) minmax(320px, 1.8fr) minmax(
+      200px,
+      0.8fr
+    );
+  gap: 12px;
+}
+.admin-main-support .support-desk > .support-panel {
+  padding: 14px;
+}
+@media (max-width: 1250px) {
+  .admin-main-support .support-desk {
+    grid-template-columns: 140px minmax(200px, 0.8fr) minmax(300px, 1.5fr);
+  }
+  .support-desk .support-ticket-details {
+    grid-column: 3;
+  }
+}
+@media (max-width: 1100px) {
+  .support-mobile-views {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .support-mobile-views button {
+    min-height: 44px;
+  }
+  .support-mobile-views button[aria-pressed='true'] {
+    background: var(--primary);
+    color: var(--card);
+  }
+  .support-grid,
+  .admin-main-support .support-desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .support-grid > .support-panel {
+    display: none;
+  }
+  .support-view-navigation > .support-ticket-nav {
+    display: grid;
+  }
+  .support-view-list > .support-list,
+  .support-view-conversation > .support-conversation,
+  .support-view-details > .support-ticket-details {
+    display: block;
+    grid-column: 1;
+    max-height: none;
+  }
+  .support-field input[type='file'] {
+    font-size: 12px;
+    padding: 10px 4px;
+  }
+}

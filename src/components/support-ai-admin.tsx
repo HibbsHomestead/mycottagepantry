@@ -13,11 +13,15 @@ export function SupportAiSuggestion({
   ticketId,
   onDraft,
   consent,
+  reply = '',
 }: {
   ticketId: string
   consent: boolean
+  reply?: string
   onDraft: (text: string) => void
 }) {
+  const [assistance, setAssistance] = useState('summary')
+  const [resultMode, setResultMode] = useState('summary')
   const [sources, setSources] = useState<string[]>([])
   const [suggestion, setSuggestion] = useState(''),
     [busy, setBusy] = useState(false),
@@ -26,10 +30,10 @@ export function SupportAiSuggestion({
     <section className="support-helper">
       <h3>AI review assistant</h3>
       <p>
-        Shares the reported summary, public replies, and any retained AI
-        conversation with OpenAI via Netlify AI Gateway. Diagnostic attachments
-        and private notes are excluded. Review all suggestions; no reply or
-        account change is made.
+        Shares the reported summary, latest 40 public replies, and any retained
+        AI conversation with OpenAI via Netlify AI Gateway. Diagnostic
+        attachments and private notes are excluded. Review all suggestions; no
+        reply or account change is made.
       </p>
       {!consent && (
         <p>
@@ -37,6 +41,18 @@ export function SupportAiSuggestion({
           guides manually.
         </p>
       )}
+      <label className="support-field">
+        AI assistance
+        <select
+          value={assistance}
+          onChange={(e) => setAssistance(e.target.value)}
+        >
+          <option value="summary">Summarize conversation</option>
+          <option value="category">Suggest category</option>
+          <option value="draft">Draft reply</option>
+          <option value="rewrite">Rewrite current reply</option>
+        </select>
+      </label>
       <button
         type="button"
         className="support-button"
@@ -48,7 +64,10 @@ export function SupportAiSuggestion({
             const v = await supportAiRequest(true, {
               action: 'summarize',
               ticketId,
+              assistance,
+              ...(assistance === 'rewrite' ? { draft: reply } : {}),
             })
+            setResultMode(assistance)
             setSuggestion(v.suggestion)
             setSources(v.articles || [])
           } catch (e) {
@@ -58,12 +77,20 @@ export function SupportAiSuggestion({
           }
         }}
       >
-        {busy ? 'Preparing suggestion…' : 'Summarize & suggest troubleshooting'}
+        {busy ? 'Preparing suggestion…' : 'Generate AI suggestion'}
       </button>
       {error && <p role="alert">{error}</p>}
       {suggestion && (
         <div className="ai-notice">
+          <strong>AI suggestion · review required · not sent</strong>
           <p style={{ whiteSpace: 'pre-wrap' }}>{suggestion}</p>
+          <p>Supporting help sources</p>
+          {!sources.length && (
+            <p>
+              No matching approved help source. Verify the suggestion before
+              using it.
+            </p>
+          )}
           <ul className="ai-links">
             {supportKnowledge
               .filter((a) => sources.includes(a.id))
@@ -73,13 +100,15 @@ export function SupportAiSuggestion({
                 </li>
               ))}
           </ul>
-          <button
-            type="button"
-            className="support-button"
-            onClick={() => onDraft(suggestion)}
-          >
-            Use as reply draft
-          </button>
+          {(resultMode === 'draft' || resultMode === 'rewrite') && (
+            <button
+              type="button"
+              className="support-button"
+              onClick={() => onDraft(suggestion)}
+            >
+              Use as reply draft
+            </button>
+          )}
           <p>Review and edit the reply below before sending.</p>
         </div>
       )}

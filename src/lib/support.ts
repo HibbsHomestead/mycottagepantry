@@ -10,6 +10,7 @@ export const supportStatuses = {
   in_progress: 'In progress',
   waiting_on_customer: 'Waiting on customer',
   resolved: 'Resolved',
+  archived: 'Archived',
 } as const
 export const ticketInput = z
   .object({
@@ -43,6 +44,10 @@ export type SupportTicket = {
   status: keyof typeof supportStatuses
   createdAt: string
   updatedAt: string
+  unread?: boolean
+  priority?: string
+  assignee?: string | null
+  businessName?: string | null
   requesterEmail?: string
   workspaceId?: string
   diagnostics?: Record<string, string>
@@ -61,6 +66,12 @@ export type SupportDetail = {
     messages: import('./support-ai').SupportAiMessage[]
     diagnostics: unknown
     expires_at: string
+  } | null
+  staffOptions?: { id: string }[]
+  subscription?: {
+    plan: string | null
+    status: string
+    verifiedAt: string | null
   } | null
   ticket: SupportTicket
   messages: SupportMessage[]

@@ -462,6 +462,9 @@ export const supportTickets = pgTable(
     subject: text().notNull(),
     category: text().notNull(),
     status: text().notNull().default('new'),
+    priority: text().notNull().default('normal'),
+    assignee: text(),
+    reads: jsonb().$type<Record<string, string>>().notNull().default({}),
     submissionKey: uuid('submission_key').notNull(),
     diagnostics: jsonb().$type<Record<string, string>>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -474,6 +477,11 @@ export const supportTickets = pgTable(
   (t) => [
     uniqueIndex('support_ticket_submission').on(t.requesterId, t.submissionKey),
     index('support_ticket_inbox').on(t.updatedAt),
+    index('support_ticket_assignment').on(t.assignee, t.status, t.updatedAt),
+    check(
+      'support_ticket_priority',
+      sql`${t.priority} IN ('low','normal','high','urgent')`,
+    ),
     index('support_ticket_requester').on(t.requesterId),
   ],
 )

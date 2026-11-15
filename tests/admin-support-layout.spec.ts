@@ -174,7 +174,7 @@ for (const width of [390, 820, 1440]) {
       const columns = await page
         .locator('.support-grid')
         .evaluate((grid) => getComputedStyle(grid).gridTemplateColumns)
-      expect(columns.split(' ')).toHaveLength(2)
+      expect(columns.split(' ')).toHaveLength(4)
       const shell = await page.locator('.support-shell').boundingBox()
       const main = await page.locator('.admin-main').evaluate((el) => ({
         width: el.clientWidth,
@@ -183,7 +183,7 @@ for (const width of [390, 820, 1440]) {
       }))
       expect(shell!.width).toBeCloseTo(main.width - main.left - main.right, 0)
       await page.screenshot({
-        path: 'docs/reviews/admin-support-layout/inbox-1440.png',
+        path: '/tmp/cottage-support-inbox-1440.png',
         fullPage: true,
       })
     }
@@ -200,6 +200,8 @@ for (const width of [390, 820, 1440]) {
     await expect(
       page.locator('summary').filter({ hasText: 'Private admin AI assistant' }),
     ).toBeVisible()
+    if (width <= 1100)
+      await page.getByRole('button', { name: 'Tickets', exact: true }).click()
     await page.getByRole('button', { name: /Label preview question/ }).click()
     await expect(page).toHaveURL(new RegExp('#ticket=' + secondId))
     await page.goBack()
@@ -247,7 +249,7 @@ for (const width of [390, 820, 1440]) {
       ),
     ).toBeLessThanOrEqual(1)
     await page.screenshot({
-      path: `docs/reviews/admin-support-layout/conversation-${width}.png`,
+      path: `/tmp/cottage-support-conversation-${width}.png`,
       fullPage: true,
     })
     await page
@@ -303,5 +305,57 @@ for (const status of [401, 403]) {
     await expect(page.getByRole('link', { name: 'Admin sign-in' })).toHaveCount(
       status === 401 ? 1 : 0,
     )
+  })
+}
+
+for (const width of [390, 1440]) {
+  test(`help desk navigation and detail views at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await fixture(page)
+    await page.goto('/platform-support')
+    if (width === 390) {
+      await page
+        .getByRole('button', { name: 'Navigation', exact: true })
+        .click()
+    }
+    await page.getByRole('button', { name: 'Unassigned', exact: true }).click()
+    await page.getByRole('button', { name: /Recipe method question/ }).click()
+    await expect(
+      page.getByText('Where can I update the method for my sourdough recipe?'),
+    ).toBeVisible()
+    await page
+      .getByLabel('Reply in Cottage Pantry')
+      .fill('Please open the recipe editor.')
+    await expect(page.getByLabel('Optional screenshot')).toBeVisible()
+    if (width === 390) {
+      await page.getByRole('button', { name: 'Details', exact: true }).click()
+      await expect(page.getByLabel('Priority')).toBeVisible()
+      await expect(page.getByLabel('Reply in Cottage Pantry')).not.toBeVisible()
+      await page
+        .getByRole('button', { name: 'Conversation', exact: true })
+        .click()
+      await expect(page.getByLabel('Reply in Cottage Pantry')).toHaveValue(
+        'Please open the recipe editor.',
+      )
+    } else {
+      const columns = await page
+        .locator('.support-grid')
+        .evaluate(
+          (el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
+        )
+      expect(columns).toBe(4)
+      await expect(page.getByLabel('Priority')).toBeVisible()
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true)
+    await page.screenshot({
+      path: `/tmp/cottage-help-desk-${width}.png`,
+      fullPage: true,
+    })
   })
 }
