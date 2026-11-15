@@ -105,7 +105,7 @@ export function IngredientPurchaseSetup({
       )}
       <div className="form-grid ingredient-purchase-five">
         <label className="field">
-          <span>Purchasing package unit</span>
+          <span>Package type</span>
           {select(
             s.packageUnit,
             (v) => set('packageUnit', v),
@@ -113,7 +113,7 @@ export function IngredientPurchaseSetup({
           )}
         </label>
         <label className="field">
-          <span>Purchasing price</span>
+          <span>Price per package</span>
           <input
             type="number"
             min="0"
@@ -127,11 +127,11 @@ export function IngredientPurchaseSetup({
           </small>
         </label>
         <label className="field">
-          <span>Stock shelf unit</span>
+          <span>Stock unit</span>
           {select(shelf, changeStorage, 'Stock shelf unit')}
         </label>
         <label className="field">
-          <span># of stock units in purchasing unit</span>
+          <span>Stock units per package</span>
           <input
             type="number"
             min="0.000001"

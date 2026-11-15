@@ -406,7 +406,7 @@ it('adds a measured prep conversion in its dedicated tab without inventing a pur
     conversions: [],
   }
   render(<IngredientDetail ingredient={ingredient} {...p} initialEditing />)
-  await user.click(screen.getByRole('button', { name: 'Unit Conversions' }))
+  await user.click(screen.getByRole('tab', { name: 'Unit Conversions' }))
   await user.type(screen.getByLabelText('To quantity'), '100')
   await user.click(
     screen.getByRole('checkbox', { name: /I verified these amounts/ }),
@@ -461,9 +461,7 @@ it('opens Edit Item with incomplete units, preserves saved fields and cancels wi
     'Pumpkin fixture',
   )
   expect(screen.getByText(/Conversion required\./)).toBeVisible()
-  await user.click(
-    screen.getByRole('button', { name: 'Stock & Other Details' }),
-  )
+  await user.click(screen.getByRole('tab', { name: 'Stock & Other Details' }))
   expect(screen.getByLabelText('Reorder threshold (each)')).toHaveValue(2)
   expect(screen.getByLabelText('Reorder quantity (each)')).toHaveValue('3')
   expect(screen.getByText(/Current balance: 7 each/)).toBeVisible()
@@ -480,7 +478,7 @@ it('saves an explicitly verified fixture correction while preserving saved stock
     ingredient = pumpkinFixture()
   render(<IngredientDetail ingredient={ingredient} {...p} />)
   await user.click(screen.getByRole('button', { name: 'Edit Ingredient' }))
-  await user.click(screen.getByRole('button', { name: 'Unit Conversions' }))
+  await user.click(screen.getByRole('tab', { name: 'Unit Conversions' }))
   await user.selectOptions(screen.getByLabelText('From unit'), 'can')
   await user.selectOptions(screen.getByLabelText('To unit'), 'each')
   await user.clear(screen.getByLabelText('From quantity'))
