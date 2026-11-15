@@ -1,5 +1,14 @@
+import {
+  receiptBusinessAllocations,
+  receiptAllocationIssues,
+  receiptTotals,
+  receiptLineIssues,
+} from '../../src/lib/receipt-totals'
 import { handlePantryCategories } from '../lib/pantry-category-handler'
-import { assertSectionCategoryAssignment, pantryCategoryView } from '../../src/lib/section-categories'
+import {
+  assertSectionCategoryAssignment,
+  pantryCategoryView,
+} from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
@@ -632,7 +641,12 @@ export default async (req: Request, context: Context) => {
       countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
-      assertSectionCategoryAssignment(item, state[table]?.find(r => r.id === item.id), state, table)
+      assertSectionCategoryAssignment(
+        item,
+        state[table]?.find((r) => r.id === item.id),
+        state,
+        table,
+      )
       if (table === 'ingredients' && !countPackageWrite) {
         const previous = state.ingredients.find((i) => i.id === item.id)
         if (previous?.countPackages) item.countPackages = previous.countPackages
@@ -1054,7 +1068,8 @@ export default async (req: Request, context: Context) => {
         role,
         actor: user?.id,
       })
-    if (requestUrl.searchParams.has('pantryCategories')) return await handlePantryCategories(req, {state,role,save,client})
+    if (requestUrl.searchParams.has('pantryCategories'))
+      return await handlePantryCategories(req, { state, role, save, client })
     if (requestUrl.searchParams.has('productCategories')) {
       return await handleProductCategories(req, {
         state,
@@ -1510,8 +1525,15 @@ export default async (req: Request, context: Context) => {
       if (!receipt || !receipt.fileHash)
         throw new Error('Receipt file not found in this oven.')
       const original = requestUrl.searchParams.get('original') === '1'
+      const source = receipt.sourceReceiptId
+        ? state.receipt_extractions.find(
+            (r) => r.id === receipt.sourceReceiptId,
+          )
+        : receipt
+      if (!source || source.fileHash !== receipt.fileHash)
+        throw new Error('Receipt source not found in this oven.')
       const bytes = await getStore('receipts-private').get(
-        receiptObjectKey(org, receipt, original),
+        receiptObjectKey(org, source, original),
         { type: 'arrayBuffer' },
       )
       if (!bytes) throw new Error('Receipt file is unavailable.')
@@ -3023,9 +3045,39 @@ export default async (req: Request, context: Context) => {
         )
         if (!receipt || receipt.status !== 'draft' || !transaction)
           throw new Error('Choose an open receipt and an existing purchase.')
+        if (receipt.allocationVersion === 1) {
+          const totals = receiptTotals(receipt)
+          const allocations = receiptBusinessAllocations(receipt)
+          if (
+            totals.errors.length ||
+            (totals.difference != null && totals.difference !== 0) ||
+            receiptAllocationIssues(receipt).length ||
+            receipt.lines.some((l: Item) => receiptLineIssues(l).length)
+          )
+            throw new Error(
+              'Complete allocation review and reconciliation before attaching a purchase.',
+            )
+          if (
+            allocations.some(
+              (l) => l.allocation !== 'personal' && l.decision === 'inventory',
+            )
+          )
+            throw new Error(
+              'Use receipt posting for confirmed stock additions; attachment does not receive inventory.',
+            )
+          if (
+            Math.round(
+              allocations.reduce((sum, l) => sum + l.postedAmount, 0) * 100,
+            ) !== Math.round(Number(transaction.amount) * 100)
+          )
+            throw new Error(
+              'The existing purchase must match only the business allocation. Correct the existing purchase first if it includes excluded personal costs.',
+            )
+        }
         if (
           receipt.total == null ||
-          Number(receipt.total) !== Number(transaction.amount)
+          (receipt.allocationVersion !== 1 &&
+            Number(receipt.total) !== Number(transaction.amount))
         )
           throw new Error(
             'Receipt total must match the existing purchase amount.',
@@ -3108,6 +3160,7 @@ export default async (req: Request, context: Context) => {
           'financeReconcile',
           'financeReverse',
           'receiptDraft',
+          'receiptCorrect',
           'receiptCreateItem',
           'receiptPost',
           'receiptCancel',
@@ -4072,7 +4125,12 @@ export default async (req: Request, context: Context) => {
               item.defaultOverhead,
               'Default overhead',
             )
-          if (item.taxRate !== undefined && item.taxRate !== null && item.taxRate !== '') item.taxRate = number(item.taxRate, 'Tax rate')
+          if (
+            item.taxRate !== undefined &&
+            item.taxRate !== null &&
+            item.taxRate !== ''
+          )
+            item.taxRate = number(item.taxRate, 'Tax rate')
           item.laborRate = number(item.laborRate ?? 18, 'Labor rate')
           item.targetMargin = number(item.targetMargin ?? 65, 'Target margin')
           if (item.taxRate > 100 || item.targetMargin >= 100)

@@ -97,6 +97,7 @@ it('uploads, reads, populates review, and makes no posting request before confir
   expect(within(dialog).getByRole('status')).toHaveTextContent(
     'Partially extracted',
   )
+  await user.click(within(dialog).getByRole('tab', { name: 'Line Items' }))
   await user.click(within(dialog).getByRole('button', { name: /Flour.*Edit/ }))
   await user.click(within(dialog).getByText('Printed package details'))
   expect(within(dialog).getByLabelText('Printed purchase count')).toHaveValue(2)
@@ -201,6 +202,7 @@ it('creates a receipt-line item through the shared dialog and returns with it se
   )
   render(<App initial={workspace} />)
   await user.click(screen.getByRole('button', { name: /Supplier/ }))
+  await user.click(screen.getByRole('tab', { name: 'Line Items' }))
   await user.click(screen.getByRole('button', { name: /Receipt bags.*Edit/ }))
   await user.selectOptions(screen.getByLabelText('Match inventory item'), 'new')
   const dialog = within(screen.getByRole('dialog', { name: 'Add Item' }))

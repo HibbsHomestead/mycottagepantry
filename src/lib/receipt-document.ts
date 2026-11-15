@@ -88,6 +88,8 @@ export async function readReceiptResponse(response: Response) {
 }
 export const receiptFields = [
   'arithmeticVersion',
+  'allocationVersion',
+  'adjustmentAllocation',
   'taxTreatment',
   'receiptDiscount',
   'printedTotal',

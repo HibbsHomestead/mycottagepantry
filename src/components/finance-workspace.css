@@ -1088,3 +1088,83 @@
   outline: 2px solid #8055c8;
   outline-offset: 3px;
 }
+
+/* Receipt allocation extends the native document review surface. */
+.receipt-allocation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+.receipt-allocation-summary p {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+}
+.receipt-tab-lines .receipt-metadata {
+  display: none;
+}
+.receipt-lines-panel[hidden] {
+  display: none;
+}
+@media (min-width: 901px) {
+  .receipt-review-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+  .receipt-review-grid > .receipt-fields {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .receipt-review-grid > .receipt-preview {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+@media (max-width: 900px) {
+  .receipt-allocation-summary {
+    gap: 8px 16px;
+  }
+  .receipt-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.receipt-allocation-summary {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--card, #fff);
+  box-shadow: 0 3px 9px rgb(40 32 52 / 6%);
+}
+.receipt-line > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 0;
+  font-size: 12px;
+}
+
+@media (max-width: 800px) {
+  .receipt-summary {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .receipt-summary dl {
+    display: none;
+  }
+  .receipt-summary > div > strong {
+    font-size: 24px;
+  }
+  .receipt-allocation-summary {
+    padding: 12px;
+    font-size: 13px;
+    gap: 6px 12px;
+  }
+  .receipt-allocation-summary p {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+}
