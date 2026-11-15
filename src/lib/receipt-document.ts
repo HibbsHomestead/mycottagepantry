@@ -90,6 +90,7 @@ export const receiptFields = [
   'arithmeticVersion',
   'allocationVersion',
   'adjustmentAllocation',
+  'feeAllocation',
   'taxTreatment',
   'receiptDiscount',
   'printedTotal',
