@@ -43,13 +43,13 @@ export const sectionTabs: Record<string, string[]> = {
   ],
   Finance: [
     'Overview',
-    'Money Activity',
-    'Expenses',
-    'Profit & Loss',
-    'Cash Flow',
-    'Tax Center',
-    'Chart of Accounts',
+    'Register',
+    'Accounts',
+    'Mileage',
     'Reports',
+    'Settings / Categories',
+    'Advanced',
+    'Advanced reports',
   ],
   Settings: [
     'Business Profile',
@@ -118,6 +118,22 @@ export function destination(name: string, section?: string): Destination {
         : 'Overview'
     }
   }
+  if (main === 'Finance') {
+    const legacy: Record<string, string> = {
+      'Money Activity': 'Register',
+      Expenses: 'Register',
+      'Profit & Loss': 'Reports',
+      'Cash Flow': 'Reports',
+      'Tax Center': 'Reports',
+      'Chart Of Accounts': 'Advanced',
+      'Chart of Accounts': 'Advanced',
+      'Bookkeeping Reports': 'Reports',
+    }
+    tab =
+      legacy[tab] ||
+      sectionTabs.Finance.find((t) => t.toLowerCase() === tab.toLowerCase()) ||
+      tab
+  }
   if (name === 'Production')
     tab =
       (
@@ -182,11 +198,12 @@ export function destination(name: string, section?: string): Destination {
     sub = tab
   }
   if (main === 'Finance') {
-    page = tab === 'Reports' ? 'Reports' : 'Finances'
+    page = tab === 'Advanced reports' ? 'Reports' : 'Finances'
     sub =
       (
         {
-          'Money Activity': 'Money activity',
+          Advanced: 'Money activity',
+          Reports: 'Bookkeeping reports',
           'Profit & Loss': 'Profit & loss',
           'Cash Flow': 'Cash flow',
           'Tax Center': 'Tax center',

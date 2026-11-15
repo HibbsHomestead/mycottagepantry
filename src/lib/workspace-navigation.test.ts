@@ -30,7 +30,7 @@ it('maps old shared destinations without losing existing functionality', () => {
     ['#Production/Batch%20runs', 'Production', 'Production Runs'],
     ['#Finances/Sales', 'Sales', 'Sales'],
     ['#Finances/Receipt%20inbox', 'Purchasing', 'Purchases & Receipts'],
-    ['#Finances/Profit%20%26%20loss', 'Finance', 'Profit & Loss'],
+    ['#Finances/Profit%20%26%20loss', 'Finance', 'Reports'],
     ['#Reports', 'Finance', 'Reports'],
     [
       '#Settings/Data%20Import%20%26%20Export',
