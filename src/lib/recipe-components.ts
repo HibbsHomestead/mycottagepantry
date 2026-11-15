@@ -28,7 +28,7 @@ export function componentStock(source: Item, ingredients: Item[]): Item {
     currentCost: recipeCost(source, ingredients) / Number(source.yield),
     compoundRecipeId: source.id,
     usedAs: 'ingredient',
-    category: 'Preps & fillings',
+    category: 'Preps, Fillings & Toppings',
     threshold: existing?.threshold || 0,
     allergens: existing?.allergens || [],
     reviewed: existing?.reviewed || false,

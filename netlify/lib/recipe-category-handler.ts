@@ -1,3 +1,4 @@
+import { canonicalCategoryName } from '../../src/lib/category-consolidation'
 import {
   categoryDetailsShape,
   validateCategoryTree,
@@ -58,7 +59,7 @@ export async function handleRecipeCategories(
         id: previous?.id || randomUUID(),
         name:
           typeof input.category?.name === 'string'
-            ? input.category.name.trim().replace(/\s+/g, ' ')
+            ? canonicalCategoryName(input.category.name).replace(/\s+/g, ' ')
             : '',
         icon: input.category?.icon,
         previousNames:

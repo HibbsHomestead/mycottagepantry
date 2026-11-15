@@ -203,7 +203,7 @@ export function demoData(): Workspace {
         'g',
         0.02,
         100,
-        'Preps & fillings',
+        'Preps, Fillings & Toppings',
         { compoundRecipeId: 'cream' },
       ),
       ingredient(
@@ -213,7 +213,7 @@ export function demoData(): Workspace {
         'g',
         0.008,
         200,
-        'Preps & fillings',
+        'Preps, Fillings & Toppings',
         { compoundRecipeId: 'filling', allergens: ['Milk'] },
       ),
       ingredient(
@@ -241,7 +241,7 @@ export function demoData(): Workspace {
       {
         id: 'bread',
         name: 'Homestyle White Bread',
-        category: 'Breads',
+        category: 'Breads & Rolls',
         description: 'A soft, golden everyday loaf. A market favorite.',
         yield: 4,
         yieldUnit: 'loaves',
@@ -303,7 +303,7 @@ export function demoData(): Workspace {
       {
         id: 'cream',
         name: 'Vanilla Buttercream',
-        category: 'Preps & fillings',
+        category: 'Preps, Fillings & Toppings',
         compound: true,
         description: 'A small-batch frosting for cakes and cupcakes.',
         yield: 650,
@@ -322,7 +322,7 @@ export function demoData(): Workspace {
       {
         id: 'filling',
         name: 'Cinnamon Filling',
-        category: 'Preps & fillings',
+        category: 'Preps, Fillings & Toppings',
         compound: true,
         yield: 368,
         yieldUnit: 'g',

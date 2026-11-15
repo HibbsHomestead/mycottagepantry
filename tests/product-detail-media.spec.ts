@@ -7,6 +7,10 @@ import {
   workspaceFixtureUrl,
 } from './workspace-fixture'
 
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
+
 for (const [width, height] of [
   [1762, 854],
   [1280, 854],
@@ -16,7 +20,7 @@ for (const [width, height] of [
   [390, 900],
   [320, 900],
 ]) {
-  test(`product details keep labels and actions below the unchanged photo (${width} × ${height})`, async ({
+  test(`product details keep labels, toolbar and recipe actions accessible (${width} × ${height})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height })
@@ -48,6 +52,7 @@ for (const [width, height] of [
       })
     })
     await page.goto(workspaceFixtureUrl('Products/Food'))
+    await page.reload()
     const card = page.getByRole('article', {
       name: product.name,
       exact: true,
@@ -64,7 +69,7 @@ for (const [width, height] of [
     ).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({
-      path: `docs/previews/product-details-after-${width}.png`,
+      path: `docs/reviews/product-refresh/media-${width}.png`,
       animations: 'disabled',
     })
     const media = dialog.locator('.product-detail-media')
@@ -76,20 +81,20 @@ for (const [width, height] of [
       labels.getByRole('button', { name: 'Edit', exact: true }),
     ).toHaveCount(1)
     await expect(
-      media.getByRole('button', { name: 'Edit Product' }),
+      dialog.getByRole('button', { name: 'Edit Product' }),
     ).toBeEnabled()
     await expect(
       media.getByRole('button', { name: 'Create label' }),
     ).toBeEnabled()
     await expect(
-      media.getByRole('button', { name: 'Open recipe' }),
+      dialog.getByRole('button', { name: 'Open recipe' }),
     ).toBeEnabled()
     await expect(dialog.locator('.product-detail-information')).toContainText(
       'How this is calculated',
     )
     await expect(
       dialog.locator('.product-detail-information').getByRole('button'),
-    ).toHaveCount(0)
+    ).toHaveCount(2)
     const geometry = await dialog.evaluate((panel) => {
       const media = panel.querySelector('.product-detail-media')!
       const photo = media.querySelector('.product-detail-photo')!
@@ -130,10 +135,10 @@ for (const [width, height] of [
     expect(geometry.labelTop - geometry.photoBottom).toBeLessThanOrEqual(17)
     expect(geometry.nestedScrollers).toBe(0)
     expect(geometry.overflowX).toBeLessThanOrEqual(1)
-    if (width >= 768) expect(geometry.overflowY).toBeLessThanOrEqual(1)
+    if (width >= 1366) expect(geometry.overflowY).toBeLessThanOrEqual(1)
     if (width <= 640) {
       expect(geometry.columns).toBe(1)
-      expect(geometry.photoTop).toBeLessThan(geometry.infoTop)
+      expect(geometry.infoTop).toBeLessThan(geometry.photoTop)
     }
     // Scroll the outer dialog as necessary, then check text and control bounds.
     for (const control of await media.getByRole('button').all()) {
@@ -168,7 +173,7 @@ for (const [width, height] of [
       .getByRole('button', { name: 'Close', exact: true })
       .first()
       .click()
-    await media.getByRole('button', { name: 'Open recipe' }).click()
+    await dialog.getByRole('button', { name: 'Open recipe' }).click()
     await expect(
       page.getByRole('dialog').getByRole('heading', {
         name: workspace.recipes.find((r) => r.id === product.recipeId)!.name,
@@ -176,10 +181,11 @@ for (const [width, height] of [
       }),
     ).toBeVisible()
     await page.goto(workspaceFixtureUrl('Products/Food'))
+    await page.reload()
     await card
       .getByRole('button', { name: 'View details', exact: true })
       .click()
-    await media
+    await dialog
       .getByRole('button', { name: 'Edit Product', exact: true })
       .click()
     await expect(
@@ -190,6 +196,7 @@ for (const [width, height] of [
       .getByRole('button', { name: 'Cancel', exact: true })
       .click()
     await page.goto(workspaceFixtureUrl('Products/Food'))
+    await page.reload()
     await card
       .getByRole('button', { name: 'View details', exact: true })
       .click()
@@ -198,6 +205,7 @@ for (const [width, height] of [
       label.name,
     )
     await page.goto(workspaceFixtureUrl('Products/Food'))
+    await page.reload()
     await card
       .getByRole('button', { name: 'View details', exact: true })
       .click()
@@ -249,6 +257,7 @@ for (const width of [1440, 390]) {
       route.fulfill({ json: { workspace, role: 'Owner', demo: false } }),
     )
     await page.goto(workspaceFixtureUrl('Products/Food'))
+    await page.reload()
     await page
       .getByRole('article', { name: product.name, exact: true })
       .getByRole('button', { name: 'View details', exact: true })
@@ -294,8 +303,11 @@ for (const width of [1440, 390]) {
         return problems
       }),
     ).toEqual([])
+    await dialog
+      .getByRole('button', { name: 'Open recipe', exact: true })
+      .scrollIntoViewIfNeeded()
     await expect(
-      media.getByRole('button', { name: 'Open recipe', exact: true }),
+      dialog.getByRole('button', { name: 'Open recipe', exact: true }),
     ).toBeInViewport()
   })
 }

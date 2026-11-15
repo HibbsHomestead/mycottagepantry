@@ -348,7 +348,7 @@ it('preserves source categories for import review and validates reviewed categor
     categoryNeedsReview: true,
   })
   const breadCategory = (await call()).categories.find(
-    (c) => c.name === 'Breads',
+    (c) => c.name === 'Breads & Rolls',
   )!
   await change({
     operation: 'saveCategory',

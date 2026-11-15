@@ -1,3 +1,4 @@
+import { canonicalCategoryName } from './category-consolidation'
 import { z } from 'zod'
 import type { Item, Workspace } from './domain'
 import {
@@ -63,10 +64,12 @@ export function pantrySectionCategories(w: Workspace): SectionCategory[] {
   for (const i of w.ingredients || []) {
     if (i.sectionCategoryId) continue
     const scope = pantryCategoryScope(i)
-    const label = String(
-      scope === 'handmade-materials'
-        ? i.materialCategory || ''
-        : i.category || '',
+    const label = canonicalCategoryName(
+      String(
+        scope === 'handmade-materials'
+          ? i.materialCategory || ''
+          : i.category || '',
+      ),
     )
     if (!label) continue
     const seed = pantryCategories.find(
@@ -109,7 +112,9 @@ export function assignedCategoryId(
       c.label === label &&
       sectionCategories(w, scope).some((r) => r.id === c.value),
   )
-  return seed?.value || (label ? legacyId(scope, label) : '')
+  return (
+    seed?.value || (label ? legacyId(scope, canonicalCategoryName(label)) : '')
+  )
 }
 export function recordsInScope(w: Workspace, scope: CategoryScope) {
   return scope === 'recipes'
