@@ -28,7 +28,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { X } from 'lucide-react'
+import { X, Calculator, Image, Box, ArrowLeftRight } from 'lucide-react'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -595,23 +601,64 @@ export function IngredientDetail({
             {editing && (
               <div
                 className="ingredient-setup-tabs"
+                role="tablist"
                 aria-label="Ingredient editor sections"
               >
-                {[
-                  ['details', 'Details & Costing'],
-                  ['labels', 'Images & Label Info'],
-                  ['stock', 'Stock & Other Details'],
-                  ['conversions', 'Unit Conversions'],
-                ].map(([key, label]) => (
-                  <button
-                    type="button"
-                    className={editTab === key ? 'btn' : 'btn secondary'}
-                    aria-pressed={editTab === key}
-                    key={key}
-                    onClick={() => setEditTab(key)}
-                  >
-                    {label}
-                  </button>
+                {(
+                  [
+                    ['details', 'Details & Costing', Calculator],
+                    ['labels', 'Images & Label Info', Image],
+                    ['stock', 'Stock & Other Details', Box],
+                    ['conversions', 'Unit Conversions', ArrowLeftRight],
+                  ] as const
+                ).map(([key, label, Icon]) => (
+                  <TooltipProvider key={key}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className={editTab === key ? 'btn' : 'btn secondary'}
+                          role="tab"
+                          id={`ingredient-tab-${key}`}
+                          aria-controls="ingredient-active-panel"
+                          aria-label={label}
+                          aria-selected={editTab === key}
+                          tabIndex={editTab === key ? 0 : -1}
+                          onKeyDown={(event) => {
+                            const keys = [
+                              'details',
+                              'labels',
+                              'stock',
+                              'conversions',
+                            ]
+                            const index = keys.indexOf(key)
+                            const next =
+                              event.key === 'Home'
+                                ? 0
+                                : event.key === 'End'
+                                  ? 3
+                                  : event.key === 'ArrowRight'
+                                    ? (index + 1) % 4
+                                    : event.key === 'ArrowLeft'
+                                      ? (index + 3) % 4
+                                      : -1
+                            if (next < 0) return
+                            event.preventDefault()
+                            setEditTab(keys[next])
+                            document
+                              .getElementById(`ingredient-tab-${keys[next]}`)
+                              ?.focus()
+                          }}
+                          onClick={() => setEditTab(key)}
+                        >
+                          <Icon size={19} aria-hidden="true" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {label}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ))}
               </div>
             )}
@@ -738,6 +785,9 @@ export function IngredientDetail({
             >
               {editing ? (
                 <div
+                  id="ingredient-active-panel"
+                  role="tabpanel"
+                  aria-labelledby={`ingredient-tab-${editTab}`}
                   className={`ingredient-detail-grid ingredient-tab-${editTab} ${packaging ? 'packaging-edit-grid' : 'ingredient-edit-grid'}`}
                 >
                   {editTab === 'conversions' && (
@@ -848,135 +898,157 @@ export function IngredientDetail({
                       />
                     </section>
                   )}
-                  <details className="ingredient-import-tools">
-                    <summary>Find product details</summary>
-                    <ProductLinkImport
-                      lookupPanel
-                      afterLookup={(selectUrl) => (
-                        <details className="ingredient-secondary-lookup">
-                          <summary>Barcode, catalog & photo lookup</summary>
-                          <IngredientLookupTools
-                            draft={draft}
-                            workspace={w}
-                            existing
-                            onScan={
-                              packaging ? () => setScanning(true) : undefined
-                            }
-                            onSourceUrl={selectUrl}
-                            apply={applyImport}
-                          />
-                        </details>
-                      )}
-                      populateDraft={food}
-                      vendors={w.vendors}
-                      settings={w.settings[0]}
-                      draft={draft}
-                      existing
-                      onBusyChange={setImportBusy}
-                      onWorkspace={onWorkspace}
-                      onVendorsChange={(vendors) =>
-                        onWorkspace({ ...w, vendors })
-                      }
-                      apply={applyImport}
-                    />
-                  </details>
-                  {packaging && (
-                    <InventoryProductFields value={draft} change={change} />
-                  )}
-                  <section className="ingredient-section ingredient-edit-identification">
-                    <h3>Identification</h3>
-                    <div className="ingredient-edit-identity-body">
-                      <div className="ingredient-edit-identity-fields">
-                        <Field label={packaging ? 'Packaging name' : 'Name'}>
-                          {input('name')}
-                        </Field>
-                        <div className="form-grid">
-                          <Field label="Brand">{input('brand')}</Field>
-                          <ScopedCategorySelect
-                            workspace={w}
-                            scope={pantryCategoryScope(draft)}
-                            item={draft}
-                            canManage={canEdit}
-                            onSettings={(patch) =>
-                              onWorkspace(workspaceCategorySettings(w, patch))
-                            }
-                            onChange={change}
-                          />
-                          <Field label="Preferred vendor">
-                            <select
-                              value={
-                                draft.vendorId ||
-                                w.vendors.find((v) => v.name === draft.vendor)
-                                  ?.id ||
-                                (draft.vendor ? '__saved_vendor_name__' : '') ||
-                                ''
-                              }
-                              onChange={(e) => {
-                                change('vendorId', e.target.value || null)
-                                change(
-                                  'vendor',
-                                  w.vendors.find((v) => v.id === e.target.value)
-                                    ?.name || '',
-                                )
-                              }}
-                            >
-                              <option value="">Not set</option>
-                              {draft.vendor &&
-                                !draft.vendorId &&
-                                !w.vendors.some(
-                                  (v) => v.name === draft.vendor,
-                                ) && (
-                                  <option
-                                    value="__saved_vendor_name__"
-                                    disabled
-                                  >
-                                    {draft.vendor} (saved name)
-                                  </option>
-                                )}
-                              {w.vendors.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                  {v.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Default barcode">
-                            <div className="ingredient-barcode-entry">
-                              {input('barcode')}
-                              {!packaging && (
-                                <button
-                                  type="button"
-                                  className="btn secondary"
-                                  onClick={() => setScanning(true)}
-                                >
-                                  Scan barcode
-                                </button>
-                              )}
-                            </div>
-                          </Field>
-                          {!packaging && (
-                            <Field label="Internal SKU">{input('sku')}</Field>
+                  <h3 className="ingredient-active-heading">
+                    {
+                      (
+                        {
+                          details: 'Details & Costing',
+                          labels: 'Images & Label Info',
+                          stock: 'Stock & Other Details',
+                          conversions: 'Unit Conversions',
+                        } as Record<string, string>
+                      )[editTab]
+                    }
+                  </h3>
+                  <div className="ingredient-edit-general">
+                    {packaging && (
+                      <InventoryProductFields value={draft} change={change} />
+                    )}
+                    <section className="ingredient-section ingredient-edit-identification">
+                      <h3>Identification</h3>
+                      <details className="ingredient-import-tools">
+                        <summary>Find product details</summary>
+                        <ProductLinkImport
+                          lookupPanel
+                          afterLookup={(selectUrl) => (
+                            <details className="ingredient-secondary-lookup">
+                              <summary>Barcode, catalog & photo lookup</summary>
+                              <IngredientLookupTools
+                                draft={draft}
+                                workspace={w}
+                                existing
+                                onScan={
+                                  packaging
+                                    ? () => setScanning(true)
+                                    : undefined
+                                }
+                                onSourceUrl={selectUrl}
+                                apply={applyImport}
+                              />
+                            </details>
                           )}
+                          populateDraft={food}
+                          vendors={w.vendors}
+                          settings={w.settings[0]}
+                          draft={draft}
+                          existing
+                          onBusyChange={setImportBusy}
+                          onWorkspace={onWorkspace}
+                          onVendorsChange={(vendors) =>
+                            onWorkspace({ ...w, vendors })
+                          }
+                          apply={applyImport}
+                        />
+                      </details>
+
+                      <div className="ingredient-edit-identity-body">
+                        <div className="ingredient-edit-identity-fields">
+                          <div className="form-grid">
+                            <Field
+                              label={packaging ? 'Packaging name' : 'Name'}
+                            >
+                              {input('name')}
+                            </Field>
+                            <ScopedCategorySelect
+                              workspace={w}
+                              scope={pantryCategoryScope(draft)}
+                              item={draft}
+                              canManage={canEdit}
+                              onSettings={(patch) =>
+                                onWorkspace(workspaceCategorySettings(w, patch))
+                              }
+                              onChange={change}
+                            />
+                            <Field label="Brand">{input('brand')}</Field>
+                            <Field label="Preferred vendor">
+                              <select
+                                value={
+                                  draft.vendorId ||
+                                  w.vendors.find((v) => v.name === draft.vendor)
+                                    ?.id ||
+                                  (draft.vendor
+                                    ? '__saved_vendor_name__'
+                                    : '') ||
+                                  ''
+                                }
+                                onChange={(e) => {
+                                  change('vendorId', e.target.value || null)
+                                  change(
+                                    'vendor',
+                                    w.vendors.find(
+                                      (v) => v.id === e.target.value,
+                                    )?.name || '',
+                                  )
+                                }}
+                              >
+                                <option value="">Not set</option>
+                                {draft.vendor &&
+                                  !draft.vendorId &&
+                                  !w.vendors.some(
+                                    (v) => v.name === draft.vendor,
+                                  ) && (
+                                    <option
+                                      value="__saved_vendor_name__"
+                                      disabled
+                                    >
+                                      {draft.vendor} (saved name)
+                                    </option>
+                                  )}
+                                {w.vendors.map((v) => (
+                                  <option key={v.id} value={v.id}>
+                                    {v.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            <Field label="Default barcode">
+                              <div className="ingredient-barcode-entry">
+                                {input('barcode')}
+                                {!packaging && (
+                                  <button
+                                    type="button"
+                                    className="btn secondary"
+                                    onClick={() => setScanning(true)}
+                                  >
+                                    Scan barcode
+                                  </button>
+                                )}
+                              </div>
+                            </Field>
+                            {!packaging && (
+                              <Field label="Internal SKU">{input('sku')}</Field>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ingredient-edit-identity-photo">
+                          <ItemPhotoField
+                            value={{ ...i, ...draft }}
+                            assets={w.graphic_assets || []}
+                            disabled={busy}
+                            canUpload={canEdit}
+                            onChange={change}
+                            onWorkspace={onWorkspace}
+                            onBusy={setBusy}
+                            className="item-photo-control"
+                            previewClassName="pantry-edit-photo"
+                          />
                         </div>
                       </div>
-                      <div className="ingredient-edit-identity-photo">
-                        <ItemPhotoField
-                          value={{ ...i, ...draft }}
-                          assets={w.graphic_assets || []}
-                          disabled={busy}
-                          canUpload={canEdit}
-                          onChange={change}
-                          onWorkspace={onWorkspace}
-                          onBusy={setBusy}
-                          className="item-photo-control"
-                          previewClassName="pantry-edit-photo"
-                        />
-                      </div>
-                    </div>
-                    {packaging && (
-                      <Field label="Internal SKU">{input('sku')}</Field>
-                    )}
-                  </section>
+                      {packaging && (
+                        <Field label="Internal SKU">{input('sku')}</Field>
+                      )}
+                    </section>
+                  </div>
                   <div className="ingredient-edit-columns">
                     <div className="ingredient-edit-primary">
                       <section className="ingredient-section">

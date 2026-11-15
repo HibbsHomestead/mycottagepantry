@@ -4,9 +4,9 @@ import {
   installWorkspaceFixture,
   workspaceFixtureUrl,
 } from './workspace-fixture'
-for (const width of [1044, 390])
+for (const width of [1440, 1044, 390])
   test(`ingredient editor header ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1177 })
+    await page.setViewportSize({ width, height: width === 390 ? 844 : width === 1440 ? 900 : 1177 })
     await installWorkspaceFixture(page)
     const workspace = demoData()
     const original = structuredClone(workspace)
@@ -38,7 +38,7 @@ for (const width of [1044, 390])
     await expect(d.getByLabel('Name', { exact: true })).toBeVisible()
     const phase = process.env.CAPTURE_PHASE || 'after'
     await page.screenshot({
-      path: `docs/reviews/ingredient-header/${phase}-${width}.png`,
+      path: `docs/reviews/ingredient-side-by-side/${phase}-${width}.png`,
       animations: 'disabled',
     })
     if (phase === 'before') {
@@ -50,8 +50,28 @@ for (const width of [1044, 390])
     )
     await expect(d.getByLabel('Category', { exact: true })).toHaveCount(1)
     const header = d.locator('.ingredient-detail-header')
+    if (width > 900) {
+      const title = await header.getByRole('heading').boundingBox()
+      const tabs = await header.getByRole('tablist').boundingBox()
+      expect(tabs!.x).toBeGreaterThan(title!.x + title!.width)
+      const left = await d.locator('.ingredient-edit-general').boundingBox()
+      const right = await d
+        .locator('.ingredient-edit-primary > section')
+        .first()
+        .boundingBox()
+      expect(right!.x).toBeGreaterThan(left!.x + left!.width)
+      expect(Math.abs(right!.y - left!.y)).toBeLessThan(2)
+    }
+    await header
+      .getByRole('tab', { name: 'Details & Costing', exact: true })
+      .focus()
+    await page.keyboard.press('ArrowRight')
     await expect(
-      header.getByRole('button', { name: 'Details & Costing', exact: true }),
+      header.getByRole('tab', { name: 'Images & Label Info', exact: true }),
+    ).toBeFocused()
+    await page.keyboard.press('Home')
+    await expect(
+      header.getByRole('tab', { name: 'Details & Costing', exact: true }),
     ).toBeVisible()
     await d
       .getByLabel('Name', { exact: true })
@@ -62,7 +82,7 @@ for (const width of [1044, 390])
       'Unit Conversions',
       'Details & Costing',
     ]) {
-      await header.getByRole('button', { name, exact: true }).click()
+      await header.getByRole('tab', { name, exact: true }).click()
       expect(await d.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
         true,
       )
@@ -75,11 +95,20 @@ for (const width of [1044, 390])
       .filter({ hasText: /^Find product details$/ })
       .click()
     await expect(d.getByLabel('Product URL', { exact: true })).toBeVisible()
+    if (width > 900) {
+      const left = await d.locator('.ingredient-edit-general').boundingBox()
+      const right = await d
+        .locator('.ingredient-edit-primary > section')
+        .first()
+        .boundingBox()
+      expect(right!.x).toBeGreaterThan(left!.x + left!.width)
+      expect(Math.abs(right!.y - left!.y)).toBeLessThan(2)
+    }
     await d
       .getByLabel('Product URL', { exact: true })
       .fill('https://example.invalid/ingredient')
     await page.screenshot({
-      path: `docs/reviews/ingredient-header/lookup-${width}.png`,
+      path: `docs/reviews/ingredient-side-by-side/lookup-${width}.png`,
       animations: 'disabled',
     })
     await d
@@ -92,6 +121,11 @@ for (const width of [1044, 390])
       el.scrollTop = el.scrollHeight
     })
     expect((await header.boundingBox())?.y).toBe(headerBefore?.y)
+    if (width === 390)
+      await page.screenshot({
+        path: 'docs/reviews/ingredient-side-by-side/costing-390.png',
+        animations: 'disabled',
+      })
     await expect(
       d.getByRole('button', { name: 'Save changes', exact: true }),
     ).toBeInViewport()
