@@ -152,3 +152,29 @@
     max-width: 190px;
   }
 }
+/* Preserve usable mobile controls without stacking large utility tiles. */
+@media (max-width: 700px) {
+  .workspace-standard .pantry-summary {
+    gap: 8px;
+  }
+  .workspace-standard .pantry-summary > span {
+    padding: 10px;
+  }
+  .workspace-standard .pantry-summary > span > span {
+    font-size: max(var(--interface-text-min, 0px), 12px);
+  }
+  .workspace-standard .pantry-summary strong {
+    font-size: 19px;
+  }
+  .workspace-standard .inventory-primary-actions {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .workspace-standard .inventory-primary-actions > .btn {
+    min-width: 0;
+    width: 100%;
+    padding: 8px 2px;
+    min-height: 56px;
+    font-size: max(var(--interface-text-min, 0px), 12px);
+    gap: 4px;
+  }
+}

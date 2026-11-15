@@ -1,3 +1,4 @@
+import { SectionNavigation } from './section-navigation'
 import {
   labelLayout,
   labelSide,
@@ -1528,2135 +1529,518 @@ export function LabelStudio({
           customFonts,
         )}
       </style>
-      <nav className="studio-nav" aria-label="Label Studio sections">
-        {sections.map((s) => (
-          <button
-            key={s}
-            className={section === s ? 'active' : ''}
-            aria-current={section === s ? 'page' : undefined}
-            onClick={() => navigateStudio(s)}
-          >
-            {s}
-          </button>
-        ))}
-        {doc && (
-          <button
-            className={section === 'Editor' ? 'active' : ''}
-            onClick={() => setSection('Editor')}
-          >
-            Editor <ArrowRight size={15} />
-          </button>
-        )}
-      </nav>
-      {libraryStatus && (
-        <p className="studio-notice" role="status">
-          {libraryStatus}
-        </p>
-      )}
-      {deleteTargets && (
-        <DeleteDesignDialog
-          documents={deleteTargets}
-          kind={labelRecordKind(deleteTargets[0])}
-          openDocumentId={doc?.id}
-          affectedProducts={w.products
-            .filter((p) => deleteTargets.some((t) => t.id === p.labelDesignId))
-            .map((p) => p.name)}
-          onDelete={deleteDesigns}
-          onClose={() => setDeleteTargets(null)}
-        />
-      )}
-      <div className="studio-recovery-bar">
-        <button
-          className="btn secondary"
-          onClick={() => recoveryInput.current?.click()}
-        >
-          Import editable recovery file
-        </button>
-        <input
-          ref={recoveryInput}
-          type="file"
-          accept=".json,application/json"
-          aria-label="Editable label recovery file"
-          hidden
-          onChange={async (event) => {
-            const file = event.target.files?.[0]
-            if (!file) return
-            try {
-              if (file.size > 1_000_000)
-                throw new Error('Recovery files must be at most 1 MB.')
-              const value = JSON.parse(await file.text())
-              if (
-                value.format !== 'cottage-pantry-label-recovery' ||
-                value.version !== 1
-              )
-                throw new Error(
-                  'Choose a Cottage Pantry editable recovery file.',
-                )
-              recover(
-                validateLabelDocument(value.document, customFonts),
-                value.source,
-                value.displayUnit,
-              )
-            } catch (e) {
-              setError((e as Error).message)
-            }
-            event.target.value = ''
-          }}
-        />
-        {doc && (
-          <button className="btn secondary" onClick={exportRecovery}>
-            Export editable recovery file
-          </button>
-        )}
-      </div>
-      {draftStatus && (
-        <p
-          role={
-            draftStatus.startsWith('Recovery checkpoint failed')
-              ? 'alert'
-              : 'status'
-          }
-          className="studio-notice"
-        >
-          {draftStatus}
-        </p>
-      )}
-      {!!w.label_recovery_drafts?.length && (
-        <details className="studio-recovery-panel" open={!doc}>
-          <summary>
-            Recover interrupted label sessions ({w.label_recovery_drafts.length}
-            )
-          </summary>
-          <p>
-            These are private recovery checkpoints, not confirmed saved labels.
-            Restore a separate editable copy to compare with the latest saved
-            version. Existing labels remain intact.
-          </p>
-          {w.label_recovery_drafts.map((draft) => (
-            <div key={draft.id}>
-              <strong>{draft.name}</strong> ·{' '}
-              {new Date(draft.savedAt).toLocaleString()} · based on revision{' '}
-              {draft.baseRevision}
-              <button
-                className="text-button"
-                disabled={saveBusy}
-                onClick={() =>
-                  recover(draft.document, draft.source, draft.displayUnit)
-                }
-              >
-                Recover as editable copy
-              </button>
-            </div>
+      <div className="section-workspace">
+        <SectionNavigation name="Labels" active={section}>
+          {sections.map((s) => (
+            <button
+              key={s}
+              className={section === s ? 'active' : ''}
+              aria-current={section === s ? 'page' : undefined}
+              onClick={() => navigateStudio(s)}
+            >
+              {s}
+            </button>
           ))}
-        </details>
-      )}
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-          {saveFailed && (
+          {doc && (
             <button
-              className="btn secondary"
-              disabled={saveBusy}
-              onClick={() => void saveDocument()}
+              className={section === 'Editor' ? 'active' : ''}
+              aria-current={section === 'Editor' ? 'page' : undefined}
+              onClick={() => setSection('Editor')}
             >
-              Retry save
+              Editor <ArrowRight size={15} />
             </button>
           )}
-        </p>
-      )}
-      {!canEdit && (
-        <p className="studio-notice">
-          Preview available. Connect as an Owner or Manager to save, upload, and
-          export.
-        </p>
-      )}
-      {section === 'Labels' && (
-        <>
-          <div className="studio-gallery-heading">
-            <div>
-              <span className="eyebrow">LABELS</span>
-              <h2>Your labels</h2>
-              <p>
-                Create, choose a product, design, save and print. Duplicate a
-                label to reuse its design.
-              </p>
-            </div>
-            <button
-              className="btn"
-              disabled={saveBusy}
-              onClick={() => createLabel()}
-            >
-              <Plus size={18} /> Create label
-            </button>
-          </div>
-          <div className="studio-gallery-toolbar">
-            <label className="search-field">
-              <Search size={18} />
-              <span className="sr-only">Search labels</span>
-              <input
-                placeholder="Search labels…"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value)
-                }}
-              />
-            </label>
-            <Control label="Style filter">
-              <select
-                value={filter}
-                onChange={(e) => {
-                  setFilter(e.target.value)
-                }}
-              >
-                {labelFilters.map((f) => (
-                  <option key={f}>{f}</option>
-                ))}
-              </select>
-            </Control>
-          </div>
-          {!filteredRecords.length && (
-            <p className="calm-empty">
-              No labels to show. Create a label or clear the search.
+        </SectionNavigation>
+        <div className="section-workspace-content">
+          {libraryStatus && (
+            <p className="studio-notice" role="status">
+              {libraryStatus}
             </p>
           )}
-          {!!selectableLabels.length && (
-            <div className="studio-selection-toolbar">
-              <label>
-                <input
-                  type="checkbox"
-                  aria-label="Select All filtered labels"
-                  checked={
-                    selectedLabels.length > 0 &&
-                    selectedLabels.length === selectableLabels.length
-                  }
-                  onChange={(event) =>
-                    setSelectedIds(
-                      event.target.checked
-                        ? selectableLabels.map((d) => d.id)
-                        : [],
+          {deleteTargets && (
+            <DeleteDesignDialog
+              documents={deleteTargets}
+              kind={labelRecordKind(deleteTargets[0])}
+              openDocumentId={doc?.id}
+              affectedProducts={w.products
+                .filter((p) =>
+                  deleteTargets.some((t) => t.id === p.labelDesignId),
+                )
+                .map((p) => p.name)}
+              onDelete={deleteDesigns}
+              onClose={() => setDeleteTargets(null)}
+            />
+          )}
+          <div className="studio-recovery-bar">
+            <button
+              className="btn secondary"
+              onClick={() => recoveryInput.current?.click()}
+            >
+              Import editable recovery file
+            </button>
+            <input
+              ref={recoveryInput}
+              type="file"
+              accept=".json,application/json"
+              aria-label="Editable label recovery file"
+              hidden
+              onChange={async (event) => {
+                const file = event.target.files?.[0]
+                if (!file) return
+                try {
+                  if (file.size > 1_000_000)
+                    throw new Error('Recovery files must be at most 1 MB.')
+                  const value = JSON.parse(await file.text())
+                  if (
+                    value.format !== 'cottage-pantry-label-recovery' ||
+                    value.version !== 1
+                  )
+                    throw new Error(
+                      'Choose a Cottage Pantry editable recovery file.',
                     )
-                  }
-                />{' '}
-                Select All
-              </label>
-              <span role="status">{selectedLabels.length} selected</span>
-              <button
-                className="text-button studio-delete-button"
-                disabled={!canEdit || saveBusy || !selectedLabels.length}
-                onClick={() => setDeleteTargets(selectedLabels)}
-              >
-                Delete Selected
+                  recover(
+                    validateLabelDocument(value.document, customFonts),
+                    value.source,
+                    value.displayUnit,
+                  )
+                } catch (e) {
+                  setError((e as Error).message)
+                }
+                event.target.value = ''
+              }}
+            />
+            {doc && (
+              <button className="btn secondary" onClick={exportRecovery}>
+                Export editable recovery file
               </button>
-            </div>
-          )}
-          <div className="studio-label-list">
-            {filteredRecords.map((t) => {
-              const linkedSource = labelSource(w, t, initialProductId)
-              const linkedProducts = w.products.filter(
-                (p) => p.labelDesignId === t.id || p.id === t.productId,
-              )
-              const labelData = resolveLabelData(
-                w,
-                linkedSource,
-                w.brand_kits?.find((b) => b.id === t.brandId),
-              )
-              const product = w.products.find(
-                (p) => p.id === sourceProductId(linkedSource),
-              )
-              return (
-                <article className="studio-label-row" key={t.id}>
-                  <div className="studio-label-thumbnail">
-                    <PairedLabelPreview
-                      document={t}
-                      data={labelData}
-                      assets={assets}
-                    />
-                  </div>
-                  <div className="studio-label-description">
-                    {t.workflowVersion === 1 && (
-                      <label className="studio-small-note">
-                        <input
-                          type="checkbox"
-                          aria-label={'Select ' + t.name}
-                          checked={selectedIds.includes(t.id)}
-                          onChange={(event) =>
-                            setSelectedIds((ids) =>
-                              event.target.checked
-                                ? [...ids, t.id]
-                                : ids.filter((id) => id !== t.id),
-                            )
-                          }
-                        />{' '}
-                        Select
-                      </label>
-                    )}
-                    <h3>{t.name}</h3>
-                    <p>
-                      {linkedProducts.length > 1
-                        ? `${linkedProducts.length} linked products · Preserved shared design`
-                        : product?.name ||
-                          (t.workflowVersion === 1
-                            ? 'No product link'
-                            : 'Preserved design')}{' '}
-                      · {(t.width / 72).toFixed(1)} ×{' '}
-                      {(t.height / 72).toFixed(1)} in
-                      {t.format === 'front-back' ? ' · Front + Back' : ''}
-                    </p>
-                  </div>
-                  <div className="studio-library-actions">
-                    <button
-                      className="text-button"
-                      aria-label={'Preview/Print ' + t.name}
-                      onClick={() => {
-                        if (choose(t, true)) setSection('Print & Export')
-                      }}
-                    >
-                      Preview/Print
-                    </button>
-                    <button
-                      className="text-button"
-                      aria-label={'Edit ' + t.name}
-                      onClick={() =>
-                        t.workflowVersion === 1
-                          ? choose(t, true)
-                          : duplicateLabel(t)
-                      }
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="text-button"
-                      aria-label={'Duplicate ' + t.name}
-                      disabled={!canEdit || saveBusy}
-                      onClick={() => duplicateLabel(t)}
-                    >
-                      <Copy size={16} /> Duplicate
-                    </button>
-                    {t.workflowVersion === 1 && (
-                      <button
-                        className="text-button studio-delete-button"
-                        aria-label={'Delete ' + t.name}
-                        disabled={!canEdit || saveBusy}
-                        onClick={() => setDeleteTargets([t])}
-                      >
-                        <Trash2 size={16} /> Delete
-                      </button>
-                    )}
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-          {libraryRecords.some((t) => t.workflowVersion !== 1) && (
-            <p className="studio-small-note">
-              Existing designs and shared product links are preserved pending
-              conversion review. Edit opens an independent unsaved copy;
-              preview/print uses the original.
-            </p>
-          )}
-        </>
-      )}
-      {section === 'Editor' && doc && (
-        <>
-          <div className="studio-editor-toolbar">
-            <button
-              className="icon-button"
-              aria-label="Back to labels"
-              onClick={() => navigateStudio('Labels')}
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <Control label="Label name">
-              <input
-                value={doc.name}
-                onChange={(e) => change({ name: e.target.value })}
-              />
-            </Control>
-            <span className="studio-save-state" role="status">
-              {saveBusy
-                ? 'Saving…'
-                : saveFailed
-                  ? status
-                  : dirty && !status.startsWith('Recovered')
-                    ? 'Unsaved changes'
-                    : status}
-            </span>
-            <button className="icon-button" aria-label="Undo" onClick={undo}>
-              <Undo2 size={19} />
-            </button>
-            <button className="icon-button" aria-label="Redo" onClick={redo}>
-              <Redo2 size={19} />
-            </button>
-            <button
-              className="btn secondary"
-              disabled={
-                busy || saveBusy || !canEdit || doc.workflowVersion !== 1
-              }
-              onClick={() => void saveDocument()}
-            >
-              <Save size={17} /> Save
-            </button>
-            <button
-              className="btn secondary"
-              disabled={saveBusy}
-              onClick={cancelEditor}
-            >
-              Cancel
-            </button>
-            <button
-              className="text-button"
-              disabled={saveBusy || !canEdit}
-              onClick={() => duplicateLabel(doc)}
-            >
-              <Copy size={16} /> Duplicate
-            </button>
-            <button
-              className="btn"
-              onClick={() => setSection('Print & Export')}
-            >
-              <Printer size={17} /> Preview/Print
-            </button>
-          </div>
-          {doc.workflowVersion !== 1 && (
-            <p className="studio-notice">
-              This existing design is preserved. Duplicate it to edit an
-              independent label.
-            </p>
-          )}
-          {doc.workflowVersion === 1 && doc.revision === 0 && (
-            <>
-              <p className="studio-small-note">
-                Unsaved draft. Save creates a label; Cancel creates no record.
-              </p>
-              <button
-                className="text-button"
-                onClick={() => setShowStarters(!showStarters)}
-              >
-                Choose a starting design (optional)
-              </button>
-              {showStarters && (
-                <div className="studio-starters">
-                  {systemLabelTemplates.map((t) => (
-                    <button
-                      className="btn secondary"
-                      key={t.id}
-                      onClick={() => createLabel(t)}
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {sourceControls}
-          {doc.workflowVersion === 1 &&
-            manualLabelFields(doc).length > 0 &&
-            doc.manualTextReviewedFor !== sourceKey(source) && (
-              <section className="studio-manual-review" role="alert">
-                <h3>Review manually entered text</h3>
-                <p>
-                  The selected product changed or this design has no recorded
-                  product source. Product-linked fields update automatically.
-                  This editable text stays as entered:
-                </p>
-                <ul>
-                  {manualLabelFields(doc).map((field) => (
-                    <li key={field.id}>
-                      {field.side === 'back' ? 'Back' : 'Front'}: {field.text}
-                    </li>
-                  ))}
-                </ul>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={false}
-                    onChange={() =>
-                      change({ manualTextReviewedFor: sourceKey(source) })
-                    }
-                  />{' '}
-                  I reviewed this manual text for the selected product.
-                </label>
-              </section>
             )}
-          <div className="studio-set-toolbar">
-            <Control label="Label format">
-              <select
-                value={doc.format || 'single'}
-                onChange={(e) => {
-                  if (e.target.value === 'front-back')
-                    change({
-                      format: 'front-back',
-                      renderVersion: 2,
-                      back: { ...labelLayout(doc), elements: [] },
-                    })
-                  else if (
-                    !doc.back?.elements.length ||
-                    window.confirm(
-                      'Remove the Back layout from this draft? The saved version remains in history.',
-                    )
-                  ) {
-                    change({ format: 'single', back: undefined })
-                    setEditorSide('front')
-                  }
-                }}
-              >
-                <option value="single">Single label</option>
-                <option value="front-back">Front + Back labels</option>
-              </select>
-            </Control>
-            {doc.format === 'front-back' && (
-              <div role="group" aria-label="Label side">
-                {labelSides(doc).map((side) => (
+          </div>
+          {draftStatus && (
+            <p
+              role={
+                draftStatus.startsWith('Recovery checkpoint failed')
+                  ? 'alert'
+                  : 'status'
+              }
+              className="studio-notice"
+            >
+              {draftStatus}
+            </p>
+          )}
+          {!!w.label_recovery_drafts?.length && (
+            <details className="studio-recovery-panel" open={!doc}>
+              <summary>
+                Recover interrupted label sessions (
+                {w.label_recovery_drafts.length})
+              </summary>
+              <p>
+                These are private recovery checkpoints, not confirmed saved
+                labels. Restore a separate editable copy to compare with the
+                latest saved version. Existing labels remain intact.
+              </p>
+              {w.label_recovery_drafts.map((draft) => (
+                <div key={draft.id}>
+                  <strong>{draft.name}</strong> ·{' '}
+                  {new Date(draft.savedAt).toLocaleString()} · based on revision{' '}
+                  {draft.baseRevision}
                   <button
-                    className="btn secondary"
-                    key={side}
-                    aria-pressed={editorSide === side}
-                    onClick={() => {
-                      setEditorSide(side)
-                      setSelected('')
-                      history.current = []
-                      future.current = []
+                    className="text-button"
+                    disabled={saveBusy}
+                    onClick={() =>
+                      recover(draft.document, draft.source, draft.displayUnit)
+                    }
+                  >
+                    Recover as editable copy
+                  </button>
+                </div>
+              ))}
+            </details>
+          )}
+          {error && (
+            <p role="alert" className="form-error">
+              {error}
+              {saveFailed && (
+                <button
+                  className="btn secondary"
+                  disabled={saveBusy}
+                  onClick={() => void saveDocument()}
+                >
+                  Retry save
+                </button>
+              )}
+            </p>
+          )}
+          {!canEdit && (
+            <p className="studio-notice">
+              Preview available. Connect as an Owner or Manager to save, upload,
+              and export.
+            </p>
+          )}
+          {section === 'Labels' && (
+            <>
+              <div className="studio-gallery-heading">
+                <div>
+                  <span className="eyebrow">LABELS</span>
+                  <h2>Your labels</h2>
+                  <p>
+                    Create, choose a product, design, save and print. Duplicate
+                    a label to reuse its design.
+                  </p>
+                </div>
+                <button
+                  className="btn"
+                  disabled={saveBusy}
+                  onClick={() => createLabel()}
+                >
+                  <Plus size={18} /> Create label
+                </button>
+              </div>
+              <div className="studio-gallery-toolbar">
+                <label className="search-field">
+                  <Search size={18} />
+                  <span className="sr-only">Search labels</span>
+                  <input
+                    placeholder="Search labels…"
+                    value={query}
+                    onChange={(e) => {
+                      setQuery(e.target.value)
+                    }}
+                  />
+                </label>
+                <Control label="Style filter">
+                  <select
+                    value={filter}
+                    onChange={(e) => {
+                      setFilter(e.target.value)
                     }}
                   >
-                    {side === 'front' ? 'Front' : 'Back'}
-                  </button>
-                ))}
+                    {labelFilters.map((f) => (
+                      <option key={f}>{f}</option>
+                    ))}
+                  </select>
+                </Control>
               </div>
-            )}
-          </div>
-          {doc.format === 'front-back' && (
-            <PairedLabelPreview document={doc} data={data} assets={assets} />
-          )}
-          <div className="studio-editor">
-            <aside className="studio-left panel">
-              <div className="studio-left-tabs">
-                {['Elements', 'Assets', 'Layers'].map((t, i) => {
-                  const Icon = [Type, ImagePlus, Layers][i]
+              {!filteredRecords.length && (
+                <p className="calm-empty">
+                  No labels to show. Create a label or clear the search.
+                </p>
+              )}
+              {!!selectableLabels.length && (
+                <div className="studio-selection-toolbar">
+                  <label>
+                    <input
+                      type="checkbox"
+                      aria-label="Select All filtered labels"
+                      checked={
+                        selectedLabels.length > 0 &&
+                        selectedLabels.length === selectableLabels.length
+                      }
+                      onChange={(event) =>
+                        setSelectedIds(
+                          event.target.checked
+                            ? selectableLabels.map((d) => d.id)
+                            : [],
+                        )
+                      }
+                    />{' '}
+                    Select All
+                  </label>
+                  <span role="status">{selectedLabels.length} selected</span>
+                  <button
+                    className="text-button studio-delete-button"
+                    disabled={!canEdit || saveBusy || !selectedLabels.length}
+                    onClick={() => setDeleteTargets(selectedLabels)}
+                  >
+                    Delete Selected
+                  </button>
+                </div>
+              )}
+              <div className="studio-label-list">
+                {filteredRecords.map((t) => {
+                  const linkedSource = labelSource(w, t, initialProductId)
+                  const linkedProducts = w.products.filter(
+                    (p) => p.labelDesignId === t.id || p.id === t.productId,
+                  )
+                  const labelData = resolveLabelData(
+                    w,
+                    linkedSource,
+                    w.brand_kits?.find((b) => b.id === t.brandId),
+                  )
+                  const product = w.products.find(
+                    (p) => p.id === sourceProductId(linkedSource),
+                  )
                   return (
-                    <button
-                      key={t}
-                      className={left === t ? 'active' : ''}
-                      onClick={() => setLeft(t)}
-                    >
-                      <Icon size={17} />
-                      {t}
-                    </button>
+                    <article className="studio-label-row" key={t.id}>
+                      <div className="studio-label-thumbnail">
+                        <PairedLabelPreview
+                          document={t}
+                          data={labelData}
+                          assets={assets}
+                        />
+                      </div>
+                      <div className="studio-label-description">
+                        {t.workflowVersion === 1 && (
+                          <label className="studio-small-note">
+                            <input
+                              type="checkbox"
+                              aria-label={'Select ' + t.name}
+                              checked={selectedIds.includes(t.id)}
+                              onChange={(event) =>
+                                setSelectedIds((ids) =>
+                                  event.target.checked
+                                    ? [...ids, t.id]
+                                    : ids.filter((id) => id !== t.id),
+                                )
+                              }
+                            />{' '}
+                            Select
+                          </label>
+                        )}
+                        <h3>{t.name}</h3>
+                        <p>
+                          {linkedProducts.length > 1
+                            ? `${linkedProducts.length} linked products · Preserved shared design`
+                            : product?.name ||
+                              (t.workflowVersion === 1
+                                ? 'No product link'
+                                : 'Preserved design')}{' '}
+                          · {(t.width / 72).toFixed(1)} ×{' '}
+                          {(t.height / 72).toFixed(1)} in
+                          {t.format === 'front-back' ? ' · Front + Back' : ''}
+                        </p>
+                      </div>
+                      <div className="studio-library-actions">
+                        <button
+                          className="text-button"
+                          aria-label={'Preview/Print ' + t.name}
+                          onClick={() => {
+                            if (choose(t, true)) setSection('Print & Export')
+                          }}
+                        >
+                          Preview/Print
+                        </button>
+                        <button
+                          className="text-button"
+                          aria-label={'Edit ' + t.name}
+                          onClick={() =>
+                            t.workflowVersion === 1
+                              ? choose(t, true)
+                              : duplicateLabel(t)
+                          }
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="text-button"
+                          aria-label={'Duplicate ' + t.name}
+                          disabled={!canEdit || saveBusy}
+                          onClick={() => duplicateLabel(t)}
+                        >
+                          <Copy size={16} /> Duplicate
+                        </button>
+                        {t.workflowVersion === 1 && (
+                          <button
+                            className="text-button studio-delete-button"
+                            aria-label={'Delete ' + t.name}
+                            disabled={!canEdit || saveBusy}
+                            onClick={() => setDeleteTargets([t])}
+                          >
+                            <Trash2 size={16} /> Delete
+                          </button>
+                        )}
+                      </div>
+                    </article>
                   )
                 })}
               </div>
-              {left === 'Elements' && (
-                <div className="studio-element-list">
-                  <h3>Add to your label</h3>
-                  <button onClick={() => add(newElement())}>
-                    <Type size={18} />
-                    <span>Static text</span>
-                  </button>
-                  <Control label="Dynamic field">
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value)
-                          add({
-                            ...newElement(
-                              imageBindings.includes(e.target.value)
-                                ? 'image'
-                                : 'text',
-                              '',
-                              e.target.value,
-                            ),
-                            ...(imageBindings.includes(e.target.value)
-                              ? { width: 90, height: 90 }
-                              : {}),
-                            condition: 'nonempty',
-                          })
-                      }}
-                    >
-                      <option value="">Choose a field…</option>
-                      <optgroup label="Text fields">
-                        {bindings
-                          .filter((b) => !imageBindings.includes(b))
-                          .map((b) => (
-                            <option key={b} value={b}>
-                              {imageBindingNames[b] || b}
-                            </option>
-                          ))}
-                      </optgroup>
-                      <optgroup label="Images & graphics">
-                        {imageBindings.map((b) => (
-                          <option key={b} value={b}>
-                            {imageBindingNames[b]}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </Control>
-                  <button
-                    onClick={() =>
-                      add({ ...newElement('shape'), width: 100, height: 50 })
-                    }
-                  >
-                    <Shapes size={18} />
-                    <span>Shape</span>
-                  </button>
-                  <button onClick={() => add(newElement('line'))}>
-                    — Line / divider
-                  </button>
-                  <button
-                    onClick={() =>
-                      add({
-                        ...newElement('border'),
-                        width: editorDoc.width - 36,
-                        height: editorDoc.height - 36,
-                      })
-                    }
-                  >
-                    <Grid2X2 size={18} />
-                    <span>Border</span>
-                  </button>
-                  <div className="studio-small-note">
-                    Select an element to edit it. Drag to move; use its corner
-                    to resize. Arrow keys move precisely. Ctrl/Cmd+C and V copy
-                    and paste.
-                  </div>
-                  <details>
-                    <summary>Original bakery illustrations</summary>
-                    <div className="studio-graphic-grid">
-                      {Object.keys(bakeryGraphics).map((g) => (
-                        <button
-                          title={g}
-                          aria-label={'Add ' + g}
-                          key={g}
-                          onClick={() =>
-                            add({
-                              ...newElement('illustration'),
-                              graphic: g,
-                              width: 60,
-                              height: 60,
-                            })
-                          }
-                        >
-                          <svg viewBox="0 0 100 100">
-                            <path d={bakeryGraphics[g]} />
-                          </svg>
-                          <small>{g}</small>
-                        </button>
-                      ))}
-                    </div>
-                  </details>
-                </div>
+              {libraryRecords.some((t) => t.workflowVersion !== 1) && (
+                <p className="studio-small-note">
+                  Existing designs and shared product links are preserved
+                  pending conversion review. Edit opens an independent unsaved
+                  copy; preview/print uses the original.
+                </p>
               )}
-              {left === 'Assets' && (
-                <div className="studio-element-list">
-                  <h3>Linked image fields</h3>
-                  <p className="studio-small-note">
-                    Follow the selected product or business automatically.
-                  </p>
-                  {imageBindings.map((binding) => (
-                    <button
-                      key={binding}
-                      className="btn secondary"
-                      onClick={() =>
-                        add({
-                          ...newElement('image'),
-                          binding,
-                          condition: 'nonempty',
-                          width: 90,
-                          height: 90,
-                        })
-                      }
-                    >
-                      <ImagePlus size={17} />
-                      <span>{imageBindingNames[binding]}</span>
-                    </button>
-                  ))}
-
-                  <button
-                    className="btn secondary"
-                    onClick={() => setSection('Graphics Library')}
-                  >
-                    <Upload size={17} />
-                    <span>Upload graphics</span>
-                  </button>
-                  {assets.map((a) => (
-                    <button
-                      className="studio-asset-row"
-                      key={a.id}
-                      onClick={() =>
-                        add({
-                          ...newElement('image'),
-                          assetId: a.id,
-                          width: 90,
-                          height: (90 * a.heightPx) / a.widthPx,
-                        })
-                      }
-                    >
-                      <img src={a.fileUrl} alt="" />
-                      <span>{a.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {left === 'Layers' && (
-                <div className="studio-layer-list">
-                  {[...editorDoc.elements].reverse().map((e) => (
-                    <div
-                      key={e.id}
-                      className={selected === e.id ? 'selected' : ''}
-                    >
-                      <button onClick={() => setSelected(e.id)}>
-                        {e.binding || e.text || e.type}
-                      </button>
-                      <button
-                        aria-label={
-                          (e.hidden ? 'Show ' : 'Hide ') + (e.binding || e.type)
-                        }
-                        onClick={() =>
-                          change({
-                            elements: editorDoc.elements.map((x) =>
-                              x.id === e.id ? { ...x, hidden: !x.hidden } : x,
-                            ),
-                          })
-                        }
-                      >
-                        {e.hidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                      <button
-                        aria-label={
-                          (e.locked ? 'Unlock ' : 'Lock ') +
-                          (e.binding || e.type)
-                        }
-                        onClick={() =>
-                          change({
-                            elements: editorDoc.elements.map((x) =>
-                              x.id === e.id ? { ...x, locked: !x.locked } : x,
-                            ),
-                          })
-                        }
-                      >
-                        {e.locked ? (
-                          <LockKeyhole size={16} />
-                        ) : (
-                          <UnlockKeyhole size={16} />
-                        )}
-                      </button>
-                    </div>
-                  ))}
-                  {!editorDoc.elements.length && (
-                    <p>Add text, graphics, or shapes to begin.</p>
-                  )}
-                </div>
-              )}
-            </aside>
-            <div className="studio-stage-area">
-              <div className="studio-canvas-tools">
+            </>
+          )}
+          {section === 'Editor' && doc && (
+            <>
+              <div className="studio-editor-toolbar">
                 <button
                   className="icon-button"
-                  aria-label="Zoom out"
-                  onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}
+                  aria-label="Back to labels"
+                  onClick={() => navigateStudio('Labels')}
                 >
-                  <ZoomOut size={18} />
+                  <ArrowLeft size={20} />
                 </button>
-                <span>{Math.round(zoom * 100)}%</span>
-                <button
-                  className="icon-button"
-                  aria-label="Zoom in"
-                  onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
-                >
-                  <ZoomIn size={18} />
-                </button>
-                <label>
+                <Control label="Label name">
                   <input
-                    type="checkbox"
-                    checked={safe}
-                    onChange={(e) => setSafe(e.target.checked)}
+                    value={doc.name}
+                    onChange={(e) => change({ name: e.target.value })}
                   />
-                  Safe area
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={grid}
-                    onChange={(e) => setGrid(e.target.checked)}
-                  />
-                  Grid
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={snap}
-                    onChange={(e) => setSnap(e.target.checked)}
-                  />
-                  Snap
-                </label>
-                <label title="Snap rotation to 15° steps. Hold Shift while rotating to toggle.">
-                  <input
-                    type="checkbox"
-                    checked={angleSnap}
-                    onChange={(e) => setAngleSnap(e.target.checked)}
-                  />
-                  Snap angles
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={bleed}
-                    onChange={(e) => setBleed(e.target.checked)}
-                  />
-                  Bleed guide
-                </label>
-              </div>
-              <div className="studio-scroll-stage">
-                <div
-                  className={`studio-paper ${bleed ? 'with-bleed' : ''}`}
-                  style={{
-                    width: ((editorDoc.width * 96) / 72) * zoom,
-                    height: ((editorDoc.height * 96) / 72) * zoom,
-                  }}
-                  onPointerDown={(event) => {
-                    const target = event.target as Element,
-                      id = target
-                        .closest('[data-element]')
-                        ?.getAttribute('data-element'),
-                      e = editorDoc.elements.find((x) => x.id === id)
-                    if (!e) {
-                      setSelected('')
-                      return
-                    }
-                    setSelected(e.id)
-                    if (e.locked || event.button > 0) return
-                    event.preventDefault()
-                    event.currentTarget.setPointerCapture?.(event.pointerId)
-                    const handle =
-                        target
-                          .closest('[data-handle]')
-                          ?.getAttribute('data-handle') || '',
-                      point = labelPoint(event)
-                    drag.current = {
-                      id: e.id,
-                      x: point.x,
-                      y: point.y,
-                      original: structuredClone(editorDoc),
-                      master: structuredClone(doc),
-                      mode:
-                        handle === 'rotate'
-                          ? 'rotate'
-                          : handle
-                            ? 'resize'
-                            : 'move',
-                      handle:
-                        handle && handle !== 'rotate'
-                          ? (handle as ResizeHandle)
-                          : undefined,
-                      angle: pointerAngle(e, point),
-                      moved: false,
-                    }
-                    if (handle === 'rotate') setRotating(true)
-                  }}
-                  onPointerMove={(event) => {
-                    const move = drag.current
-                    if (!move) return
-                    const point = labelPoint(event),
-                      dx = point.x - move.x,
-                      dy = point.y - move.y,
-                      original = move.original.elements.find(
-                        (e) => e.id === move.id,
-                      )!
-                    if (!move.moved && Math.hypot(dx, dy) < 0.5) return
-                    move.moved = true
-                    const round = (v: number) =>
-                      snap ? Math.round(v / 3) * 3 : v
-                    let patch: Partial<LabelElement> | null = null
-                    if (move.mode === 'rotate') {
-                      const raw =
-                        elementAngle(original) +
-                        pointerAngle(original, point) -
-                        move.angle
-                      patch = setElementAngle(
-                        original,
-                        angleSnap !== event.shiftKey
-                          ? snapAngle(raw)
-                          : normalizeAngle(raw),
-                      )
-                    } else if (move.mode === 'resize' && move.handle)
-                      patch = resizeElement(original, move.handle, point, {
-                        // Shift temporarily toggles proportional resizing.
-                        keepAspect: keepsAspect(original) !== event.shiftKey,
-                        snap:
-                          snap && !original.rotation
-                            ? (v) => Math.round(v / 3) * 3
-                            : undefined,
-                      })
-                    const nextSide = {
-                      ...move.original,
-                      elements: move.original.elements.map((e) => {
-                        if (patch)
-                          return e.id === move.id ? { ...e, ...patch } : e
-                        if (
-                          (e.id === move.id ||
-                            (original.groupId &&
-                              original.groupId === e.groupId)) &&
-                          !e.locked
-                        )
-                          return {
-                            ...e,
-                            x: round(e.x + dx),
-                            y: round(e.y + dy),
-                          }
-                        return e
-                      }),
-                    }
-                    setDoc(
-                      editorSide === 'back' && doc.back
-                        ? { ...doc, back: labelLayout(nextSide) }
-                        : { ...doc, ...labelLayout(nextSide) },
-                    )
-                  }}
-                  onPointerUp={() => {
-                    const move = drag.current
-                    if (move) {
-                      drag.current = null
-                      setRotating(false)
-                      // One continuous drag is one undo step; a plain click
-                      // that only selects adds nothing to history.
-                      if (move.moved) {
-                        history.current = [
-                          ...history.current.slice(-39),
-                          move.master || move.original,
-                        ]
-                        future.current = []
-                        setStatus('Unsaved changes')
-                        setReviewed(false)
-                      }
-                    }
-                  }}
-                  onPointerCancel={() => {
-                    if (drag.current) {
-                      setDoc(drag.current.master || drag.current.original)
-                      drag.current = null
-                      setRotating(false)
-                    }
-                  }}
-                >
-                  <div className="studio-ruler" aria-hidden="true">
-                    {Array.from(
-                      { length: Math.ceil(editorDoc.width / 72) },
-                      (_, i) => (
-                        <span key={i}>{i}″</span>
-                      ),
-                    )}
-                  </div>
-                  <LabelCanvas
-                    document={editorDoc}
-                    data={data}
-                    assets={assets}
-                    svgRef={svgRef}
-                    editor
-                    selected={selected}
-                    select={setSelected}
-                    safe={safe}
-                    grid={grid}
-                    zoom={zoom}
-                    rotating={rotating}
-                  />
-                </div>
-              </div>
-              <p className="studio-dimension">
-                {(editorDoc.width / 72).toFixed(2)} ×{' '}
-                {(editorDoc.height / 72).toFixed(2)} inches · dimensions, not
-                screen size · ⅛″ safe margin
-              </p>
-              <details className="studio-mobile-data">
-                <summary>Preview data & Label Check</summary>
-                {sourceControls}
-                {labelCheck}
-              </details>
-            </div>
-            <aside className="studio-inspector panel">
-              <div className="studio-panel-title">
-                <SlidersHorizontal size={18} />
-                <h3>{element ? 'Element settings' : 'Label setup'}</h3>
-              </div>
-              {element ? (
-                <div className="studio-inspector-fields studio-element-fields">
-                  <div className="studio-selection-heading">
-                    <p className="studio-small-note" title={element.binding}>
-                      {element.binding
-                        ? 'Linked text / artwork'
-                        : element.type === 'text'
-                          ? 'Manually entered text'
-                          : element.type}
-                      {element.locked ? ' · locked' : ''}
-                    </p>
-                    <div className="studio-actions">
-                      <button
-                        className="icon-button"
-                        aria-label="Duplicate element"
-                        title="Duplicate element"
-                        onClick={duplicate}
-                      >
-                        <Copy size={17} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label="Delete element"
-                        title="Delete element"
-                        disabled={element.locked}
-                        onClick={() => {
-                          change({
-                            elements: editorDoc.elements.filter(
-                              (e) => e.id !== selected,
-                            ),
-                          })
-                          setSelected('')
-                        }}
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={
-                          element.locked ? 'Unlock element' : 'Lock element'
-                        }
-                        title={
-                          element.locked ? 'Unlock element' : 'Lock element'
-                        }
-                        onClick={() =>
-                          change({
-                            elements: editorDoc.elements.map((e) =>
-                              e.id === selected
-                                ? { ...e, locked: !e.locked }
-                                : e,
-                            ),
-                          })
-                        }
-                      >
-                        {element.locked ? (
-                          <LockKeyhole size={17} />
-                        ) : (
-                          <UnlockKeyhole size={17} />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                  <LabelTextToolbar
-                    key={`text-${element.id}`}
-                    element={element}
-                    onPatch={patchElement}
-                    supportsBold={
-                      !!availableFonts
-                        .find((f) => f.name === element.font)
-                        ?.weights.includes(700)
-                    }
-                    fontPicker={
-                      <FontPicker
-                        onUploadRequest={() => setSection('Brand Kit')}
-                        customFonts={customFonts}
-                        compact
-                        displayValue={textFontName(element)}
-                        value={element.font}
-                        disabled={element.locked || element.type !== 'text'}
-                        preview={elementText(element, data)}
-                        preferences={w.settings[0].currentFontPreferences}
-                        onPreferences={
-                          canEdit ? saveFontPreferences : undefined
-                        }
-                        onChange={(font) =>
-                          patchElement({
-                            font,
-                            ...(!element.binding && element.textRuns
-                              ? {
-                                  textRuns: applySelectionFont(
-                                    element,
-                                    0,
-                                    element.text.length,
-                                    font,
-                                  ),
-                                }
-                              : {}),
-                            bold:
-                              element.bold &&
-                              !!availableFonts
-                                .find((f) => f.name === font)
-                                ?.weights.includes(700),
-                          })
-                        }
-                      />
-                    }
-                    colorPicker={elementColor(
-                      'Text color',
-                      'color',
-                      'colorOpacity',
-                      false,
-                      true,
-                    )}
-                  />
-                  <LabelGeometryToolbar
-                    key={`geometry-${element.id}`}
-                    element={element}
-                    onPatch={patchElement}
-                    atFront={editorDoc.elements.at(-1)?.id === selected}
-                    atBack={editorDoc.elements[0]?.id === selected}
-                    onLayer={(layer) =>
-                      change({
-                        elements:
-                          layer === 'front'
-                            ? [
-                                ...editorDoc.elements.filter(
-                                  (e) => e.id !== selected,
-                                ),
-                                element,
-                              ]
-                            : [
-                                element,
-                                ...editorDoc.elements.filter(
-                                  (e) => e.id !== selected,
-                                ),
-                              ],
-                      })
-                    }
-                  />
-                  {element.type === 'text' && (
-                    <>
-                      <Control label="Data binding">
-                        <select
-                          value={element.binding || ''}
-                          disabled={element.locked}
-                          onChange={(e) =>
-                            patchElement({
-                              binding: e.target.value || undefined,
-                              textRuns: undefined,
-                            })
-                          }
-                        >
-                          <option value="">Static text</option>
-                          {bindings
-                            .filter((b) => !imageBindings.includes(b))
-                            .map((b) => (
-                              <option key={b} value={b}>
-                                {imageBindingNames[b] || b}
-                              </option>
-                            ))}
-                        </select>
-                      </Control>
-                      {!element.binding && (
-                        <Control label="Text">
-                          <textarea
-                            value={element.text}
-                            disabled={element.locked}
-                            onChange={(e) =>
-                              patchElement(
-                                editStaticText(element, e.target.value),
-                              )
-                            }
-                            onSelect={(e) =>
-                              setTextSelection([
-                                e.currentTarget.selectionStart,
-                                e.currentTarget.selectionEnd,
-                              ])
-                            }
-                          />
-                        </Control>
-                      )}
-                    </>
-                  )}
-                  {element.type === 'image' && (
-                    <>
-                      <Control label="Image source">
-                        <select
-                          value={element.binding || 'static'}
-                          onChange={(e) =>
-                            patchElement({
-                              binding:
-                                e.target.value === 'static'
-                                  ? undefined
-                                  : e.target.value,
-                              assetId: undefined,
-                            })
-                          }
-                        >
-                          <option value="static">Fixed uploaded graphic</option>
-                          {imageBindings.map((b) => (
-                            <option key={b} value={b}>
-                              {imageBindingNames[b] || b}
-                            </option>
-                          ))}
-                        </select>
-                      </Control>
-                      {element.binding ? (
-                        <p className="studio-small-note">
-                          Linked to{' '}
-                          {imageBindingNames[element.binding] ||
-                            element.binding}
-                          .{' '}
-                          {assets.find(
-                            (a) => a.id === elementAssetId(element, data),
-                          )?.name ||
-                            'No artwork linked for the selected source.'}
-                        </p>
-                      ) : (
-                        <>
-                          <Control label="Graphic">
-                            <select
-                              value={element.assetId}
-                              onChange={(e) =>
-                                patchElement({ assetId: e.target.value })
-                              }
-                            >
-                              {assets.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.name}
-                                </option>
-                              ))}
-                            </select>
-                          </Control>
-                        </>
-                      )}
-                      <Control label="Image fit">
-                        <select
-                          value={element.fit || 'contain'}
-                          onChange={(e) =>
-                            patchElement({
-                              fit: e.target.value as 'contain' | 'cover',
-                            })
-                          }
-                        >
-                          <option value="contain">
-                            Fit whole image (preserve aspect ratio)
-                          </option>
-                          <option value="cover">Crop to fill frame</option>
-                        </select>
-                      </Control>
-                      {element.binding === 'product.graphic' &&
-                        !elementAssetId(element, data) && (
-                          <button
-                            className="btn secondary"
-                            onClick={() => {
-                              setImageTarget('productGraphic')
-                              setImageProductId(
-                                source.kind === 'product'
-                                  ? source.id
-                                  : source.productId || '',
-                              )
-                              setSection('Graphics Library')
-                            }}
-                          >
-                            Upload / select product label graphic
-                          </button>
-                        )}
-                    </>
-                  )}
-                  {element.type !== 'image' &&
-                    element.type !== 'text' &&
-                    elementColor(
-                      element.type === 'illustration'
-                        ? 'Vector stroke color'
-                        : 'Stroke / border color',
-                      'color',
-                      'colorOpacity',
-                    )}
-                  {element.type === 'shape' &&
-                    elementColor('Shape fill', 'fill', 'fillOpacity', true)}
-                  <details className="studio-advanced">
-                    <summary>Advanced</summary>
-                    <div className="studio-advanced-fields">
-                      {element.type === 'text' && (
-                        <>
-                          {!element.binding && (
-                            <div
-                              className="studio-field"
-                              role="group"
-                              aria-label="Font for selected text"
-                            >
-                              <span>Font for selected text</span>
-                              <small>
-                                Select a word or range in Text to change its
-                                font.
-                              </small>
-                              <FontPicker
-                                value={element.font}
-                                displayValue={textFontName(
-                                  element,
-                                  textSelection,
-                                )}
-                                customFonts={customFonts}
-                                disabled={
-                                  element.locked ||
-                                  textSelection[1] <= textSelection[0]
-                                }
-                                preview={element.text.slice(...textSelection)}
-                                onUploadRequest={() => setSection('Brand Kit')}
-                                onChange={(font) => {
-                                  try {
-                                    patchElement({
-                                      textRuns: applySelectionFont(
-                                        element,
-                                        ...textSelection,
-                                        font,
-                                      ),
-                                    })
-                                  } catch (e) {
-                                    setError((e as Error).message)
-                                  }
-                                }}
-                              />
-                            </div>
-                          )}
-                          <Control label="Font pairing">
-                            <select
-                              value=""
-                              onChange={(e) => {
-                                const pairing = fontPairings.find(
-                                  (p) => p.name === e.target.value,
-                                )
-                                if (pairing)
-                                  change({
-                                    elements: applyFontPairing(
-                                      editorDoc.elements,
-                                      pairing,
-                                    ),
-                                  })
-                              }}
-                            >
-                              <option value="">
-                                Apply a pairing · locked elements stay unchanged
-                              </option>
-                              {fontPairings.map((p) => (
-                                <option key={p.name}>{p.name}</option>
-                              ))}
-                            </select>
-                          </Control>
-                          <button
-                            className="text-button"
-                            disabled={element.locked}
-                            onClick={() => {
-                              let size = element.fontSize
-                              while (
-                                size > 7 &&
-                                labelTextLines(
-                                  { ...element, fontSize: size },
-                                  data,
-                                ).length *
-                                  size *
-                                  element.lineHeight >
-                                  element.height
-                              )
-                                size = Math.max(7, size - 0.5)
-                              patchElement({ fontSize: size })
-                            }}
-                          >
-                            Fit text to box (minimum 7 pt)
-                          </button>
-                          {elementColor(
-                            'Text background',
-                            'fill',
-                            'fillOpacity',
-                            true,
-                          )}
-                        </>
-                      )}
-                      <Control label="Group ID (same ID moves together)">
-                        <input
-                          disabled={element.locked}
-                          value={element.groupId || ''}
-                          onChange={(e) =>
-                            patchElement({
-                              groupId: e.target.value || undefined,
-                            })
-                          }
-                        />
-                      </Control>
-                      <Control label="Show element">
-                        <select
-                          disabled={element.locked}
-                          value={element.condition || 'always'}
-                          onChange={(e) =>
-                            patchElement({
-                              condition: e.target
-                                .value as LabelElement['condition'],
-                            })
-                          }
-                        >
-                          <option value="always">Always</option>
-                          <option value="nonempty">
-                            When field has a value
-                          </option>
-                          <option value="allergens">
-                            When allergens are declared
-                          </option>
-                          <option value="batch">
-                            When a batch is selected
-                          </option>
-                        </select>
-                      </Control>
-                      <details>
-                        <summary>Editor help</summary>
-                        <p className="studio-small-note">
-                          Drag to move; use edge handles to resize and the round
-                          handle to rotate. Images and icons keep their
-                          proportions. Hold Shift to resize freely or toggle
-                          angle snapping. Elements with the same Group ID move
-                          together. Use separate Label main name and Label
-                          product type fields for font pairings.
-                        </p>
-                      </details>
-                    </div>
-                  </details>
-                  <button
-                    className="text-button"
-                    onClick={() => setSelected('')}
-                  >
-                    Edit label setup
-                  </button>
-                </div>
-              ) : (
-                <div className="studio-inspector-fields">
-                  <Control label="Label type">
-                    <select
-                      value={editorDoc.labelType}
-                      onChange={(e) => change({ labelType: e.target.value })}
-                    >
-                      {labelTypes.map((t) => (
-                        <option key={t}>{t}</option>
-                      ))}
-                    </select>
-                  </Control>
-                  <Control label="Label size">
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value === '') return
-                        const size = labelSizes[Number(e.target.value)]
-                        if (size) {
-                          dimensions(size.w, size.h)
-                          setDoc((prev) =>
-                            prev ? { ...prev, round: !!size.round } : prev,
-                          )
-                        }
-                      }}
-                    >
-                      <option value="">Custom / choose preset</option>
-                      {labelSizes.map((s, i) => (
-                        <option key={s.name} value={i}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Control>
-                  <Control label="Dimension display">
-                    <select
-                      value={displayUnit}
-                      onChange={(e) => {
-                        setDisplayUnit(e.target.value as typeof displayUnit)
-                        change({
-                          displayUnit: e.target.value as typeof displayUnit,
-                        })
-                      }}
-                    >
-                      <option value="in">Inches</option>
-                      <option value="mm">Millimeters</option>
-                      <option value="px">Pixels (96 DPI screen)</option>
-                    </select>
-                  </Control>
-                  <div className="studio-two">
-                    {number(
-                      'Width (' + displayUnit + ')',
-                      Number(
-                        (
-                          editorDoc.width /
-                          (displayUnit === 'in'
-                            ? 72
-                            : displayUnit === 'mm'
-                              ? 72 / 25.4
-                              : 0.75)
-                        ).toFixed(2),
-                      ),
-                      (v) =>
-                        dimensions(
-                          v *
-                            (displayUnit === 'in'
-                              ? 72
-                              : displayUnit === 'mm'
-                                ? 72 / 25.4
-                                : 0.75),
-                          editorDoc.height,
-                        ),
-                      0.5,
-                    )}
-                    {number(
-                      'Height (' + displayUnit + ')',
-                      Number(
-                        (
-                          editorDoc.height /
-                          (displayUnit === 'in'
-                            ? 72
-                            : displayUnit === 'mm'
-                              ? 72 / 25.4
-                              : 0.75)
-                        ).toFixed(2),
-                      ),
-                      (v) =>
-                        dimensions(
-                          editorDoc.width,
-                          v *
-                            (displayUnit === 'in'
-                              ? 72
-                              : displayUnit === 'mm'
-                                ? 72 / 25.4
-                                : 0.75),
-                        ),
-                      0.5,
-                    )}
-                  </div>
-                  <button
-                    className="btn secondary"
-                    onClick={() =>
-                      dimensions(editorDoc.height, editorDoc.width)
-                    }
-                  >
-                    Rotate orientation
-                  </button>
-                  {color(
-                    'Label background',
-                    editorDoc.background,
-                    editorDoc.backgroundOpacity ?? 1,
-                    (d, c) => ({
-                      ...d,
-                      background: c.hex,
-                      backgroundOpacity: c.opacity,
-                    }),
-                    true,
-                  )}
-                  {sourceControls}
-                  <Control label="Brand kit">
-                    <select
-                      value={brandId}
-                      onChange={(e) => {
-                        setBrandId(e.target.value)
-                        if (doc?.workflowVersion === 1)
-                          change({ brandId: e.target.value })
-                      }}
-                    >
-                      <option value="">Business defaults</option>
-                      {(w.brand_kits || []).map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Control>
-                  {brand?.primaryLogoAssetId && (
-                    <button
-                      className="btn secondary"
-                      onClick={() =>
-                        add({
-                          ...newElement('image'),
-                          binding: 'business.logo',
-                          condition: 'nonempty',
-                          width: 70,
-                          height: 70,
-                        })
-                      }
-                    >
-                      Add brand logo
-                    </button>
-                  )}
-                  {brand && (
-                    <button
-                      className="btn secondary"
-                      onClick={() =>
-                        change({
-                          background: brand.colors[1] || '#ffffff',
-                          elements: applyFontPairing(editorDoc.elements, {
-                            name: 'Brand Kit',
-                            heading: brand.headingFont || 'Oswald',
-                            body: brand.bodyFont || 'DM Sans',
-                            compliance: brand.complianceFont || 'DM Sans',
-                            accent: brand.accentFont,
-                          }).map((e) =>
-                            e.locked
-                              ? e
-                              : { ...e, color: brand.colors[0] || '#292630' },
-                          ),
-                        })
-                      }
-                    >
-                      <Palette size={17} />
-                      Apply brand style
-                    </button>
-                  )}
-                  {labelCheck}
-                  <details>
-                    <summary>Saved versions</summary>
-                    {(w.label_versions || [])
-                      .filter((v) => v.templateId === doc.id)
-                      .slice()
-                      .reverse()
-                      .map((v) => (
-                        <button
-                          className="text-button"
-                          key={v.id}
-                          onClick={() =>
-                            commit({
-                              ...v.document,
-                              revision: revision.current,
-                            })
-                          }
-                        >
-                          Restore v{v.revision} ·{' '}
-                          {new Date(v.savedAt).toLocaleString()}
-                        </button>
-                      ))}
-                  </details>
-                </div>
-              )}
-            </aside>
-          </div>
-        </>
-      )}
-      {section === 'Graphics Library' && (
-        <>
-          <div className="studio-gallery-heading">
-            <div>
-              <h2>Your artwork, close at hand.</h2>
-              <p>
-                Original files stay private to your business. PNG, JPEG, WebP ·
-                up to 5 MB.
-              </p>
-            </div>
-            <label className="btn">
-              <Upload size={18} />
-              Upload graphic
-              <input
-                className="sr-only"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={busy || !canEdit}
-                onChange={(e) => {
-                  if (e.target.files?.[0]) void upload(e.target.files[0])
-                }}
-              />
-            </label>
-          </div>
-          <div className="panel panel-body" style={{ marginBottom: 24 }}>
-            <h3>Link artwork to label data</h3>
-            <p>
-              Choose a role before uploading, or link an existing graphic below.
-            </p>
-            <div className="studio-two">
-              <Control label="Use artwork for">
-                <select
-                  value={imageTarget}
-                  onChange={(e) => setImageTarget(e.target.value)}
-                >
-                  <option value="library">Library only · fixed graphic</option>
-                  <option value="businessLogo">Business logo</option>
-                  <option value="productPhoto">Product photo</option>
-                  <option value="productGraphic">
-                    Product graphic / illustration
-                  </option>
-                </select>
-              </Control>
-              {imageTarget.startsWith('product') && (
-                <Control label="Artwork product">
-                  <select
-                    value={imageProductId}
-                    onChange={(e) => setImageProductId(e.target.value)}
-                  >
-                    <option value="">Choose product…</option>
-                    {w.products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
                 </Control>
-              )}
-            </div>
-          </div>
-          <div
-            className="studio-upload-drop"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              if (e.dataTransfer.files[0]) void upload(e.dataTransfer.files[0])
-            }}
-          >
-            <Upload size={26} />
-            <strong>Drop your logo or artwork here</strong>
-            <p>
-              For sharp printing, aim for 300 pixels per inch. SVG/PDF uploads
-              and background removal are not available.
-            </p>
-            <div className="studio-two">
-              <Control label="Asset category">
-                <select
-                  value={uploadCategory}
-                  onChange={(e) => setUploadCategory(e.target.value)}
+                <span className="studio-save-state" role="status">
+                  {saveBusy
+                    ? 'Saving…'
+                    : saveFailed
+                      ? status
+                      : dirty && !status.startsWith('Recovered')
+                        ? 'Unsaved changes'
+                        : status}
+                </span>
+                <button
+                  className="icon-button"
+                  aria-label="Undo"
+                  onClick={undo}
                 >
-                  {[
-                    'logo',
-                    'product photo',
-                    'illustration',
-                    'seasonal',
-                    'divider',
-                    'icon',
-                    'background',
-                  ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </Control>
-              <Control label="Collection">
-                <input
-                  value={collection}
-                  onChange={(e) => setCollection(e.target.value)}
-                />
-              </Control>
-            </div>
-          </div>
-          <Control label="Search graphics / collections">
-            <input
-              value={assetQuery}
-              onChange={(e) => setAssetQuery(e.target.value)}
-              placeholder="Logo, seasonal, bread…"
-            />
-          </Control>
-          <div className="studio-assets-grid">
-            {assets
-              .filter((a) =>
-                [a.name, a.category, a.collection, a.tags]
-                  .join(' ')
-                  .toLowerCase()
-                  .includes(assetQuery.toLowerCase()),
-              )
-              .map((a) => (
-                <article className="panel" key={a.id}>
-                  <img src={a.fileUrl} alt={a.name} />
-                  <h3>{a.name}</h3>
-                  <p>
-                    {a.widthPx} × {a.heightPx} px · {a.collection}
-                  </p>
-                  <p>
-                    300 DPI: {(a.widthPx / 300).toFixed(1)} ×{' '}
-                    {(a.heightPx / 300).toFixed(1)} in
-                  </p>
-                  {imageTarget !== 'library' && (
-                    <button
-                      className="btn secondary"
-                      disabled={!canEdit || busy}
-                      onClick={() => {
-                        setBusy(true)
-                        linkArtwork(a.id)
-                          .catch((e) => setError(e.message))
-                          .finally(() => setBusy(false))
-                      }}
-                    >
-                      Link as{' '}
-                      {imageTarget === 'businessLogo'
-                        ? 'business logo'
-                        : imageTarget === 'productPhoto'
-                          ? 'product photo'
-                          : 'product graphic'}
-                    </button>
-                  )}
-                  {doc && (
-                    <button
-                      className="text-button"
-                      onClick={() => {
-                        add({
-                          ...newElement('image'),
-                          assetId: a.id,
-                          width: 90,
-                          height: (90 * a.heightPx) / a.widthPx,
-                        })
-                        setSection('Editor')
-                      }}
-                    >
-                      Add to current label <Plus size={16} />
-                    </button>
-                  )}
-                </article>
-              ))}
-          </div>
-          <h3 className="spaced-title">Original bakery collection</h3>
-          <div className="studio-graphic-grid library">
-            {Object.keys(bakeryGraphics).map((g) => (
-              <button
-                key={g}
-                disabled={!doc}
-                onClick={() => {
-                  add({
-                    ...newElement('illustration'),
-                    graphic: g,
-                    width: 60,
-                    height: 60,
-                  })
-                  setSection('Editor')
-                }}
-              >
-                <svg viewBox="0 0 100 100">
-                  <path d={bakeryGraphics[g]} />
-                </svg>
-                <span>{g}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {['Brand Kit', 'Label Settings'].includes(section) && (
-        <FontUploadPanel
-          workspace={w}
-          onWorkspace={onWorkspace}
-          canEdit={canEdit}
-        />
-      )}
-      {section === 'Brand Kit' && (
-        <div className="studio-brand-layout">
-          <section className="panel studio-brand-form">
-            <h2>Make it unmistakably yours.</h2>
-            <p>Save multiple palettes for different product lines.</p>
-            <Control label="Saved brand kits">
-              <select
-                value={brandDraft.id}
-                onChange={(e) =>
-                  setBrandDraft(
-                    (w.brand_kits || []).find(
-                      (b) => b.id === e.target.value,
-                    ) || {
-                      id: '',
-                      name: 'New brand',
-                      colors: ['#742b60', '#fffdf6'],
-                      contact: {},
-                    },
-                  )
-                }
-              >
-                <option value="">New brand kit</option>
-                {(w.brand_kits || []).map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </Control>
-            <Control label="Kit name">
-              <input
-                value={brandDraft.name}
-                onChange={(e) =>
-                  setBrandDraft({ ...brandDraft, name: e.target.value })
-                }
-              />
-            </Control>
-            <div className="studio-brand-colors">
-              {brandDraft.colors.map((c: string, i: number) => (
-                <label key={i}>
-                  <span>Color {i + 1}</span>
-                  <input
-                    type="color"
-                    value={c}
-                    onChange={(e) =>
-                      setBrandDraft({
-                        ...brandDraft,
-                        colors: brandDraft.colors.map((v: string, j: number) =>
-                          i === j ? e.target.value : v,
-                        ),
-                      })
-                    }
-                  />
-                </label>
-              ))}
-              <button
-                className="icon-button"
-                aria-label="Add brand color"
-                disabled={brandDraft.colors.length >= 12}
-                onClick={() =>
-                  setBrandDraft({
-                    ...brandDraft,
-                    colors: [...brandDraft.colors, '#ffffff'],
-                  })
-                }
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-            <Control label="Default font pairing">
-              <select
-                value={brandDraft.defaultFontPairing || ''}
-                onChange={(e) => {
-                  const p = fontPairings.find((p) => p.name === e.target.value)
-                  if (p)
-                    setBrandDraft({
-                      ...brandDraft,
-                      defaultFontPairing: p.name,
-                      headingFont: p.heading,
-                      bodyFont: p.body,
-                      complianceFont: p.compliance,
-                      accentFont: p.accent || p.heading,
-                    })
-                }}
-              >
-                <option value="">Custom typography</option>
-                {fontPairings.map((p) => (
-                  <option key={p.name}>{p.name}</option>
-                ))}
-              </select>
-            </Control>
-            {[
-              'headingFont',
-              'secondaryHeadingFont',
-              'bodyFont',
-              'complianceFont',
-              'accentFont',
-            ].map((key) => (
-              <Control key={key} label={key.replace('Font', ' font')}>
-                <FontPicker
-                  onUploadRequest={() => setSection('Brand Kit')}
-                  customFonts={customFonts}
-                  value={brandDraft[key] || 'DM Sans'}
-                  onChange={(font) =>
-                    setBrandDraft({ ...brandDraft, [key]: font })
+                  <Undo2 size={19} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Redo"
+                  onClick={redo}
+                >
+                  <Redo2 size={19} />
+                </button>
+                <button
+                  className="btn secondary"
+                  disabled={
+                    busy || saveBusy || !canEdit || doc.workflowVersion !== 1
                   }
-                  preferences={w.settings[0].currentFontPreferences}
-                  onPreferences={canEdit ? saveFontPreferences : undefined}
-                />
-              </Control>
-            ))}
-            <label className="btn secondary">
-              <Upload size={17} />
-              Upload business logo
-              <input
-                type="file"
-                className="sr-only"
-                accept="image/png,image/jpeg,image/webp"
-                disabled={busy || !canEdit}
-                onChange={(e) => {
-                  if (e.target.files?.[0])
-                    void upload(
-                      e.target.files[0],
-                      'businessLogo',
-                      brandDraft.id || undefined,
-                    )
-                }}
-              />
-            </label>
-            {['primaryLogoAssetId', 'secondaryLogoAssetId', 'markAssetId'].map(
-              (key) => (
-                <Control
-                  key={key}
-                  label={key.replace('AssetId', '').replace(/([A-Z])/g, ' $1')}
+                  onClick={() => void saveDocument()}
                 >
-                  <select
-                    value={brandDraft[key] || ''}
-                    onChange={(e) =>
-                      setBrandDraft({ ...brandDraft, [key]: e.target.value })
-                    }
-                  >
-                    <option value="">No logo</option>
-                    {assets.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
-                </Control>
-              ),
-            )}
-            <details>
-              <summary>Business information & default label text</summary>
-              {[
-                'name',
-                'address',
-                'website',
-                'phone',
-                'email',
-                'jurisdiction',
-                'socialHandle',
-              ].map((k) => (
-                <Control label={'Business ' + k} key={k}>
-                  <input
-                    value={brandDraft.contact?.[k] || ''}
-                    placeholder={w.settings[0]?.[k] || ''}
-                    onChange={(e) =>
-                      setBrandDraft({
-                        ...brandDraft,
-                        contact: { ...brandDraft.contact, [k]: e.target.value },
-                      })
-                    }
-                  />
-                </Control>
-              ))}
-              {['defaultDisclaimer', 'defaultStorage', 'defaultFooter'].map(
-                (k) => (
-                  <Control label={k.replace('default', 'Default ')} key={k}>
-                    <textarea
-                      value={brandDraft[k] || ''}
-                      onChange={(e) =>
-                        setBrandDraft({ ...brandDraft, [k]: e.target.value })
-                      }
-                    />
-                  </Control>
-                ),
-              )}
-            </details>
-            <button
-              className="btn"
-              disabled={busy || !canEdit}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  const result = await request('labelBrand', brandDraft)
-                  setBrandDraft(
-                    result.brand_kits.find((b) => b.id === brandDraft.id) ||
-                      result.brand_kits.at(-1)!,
-                  )
-                  setStatus('Brand kit saved')
-                } catch (e) {
-                  setError((e as Error).message)
-                } finally {
-                  setBusy(false)
-                }
-              }}
-            >
-              <Save size={17} />
-              Save brand kit
-            </button>
-            <p role="status">{status}</p>
-          </section>
-          <aside
-            className="studio-brand-preview"
-            style={{
-              background: brandDraft.colors[1] || '#fffdf6',
-              color: brandDraft.colors[0],
-            }}
-          >
-            <Wheat size={55} />
-            <span>YOUR BRAND, BEAUTIFULLY CONSISTENT</span>
-            <h2 style={{ fontFamily: brandDraft.headingFont || 'Oswald' }}>
-              {brandDraft.contact?.name || w.settings[0].name}
-            </h2>
-            <p style={{ fontFamily: brandDraft.bodyFont || 'DM Sans' }}>
-              Made by hand. Labeled with care.
-            </p>
-          </aside>
-        </div>
-      )}
-      {section === 'Print & Export' &&
-        (doc ? (
-          <div className="studio-print-layout">
-            <section className="panel studio-print-controls">
-              <h2>Preview and print</h2>
-              {doc.workflowVersion === 1 && (
-                <div className="button-row">
-                  <button
-                    className="btn secondary"
-                    disabled={saveBusy || !canEdit}
-                    onClick={() => void saveDocument()}
-                  >
-                    Save label
-                  </button>
-                  <button
-                    className="btn secondary"
-                    onClick={() => setSection('Editor')}
-                  >
-                    Edit label
-                  </button>
-                  <button
-                    className="btn secondary"
-                    disabled={saveBusy}
-                    onClick={cancelEditor}
-                  >
-                    Cancel
-                  </button>
-                  {dirty && (
-                    <p role="status">
-                      Save your changes before printing. Review manually entered
-                      product text in the editor when changing products.
-                    </p>
-                  )}
-                </div>
-              )}
-              {sourceControls}
-              <LabelSetControls
-                document={doc}
-                products={copies}
-                parts={parts}
-                setParts={(v) => {
-                  setParts(v)
-                  updatePrint({ parts: v })
-                  setRunIndex(0)
-                }}
-                order={order}
-                setOrder={(v) => {
-                  setOrder(v)
-                  updatePrint({ order: v })
-                }}
-                runIndex={runIndex}
-                setRunIndex={setRunIndex}
-              />
-              <LabelPrintOptions
-                doc={doc}
-                printerProfiles={printerProfiles}
-                selectedPrinter={selectedPrinter}
-                printingMethod={printingMethod}
-                setPrintingMethod={(value) => {
-                  setPrintingMethod(value)
-                  updatePrint({ printingMethod: value })
-                }}
-                connected={connected}
-                copies={copies}
-                setCopies={(v) => {
-                  setCopies(v)
-                  updatePrint({ copies: v })
-                }}
-                layout={layout}
-                setLayout={(v) => {
-                  setLayout(v)
-                  updatePrint({ layout: v })
-                }}
-                onManagePrinters={() => setSection('Label Settings')}
-              />
-              <div className="studio-print-buttons">
+                  <Save size={17} /> Save
+                </button>
+                <button
+                  className="btn secondary"
+                  disabled={saveBusy}
+                  onClick={cancelEditor}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="text-button"
+                  disabled={saveBusy || !canEdit}
+                  onClick={() => duplicateLabel(doc)}
+                >
+                  <Copy size={16} /> Duplicate
+                </button>
                 <button
                   className="btn"
-                  disabled={busy || !canEdit || colorEditing}
-                  onClick={() => void output('print')}
+                  onClick={() => setSection('Print & Export')}
                 >
-                  <Printer size={18} />
-                  {busy
-                    ? 'Preparing…'
-                    : selectedPrinter?.method === 'qz'
-                      ? `Print to ${selectedPrinter.name}`
-                      : 'Print labels'}
-                </button>
-                <button
-                  className="btn secondary"
-                  disabled={busy || !canEdit}
-                  onClick={() => void output('pdf')}
-                >
-                  <Download size={18} />
-                  Download PDF
-                </button>
-                <button
-                  className="btn secondary"
-                  disabled={busy || !canEdit}
-                  onClick={() => void output('png')}
-                >
-                  <Download size={18} />
-                  Single PNG · 300 DPI
+                  <Printer size={17} /> Preview/Print
                 </button>
               </div>
-              <p className="studio-small-note">
-                Match your printer paper size and use actual size / 100%
-                scaling. Set driver copies to 1: the document already contains
-                the requested labels. Browser code cannot force every driver
-                option. Fonts and graphics finish loading before the print
-                dialog opens. Screen RGB colors are not guaranteed CMYK or exact
-                printed matches.
-              </p>
-              {labelCheck}
-            </section>
-            <div className="studio-print-preview">
+              {doc.workflowVersion !== 1 && (
+                <p className="studio-notice">
+                  This existing design is preserved. Duplicate it to edit an
+                  independent label.
+                </p>
+              )}
+              {doc.workflowVersion === 1 && doc.revision === 0 && (
+                <>
+                  <p className="studio-small-note">
+                    Unsaved draft. Save creates a label; Cancel creates no
+                    record.
+                  </p>
+                  <button
+                    className="text-button"
+                    onClick={() => setShowStarters(!showStarters)}
+                  >
+                    Choose a starting design (optional)
+                  </button>
+                  {showStarters && (
+                    <div className="studio-starters">
+                      {systemLabelTemplates.map((t) => (
+                        <button
+                          className="btn secondary"
+                          key={t.id}
+                          onClick={() => createLabel(t)}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+              {sourceControls}
+              {doc.workflowVersion === 1 &&
+                manualLabelFields(doc).length > 0 &&
+                doc.manualTextReviewedFor !== sourceKey(source) && (
+                  <section className="studio-manual-review" role="alert">
+                    <h3>Review manually entered text</h3>
+                    <p>
+                      The selected product changed or this design has no
+                      recorded product source. Product-linked fields update
+                      automatically. This editable text stays as entered:
+                    </p>
+                    <ul>
+                      {manualLabelFields(doc).map((field) => (
+                        <li key={field.id}>
+                          {field.side === 'back' ? 'Back' : 'Front'}:{' '}
+                          {field.text}
+                        </li>
+                      ))}
+                    </ul>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        onChange={() =>
+                          change({ manualTextReviewedFor: sourceKey(source) })
+                        }
+                      />{' '}
+                      I reviewed this manual text for the selected product.
+                    </label>
+                  </section>
+                )}
+              <div className="studio-set-toolbar">
+                <Control label="Label format">
+                  <select
+                    value={doc.format || 'single'}
+                    onChange={(e) => {
+                      if (e.target.value === 'front-back')
+                        change({
+                          format: 'front-back',
+                          renderVersion: 2,
+                          back: { ...labelLayout(doc), elements: [] },
+                        })
+                      else if (
+                        !doc.back?.elements.length ||
+                        window.confirm(
+                          'Remove the Back layout from this draft? The saved version remains in history.',
+                        )
+                      ) {
+                        change({ format: 'single', back: undefined })
+                        setEditorSide('front')
+                      }
+                    }}
+                  >
+                    <option value="single">Single label</option>
+                    <option value="front-back">Front + Back labels</option>
+                  </select>
+                </Control>
+                {doc.format === 'front-back' && (
+                  <div role="group" aria-label="Label side">
+                    {labelSides(doc).map((side) => (
+                      <button
+                        className="btn secondary"
+                        key={side}
+                        aria-pressed={editorSide === side}
+                        onClick={() => {
+                          setEditorSide(side)
+                          setSelected('')
+                          history.current = []
+                          future.current = []
+                        }}
+                      >
+                        {side === 'front' ? 'Front' : 'Back'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {doc.format === 'front-back' && (
                 <PairedLabelPreview
                   document={doc}
@@ -3664,150 +2048,1842 @@ export function LabelStudio({
                   assets={assets}
                 />
               )}
-              <span className="eyebrow">
-                ACTUAL LABEL: {(editorDoc.width / 72).toFixed(2)} ×{' '}
-                {(editorDoc.height / 72).toFixed(2)} IN
-              </span>
-              {layout.mode === 'sheet' ? (
-                <div
-                  className="studio-sheet-preview"
-                  style={{
-                    aspectRatio: `${layout.pageWidth}/${layout.pageHeight}`,
-                    padding: `${(layout.margin / layout.pageWidth) * 100}%`,
-                    gap: `${(layout.gutter / layout.pageWidth) * 100}%`,
-                    gridTemplateColumns: `repeat(${Math.max(1, Math.min(20, layout.columns))},1fr)`,
-                  }}
-                >
-                  {Array.from(
-                    {
-                      length: Math.min(
-                        200,
-                        Math.max(1, layout.columns * layout.rows),
-                      ),
-                    },
-                    (_, i) => (
+              <div className="studio-editor">
+                <aside className="studio-left panel">
+                  <div className="studio-left-tabs">
+                    {['Elements', 'Assets', 'Layers'].map((t, i) => {
+                      const Icon = [Type, ImagePlus, Layers][i]
+                      return (
+                        <button
+                          key={t}
+                          className={left === t ? 'active' : ''}
+                          onClick={() => setLeft(t)}
+                        >
+                          <Icon size={17} />
+                          {t}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {left === 'Elements' && (
+                    <div className="studio-element-list">
+                      <h3>Add to your label</h3>
+                      <button onClick={() => add(newElement())}>
+                        <Type size={18} />
+                        <span>Static text</span>
+                      </button>
+                      <Control label="Dynamic field">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value)
+                              add({
+                                ...newElement(
+                                  imageBindings.includes(e.target.value)
+                                    ? 'image'
+                                    : 'text',
+                                  '',
+                                  e.target.value,
+                                ),
+                                ...(imageBindings.includes(e.target.value)
+                                  ? { width: 90, height: 90 }
+                                  : {}),
+                                condition: 'nonempty',
+                              })
+                          }}
+                        >
+                          <option value="">Choose a field…</option>
+                          <optgroup label="Text fields">
+                            {bindings
+                              .filter((b) => !imageBindings.includes(b))
+                              .map((b) => (
+                                <option key={b} value={b}>
+                                  {imageBindingNames[b] || b}
+                                </option>
+                              ))}
+                          </optgroup>
+                          <optgroup label="Images & graphics">
+                            {imageBindings.map((b) => (
+                              <option key={b} value={b}>
+                                {imageBindingNames[b]}
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </Control>
+                      <button
+                        onClick={() =>
+                          add({
+                            ...newElement('shape'),
+                            width: 100,
+                            height: 50,
+                          })
+                        }
+                      >
+                        <Shapes size={18} />
+                        <span>Shape</span>
+                      </button>
+                      <button onClick={() => add(newElement('line'))}>
+                        — Line / divider
+                      </button>
+                      <button
+                        onClick={() =>
+                          add({
+                            ...newElement('border'),
+                            width: editorDoc.width - 36,
+                            height: editorDoc.height - 36,
+                          })
+                        }
+                      >
+                        <Grid2X2 size={18} />
+                        <span>Border</span>
+                      </button>
+                      <div className="studio-small-note">
+                        Select an element to edit it. Drag to move; use its
+                        corner to resize. Arrow keys move precisely. Ctrl/Cmd+C
+                        and V copy and paste.
+                      </div>
+                      <details>
+                        <summary>Original bakery illustrations</summary>
+                        <div className="studio-graphic-grid">
+                          {Object.keys(bakeryGraphics).map((g) => (
+                            <button
+                              title={g}
+                              aria-label={'Add ' + g}
+                              key={g}
+                              onClick={() =>
+                                add({
+                                  ...newElement('illustration'),
+                                  graphic: g,
+                                  width: 60,
+                                  height: 60,
+                                })
+                              }
+                            >
+                              <svg viewBox="0 0 100 100">
+                                <path d={bakeryGraphics[g]} />
+                              </svg>
+                              <small>{g}</small>
+                            </button>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                  {left === 'Assets' && (
+                    <div className="studio-element-list">
+                      <h3>Linked image fields</h3>
+                      <p className="studio-small-note">
+                        Follow the selected product or business automatically.
+                      </p>
+                      {imageBindings.map((binding) => (
+                        <button
+                          key={binding}
+                          className="btn secondary"
+                          onClick={() =>
+                            add({
+                              ...newElement('image'),
+                              binding,
+                              condition: 'nonempty',
+                              width: 90,
+                              height: 90,
+                            })
+                          }
+                        >
+                          <ImagePlus size={17} />
+                          <span>{imageBindingNames[binding]}</span>
+                        </button>
+                      ))}
+
+                      <button
+                        className="btn secondary"
+                        onClick={() => setSection('Graphics Library')}
+                      >
+                        <Upload size={17} />
+                        <span>Upload graphics</span>
+                      </button>
+                      {assets.map((a) => (
+                        <button
+                          className="studio-asset-row"
+                          key={a.id}
+                          onClick={() =>
+                            add({
+                              ...newElement('image'),
+                              assetId: a.id,
+                              width: 90,
+                              height: (90 * a.heightPx) / a.widthPx,
+                            })
+                          }
+                        >
+                          <img src={a.fileUrl} alt="" />
+                          <span>{a.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {left === 'Layers' && (
+                    <div className="studio-layer-list">
+                      {[...editorDoc.elements].reverse().map((e) => (
+                        <div
+                          key={e.id}
+                          className={selected === e.id ? 'selected' : ''}
+                        >
+                          <button onClick={() => setSelected(e.id)}>
+                            {e.binding || e.text || e.type}
+                          </button>
+                          <button
+                            aria-label={
+                              (e.hidden ? 'Show ' : 'Hide ') +
+                              (e.binding || e.type)
+                            }
+                            onClick={() =>
+                              change({
+                                elements: editorDoc.elements.map((x) =>
+                                  x.id === e.id
+                                    ? { ...x, hidden: !x.hidden }
+                                    : x,
+                                ),
+                              })
+                            }
+                          >
+                            {e.hidden ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </button>
+                          <button
+                            aria-label={
+                              (e.locked ? 'Unlock ' : 'Lock ') +
+                              (e.binding || e.type)
+                            }
+                            onClick={() =>
+                              change({
+                                elements: editorDoc.elements.map((x) =>
+                                  x.id === e.id
+                                    ? { ...x, locked: !x.locked }
+                                    : x,
+                                ),
+                              })
+                            }
+                          >
+                            {e.locked ? (
+                              <LockKeyhole size={16} />
+                            ) : (
+                              <UnlockKeyhole size={16} />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                      {!editorDoc.elements.length && (
+                        <p>Add text, graphics, or shapes to begin.</p>
+                      )}
+                    </div>
+                  )}
+                </aside>
+                <div className="studio-stage-area">
+                  <div className="studio-canvas-tools">
+                    <button
+                      className="icon-button"
+                      aria-label="Zoom out"
+                      onClick={() => setZoom((z) => Math.max(0.25, z - 0.1))}
+                    >
+                      <ZoomOut size={18} />
+                    </button>
+                    <span>{Math.round(zoom * 100)}%</span>
+                    <button
+                      className="icon-button"
+                      aria-label="Zoom in"
+                      onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
+                    >
+                      <ZoomIn size={18} />
+                    </button>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={safe}
+                        onChange={(e) => setSafe(e.target.checked)}
+                      />
+                      Safe area
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={grid}
+                        onChange={(e) => setGrid(e.target.checked)}
+                      />
+                      Grid
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={snap}
+                        onChange={(e) => setSnap(e.target.checked)}
+                      />
+                      Snap
+                    </label>
+                    <label title="Snap rotation to 15° steps. Hold Shift while rotating to toggle.">
+                      <input
+                        type="checkbox"
+                        checked={angleSnap}
+                        onChange={(e) => setAngleSnap(e.target.checked)}
+                      />
+                      Snap angles
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={bleed}
+                        onChange={(e) => setBleed(e.target.checked)}
+                      />
+                      Bleed guide
+                    </label>
+                  </div>
+                  <div className="studio-scroll-stage">
+                    <div
+                      className={`studio-paper ${bleed ? 'with-bleed' : ''}`}
+                      style={{
+                        width: ((editorDoc.width * 96) / 72) * zoom,
+                        height: ((editorDoc.height * 96) / 72) * zoom,
+                      }}
+                      onPointerDown={(event) => {
+                        const target = event.target as Element,
+                          id = target
+                            .closest('[data-element]')
+                            ?.getAttribute('data-element'),
+                          e = editorDoc.elements.find((x) => x.id === id)
+                        if (!e) {
+                          setSelected('')
+                          return
+                        }
+                        setSelected(e.id)
+                        if (e.locked || event.button > 0) return
+                        event.preventDefault()
+                        event.currentTarget.setPointerCapture?.(event.pointerId)
+                        const handle =
+                            target
+                              .closest('[data-handle]')
+                              ?.getAttribute('data-handle') || '',
+                          point = labelPoint(event)
+                        drag.current = {
+                          id: e.id,
+                          x: point.x,
+                          y: point.y,
+                          original: structuredClone(editorDoc),
+                          master: structuredClone(doc),
+                          mode:
+                            handle === 'rotate'
+                              ? 'rotate'
+                              : handle
+                                ? 'resize'
+                                : 'move',
+                          handle:
+                            handle && handle !== 'rotate'
+                              ? (handle as ResizeHandle)
+                              : undefined,
+                          angle: pointerAngle(e, point),
+                          moved: false,
+                        }
+                        if (handle === 'rotate') setRotating(true)
+                      }}
+                      onPointerMove={(event) => {
+                        const move = drag.current
+                        if (!move) return
+                        const point = labelPoint(event),
+                          dx = point.x - move.x,
+                          dy = point.y - move.y,
+                          original = move.original.elements.find(
+                            (e) => e.id === move.id,
+                          )!
+                        if (!move.moved && Math.hypot(dx, dy) < 0.5) return
+                        move.moved = true
+                        const round = (v: number) =>
+                          snap ? Math.round(v / 3) * 3 : v
+                        let patch: Partial<LabelElement> | null = null
+                        if (move.mode === 'rotate') {
+                          const raw =
+                            elementAngle(original) +
+                            pointerAngle(original, point) -
+                            move.angle
+                          patch = setElementAngle(
+                            original,
+                            angleSnap !== event.shiftKey
+                              ? snapAngle(raw)
+                              : normalizeAngle(raw),
+                          )
+                        } else if (move.mode === 'resize' && move.handle)
+                          patch = resizeElement(original, move.handle, point, {
+                            // Shift temporarily toggles proportional resizing.
+                            keepAspect:
+                              keepsAspect(original) !== event.shiftKey,
+                            snap:
+                              snap && !original.rotation
+                                ? (v) => Math.round(v / 3) * 3
+                                : undefined,
+                          })
+                        const nextSide = {
+                          ...move.original,
+                          elements: move.original.elements.map((e) => {
+                            if (patch)
+                              return e.id === move.id ? { ...e, ...patch } : e
+                            if (
+                              (e.id === move.id ||
+                                (original.groupId &&
+                                  original.groupId === e.groupId)) &&
+                              !e.locked
+                            )
+                              return {
+                                ...e,
+                                x: round(e.x + dx),
+                                y: round(e.y + dy),
+                              }
+                            return e
+                          }),
+                        }
+                        setDoc(
+                          editorSide === 'back' && doc.back
+                            ? { ...doc, back: labelLayout(nextSide) }
+                            : { ...doc, ...labelLayout(nextSide) },
+                        )
+                      }}
+                      onPointerUp={() => {
+                        const move = drag.current
+                        if (move) {
+                          drag.current = null
+                          setRotating(false)
+                          // One continuous drag is one undo step; a plain click
+                          // that only selects adds nothing to history.
+                          if (move.moved) {
+                            history.current = [
+                              ...history.current.slice(-39),
+                              move.master || move.original,
+                            ]
+                            future.current = []
+                            setStatus('Unsaved changes')
+                            setReviewed(false)
+                          }
+                        }
+                      }}
+                      onPointerCancel={() => {
+                        if (drag.current) {
+                          setDoc(drag.current.master || drag.current.original)
+                          drag.current = null
+                          setRotating(false)
+                        }
+                      }}
+                    >
+                      <div className="studio-ruler" aria-hidden="true">
+                        {Array.from(
+                          { length: Math.ceil(editorDoc.width / 72) },
+                          (_, i) => (
+                            <span key={i}>{i}″</span>
+                          ),
+                        )}
+                      </div>
                       <LabelCanvas
-                        key={i}
                         document={editorDoc}
                         data={data}
                         assets={assets}
-                        svgRef={i === 0 ? svgRef : undefined}
+                        svgRef={svgRef}
+                        editor
+                        selected={selected}
+                        select={setSelected}
+                        safe={safe}
+                        grid={grid}
+                        zoom={zoom}
+                        rotating={rotating}
                       />
-                    ),
+                    </div>
+                  </div>
+                  <p className="studio-dimension">
+                    {(editorDoc.width / 72).toFixed(2)} ×{' '}
+                    {(editorDoc.height / 72).toFixed(2)} inches · dimensions,
+                    not screen size · ⅛″ safe margin
+                  </p>
+                  <details className="studio-mobile-data">
+                    <summary>Preview data & Label Check</summary>
+                    {sourceControls}
+                    {labelCheck}
+                  </details>
+                </div>
+                <aside className="studio-inspector panel">
+                  <div className="studio-panel-title">
+                    <SlidersHorizontal size={18} />
+                    <h3>{element ? 'Element settings' : 'Label setup'}</h3>
+                  </div>
+                  {element ? (
+                    <div className="studio-inspector-fields studio-element-fields">
+                      <div className="studio-selection-heading">
+                        <p
+                          className="studio-small-note"
+                          title={element.binding}
+                        >
+                          {element.binding
+                            ? 'Linked text / artwork'
+                            : element.type === 'text'
+                              ? 'Manually entered text'
+                              : element.type}
+                          {element.locked ? ' · locked' : ''}
+                        </p>
+                        <div className="studio-actions">
+                          <button
+                            className="icon-button"
+                            aria-label="Duplicate element"
+                            title="Duplicate element"
+                            onClick={duplicate}
+                          >
+                            <Copy size={17} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label="Delete element"
+                            title="Delete element"
+                            disabled={element.locked}
+                            onClick={() => {
+                              change({
+                                elements: editorDoc.elements.filter(
+                                  (e) => e.id !== selected,
+                                ),
+                              })
+                              setSelected('')
+                            }}
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={
+                              element.locked ? 'Unlock element' : 'Lock element'
+                            }
+                            title={
+                              element.locked ? 'Unlock element' : 'Lock element'
+                            }
+                            onClick={() =>
+                              change({
+                                elements: editorDoc.elements.map((e) =>
+                                  e.id === selected
+                                    ? { ...e, locked: !e.locked }
+                                    : e,
+                                ),
+                              })
+                            }
+                          >
+                            {element.locked ? (
+                              <LockKeyhole size={17} />
+                            ) : (
+                              <UnlockKeyhole size={17} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <LabelTextToolbar
+                        key={`text-${element.id}`}
+                        element={element}
+                        onPatch={patchElement}
+                        supportsBold={
+                          !!availableFonts
+                            .find((f) => f.name === element.font)
+                            ?.weights.includes(700)
+                        }
+                        fontPicker={
+                          <FontPicker
+                            onUploadRequest={() => setSection('Brand Kit')}
+                            customFonts={customFonts}
+                            compact
+                            displayValue={textFontName(element)}
+                            value={element.font}
+                            disabled={element.locked || element.type !== 'text'}
+                            preview={elementText(element, data)}
+                            preferences={w.settings[0].currentFontPreferences}
+                            onPreferences={
+                              canEdit ? saveFontPreferences : undefined
+                            }
+                            onChange={(font) =>
+                              patchElement({
+                                font,
+                                ...(!element.binding && element.textRuns
+                                  ? {
+                                      textRuns: applySelectionFont(
+                                        element,
+                                        0,
+                                        element.text.length,
+                                        font,
+                                      ),
+                                    }
+                                  : {}),
+                                bold:
+                                  element.bold &&
+                                  !!availableFonts
+                                    .find((f) => f.name === font)
+                                    ?.weights.includes(700),
+                              })
+                            }
+                          />
+                        }
+                        colorPicker={elementColor(
+                          'Text color',
+                          'color',
+                          'colorOpacity',
+                          false,
+                          true,
+                        )}
+                      />
+                      <LabelGeometryToolbar
+                        key={`geometry-${element.id}`}
+                        element={element}
+                        onPatch={patchElement}
+                        atFront={editorDoc.elements.at(-1)?.id === selected}
+                        atBack={editorDoc.elements[0]?.id === selected}
+                        onLayer={(layer) =>
+                          change({
+                            elements:
+                              layer === 'front'
+                                ? [
+                                    ...editorDoc.elements.filter(
+                                      (e) => e.id !== selected,
+                                    ),
+                                    element,
+                                  ]
+                                : [
+                                    element,
+                                    ...editorDoc.elements.filter(
+                                      (e) => e.id !== selected,
+                                    ),
+                                  ],
+                          })
+                        }
+                      />
+                      {element.type === 'text' && (
+                        <>
+                          <Control label="Data binding">
+                            <select
+                              value={element.binding || ''}
+                              disabled={element.locked}
+                              onChange={(e) =>
+                                patchElement({
+                                  binding: e.target.value || undefined,
+                                  textRuns: undefined,
+                                })
+                              }
+                            >
+                              <option value="">Static text</option>
+                              {bindings
+                                .filter((b) => !imageBindings.includes(b))
+                                .map((b) => (
+                                  <option key={b} value={b}>
+                                    {imageBindingNames[b] || b}
+                                  </option>
+                                ))}
+                            </select>
+                          </Control>
+                          {!element.binding && (
+                            <Control label="Text">
+                              <textarea
+                                value={element.text}
+                                disabled={element.locked}
+                                onChange={(e) =>
+                                  patchElement(
+                                    editStaticText(element, e.target.value),
+                                  )
+                                }
+                                onSelect={(e) =>
+                                  setTextSelection([
+                                    e.currentTarget.selectionStart,
+                                    e.currentTarget.selectionEnd,
+                                  ])
+                                }
+                              />
+                            </Control>
+                          )}
+                        </>
+                      )}
+                      {element.type === 'image' && (
+                        <>
+                          <Control label="Image source">
+                            <select
+                              value={element.binding || 'static'}
+                              onChange={(e) =>
+                                patchElement({
+                                  binding:
+                                    e.target.value === 'static'
+                                      ? undefined
+                                      : e.target.value,
+                                  assetId: undefined,
+                                })
+                              }
+                            >
+                              <option value="static">
+                                Fixed uploaded graphic
+                              </option>
+                              {imageBindings.map((b) => (
+                                <option key={b} value={b}>
+                                  {imageBindingNames[b] || b}
+                                </option>
+                              ))}
+                            </select>
+                          </Control>
+                          {element.binding ? (
+                            <p className="studio-small-note">
+                              Linked to{' '}
+                              {imageBindingNames[element.binding] ||
+                                element.binding}
+                              .{' '}
+                              {assets.find(
+                                (a) => a.id === elementAssetId(element, data),
+                              )?.name ||
+                                'No artwork linked for the selected source.'}
+                            </p>
+                          ) : (
+                            <>
+                              <Control label="Graphic">
+                                <select
+                                  value={element.assetId}
+                                  onChange={(e) =>
+                                    patchElement({ assetId: e.target.value })
+                                  }
+                                >
+                                  {assets.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                      {a.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Control>
+                            </>
+                          )}
+                          <Control label="Image fit">
+                            <select
+                              value={element.fit || 'contain'}
+                              onChange={(e) =>
+                                patchElement({
+                                  fit: e.target.value as 'contain' | 'cover',
+                                })
+                              }
+                            >
+                              <option value="contain">
+                                Fit whole image (preserve aspect ratio)
+                              </option>
+                              <option value="cover">Crop to fill frame</option>
+                            </select>
+                          </Control>
+                          {element.binding === 'product.graphic' &&
+                            !elementAssetId(element, data) && (
+                              <button
+                                className="btn secondary"
+                                onClick={() => {
+                                  setImageTarget('productGraphic')
+                                  setImageProductId(
+                                    source.kind === 'product'
+                                      ? source.id
+                                      : source.productId || '',
+                                  )
+                                  setSection('Graphics Library')
+                                }}
+                              >
+                                Upload / select product label graphic
+                              </button>
+                            )}
+                        </>
+                      )}
+                      {element.type !== 'image' &&
+                        element.type !== 'text' &&
+                        elementColor(
+                          element.type === 'illustration'
+                            ? 'Vector stroke color'
+                            : 'Stroke / border color',
+                          'color',
+                          'colorOpacity',
+                        )}
+                      {element.type === 'shape' &&
+                        elementColor('Shape fill', 'fill', 'fillOpacity', true)}
+                      <details className="studio-advanced">
+                        <summary>Advanced</summary>
+                        <div className="studio-advanced-fields">
+                          {element.type === 'text' && (
+                            <>
+                              {!element.binding && (
+                                <div
+                                  className="studio-field"
+                                  role="group"
+                                  aria-label="Font for selected text"
+                                >
+                                  <span>Font for selected text</span>
+                                  <small>
+                                    Select a word or range in Text to change its
+                                    font.
+                                  </small>
+                                  <FontPicker
+                                    value={element.font}
+                                    displayValue={textFontName(
+                                      element,
+                                      textSelection,
+                                    )}
+                                    customFonts={customFonts}
+                                    disabled={
+                                      element.locked ||
+                                      textSelection[1] <= textSelection[0]
+                                    }
+                                    preview={element.text.slice(
+                                      ...textSelection,
+                                    )}
+                                    onUploadRequest={() =>
+                                      setSection('Brand Kit')
+                                    }
+                                    onChange={(font) => {
+                                      try {
+                                        patchElement({
+                                          textRuns: applySelectionFont(
+                                            element,
+                                            ...textSelection,
+                                            font,
+                                          ),
+                                        })
+                                      } catch (e) {
+                                        setError((e as Error).message)
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <Control label="Font pairing">
+                                <select
+                                  value=""
+                                  onChange={(e) => {
+                                    const pairing = fontPairings.find(
+                                      (p) => p.name === e.target.value,
+                                    )
+                                    if (pairing)
+                                      change({
+                                        elements: applyFontPairing(
+                                          editorDoc.elements,
+                                          pairing,
+                                        ),
+                                      })
+                                  }}
+                                >
+                                  <option value="">
+                                    Apply a pairing · locked elements stay
+                                    unchanged
+                                  </option>
+                                  {fontPairings.map((p) => (
+                                    <option key={p.name}>{p.name}</option>
+                                  ))}
+                                </select>
+                              </Control>
+                              <button
+                                className="text-button"
+                                disabled={element.locked}
+                                onClick={() => {
+                                  let size = element.fontSize
+                                  while (
+                                    size > 7 &&
+                                    labelTextLines(
+                                      { ...element, fontSize: size },
+                                      data,
+                                    ).length *
+                                      size *
+                                      element.lineHeight >
+                                      element.height
+                                  )
+                                    size = Math.max(7, size - 0.5)
+                                  patchElement({ fontSize: size })
+                                }}
+                              >
+                                Fit text to box (minimum 7 pt)
+                              </button>
+                              {elementColor(
+                                'Text background',
+                                'fill',
+                                'fillOpacity',
+                                true,
+                              )}
+                            </>
+                          )}
+                          <Control label="Group ID (same ID moves together)">
+                            <input
+                              disabled={element.locked}
+                              value={element.groupId || ''}
+                              onChange={(e) =>
+                                patchElement({
+                                  groupId: e.target.value || undefined,
+                                })
+                              }
+                            />
+                          </Control>
+                          <Control label="Show element">
+                            <select
+                              disabled={element.locked}
+                              value={element.condition || 'always'}
+                              onChange={(e) =>
+                                patchElement({
+                                  condition: e.target
+                                    .value as LabelElement['condition'],
+                                })
+                              }
+                            >
+                              <option value="always">Always</option>
+                              <option value="nonempty">
+                                When field has a value
+                              </option>
+                              <option value="allergens">
+                                When allergens are declared
+                              </option>
+                              <option value="batch">
+                                When a batch is selected
+                              </option>
+                            </select>
+                          </Control>
+                          <details>
+                            <summary>Editor help</summary>
+                            <p className="studio-small-note">
+                              Drag to move; use edge handles to resize and the
+                              round handle to rotate. Images and icons keep
+                              their proportions. Hold Shift to resize freely or
+                              toggle angle snapping. Elements with the same
+                              Group ID move together. Use separate Label main
+                              name and Label product type fields for font
+                              pairings.
+                            </p>
+                          </details>
+                        </div>
+                      </details>
+                      <button
+                        className="text-button"
+                        onClick={() => setSelected('')}
+                      >
+                        Edit label setup
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="studio-inspector-fields">
+                      <Control label="Label type">
+                        <select
+                          value={editorDoc.labelType}
+                          onChange={(e) =>
+                            change({ labelType: e.target.value })
+                          }
+                        >
+                          {labelTypes.map((t) => (
+                            <option key={t}>{t}</option>
+                          ))}
+                        </select>
+                      </Control>
+                      <Control label="Label size">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value === '') return
+                            const size = labelSizes[Number(e.target.value)]
+                            if (size) {
+                              dimensions(size.w, size.h)
+                              setDoc((prev) =>
+                                prev ? { ...prev, round: !!size.round } : prev,
+                              )
+                            }
+                          }}
+                        >
+                          <option value="">Custom / choose preset</option>
+                          {labelSizes.map((s, i) => (
+                            <option key={s.name} value={i}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Control>
+                      <Control label="Dimension display">
+                        <select
+                          value={displayUnit}
+                          onChange={(e) => {
+                            setDisplayUnit(e.target.value as typeof displayUnit)
+                            change({
+                              displayUnit: e.target.value as typeof displayUnit,
+                            })
+                          }}
+                        >
+                          <option value="in">Inches</option>
+                          <option value="mm">Millimeters</option>
+                          <option value="px">Pixels (96 DPI screen)</option>
+                        </select>
+                      </Control>
+                      <div className="studio-two">
+                        {number(
+                          'Width (' + displayUnit + ')',
+                          Number(
+                            (
+                              editorDoc.width /
+                              (displayUnit === 'in'
+                                ? 72
+                                : displayUnit === 'mm'
+                                  ? 72 / 25.4
+                                  : 0.75)
+                            ).toFixed(2),
+                          ),
+                          (v) =>
+                            dimensions(
+                              v *
+                                (displayUnit === 'in'
+                                  ? 72
+                                  : displayUnit === 'mm'
+                                    ? 72 / 25.4
+                                    : 0.75),
+                              editorDoc.height,
+                            ),
+                          0.5,
+                        )}
+                        {number(
+                          'Height (' + displayUnit + ')',
+                          Number(
+                            (
+                              editorDoc.height /
+                              (displayUnit === 'in'
+                                ? 72
+                                : displayUnit === 'mm'
+                                  ? 72 / 25.4
+                                  : 0.75)
+                            ).toFixed(2),
+                          ),
+                          (v) =>
+                            dimensions(
+                              editorDoc.width,
+                              v *
+                                (displayUnit === 'in'
+                                  ? 72
+                                  : displayUnit === 'mm'
+                                    ? 72 / 25.4
+                                    : 0.75),
+                            ),
+                          0.5,
+                        )}
+                      </div>
+                      <button
+                        className="btn secondary"
+                        onClick={() =>
+                          dimensions(editorDoc.height, editorDoc.width)
+                        }
+                      >
+                        Rotate orientation
+                      </button>
+                      {color(
+                        'Label background',
+                        editorDoc.background,
+                        editorDoc.backgroundOpacity ?? 1,
+                        (d, c) => ({
+                          ...d,
+                          background: c.hex,
+                          backgroundOpacity: c.opacity,
+                        }),
+                        true,
+                      )}
+                      {sourceControls}
+                      <Control label="Brand kit">
+                        <select
+                          value={brandId}
+                          onChange={(e) => {
+                            setBrandId(e.target.value)
+                            if (doc?.workflowVersion === 1)
+                              change({ brandId: e.target.value })
+                          }}
+                        >
+                          <option value="">Business defaults</option>
+                          {(w.brand_kits || []).map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Control>
+                      {brand?.primaryLogoAssetId && (
+                        <button
+                          className="btn secondary"
+                          onClick={() =>
+                            add({
+                              ...newElement('image'),
+                              binding: 'business.logo',
+                              condition: 'nonempty',
+                              width: 70,
+                              height: 70,
+                            })
+                          }
+                        >
+                          Add brand logo
+                        </button>
+                      )}
+                      {brand && (
+                        <button
+                          className="btn secondary"
+                          onClick={() =>
+                            change({
+                              background: brand.colors[1] || '#ffffff',
+                              elements: applyFontPairing(editorDoc.elements, {
+                                name: 'Brand Kit',
+                                heading: brand.headingFont || 'Oswald',
+                                body: brand.bodyFont || 'DM Sans',
+                                compliance: brand.complianceFont || 'DM Sans',
+                                accent: brand.accentFont,
+                              }).map((e) =>
+                                e.locked
+                                  ? e
+                                  : {
+                                      ...e,
+                                      color: brand.colors[0] || '#292630',
+                                    },
+                              ),
+                            })
+                          }
+                        >
+                          <Palette size={17} />
+                          Apply brand style
+                        </button>
+                      )}
+                      {labelCheck}
+                      <details>
+                        <summary>Saved versions</summary>
+                        {(w.label_versions || [])
+                          .filter((v) => v.templateId === doc.id)
+                          .slice()
+                          .reverse()
+                          .map((v) => (
+                            <button
+                              className="text-button"
+                              key={v.id}
+                              onClick={() =>
+                                commit({
+                                  ...v.document,
+                                  revision: revision.current,
+                                })
+                              }
+                            >
+                              Restore v{v.revision} ·{' '}
+                              {new Date(v.savedAt).toLocaleString()}
+                            </button>
+                          ))}
+                      </details>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            </>
+          )}
+          {section === 'Graphics Library' && (
+            <>
+              <div className="studio-gallery-heading">
+                <div>
+                  <h2>Your artwork, close at hand.</h2>
+                  <p>
+                    Original files stay private to your business. PNG, JPEG,
+                    WebP · up to 5 MB.
+                  </p>
+                </div>
+                <label className="btn">
+                  <Upload size={18} />
+                  Upload graphic
+                  <input
+                    className="sr-only"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy || !canEdit}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) void upload(e.target.files[0])
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="panel panel-body" style={{ marginBottom: 24 }}>
+                <h3>Link artwork to label data</h3>
+                <p>
+                  Choose a role before uploading, or link an existing graphic
+                  below.
+                </p>
+                <div className="studio-two">
+                  <Control label="Use artwork for">
+                    <select
+                      value={imageTarget}
+                      onChange={(e) => setImageTarget(e.target.value)}
+                    >
+                      <option value="library">
+                        Library only · fixed graphic
+                      </option>
+                      <option value="businessLogo">Business logo</option>
+                      <option value="productPhoto">Product photo</option>
+                      <option value="productGraphic">
+                        Product graphic / illustration
+                      </option>
+                    </select>
+                  </Control>
+                  {imageTarget.startsWith('product') && (
+                    <Control label="Artwork product">
+                      <select
+                        value={imageProductId}
+                        onChange={(e) => setImageProductId(e.target.value)}
+                      >
+                        <option value="">Choose product…</option>
+                        {w.products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Control>
                   )}
                 </div>
-              ) : (
-                <div
-                  style={{
-                    maxWidth: Math.min(520, editorDoc.width * 1.6),
-                    margin: 'auto',
+              </div>
+              <div
+                className="studio-upload-drop"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  if (e.dataTransfer.files[0])
+                    void upload(e.dataTransfer.files[0])
+                }}
+              >
+                <Upload size={26} />
+                <strong>Drop your logo or artwork here</strong>
+                <p>
+                  For sharp printing, aim for 300 pixels per inch. SVG/PDF
+                  uploads and background removal are not available.
+                </p>
+                <div className="studio-two">
+                  <Control label="Asset category">
+                    <select
+                      value={uploadCategory}
+                      onChange={(e) => setUploadCategory(e.target.value)}
+                    >
+                      {[
+                        'logo',
+                        'product photo',
+                        'illustration',
+                        'seasonal',
+                        'divider',
+                        'icon',
+                        'background',
+                      ].map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  </Control>
+                  <Control label="Collection">
+                    <input
+                      value={collection}
+                      onChange={(e) => setCollection(e.target.value)}
+                    />
+                  </Control>
+                </div>
+              </div>
+              <Control label="Search graphics / collections">
+                <input
+                  value={assetQuery}
+                  onChange={(e) => setAssetQuery(e.target.value)}
+                  placeholder="Logo, seasonal, bread…"
+                />
+              </Control>
+              <div className="studio-assets-grid">
+                {assets
+                  .filter((a) =>
+                    [a.name, a.category, a.collection, a.tags]
+                      .join(' ')
+                      .toLowerCase()
+                      .includes(assetQuery.toLowerCase()),
+                  )
+                  .map((a) => (
+                    <article className="panel" key={a.id}>
+                      <img src={a.fileUrl} alt={a.name} />
+                      <h3>{a.name}</h3>
+                      <p>
+                        {a.widthPx} × {a.heightPx} px · {a.collection}
+                      </p>
+                      <p>
+                        300 DPI: {(a.widthPx / 300).toFixed(1)} ×{' '}
+                        {(a.heightPx / 300).toFixed(1)} in
+                      </p>
+                      {imageTarget !== 'library' && (
+                        <button
+                          className="btn secondary"
+                          disabled={!canEdit || busy}
+                          onClick={() => {
+                            setBusy(true)
+                            linkArtwork(a.id)
+                              .catch((e) => setError(e.message))
+                              .finally(() => setBusy(false))
+                          }}
+                        >
+                          Link as{' '}
+                          {imageTarget === 'businessLogo'
+                            ? 'business logo'
+                            : imageTarget === 'productPhoto'
+                              ? 'product photo'
+                              : 'product graphic'}
+                        </button>
+                      )}
+                      {doc && (
+                        <button
+                          className="text-button"
+                          onClick={() => {
+                            add({
+                              ...newElement('image'),
+                              assetId: a.id,
+                              width: 90,
+                              height: (90 * a.heightPx) / a.widthPx,
+                            })
+                            setSection('Editor')
+                          }}
+                        >
+                          Add to current label <Plus size={16} />
+                        </button>
+                      )}
+                    </article>
+                  ))}
+              </div>
+              <h3 className="spaced-title">Original bakery collection</h3>
+              <div className="studio-graphic-grid library">
+                {Object.keys(bakeryGraphics).map((g) => (
+                  <button
+                    key={g}
+                    disabled={!doc}
+                    onClick={() => {
+                      add({
+                        ...newElement('illustration'),
+                        graphic: g,
+                        width: 60,
+                        height: 60,
+                      })
+                      setSection('Editor')
+                    }}
+                  >
+                    <svg viewBox="0 0 100 100">
+                      <path d={bakeryGraphics[g]} />
+                    </svg>
+                    <span>{g}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {['Brand Kit', 'Label Settings'].includes(section) && (
+            <FontUploadPanel
+              workspace={w}
+              onWorkspace={onWorkspace}
+              canEdit={canEdit}
+            />
+          )}
+          {section === 'Brand Kit' && (
+            <div className="studio-brand-layout">
+              <section className="panel studio-brand-form">
+                <h2>Make it unmistakably yours.</h2>
+                <p>Save multiple palettes for different product lines.</p>
+                <Control label="Saved brand kits">
+                  <select
+                    value={brandDraft.id}
+                    onChange={(e) =>
+                      setBrandDraft(
+                        (w.brand_kits || []).find(
+                          (b) => b.id === e.target.value,
+                        ) || {
+                          id: '',
+                          name: 'New brand',
+                          colors: ['#742b60', '#fffdf6'],
+                          contact: {},
+                        },
+                      )
+                    }
+                  >
+                    <option value="">New brand kit</option>
+                    {(w.brand_kits || []).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </Control>
+                <Control label="Kit name">
+                  <input
+                    value={brandDraft.name}
+                    onChange={(e) =>
+                      setBrandDraft({ ...brandDraft, name: e.target.value })
+                    }
+                  />
+                </Control>
+                <div className="studio-brand-colors">
+                  {brandDraft.colors.map((c: string, i: number) => (
+                    <label key={i}>
+                      <span>Color {i + 1}</span>
+                      <input
+                        type="color"
+                        value={c}
+                        onChange={(e) =>
+                          setBrandDraft({
+                            ...brandDraft,
+                            colors: brandDraft.colors.map(
+                              (v: string, j: number) =>
+                                i === j ? e.target.value : v,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                  <button
+                    className="icon-button"
+                    aria-label="Add brand color"
+                    disabled={brandDraft.colors.length >= 12}
+                    onClick={() =>
+                      setBrandDraft({
+                        ...brandDraft,
+                        colors: [...brandDraft.colors, '#ffffff'],
+                      })
+                    }
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+                <Control label="Default font pairing">
+                  <select
+                    value={brandDraft.defaultFontPairing || ''}
+                    onChange={(e) => {
+                      const p = fontPairings.find(
+                        (p) => p.name === e.target.value,
+                      )
+                      if (p)
+                        setBrandDraft({
+                          ...brandDraft,
+                          defaultFontPairing: p.name,
+                          headingFont: p.heading,
+                          bodyFont: p.body,
+                          complianceFont: p.compliance,
+                          accentFont: p.accent || p.heading,
+                        })
+                    }}
+                  >
+                    <option value="">Custom typography</option>
+                    {fontPairings.map((p) => (
+                      <option key={p.name}>{p.name}</option>
+                    ))}
+                  </select>
+                </Control>
+                {[
+                  'headingFont',
+                  'secondaryHeadingFont',
+                  'bodyFont',
+                  'complianceFont',
+                  'accentFont',
+                ].map((key) => (
+                  <Control key={key} label={key.replace('Font', ' font')}>
+                    <FontPicker
+                      onUploadRequest={() => setSection('Brand Kit')}
+                      customFonts={customFonts}
+                      value={brandDraft[key] || 'DM Sans'}
+                      onChange={(font) =>
+                        setBrandDraft({ ...brandDraft, [key]: font })
+                      }
+                      preferences={w.settings[0].currentFontPreferences}
+                      onPreferences={canEdit ? saveFontPreferences : undefined}
+                    />
+                  </Control>
+                ))}
+                <label className="btn secondary">
+                  <Upload size={17} />
+                  Upload business logo
+                  <input
+                    type="file"
+                    className="sr-only"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy || !canEdit}
+                    onChange={(e) => {
+                      if (e.target.files?.[0])
+                        void upload(
+                          e.target.files[0],
+                          'businessLogo',
+                          brandDraft.id || undefined,
+                        )
+                    }}
+                  />
+                </label>
+                {[
+                  'primaryLogoAssetId',
+                  'secondaryLogoAssetId',
+                  'markAssetId',
+                ].map((key) => (
+                  <Control
+                    key={key}
+                    label={key
+                      .replace('AssetId', '')
+                      .replace(/([A-Z])/g, ' $1')}
+                  >
+                    <select
+                      value={brandDraft[key] || ''}
+                      onChange={(e) =>
+                        setBrandDraft({ ...brandDraft, [key]: e.target.value })
+                      }
+                    >
+                      <option value="">No logo</option>
+                      {assets.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Control>
+                ))}
+                <details>
+                  <summary>Business information & default label text</summary>
+                  {[
+                    'name',
+                    'address',
+                    'website',
+                    'phone',
+                    'email',
+                    'jurisdiction',
+                    'socialHandle',
+                  ].map((k) => (
+                    <Control label={'Business ' + k} key={k}>
+                      <input
+                        value={brandDraft.contact?.[k] || ''}
+                        placeholder={w.settings[0]?.[k] || ''}
+                        onChange={(e) =>
+                          setBrandDraft({
+                            ...brandDraft,
+                            contact: {
+                              ...brandDraft.contact,
+                              [k]: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </Control>
+                  ))}
+                  {['defaultDisclaimer', 'defaultStorage', 'defaultFooter'].map(
+                    (k) => (
+                      <Control label={k.replace('default', 'Default ')} key={k}>
+                        <textarea
+                          value={brandDraft[k] || ''}
+                          onChange={(e) =>
+                            setBrandDraft({
+                              ...brandDraft,
+                              [k]: e.target.value,
+                            })
+                          }
+                        />
+                      </Control>
+                    ),
+                  )}
+                </details>
+                <button
+                  className="btn"
+                  disabled={busy || !canEdit}
+                  onClick={async () => {
+                    setBusy(true)
+                    try {
+                      const result = await request('labelBrand', brandDraft)
+                      setBrandDraft(
+                        result.brand_kits.find((b) => b.id === brandDraft.id) ||
+                          result.brand_kits.at(-1)!,
+                      )
+                      setStatus('Brand kit saved')
+                    } catch (e) {
+                      setError((e as Error).message)
+                    } finally {
+                      setBusy(false)
+                    }
                   }}
                 >
-                  <LabelCanvas
-                    document={editorDoc}
-                    data={data}
-                    assets={assets}
-                    svgRef={svgRef}
+                  <Save size={17} />
+                  Save brand kit
+                </button>
+                <p role="status">{status}</p>
+              </section>
+              <aside
+                className="studio-brand-preview"
+                style={{
+                  background: brandDraft.colors[1] || '#fffdf6',
+                  color: brandDraft.colors[0],
+                }}
+              >
+                <Wheat size={55} />
+                <span>YOUR BRAND, BEAUTIFULLY CONSISTENT</span>
+                <h2 style={{ fontFamily: brandDraft.headingFont || 'Oswald' }}>
+                  {brandDraft.contact?.name || w.settings[0].name}
+                </h2>
+                <p style={{ fontFamily: brandDraft.bodyFont || 'DM Sans' }}>
+                  Made by hand. Labeled with care.
+                </p>
+              </aside>
+            </div>
+          )}
+          {section === 'Print & Export' &&
+            (doc ? (
+              <div className="studio-print-layout">
+                <section className="panel studio-print-controls">
+                  <h2>Preview and print</h2>
+                  {doc.workflowVersion === 1 && (
+                    <div className="button-row">
+                      <button
+                        className="btn secondary"
+                        disabled={saveBusy || !canEdit}
+                        onClick={() => void saveDocument()}
+                      >
+                        Save label
+                      </button>
+                      <button
+                        className="btn secondary"
+                        onClick={() => setSection('Editor')}
+                      >
+                        Edit label
+                      </button>
+                      <button
+                        className="btn secondary"
+                        disabled={saveBusy}
+                        onClick={cancelEditor}
+                      >
+                        Cancel
+                      </button>
+                      {dirty && (
+                        <p role="status">
+                          Save your changes before printing. Review manually
+                          entered product text in the editor when changing
+                          products.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {sourceControls}
+                  <LabelSetControls
+                    document={doc}
+                    products={copies}
+                    parts={parts}
+                    setParts={(v) => {
+                      setParts(v)
+                      updatePrint({ parts: v })
+                      setRunIndex(0)
+                    }}
+                    order={order}
+                    setOrder={(v) => {
+                      setOrder(v)
+                      updatePrint({ order: v })
+                    }}
+                    runIndex={runIndex}
+                    setRunIndex={setRunIndex}
                   />
-                </div>
-              )}
-              <p>
-                {copies} copies ·{' '}
-                {layout.mode === 'sheet'
-                  ? Math.ceil(copies / (layout.columns * layout.rows))
-                  : copies}{' '}
-                pages
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="calm-empty">
-            <Printer size={35} />
-            <h2>Choose a label first.</h2>
-            <button className="btn" onClick={() => navigateStudio('Labels')}>
-              Browse labels
-            </button>
-          </div>
-        ))}
-      {section === 'Label Settings' && (
-        <>
-          <LabelPrinterSettings
-            profiles={printerProfiles}
-            canEdit={canEdit}
-            width={editorDoc?.width}
-            height={editorDoc?.height}
-            save={async (data) => {
-              await request('labelPrinterProfile', data)
-            }}
-            onTest={testPrinter}
-            onConnection={setConnected}
-          />
-          <section className="panel studio-label-settings">
-            <h2>Thoughtful defaults for real print jobs.</h2>
-            <p>
-              All document coordinates are stored in points (72 pt = 1 inch).
-              Bundled fonts include their open licenses. Google Fonts load on
-              demand. Supported fonts are embedded into PDF exports; unavailable
-              or unsupported fonts produce an error instead of a substitute.
-            </p>
-            <div className="studio-two">
-              <div>
-                <h3>Label sizes</h3>
-                <p>
-                  Use presets, round labels, or custom dimensions in the editor.
-                  Size changes scale the design; review text and safe areas
-                  after resizing.
-                </p>
-              </div>
-              <div>
-                <h3>Food information</h3>
-                <p>
-                  Ingredient declarations use saved supplier details and
-                  verified conversions. Confirm finished-product ordering,
-                  missing subingredients, allergens, dates, and local labeling
-                  requirements.
-                </p>
-              </div>
-            </div>
-            <button
-              className="btn secondary"
-              onClick={() => setSection('Brand Kit')}
-            >
-              Edit brand defaults <ArrowRight size={16} />
-            </button>
-            <details>
-              <summary>Print history</summary>
-              {(w.label_print_jobs || [])
-                .slice()
-                .reverse()
-                .map((j) => (
-                  <div className="studio-history-row" key={j.id}>
-                    <strong>{j.name}</strong>
-                    <span>
-                      {j.outputType.toUpperCase()} · {j.copies} copies ·{' '}
-                      {new Date(j.createdAt).toLocaleString()}
-                    </span>
-                    <span className="status neutral">
-                      {j.status === 'exported'
-                        ? 'PDF exported'
-                        : 'Export prepared'}
-                    </span>
+                  <LabelPrintOptions
+                    doc={doc}
+                    printerProfiles={printerProfiles}
+                    selectedPrinter={selectedPrinter}
+                    printingMethod={printingMethod}
+                    setPrintingMethod={(value) => {
+                      setPrintingMethod(value)
+                      updatePrint({ printingMethod: value })
+                    }}
+                    connected={connected}
+                    copies={copies}
+                    setCopies={(v) => {
+                      setCopies(v)
+                      updatePrint({ copies: v })
+                    }}
+                    layout={layout}
+                    setLayout={(v) => {
+                      setLayout(v)
+                      updatePrint({ layout: v })
+                    }}
+                    onManagePrinters={() => setSection('Label Settings')}
+                  />
+                  <div className="studio-print-buttons">
+                    <button
+                      className="btn"
+                      disabled={busy || !canEdit || colorEditing}
+                      onClick={() => void output('print')}
+                    >
+                      <Printer size={18} />
+                      {busy
+                        ? 'Preparing…'
+                        : selectedPrinter?.method === 'qz'
+                          ? `Print to ${selectedPrinter.name}`
+                          : 'Print labels'}
+                    </button>
+                    <button
+                      className="btn secondary"
+                      disabled={busy || !canEdit}
+                      onClick={() => void output('pdf')}
+                    >
+                      <Download size={18} />
+                      Download PDF
+                    </button>
+                    <button
+                      className="btn secondary"
+                      disabled={busy || !canEdit}
+                      onClick={() => void output('png')}
+                    >
+                      <Download size={18} />
+                      Single PNG · 300 DPI
+                    </button>
                   </div>
-                ))}
-              {!w.label_print_jobs?.length && <p>No exports recorded yet.</p>}
-            </details>
-            <details>
-              <summary>Beyond this release</summary>
-              <p>
-                QR/barcode generation, curved text, variable-data runs, advanced
-                image crops, collaboration, and jurisdiction-specific rules are
-                not available. Barcode label types can hold a reviewed uploaded
-                barcode graphic.
-              </p>
-            </details>
-          </section>
-        </>
-      )}
+                  <p className="studio-small-note">
+                    Match your printer paper size and use actual size / 100%
+                    scaling. Set driver copies to 1: the document already
+                    contains the requested labels. Browser code cannot force
+                    every driver option. Fonts and graphics finish loading
+                    before the print dialog opens. Screen RGB colors are not
+                    guaranteed CMYK or exact printed matches.
+                  </p>
+                  {labelCheck}
+                </section>
+                <div className="studio-print-preview">
+                  {doc.format === 'front-back' && (
+                    <PairedLabelPreview
+                      document={doc}
+                      data={data}
+                      assets={assets}
+                    />
+                  )}
+                  <span className="eyebrow">
+                    ACTUAL LABEL: {(editorDoc.width / 72).toFixed(2)} ×{' '}
+                    {(editorDoc.height / 72).toFixed(2)} IN
+                  </span>
+                  {layout.mode === 'sheet' ? (
+                    <div
+                      className="studio-sheet-preview"
+                      style={{
+                        aspectRatio: `${layout.pageWidth}/${layout.pageHeight}`,
+                        padding: `${(layout.margin / layout.pageWidth) * 100}%`,
+                        gap: `${(layout.gutter / layout.pageWidth) * 100}%`,
+                        gridTemplateColumns: `repeat(${Math.max(1, Math.min(20, layout.columns))},1fr)`,
+                      }}
+                    >
+                      {Array.from(
+                        {
+                          length: Math.min(
+                            200,
+                            Math.max(1, layout.columns * layout.rows),
+                          ),
+                        },
+                        (_, i) => (
+                          <LabelCanvas
+                            key={i}
+                            document={editorDoc}
+                            data={data}
+                            assets={assets}
+                            svgRef={i === 0 ? svgRef : undefined}
+                          />
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        maxWidth: Math.min(520, editorDoc.width * 1.6),
+                        margin: 'auto',
+                      }}
+                    >
+                      <LabelCanvas
+                        document={editorDoc}
+                        data={data}
+                        assets={assets}
+                        svgRef={svgRef}
+                      />
+                    </div>
+                  )}
+                  <p>
+                    {copies} copies ·{' '}
+                    {layout.mode === 'sheet'
+                      ? Math.ceil(copies / (layout.columns * layout.rows))
+                      : copies}{' '}
+                    pages
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="calm-empty">
+                <Printer size={35} />
+                <h2>Choose a label first.</h2>
+                <button
+                  className="btn"
+                  onClick={() => navigateStudio('Labels')}
+                >
+                  Browse labels
+                </button>
+              </div>
+            ))}
+          {section === 'Label Settings' && (
+            <>
+              <LabelPrinterSettings
+                profiles={printerProfiles}
+                canEdit={canEdit}
+                width={editorDoc?.width}
+                height={editorDoc?.height}
+                save={async (data) => {
+                  await request('labelPrinterProfile', data)
+                }}
+                onTest={testPrinter}
+                onConnection={setConnected}
+              />
+              <section className="panel studio-label-settings">
+                <h2>Thoughtful defaults for real print jobs.</h2>
+                <p>
+                  All document coordinates are stored in points (72 pt = 1
+                  inch). Bundled fonts include their open licenses. Google Fonts
+                  load on demand. Supported fonts are embedded into PDF exports;
+                  unavailable or unsupported fonts produce an error instead of a
+                  substitute.
+                </p>
+                <div className="studio-two">
+                  <div>
+                    <h3>Label sizes</h3>
+                    <p>
+                      Use presets, round labels, or custom dimensions in the
+                      editor. Size changes scale the design; review text and
+                      safe areas after resizing.
+                    </p>
+                  </div>
+                  <div>
+                    <h3>Food information</h3>
+                    <p>
+                      Ingredient declarations use saved supplier details and
+                      verified conversions. Confirm finished-product ordering,
+                      missing subingredients, allergens, dates, and local
+                      labeling requirements.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  className="btn secondary"
+                  onClick={() => setSection('Brand Kit')}
+                >
+                  Edit brand defaults <ArrowRight size={16} />
+                </button>
+                <details>
+                  <summary>Print history</summary>
+                  {(w.label_print_jobs || [])
+                    .slice()
+                    .reverse()
+                    .map((j) => (
+                      <div className="studio-history-row" key={j.id}>
+                        <strong>{j.name}</strong>
+                        <span>
+                          {j.outputType.toUpperCase()} · {j.copies} copies ·{' '}
+                          {new Date(j.createdAt).toLocaleString()}
+                        </span>
+                        <span className="status neutral">
+                          {j.status === 'exported'
+                            ? 'PDF exported'
+                            : 'Export prepared'}
+                        </span>
+                      </div>
+                    ))}
+                  {!w.label_print_jobs?.length && (
+                    <p>No exports recorded yet.</p>
+                  )}
+                </details>
+                <details>
+                  <summary>Beyond this release</summary>
+                  <p>
+                    QR/barcode generation, curved text, variable-data runs,
+                    advanced image crops, collaboration, and
+                    jurisdiction-specific rules are not available. Barcode label
+                    types can hold a reviewed uploaded barcode graphic.
+                  </p>
+                </details>
+              </section>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

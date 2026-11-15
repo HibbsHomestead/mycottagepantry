@@ -240,3 +240,24 @@
     min-height: 36px;
   }
 }
+/* Letterboxing belongs to the card surface, never a decorative gray frame. */
+.app-shell .pantry-photo[data-photo-state="image"],
+.app-shell .pantry-card-photo-button:has(img),
+.app-shell .pantry-card-photo-button:has(img):hover {
+  background: transparent;
+}
+.app-shell .pantry-photo[data-photo-state="image"] img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.pantry-photo[data-photo-state="missing"] {
+  background: var(--surface-soft);
+}
+.app-shell .pantry-photo[data-photo-state='loading'] {
+  background: var(--surface-soft);
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+}

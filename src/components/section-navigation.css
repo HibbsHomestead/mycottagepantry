@@ -1,0 +1,129 @@
+.section-workspace {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.section-workspace-content {
+  min-width: 0;
+}
+.internal-section-nav {
+  position: sticky;
+  top: 90px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface-soft, var(--card));
+}
+.internal-section-links {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.internal-section-links > a,
+.internal-section-links > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: max(var(--interface-text-min, 0px), 14px);
+  line-height: 1.4;
+  text-align: left;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.internal-section-links > [aria-current='page'] {
+  background: var(--primary);
+  color: var(--primary-foreground, #fff);
+  font-weight: 600;
+}
+.internal-section-links > :hover {
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+.internal-section-links > [aria-current='page']:hover {
+  background: var(--primary);
+  color: var(--primary-foreground, #fff);
+}
+.internal-section-nav :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.internal-section-toggle {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .section-workspace {
+    display: block;
+  }
+  .internal-section-nav {
+    position: static;
+    margin-bottom: 12px;
+  }
+  .internal-section-toggle {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--foreground);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .internal-section-links {
+    display: none;
+  }
+  .internal-section-nav[data-expanded='true'] .internal-section-links {
+    display: flex;
+    margin-top: 6px;
+  }
+}
+.workspace-standard .settings-workspace {
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 20px;
+}
+@media (max-width: 1000px) {
+  .workspace-standard .settings-workspace {
+    display: block;
+  }
+}
+/* Keep the established Finance/Purchasing layout on the same compact rhythm. */
+main.finance-page {
+  grid-template-columns: 180px minmax(0, 1fr);
+  column-gap: 20px;
+}
+.finance-page > .book-nav {
+  padding: 8px;
+}
+.finance-page .book-nav button {
+  font-size: max(var(--interface-text-min, 0px), 14px);
+  padding: 10px;
+}
+.finance-page .book-nav h2,
+.finance-page .book-nav .book-eyebrow {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .finance-page > .book-nav {
+    margin-bottom: 12px;
+  }
+}
+.main-shell > main.finance-page {
+  grid-template-columns: 180px minmax(0, 1fr);
+  column-gap: 20px;
+}
+.finance-page .book-nav button[aria-current='page'] {
+  font-weight: 600;
+}

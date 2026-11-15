@@ -23,6 +23,7 @@ export function PantryPhoto({
   recipeCategories?: RecipeCategory[]
 }) {
   const [failed, setFailed] = useState('')
+  const [loaded, setLoaded] = useState('')
   const asset = assets.find((a) => a.id === item.imageAssetId)
   const originalSrc = asset?.fileUrl
   const previewWidth = className.includes('detail-photo')
@@ -56,6 +57,14 @@ export function PantryPhoto({
   return (
     <span
       className={`pantry-photo ${kind === 'recipe' ? 'recipe-category-photo' : ''} ${className}`}
+      data-photo-state={
+        !src || failed === src
+          ? 'missing'
+          : loaded === src
+            ? 'image'
+            : 'loading'
+      }
+      aria-busy={!!src && failed !== src && loaded !== src}
     >
       {src && failed !== src ? (
         <img
@@ -65,6 +74,7 @@ export function PantryPhoto({
           decoding="async"
           width={asset?.widthPx || 400}
           height={asset?.heightPx || 300}
+          onLoad={() => setLoaded(src)}
           onError={() => setFailed(src)}
         />
       ) : kind === 'recipe' && item.workflow !== 'handmade' ? (

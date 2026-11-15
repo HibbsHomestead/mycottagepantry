@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { IngredientCostCards } from './ingredient-cost-cards'
 import { ProductCostCards } from './product-cost-cards'
@@ -104,6 +104,10 @@ it.each(['inclusive', 'exclusive'] as const)(
     render(
       <ProductCostCards product={product} cost={cost} workspace={workspace} />,
     )
+    expect(
+      screen.getByText('How this is calculated').closest('details'),
+    ).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByText('How this is calculated', { exact: true }))
     const card = (label: string) =>
       screen
         .getByText(label, { exact: true })
@@ -118,18 +122,14 @@ it.each(['inclusive', 'exclusive'] as const)(
       within(card('Tax per package')).getByText(money(pricing.tax)),
     ).toBeVisible()
     expect(
-      within(card('Profit per package')).getByText(money(pricing.profit)),
+      within(card('Gross profit')).getByText(money(pricing.profit)),
     ).toBeVisible()
     expect(
       within(card('Margin')).getByText(`${pricing.margin.toFixed(2)}%`),
     ).toBeVisible()
-    expect(
-      screen.getByText('How this is calculated').closest('details'),
-    ).not.toHaveAttribute('open')
     expect(JSON.stringify({ product, workspace })).toBe(original)
   },
 )
-
 
 it('keeps known package and saved costs readable while the inventory relationship is missing', () => {
   render(<IngredientCostCards ingredient={{
