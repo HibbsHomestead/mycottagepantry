@@ -1,3 +1,4 @@
+import { SectionNavigation } from './section-navigation'
 import { billingRequest } from '@/lib/billing-client'
 import { CategoryTaxSettings } from './product-categories'
 import { StripeOwnerBilling } from './stripe-owner-billing'
@@ -133,7 +134,7 @@ export function SettingsWorkspace({
   }
   return (
     <div className="settings-workspace">
-      <nav className="settings-nav" aria-label="Settings sections">
+      <SectionNavigation name="Settings" active={selected}>
         {isOwner && (
           <a className="public-text-link" href="/oven/billing">
             Subscription & Billing
@@ -153,7 +154,7 @@ export function SettingsWorkspace({
             </button>
           )
         })}
-      </nav>
+      </SectionNavigation>
       <div className="settings-content">
         <section className="panel settings-section">
           <h2>{selected}</h2>

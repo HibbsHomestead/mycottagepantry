@@ -1,3 +1,8 @@
+import {
+  SectionNavigation,
+  SectionWorkspace,
+  SectionContent,
+} from './section-navigation'
 import { LinkedPurchaseRecords } from './linked-purchase-records'
 import { Checkbook, FinanceNavigation } from './checkbook'
 import { customerMessage } from '@/lib/customer-message'
@@ -41,7 +46,7 @@ import { effectiveRecipeLines, recipeProductionLines } from '@/lib/domain'
 import { ItemDetailHeader, ItemDetailLayout } from './item-detail-layout'
 import { NetWeightField } from './net-weight-field'
 import { RecipeLineCost } from './recipe-line-cost'
-import { ProductCostCards } from './product-cost-cards'
+import { ProductCostCards, ProductMarginCard } from './product-cost-cards'
 import { AddItemDialog } from './add-item-dialog'
 import { stockReceiptPreview } from '@/lib/inventory-browse'
 import { IngredientStockAdjustment } from './ingredient-stock-adjustment'
@@ -342,7 +347,6 @@ export function WorkspaceApp() {
   const [route, setRoute] = useState(() => destination('Dashboard'))
   const routeRef = useRef(route)
   const lastHash = useRef('')
-  const sectionTabsRef = useRef<HTMLElement>(null)
   const [formDirty, setFormDirty] = useState(false)
   const packagingDraft = isPackaging(draft)
   useEffect(() => {
@@ -634,17 +638,6 @@ export function WorkspaceApp() {
     window.history.replaceState(null, '', hash)
     lastHash.current = hash
   }, [search, filter, route, ready])
-  useEffect(() => {
-    const tabs = sectionTabsRef.current
-    const active = tabs?.querySelector<HTMLElement>('[aria-current="page"]')
-    if (!tabs || !active) return
-    const bounds = tabs.getBoundingClientRect()
-    const selected = active.getBoundingClientRect()
-    if (selected.left < bounds.left || selected.right > bounds.right)
-      tabs.scrollLeft +=
-        selected.left - bounds.left - (bounds.width - selected.width) / 2
-  }, [route.section, route.tab, ready])
-
   const loadingWorkspace = useRef<Promise<void> | null>(null)
   const hasLoadedWorkspace = useRef(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
@@ -1719,327 +1712,1255 @@ export function WorkspaceApp() {
                 )}
             </div>
           </div>
-          {!!sectionTabs[route.section]?.length &&
-            route.section !== 'Finance' &&
-            route.section !== 'Purchasing' &&
-            route.section !== 'Labels' &&
-            route.section !== 'Settings' && (
-              <nav
-                ref={sectionTabsRef}
-                className="page-tabs section-tabs"
-                aria-label={`${route.section} tabs`}
-              >
-                {sectionTabs[route.section].map((tab) => (
-                  <a
-                    key={tab}
-                    href={destinationHash(destination(route.section, tab))}
-                    className={route.tab === tab ? 'active' : ''}
-                    aria-current={route.tab === tab ? 'page' : undefined}
-                    onClick={(event) => {
-                      if (!event.metaKey && !event.ctrlKey && !event.shiftKey) {
-                        event.preventDefault()
-                        go(route.section, tab)
-                      }
-                    }}
-                  >
-                    {tab}
-                  </a>
-                ))}
-              </nav>
-            )}
-          {page === 'Dashboard' && (
-            <WorkspaceDashboard
-              workspace={state}
-              financialReady={ready}
-              canWrite={['Owner', 'Manager'].includes(role)}
-              go={go}
-              open={open}
-            />
-          )}
-          {page === 'Pantry' && (
-            <>
-              {sub === 'Counts' ? (
-                <InventoryCounts
+          <SectionWorkspace
+            enabled={
+              !!sectionTabs[route.section]?.length &&
+              !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
+                route.section,
+              )
+            }
+          >
+            {!!sectionTabs[route.section]?.length &&
+              !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
+                route.section,
+              ) && (
+                <SectionNavigation name={route.section} active={route.tab}>
+                  {sectionTabs[route.section].map((tab) => (
+                    <a
+                      key={tab}
+                      href={destinationHash(destination(route.section, tab))}
+                      className={route.tab === tab ? 'active' : ''}
+                      aria-current={route.tab === tab ? 'page' : undefined}
+                      onClick={(event) => {
+                        if (
+                          !event.metaKey &&
+                          !event.ctrlKey &&
+                          !event.shiftKey
+                        ) {
+                          event.preventDefault()
+                          go(route.section, tab)
+                        }
+                      }}
+                    >
+                      {tab}
+                    </a>
+                  ))}
+                </SectionNavigation>
+              )}
+            <SectionContent
+              enabled={
+                !!sectionTabs[route.section]?.length &&
+                !['Finance', 'Purchasing', 'Labels', 'Settings'].includes(
+                  route.section,
+                )
+              }
+            >
+              {page === 'Dashboard' && (
+                <WorkspaceDashboard
                   workspace={state}
-                  onWorkspace={setState}
-                  role={role}
-                  ready={ready}
+                  financialReady={ready}
+                  canWrite={['Owner', 'Manager'].includes(role)}
+                  go={go}
                   open={open}
-                  refresh={load}
                 />
-              ) : sub === 'Finished Goods' ? (
-                <FinishedInventory
-                  workspace={state}
-                  open={open}
-                  role={role}
-                  search={search}
-                />
-              ) : sub === 'Inventory ledger' ? (
-                <DataTable
-                  rows={state.ledger.map(inventoryMovementView)}
-                  columns={[
-                    ['name', 'Item'],
-                    ['quantity', 'Change'],
-                    ['unit', 'Unit'],
-                    ['type', 'Movement'],
-                    ['reason', 'Reason'],
-                    ['actor', 'Who'],
-                    ['occurredAt', 'When'],
-                    ['sourceId', 'Source'],
-                  ]}
-                />
-              ) : sub === 'All items' || sub === 'Receiving' ? (
+              )}
+              {page === 'Pantry' && (
                 <>
-                  <InventoryTools
-                    workspace={state}
-                    role={role}
-                    open={open}
-                    mutate={mutate}
-                    refresh={load}
-                  >
-                    {({ actions, labelSelection }) => (
-                      <PantryInventory
-                        canManageCategories={
-                          ready && ['Owner', 'Manager'].includes(role)
-                        }
-                        onCategorySettings={categorySettings}
+                  {sub === 'Counts' ? (
+                    <InventoryCounts
+                      workspace={state}
+                      onWorkspace={setState}
+                      role={role}
+                      ready={ready}
+                      open={open}
+                      refresh={load}
+                    />
+                  ) : sub === 'Finished Goods' ? (
+                    <FinishedInventory
+                      workspace={state}
+                      open={open}
+                      role={role}
+                      search={search}
+                    />
+                  ) : sub === 'Inventory ledger' ? (
+                    <DataTable
+                      rows={state.ledger.map(inventoryMovementView)}
+                      columns={[
+                        ['name', 'Item'],
+                        ['quantity', 'Change'],
+                        ['unit', 'Unit'],
+                        ['type', 'Movement'],
+                        ['reason', 'Reason'],
+                        ['actor', 'Who'],
+                        ['occurredAt', 'When'],
+                        ['sourceId', 'Source'],
+                      ]}
+                    />
+                  ) : sub === 'All items' || sub === 'Receiving' ? (
+                    <>
+                      <InventoryTools
                         workspace={state}
-                        actions={actions}
-                        labelSelection={labelSelection}
-                        ingredients={
-                          route.tab === 'Craft Materials'
-                            ? ingredients.filter((i) => i.usedAs === 'material')
-                            : route.tab === 'Ingredients'
-                              ? ingredients.filter(
-                                  (i) =>
-                                    ![
-                                      'material',
-                                      'packaging',
-                                      'supply',
-                                    ].includes(i.usedAs),
-                                )
-                              : route.tab === 'Packaging'
-                                ? ingredients.filter(
-                                    (i) => i.usedAs === 'packaging',
-                                  )
-                                : route.tab === 'Supplies'
-                                  ? ingredients.filter(
-                                      (i) => i.usedAs === 'supply',
-                                    )
-                                  : ingredients
-                        }
-                        typeFilter={route.filter}
-                        assets={state.graphic_assets}
-                        savedView={business.currentPantryView}
-                        onView={(view) => {
-                          if (ready)
-                            void mutate('pantryView', 'settings', {
-                              view,
-                            }).catch((e) => toast.error(customerMessage(e)))
-                        }}
-                        savedSort={business.currentPantrySort}
-                        onSort={(sort) => {
-                          if (ready)
-                            void mutate('pantrySort', 'settings', sort).catch(
-                              (e) => toast.error(customerMessage(e)),
-                            )
-                        }}
-                        filter={filter}
-                        setFilter={setFilter}
-                        search={search}
-                        setSearch={setSearch}
+                        role={role}
                         open={open}
+                        mutate={mutate}
+                        refresh={load}
+                      >
+                        {({ actions, labelSelection }) => (
+                          <PantryInventory
+                            canManageCategories={
+                              ready && ['Owner', 'Manager'].includes(role)
+                            }
+                            onCategorySettings={categorySettings}
+                            workspace={state}
+                            actions={actions}
+                            labelSelection={labelSelection}
+                            ingredients={
+                              route.tab === 'Craft Materials'
+                                ? ingredients.filter(
+                                    (i) => i.usedAs === 'material',
+                                  )
+                                : route.tab === 'Ingredients'
+                                  ? ingredients.filter(
+                                      (i) =>
+                                        ![
+                                          'material',
+                                          'packaging',
+                                          'supply',
+                                        ].includes(i.usedAs),
+                                    )
+                                  : route.tab === 'Packaging'
+                                    ? ingredients.filter(
+                                        (i) => i.usedAs === 'packaging',
+                                      )
+                                    : route.tab === 'Supplies'
+                                      ? ingredients.filter(
+                                          (i) => i.usedAs === 'supply',
+                                        )
+                                      : ingredients
+                            }
+                            typeFilter={route.filter}
+                            assets={state.graphic_assets}
+                            savedView={business.currentPantryView}
+                            onView={(view) => {
+                              if (ready)
+                                void mutate('pantryView', 'settings', {
+                                  view,
+                                }).catch((e) => toast.error(customerMessage(e)))
+                            }}
+                            savedSort={business.currentPantrySort}
+                            onSort={(sort) => {
+                              if (ready)
+                                void mutate(
+                                  'pantrySort',
+                                  'settings',
+                                  sort,
+                                ).catch((e) => toast.error(customerMessage(e)))
+                            }}
+                            filter={filter}
+                            setFilter={setFilter}
+                            search={search}
+                            setSearch={setSearch}
+                            open={open}
+                          />
+                        )}
+                      </InventoryTools>
+                    </>
+                  ) : sub === 'Vendors' ? (
+                    <>
+                      <div className="toolbar">
+                        <h2>Your trusted suppliers</h2>
+                        <Btn onClick={() => open('vendor')}>
+                          <Plus size={15} />
+                          Add vendor
+                        </Btn>
+                      </div>
+                      <div className="card-grid">
+                        {state.vendors.map((v) => (
+                          <section className="panel vendor-card" key={v.id}>
+                            <Building2 size={25} />
+                            <h2>{v.name}</h2>
+                            <p>{v.email || 'No contact email added'}</p>
+                            <Badge>{v.terms}</Badge>
+                            <Btn
+                              secondary
+                              small
+                              onClick={() => open('vendor', v)}
+                            >
+                              Edit details
+                            </Btn>
+                          </section>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="toolbar">
+                        <p>Plan restocks and track incoming purchases.</p>
+                        <Btn onClick={() => open('order')}>
+                          <Plus size={16} />
+                          Create purchase order
+                        </Btn>
+                      </div>
+                      <DataTable
+                        rows={state.orders}
+                        columns={[
+                          ['name', 'Order'],
+                          ['vendor', 'Vendor'],
+                          ['date', 'Expected'],
+                          ['amount', 'Total'],
+                          ['status', 'Status'],
+                        ]}
+                        onRow={(o) => open('order', o)}
                       />
-                    )}
-                  </InventoryTools>
+                    </>
+                  )}
                 </>
-              ) : sub === 'Vendors' ? (
+              )}
+              {page === 'Recipes' && (
                 <>
                   <div className="toolbar">
-                    <h2>Your trusted suppliers</h2>
-                    <Btn onClick={() => open('vendor')}>
-                      <Plus size={15} />
-                      Add vendor
+                    <div className="search-field">
+                      <Search size={17} />
+                      <input
+                        aria-label="Search recipes"
+                        placeholder="Find a recipe or prep…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                    </div>
+                    <Btn secondary onClick={() => open('recipe-import')}>
+                      <Upload size={16} /> Import recipe
+                    </Btn>
+                    <Badge>
+                      {recipes.filter((r) => r.workflow !== 'handmade').length}{' '}
+                      recipes & preps
+                    </Badge>
+                    <Btn secondary onClick={() => exportData('recipes')}>
+                      <Download size={16} />
+                      Export
                     </Btn>
                   </div>
-                  <div className="card-grid">
-                    {state.vendors.map((v) => (
-                      <section className="panel vendor-card" key={v.id}>
-                        <Building2 size={25} />
-                        <h2>{v.name}</h2>
-                        <p>{v.email || 'No contact email added'}</p>
-                        <Badge>{v.terms}</Badge>
-                        <Btn secondary small onClick={() => open('vendor', v)}>
-                          Edit details
+                  <div className="toolbar">
+                    <label className="field">
+                      <span>Filter by recipe category</span>
+                      <select
+                        aria-label="Filter by recipe category"
+                        value={recipeCategoryFilter}
+                        onChange={(e) =>
+                          setRecipeCategoryFilter(e.target.value)
+                        }
+                      >
+                        <option value="all">All categories</option>
+                        <option value="uncategorized">Uncategorized</option>
+                        {recipeCategoryOptions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                            {c.active ? '' : ' (archived)'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <SectionCategoryTools
+                      workspace={state}
+                      scope="recipes"
+                      canManage={ready && ['Owner', 'Manager'].includes(role)}
+                      onSettings={categorySettings}
+                    />
+                  </div>
+                  <div className="recipe-grid">
+                    {filtered(recipes)
+                      .filter((r) => r.workflow !== 'handmade')
+                      .filter(
+                        (r) =>
+                          recipeCategoryFilter === 'all' ||
+                          (recipeCategoryFilter === 'uncategorized'
+                            ? !recipeCategory(r, recipeCategoryOptions)
+                            : recipeCategory(r, recipeCategoryOptions)?.id ===
+                              recipeCategoryFilter),
+                      )
+                      .map((r) => {
+                        let cost = 0,
+                          warning = ''
+                        try {
+                          cost = recipeCost(r, ingredients)
+                        } catch (e) {
+                          warning = (e as Error).message
+                        }
+                        return (
+                          <button
+                            className="panel recipe-card"
+                            key={r.id}
+                            onClick={() => open('recipe-detail', r)}
+                          >
+                            <div className="recipe-cover">
+                              <PantryPhoto
+                                item={r}
+                                assets={state.graphic_assets}
+                                kind="recipe"
+                                recipeCategories={recipeCategoryOptions}
+                              />
+                              <span className="recipe-category">
+                                {recipeCategoryLabel(r, recipeCategoryOptions)}
+                              </span>
+                            </div>
+                            <div className="recipe-card-body">
+                              <div className="recipe-card-title">
+                                <h2>{r.name}</h2>
+                                <ArrowUpRight size={17} />
+                              </div>
+                              <p>
+                                {r.description ||
+                                  'A hardworking prep for your kitchen.'}
+                              </p>
+                              <div className="recipe-meta">
+                                <span>
+                                  <CookingPot size={14} />
+                                  {r.yield} {r.yieldUnit}
+                                </span>
+                                <span>
+                                  <Clock3 size={14} />
+                                  {r.laborMinutes} min
+                                </span>
+                              </div>
+                              <div className="recipe-cost">
+                                <span>
+                                  <small>TOTAL BATCH COST</small>
+                                  <strong>
+                                    {warning
+                                      ? warning.startsWith('Cost incomplete')
+                                        ? warning
+                                        : 'Review units'
+                                      : money(cost)}
+                                  </strong>
+                                </span>
+                                <span>
+                                  <small>
+                                    PER{' '}
+                                    {r.yieldUnit === 'loaves'
+                                      ? 'LOAF'
+                                      : r.yieldUnit.toUpperCase()}
+                                  </small>
+                                  <strong>
+                                    {warning ? '—' : money(cost / r.yield)}
+                                  </strong>
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                  </div>
+                </>
+              )}
+              {page === 'Products & Pricing' && (
+                <>
+                  {sub === 'Categories' ? (
+                    <ProductCategoryManager
+                      canManage={ready && ['Owner', 'Manager'].includes(role)}
+                      onConfig={(patch) =>
+                        setState((w) => ({
+                          ...w,
+                          settings: w.settings.map((s, i) =>
+                            i === 0 ? { ...s, ...patch } : s,
+                          ),
+                        }))
+                      }
+                    />
+                  ) : (
+                    <>
+                      <div className="info-banner">
+                        <Tag size={20} />
+                        <div>
+                          <strong>A price that works as hard as you do.</strong>
+                          <p>
+                            Recipe + packaging + labor + overhead = your real
+                            cost. Sales tax stays separate.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="toolbar">
+                        <div className="search-field">
+                          <Search size={17} />
+                          <input
+                            aria-label="Search products"
+                            placeholder="Find a product…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                          />
+                        </div>
+                        <Btn secondary onClick={() => exportData('products')}>
+                          <Download size={16} />
+                          Export products
                         </Btn>
+                      </div>
+                      {sub !== 'Kits' &&
+                        ['Owner', 'Manager'].includes(role) && (
+                          <div className="toolbar">
+                            <button
+                              className="btn secondary"
+                              onClick={() => open('kit')}
+                            >
+                              Create kit
+                            </button>
+                            <button
+                              className="btn secondary"
+                              onClick={() => open('product')}
+                            >
+                              Create food product
+                            </button>
+                            <button
+                              className="btn secondary"
+                              onClick={() => open('trade-product')}
+                            >
+                              Create handmade product
+                            </button>
+                            <button
+                              className="btn secondary"
+                              onClick={() => open('trade-product-resale')}
+                            >
+                              Create resale product
+                            </button>
+                          </div>
+                        )}
+                      <SectionCategoryTools
+                        workspace={state}
+                        scope={
+                          sub === 'Handmade'
+                            ? 'handmade-products'
+                            : sub === 'Resale'
+                              ? 'resale-products'
+                              : sub === 'Kits'
+                                ? 'kits'
+                                : 'food-products'
+                        }
+                        canManage={ready && ['Owner', 'Manager'].includes(role)}
+                        onSettings={categorySettings}
+                        value={productCategoryFilter}
+                        onFilter={setProductCategoryFilter}
+                      />
+                      <ProductCards
+                        products={filtered(products)
+                          .filter(
+                            (p) =>
+                              productCategoryFilter === 'all' ||
+                              (productCategoryFilter === 'uncategorized'
+                                ? !p.productCategoryId
+                                : p.productCategoryId ===
+                                  productCategoryFilter),
+                          )
+                          .filter((p) =>
+                            sub === 'Kits'
+                              ? workflowOf(p) === 'kit'
+                              : !['Food', 'Handmade', 'Resale'].includes(sub) ||
+                                workflowOf(p) === sub.toLowerCase(),
+                          )}
+                        workspace={state}
+                        open={open}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+              {page === 'Handmade' && (
+                <HandmadeWorkspace
+                  workspace={state}
+                  role={role}
+                  mutate={mutate}
+                  open={open}
+                  tab={route.tab}
+                  onDirtyChange={(dirty) => {
+                    workflowDirty.current = dirty
+                  }}
+                  onWorkspace={setState}
+                />
+              )}
+              {page === 'Production' && (
+                <>
+                  {sub === 'Waste / adjustments' ? (
+                    <>
+                      <div className="info-banner">
+                        <Leaf size={20} />
+                        <div>
+                          <strong>Small changes, clearly recorded.</strong>
+                          <p>
+                            Record spoilage, waste, and corrections with a
+                            reason for your ledger.
+                          </p>
+                        </div>
+                        <Btn secondary onClick={() => open('adjust-picker')}>
+                          Record adjustment
+                        </Btn>
+                      </div>
+                      <DataTable
+                        rows={state.ledger
+                          .filter((l) =>
+                            ['waste', 'spoilage', 'adjustment'].includes(
+                              l.type,
+                            ),
+                          )
+                          .map(inventoryMovementView)}
+                        columns={[
+                          ['name', 'Item'],
+                          ['quantity', 'Change'],
+                          ['unit', 'Unit'],
+                          ['reason', 'Reason'],
+                          ['date', 'Date'],
+                        ]}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="production-layout">
+                        <section className="panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>
+                                {sub === 'Batch runs'
+                                  ? 'Your batch history'
+                                  : 'On the kitchen calendar'}
+                              </h2>
+                              <p>Plan thoughtfully. Bake confidently.</p>
+                            </div>
+                            <Btn
+                              secondary
+                              small
+                              onClick={() => open('prep-batch')}
+                            >
+                              Plan compound prep
+                            </Btn>
+                          </div>
+                          {batches
+                            .filter(
+                              (b) =>
+                                state.recipes.find((r) => r.id === b.recipeId)
+                                  ?.workflow !== 'handmade',
+                            )
+                            .filter((b) =>
+                              sub === 'Batch runs'
+                                ? true
+                                : !['completed', 'canceled'].includes(b.status),
+                            )
+                            .map((b) => (
+                              <div className="batch-row" key={b.id}>
+                                <div className="batch-date">
+                                  <small>
+                                    {new Date(
+                                      b.date + 'T12:00:00',
+                                    ).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                    })}
+                                  </small>
+                                  <strong>{b.date.slice(-2)}</strong>
+                                </div>
+                                <div className="batch-info">
+                                  <h3>{b.name}</h3>
+                                  <p>
+                                    {b.productionVersion
+                                      ? `${b.actualYield || b.quantity} selling packages`
+                                      : `${b.count} batches · ${b.actualYield || b.yield}`}{' '}
+                                    {!b.productionVersion &&
+                                      recipes.find((r) => r.id === b.recipeId)
+                                        ?.yieldUnit}
+                                  </p>
+                                  <small>
+                                    {b.note ||
+                                      (b.historicalCost &&
+                                        `Historical cost locked: ${money(b.historicalCost)}`)}
+                                  </small>
+                                </div>
+                                <Badge
+                                  tone={
+                                    b.status === 'in_progress'
+                                      ? 'amber'
+                                      : 'green'
+                                  }
+                                >
+                                  {b.status.replaceAll('_', ' ')}
+                                </Badge>
+                                <Btn
+                                  secondary
+                                  small
+                                  onClick={() =>
+                                    open(
+                                      ['completed', 'canceled'].includes(
+                                        b.status,
+                                      )
+                                        ? 'batch-detail'
+                                        : 'complete',
+                                      b,
+                                    )
+                                  }
+                                >
+                                  {['completed', 'canceled'].includes(b.status)
+                                    ? 'View run'
+                                    : b.productionVersion
+                                      ? b.status === 'draft'
+                                        ? 'Review draft'
+                                        : b.kind === 'assembly'
+                                          ? 'Assemble'
+                                          : 'Produce'
+                                      : 'Complete batch'}
+                                  <ChevronRight size={14} />
+                                </Btn>
+                              </div>
+                            ))}
+                        </section>
+                        <section className="panel shortage-panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>Before you start</h2>
+                              <p>Stock check for upcoming batches</p>
+                            </div>
+                            <Package size={19} />
+                          </div>
+                          {batches
+                            .filter(
+                              (b) =>
+                                b.productionVersion && b.status === 'scheduled',
+                            )
+                            .map((b) => (
+                              <div className="shortage-row" key={b.id}>
+                                <span>
+                                  <strong>{b.name}</strong>
+                                  <small>
+                                    {b.quantity} selling packages · requirements
+                                    pinned
+                                  </small>
+                                </span>
+                                <Btn
+                                  small
+                                  secondary
+                                  onClick={() => open('production', b)}
+                                >
+                                  Review stock
+                                </Btn>
+                              </div>
+                            ))}
+                          {(() => {
+                            const requirements = new Map<string, number>()
+                            for (const b of batches.filter(
+                              (b) =>
+                                !b.productionVersion &&
+                                !['completed', 'canceled'].includes(b.status),
+                            )) {
+                              const r = recipes.find((r) => r.id === b.recipeId)
+                              for (const l of r?.lines || []) {
+                                const i = ingredients.find(
+                                  (i) => i.id === l.ingredientId,
+                                )!
+                                try {
+                                  requirements.set(
+                                    i.id,
+                                    (requirements.get(i.id) || 0) +
+                                      convert(
+                                        l.quantity * b.count,
+                                        l.unit,
+                                        i.unit,
+                                        i.conversions,
+                                      ),
+                                  )
+                                } catch {}
+                              }
+                            }
+                            return [...requirements].map(([id, q]) => {
+                              const i = ingredients.find((i) => i.id === id)!
+                              const short = q > i.quantity
+                              return (
+                                <div className="shortage-row" key={id}>
+                                  <span>
+                                    <strong>{i.name}</strong>
+                                    <small>
+                                      Need {q.toFixed(2)} {i.unit} · Have{' '}
+                                      {i.quantity.toFixed(2)}
+                                    </small>
+                                  </span>
+                                  {short ? (
+                                    <Badge tone="amber">
+                                      Short {(q - i.quantity).toFixed(2)}
+                                    </Badge>
+                                  ) : (
+                                    <CircleCheck
+                                      size={18}
+                                      className="positive"
+                                    />
+                                  )}
+                                </div>
+                              )
+                            })
+                          })()}
+                          <Btn
+                            secondary
+                            onClick={() => {
+                              go('Pantry')
+                              setFilter('Low stock')
+                            }}
+                          >
+                            View pantry <ArrowRight size={15} />
+                          </Btn>
+                        </section>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+              {page === 'Labels' && (
+                <LabelStudio
+                  initialProductId={labelProduct}
+                  initialLabelId={labelDesign}
+                  initialCreateRequest={labelCreateRequest}
+                  onCreateRequestHandled={() => setLabelCreateRequest(0)}
+                  initialSection={sub}
+                  onSectionChange={(section) => go('Labels', section)}
+                  onDirtyChange={(dirty) => {
+                    labelUnsaved.current = dirty
+                  }}
+                  workspace={state}
+                  onWorkspace={setState}
+                  ready={ready}
+                  role={role}
+                />
+              )}
+              {['Finance', 'Purchasing'].includes(route.section) && (
+                <FinanceWorkspace
+                  workspace={state}
+                  onWorkspace={(workspace) => {
+                    setState(workspace)
+                    setReceiptRevision((n) => n + 1)
+                  }}
+                  section="Upload receipt"
+                  ready={ready}
+                  role={role}
+                  initialEntry={financeReceiptEntry}
+                  onEntryOpened={() => setFinanceReceiptEntry('')}
+                  onCreatePantryItem={(kind) => open(kind)}
+                />
+              )}
+              {['Finance', 'Purchasing'].includes(route.section) && (
+                <LinkedPurchaseRecords
+                  workspace={state}
+                  role={role}
+                  onReceipt={(id) => setFinanceReceiptEntry('receipt:' + id)}
+                />
+              )}
+              {route.section === 'Purchasing' &&
+                ['Owner', 'Manager'].includes(role) && (
+                  <div className="book-actions button-row">
+                    <Btn
+                      disabled={!ready}
+                      onClick={() => setFinanceReceiptEntry('receiptUpload')}
+                    >
+                      Upload receipt
+                    </Btn>
+                    <Btn
+                      secondary
+                      disabled={!ready}
+                      onClick={() => setFinanceReceiptEntry('purchaseManual')}
+                    >
+                      Record purchase
+                    </Btn>
+                  </div>
+                )}
+              {page === 'Finances' && (
+                <>
+                  {[
+                    'Overview',
+                    'Register',
+                    'Accounts',
+                    'Bills',
+                    'Invoices',
+                    'Mileage',
+                    'Bookkeeping reports',
+                    'Settings / Categories',
+                  ].includes(sub) ? (
+                    <Checkbook
+                      key={sub}
+                      initialTab={
+                        sub === 'Bookkeeping reports' ? 'Reports' : sub
+                      }
+                      workspace={state}
+                      onWorkspace={setState}
+                      ready={ready}
+                      role={role}
+                      onSectionChange={(section) => go('Finances', section)}
+                      onReceipts={() => go('Finances', 'Receipt inbox')}
+                      onViewReceipt={(id) =>
+                        setFinanceReceiptEntry('receipt:' + id)
+                      }
+                      onUploadReceipt={() =>
+                        setFinanceReceiptEntry('receiptUpload')
+                      }
+                      onRecordTransaction={() =>
+                        setFinanceReceiptEntry('transaction')
+                      }
+                      receiptRevision={receiptRevision}
+                      onLegacySale={() => {
+                        setFinanceEntry('sale')
+                        go('Finances', 'Advanced')
+                      }}
+                    />
+                  ) : [
+                      'Receipt inbox',
+                      'Money activity',
+                      'Consignment',
+                    ].includes(sub) ? (
+                    <>
+                      <FinanceWorkspace
+                        workspace={state}
+                        onWorkspace={(workspace) => {
+                          setState(workspace)
+                          setError('')
+                        }}
+                        section={sub}
+                        onNavigate={(section) =>
+                          section === 'Reports'
+                            ? go('Reports')
+                            : go('Finances', section)
+                        }
+                        ready={ready}
+                        loadError={error}
+                        role={role}
+                        initialEntry={financeEntry}
+                        onEntryOpened={() => setFinanceEntry('')}
+                        onCreatePantryItem={(kind) => open(kind)}
+                      />
+                      {sub === 'Receipt inbox' && (
+                        <PurchaseStockReceipts
+                          correctDate={(data) =>
+                            mutate('receivedDateCorrection', 'ledger', data)
+                          }
+                          workspace={state}
+                          role={role}
+                          open={open}
+                        />
+                      )}
+                    </>
+                  ) : sub === 'Sales' || sub === 'Expenses' ? (
+                    <>
+                      <div className="toolbar">
+                        <h2>
+                          {sub === 'Sales'
+                            ? 'Every sale, accounted for.'
+                            : 'The cost of doing good business.'}
+                        </h2>
+                        <div className="button-row">
+                          <Btn
+                            secondary
+                            onClick={() => exportData(sub.toLowerCase())}
+                          >
+                            <Download size={16} />
+                            Export
+                          </Btn>
+                          <Btn
+                            onClick={() =>
+                              open(sub === 'Sales' ? 'sale' : 'expense')
+                            }
+                          >
+                            <Plus size={16} />
+                            Record {sub === 'Sales' ? 'sale' : 'expense'}
+                          </Btn>
+                        </div>
+                      </div>
+                      <DataTable
+                        rows={state[sub.toLowerCase()]}
+                        columns={
+                          sub === 'Sales'
+                            ? [
+                                ['name', 'Description'],
+                                ['date', 'Date'],
+                                ['channel', 'Channel'],
+                                ['amount', 'Net sales'],
+                                ['tax', 'Tax collected'],
+                                ['fees', 'Fees'],
+                              ]
+                            : [
+                                ['name', 'Expense'],
+                                ['date', 'Date'],
+                                ['category', 'Category'],
+                                ['amount', 'Amount'],
+                                ['inventory', 'Inventory purchase'],
+                              ]
+                        }
+                        onRow={(i) =>
+                          open(sub === 'Sales' ? 'sale-detail' : 'expense', i)
+                        }
+                      />
+                    </>
+                  ) : sub === 'Tax center' ? (
+                    <TaxCenter
+                      workspace={state}
+                      configure={() => go('Settings', 'Taxes')}
+                      exportData={exportData}
+                    />
+                  ) : sub === 'Integrations' ? (
+                    <section className="panel settings-panel">
+                      <h2>Sales exports</h2>
+                      <p>
+                        Export your recorded manual sales for reconciliation.
+                      </p>
+                      <Btn secondary onClick={() => exportData('sales')}>
+                        <Download size={16} />
+                        Export manual sales
+                      </Btn>
+                    </section>
+                  ) : sub === 'Chart of accounts' ? (
+                    <>
+                      <div className="toolbar">
+                        <h2>Your accounting foundation</h2>
+                        <Btn onClick={() => open('journal')}>
+                          <Plus size={16} />
+                          Post balanced entry
+                        </Btn>
+                      </div>
+                      <DataTable
+                        rows={[
+                          { id: '1000', name: 'Cash', type: 'Asset' },
+                          { id: '1200', name: 'Inventory', type: 'Asset' },
+                          {
+                            id: '2100',
+                            name: 'Sales tax payable',
+                            type: 'Liability',
+                          },
+                          { id: '3000', name: 'Owner equity', type: 'Equity' },
+                          { id: '4000', name: 'Product sales', type: 'Income' },
+                          {
+                            id: '5000',
+                            name: 'Cost of goods sold',
+                            type: 'Cost of goods sold',
+                          },
+                          {
+                            id: '6000',
+                            name: 'Operating expenses',
+                            type: 'Expense',
+                          },
+                        ]}
+                        columns={[
+                          ['id', 'Account'],
+                          ['name', 'Name'],
+                          ['type', 'Type'],
+                        ]}
+                      />
+                      <h2 className="spaced-title">Posted journal entries</h2>
+                      <DataTable
+                        rows={state.journals || []}
+                        columns={[
+                          ['name', 'Memo'],
+                          ['date', 'Date'],
+                          ['status', 'Status'],
+                        ]}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <section className="stat-grid">
+                        <Stat
+                          title="Sales · excluding tax"
+                          value={money(totalSales)}
+                          icon={<Wallet size={18} />}
+                          foot="All recorded October sales"
+                          trend="Revenue"
+                        />
+                        <Stat
+                          title="Estimated COGS"
+                          value={money(cogs)}
+                          icon={<CookingPot size={18} />}
+                          foot="Historical when available"
+                          trend="Cost of sales"
+                        />
+                        <Stat
+                          title="Operating expenses"
+                          value={money(operating + fees + consignmentFees)}
+                          icon={<Receipt size={18} />}
+                          foot="Excludes inventory purchases"
+                          trend="Expenses"
+                        />
+                        <Stat
+                          title="Estimated net profit"
+                          value={money(netProfit)}
+                          icon={<TrendingUp size={18} />}
+                          foot={`${(totalSales + commissionIncome > 0 ? (netProfit / (totalSales + commissionIncome)) * 100 : 0).toFixed(1)}% net margin`}
+                          trend="After expenses"
+                        />
+                      </section>
+                      <div className="finance-grid">
+                        <section className="panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>
+                                {sub === 'Cash flow'
+                                  ? 'Cash-flow summary'
+                                  : 'Profit & loss'}
+                              </h2>
+                              <p>October 1–31, 2026 · USD · estimated</p>
+                            </div>
+                            <Btn
+                              secondary
+                              small
+                              onClick={() =>
+                                exportData(
+                                  sub === 'Cash flow'
+                                    ? 'cash-flow'
+                                    : 'profit-and-loss',
+                                  reportRows(
+                                    sub === 'Cash flow'
+                                      ? 'Cash-flow summary'
+                                      : 'Profit & loss',
+                                    state,
+                                  ),
+                                )
+                              }
+                            >
+                              <Download size={14} />
+                              Export
+                            </Btn>
+                          </div>
+                          {(sub === 'Cash flow'
+                            ? [
+                                ['Sales receipts', totalSales],
+                                [
+                                  'Sales tax held',
+                                  state.sales.reduce(
+                                    (s, i) => s + (i.tax || 0),
+                                    0,
+                                  ),
+                                ],
+                                [
+                                  'Cash paid for purchases & expenses',
+                                  -totalExpense,
+                                ],
+                                ['Payment processing fees', -fees],
+                                [
+                                  'Net cash movement',
+                                  totalSales +
+                                    state.sales.reduce(
+                                      (s, i) => s + (i.tax || 0),
+                                      0,
+                                    ) -
+                                    totalExpense -
+                                    fees,
+                                ],
+                              ]
+                            : [
+                                ['Net product sales', totalSales],
+                                [
+                                  'Consignment commission income',
+                                  commissionIncome,
+                                ],
+                                ['Cost of goods sold', -cogs],
+                                [
+                                  'Gross profit',
+                                  grossProfit + commissionIncome,
+                                ],
+                                ['Operating expenses', -operating],
+                                [
+                                  'Payment processing fees',
+                                  -fees - consignmentFees,
+                                ],
+                                ['Estimated net profit', netProfit],
+                              ]
+                          ).map(([label, value], index) => (
+                            <div
+                              className={`financial-line ${index === 2 || index === 5 ? 'total' : ''}`}
+                              key={String(label)}
+                            >
+                              <span>{label}</span>
+                              <strong>{money(Number(value))}</strong>
+                            </div>
+                          ))}
+                          <p className="panel-note">
+                            Estimates combine saved sales costs and current
+                            costs where historical sales snapshots are
+                            unavailable. Inventory purchases are tracked
+                            separately from operating expenses.
+                          </p>
+                        </section>
+                        <section className="panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>Where your sales happen</h2>
+                              <p>Revenue by sales channel</p>
+                            </div>
+                          </div>
+                          {[
+                            'Farmers market',
+                            'Pre-order',
+                            'Wholesale',
+                            'Custom order',
+                          ].map((channel, index) => {
+                            const amount = state.sales
+                              .filter((s) => s.channel === channel)
+                              .reduce((s, i) => s + i.amount, 0)
+                            return (
+                              <div className="channel-row" key={channel}>
+                                <div>
+                                  <span>{channel}</span>
+                                  <strong>{money(amount)}</strong>
+                                </div>
+                                <span className={`channel-bar bar-${index}`}>
+                                  <i
+                                    style={{
+                                      width: `${(amount / totalSales) * 100}%`,
+                                    }}
+                                  />
+                                </span>
+                              </div>
+                            )
+                          })}
+                          <div className="panel-note">
+                            Sales tax collected{' '}
+                            <strong>
+                              {money(
+                                state.sales.reduce(
+                                  (s, i) => s + (i.tax || 0),
+                                  0,
+                                ),
+                              )}
+                            </strong>
+                            <p>
+                              Tracked as a liability, separate from revenue.
+                            </p>
+                          </div>
+                        </section>
+                      </div>
+                      <p className="table-note">
+                        Cottage Pantry supports recordkeeping. It does not
+                        replace a licensed CPA or tax professional.
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
+              {page === 'Reports' && (
+                <>
+                  <div className="info-banner">
+                    <ChartNoAxesCombined size={22} />
+                    <div>
+                      <strong>A clear view of what’s working.</strong>
+                      <p>
+                        Explore your operational and financial records. Export
+                        CSV files for a closer look.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="report-grid">
+                    {[
+                      {
+                        name: 'Profit & loss',
+                        desc: 'Revenue, costs, and estimated bottom line.',
+                        table: 'sales',
+                        section: 'Profit & loss',
+                      },
+                      {
+                        name: 'Cash-flow summary',
+                        desc: 'Cash coming in and going out.',
+                        table: 'expenses',
+                        section: 'Cash flow',
+                      },
+                      {
+                        name: 'Sales by product',
+                        desc: 'See which products earn their shelf space.',
+                        table: 'sales',
+                      },
+                      {
+                        name: 'Sales by channel',
+                        desc: 'Markets, pre-orders, and wholesale.',
+                        table: 'sales',
+                      },
+                      {
+                        name: 'Sales tax collected',
+                        desc: 'Tax held separately from revenue.',
+                        table: 'sales',
+                        section: 'Tax center',
+                      },
+                      {
+                        name: 'Expense categories',
+                        desc: 'Where your business dollars go.',
+                        table: 'expenses',
+                      },
+                      {
+                        name: 'Inventory valuation',
+                        desc: 'On-hand quantities at current unit costs.',
+                        table: 'ingredients',
+                      },
+                      {
+                        name: 'Product profitability',
+                        desc: 'Recipe cost, retail price, and margin.',
+                        table: 'products',
+                      },
+                      {
+                        name: 'Batch cost variance',
+                        desc: 'Planned production and locked actual costs.',
+                        table: 'batches',
+                      },
+                      {
+                        name: 'Low stock & reorders',
+                        desc: 'Your pantry’s next shopping list.',
+                        table: 'ingredients',
+                      },
+                      {
+                        name: 'Waste & spoilage',
+                        desc: 'Track waste and stock adjustments.',
+                        table: 'ledger',
+                      },
+                      {
+                        name: 'Ingredient purchase history',
+                        desc: 'Purchase receipts and historical costs.',
+                        table: 'ledger',
+                      },
+                    ].map((r) => (
+                      <section key={r.name} className="panel report-card">
+                        <ChartNoAxesCombined size={23} />
+                        <h2>{r.name}</h2>
+                        <p>{r.desc}</p>
+                        <div>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              r.section
+                                ? go('Finances', r.section)
+                                : open('report', { id: r.table, name: r.name })
+                            }
+                          >
+                            View report <ArrowRight size={14} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            aria-label={'Export ' + r.name}
+                            onClick={() =>
+                              exportData(r.name, reportRows(r.name, state))
+                            }
+                          >
+                            <Download size={17} />
+                          </button>
+                        </div>
                       </section>
                     ))}
                   </div>
                 </>
-              ) : (
-                <>
-                  <div className="toolbar">
-                    <p>Plan restocks and track incoming purchases.</p>
-                    <Btn onClick={() => open('order')}>
-                      <Plus size={16} />
-                      Create purchase order
-                    </Btn>
-                  </div>
-                  <DataTable
-                    rows={state.orders}
-                    columns={[
-                      ['name', 'Order'],
-                      ['vendor', 'Vendor'],
-                      ['date', 'Expected'],
-                      ['amount', 'Total'],
-                      ['status', 'Status'],
-                    ]}
-                    onRow={(o) => open('order', o)}
-                  />
-                </>
               )}
-            </>
-          )}
-          {page === 'Recipes' && (
-            <>
-              <div className="toolbar">
-                <div className="search-field">
-                  <Search size={17} />
-                  <input
-                    aria-label="Search recipes"
-                    placeholder="Find a recipe or prep…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <Btn secondary onClick={() => open('recipe-import')}>
-                  <Upload size={16} /> Import recipe
-                </Btn>
-                <Badge>
-                  {recipes.filter((r) => r.workflow !== 'handmade').length}{' '}
-                  recipes & preps
-                </Badge>
-                <Btn secondary onClick={() => exportData('recipes')}>
-                  <Download size={16} />
-                  Export
-                </Btn>
-              </div>
-              <div className="toolbar">
-                <label className="field">
-                  <span>Filter by recipe category</span>
-                  <select
-                    aria-label="Filter by recipe category"
-                    value={recipeCategoryFilter}
-                    onChange={(e) => setRecipeCategoryFilter(e.target.value)}
-                  >
-                    <option value="all">All categories</option>
-                    <option value="uncategorized">Uncategorized</option>
-                    {recipeCategoryOptions.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.active ? '' : ' (archived)'}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <SectionCategoryTools
+              {page === 'Settings' && (
+                <SettingsWorkspace
+                  openTaxReports={() => go('Finances', 'Tax center')}
+                  isOwner={ready && role === 'Owner'}
                   workspace={state}
-                  scope="recipes"
-                  canManage={ready && ['Owner', 'Manager'].includes(role)}
-                  onSettings={categorySettings}
-                />
-              </div>
-              <div className="recipe-grid">
-                {filtered(recipes)
-                  .filter((r) => r.workflow !== 'handmade')
-                  .filter(
-                    (r) =>
-                      recipeCategoryFilter === 'all' ||
-                      (recipeCategoryFilter === 'uncategorized'
-                        ? !recipeCategory(r, recipeCategoryOptions)
-                        : recipeCategory(r, recipeCategoryOptions)?.id ===
-                          recipeCategoryFilter),
-                  )
-                  .map((r) => {
-                    let cost = 0,
-                      warning = ''
-                    try {
-                      cost = recipeCost(r, ingredients)
-                    } catch (e) {
-                      warning = (e as Error).message
-                    }
-                    return (
-                      <button
-                        className="panel recipe-card"
-                        key={r.id}
-                        onClick={() => open('recipe-detail', r)}
-                      >
-                        <div className="recipe-cover">
-                          <PantryPhoto
-                            item={r}
-                            assets={state.graphic_assets}
-                            kind="recipe"
-                            recipeCategories={recipeCategoryOptions}
-                          />
-                          <span className="recipe-category">
-                            {recipeCategoryLabel(r, recipeCategoryOptions)}
-                          </span>
-                        </div>
-                        <div className="recipe-card-body">
-                          <div className="recipe-card-title">
-                            <h2>{r.name}</h2>
-                            <ArrowUpRight size={17} />
-                          </div>
-                          <p>
-                            {r.description ||
-                              'A hardworking prep for your kitchen.'}
-                          </p>
-                          <div className="recipe-meta">
-                            <span>
-                              <CookingPot size={14} />
-                              {r.yield} {r.yieldUnit}
-                            </span>
-                            <span>
-                              <Clock3 size={14} />
-                              {r.laborMinutes} min
-                            </span>
-                          </div>
-                          <div className="recipe-cost">
-                            <span>
-                              <small>TOTAL BATCH COST</small>
-                              <strong>
-                                {warning
-                                  ? warning.startsWith('Cost incomplete')
-                                    ? warning
-                                    : 'Review units'
-                                  : money(cost)}
-                              </strong>
-                            </span>
-                            <span>
-                              <small>
-                                PER{' '}
-                                {r.yieldUnit === 'loaves'
-                                  ? 'LOAF'
-                                  : r.yieldUnit.toUpperCase()}
-                              </small>
-                              <strong>
-                                {warning ? '—' : money(cost / r.yield)}
-                              </strong>
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })}
-              </div>
-            </>
-          )}
-          {page === 'Products & Pricing' && (
-            <>
-              {sub === 'Categories' ? (
-                <ProductCategoryManager
-                  canManage={ready && ['Owner', 'Manager'].includes(role)}
-                  onConfig={(patch) =>
+                  section={sub}
+                  go={(section) => go('Settings', section)}
+                  open={open}
+                  appearance={appearance}
+                  preview={(next) => {
+                    setAppearancePreview(next)
+                    cacheAppearance(next)
+                    setStartupAppearance(next)
+                    if (ready && ['Owner', 'Manager'].includes(role))
+                      void persistAppearance(next)
+                  }}
+                  busy={busy}
+                  canSave={ready && ['Owner', 'Manager'].includes(role)}
+                  saveAppearance={async () => {
+                    if (await persistAppearance(appearance))
+                      setAppearancePreview(null)
+                  }}
+                  saveBusiness={(item) => mutate('save', 'settings', item)}
+                  onCategoryConfig={(patch) =>
                     setState((w) => ({
                       ...w,
                       settings: w.settings.map((s, i) =>
@@ -2047,939 +2968,79 @@ export function WorkspaceApp() {
                       ),
                     }))
                   }
-                />
-              ) : (
-                <>
-                  <div className="info-banner">
-                    <Tag size={20} />
-                    <div>
-                      <strong>A price that works as hard as you do.</strong>
-                      <p>
-                        Recipe + packaging + labor + overhead = your real cost.
-                        Sales tax stays separate.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="toolbar">
-                    <div className="search-field">
-                      <Search size={17} />
-                      <input
-                        aria-label="Search products"
-                        placeholder="Find a product…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                    </div>
-                    <Btn secondary onClick={() => exportData('products')}>
-                      <Download size={16} />
-                      Export products
-                    </Btn>
-                  </div>
-                  {sub !== 'Kits' && ['Owner', 'Manager'].includes(role) && (
-                    <div className="toolbar">
-                      <button
-                        className="btn secondary"
-                        onClick={() => open('kit')}
-                      >
-                        Create kit
-                      </button>
-                      <button
-                        className="btn secondary"
-                        onClick={() => open('product')}
-                      >
-                        Create food product
-                      </button>
-                      <button
-                        className="btn secondary"
-                        onClick={() => open('trade-product')}
-                      >
-                        Create handmade product
-                      </button>
-                      <button
-                        className="btn secondary"
-                        onClick={() => open('trade-product-resale')}
-                      >
-                        Create resale product
-                      </button>
-                    </div>
-                  )}
-                  <SectionCategoryTools
-                    workspace={state}
-                    scope={
-                      sub === 'Handmade'
-                        ? 'handmade-products'
-                        : sub === 'Resale'
-                          ? 'resale-products'
-                          : sub === 'Kits'
-                            ? 'kits'
-                            : 'food-products'
-                    }
-                    canManage={ready && ['Owner', 'Manager'].includes(role)}
-                    onSettings={categorySettings}
-                    value={productCategoryFilter}
-                    onFilter={setProductCategoryFilter}
-                  />
-                  <ProductCards
-                    products={filtered(products)
-                      .filter(
-                        (p) =>
-                          productCategoryFilter === 'all' ||
-                          (productCategoryFilter === 'uncategorized'
-                            ? !p.productCategoryId
-                            : p.productCategoryId === productCategoryFilter),
-                      )
-                      .filter((p) =>
-                        sub === 'Kits'
-                          ? workflowOf(p) === 'kit'
-                          : !['Food', 'Handmade', 'Resale'].includes(sub) ||
-                            workflowOf(p) === sub.toLowerCase(),
-                      )}
-                    workspace={state}
-                    open={open}
-                  />
-                </>
-              )}
-            </>
-          )}
-          {page === 'Handmade' && (
-            <HandmadeWorkspace
-              workspace={state}
-              role={role}
-              mutate={mutate}
-              open={open}
-              tab={route.tab}
-              onDirtyChange={(dirty) => {
-                workflowDirty.current = dirty
-              }}
-              onWorkspace={setState}
-            />
-          )}
-          {page === 'Production' && (
-            <>
-              {sub === 'Waste / adjustments' ? (
-                <>
-                  <div className="info-banner">
-                    <Leaf size={20} />
-                    <div>
-                      <strong>Small changes, clearly recorded.</strong>
-                      <p>
-                        Record spoilage, waste, and corrections with a reason
-                        for your ledger.
-                      </p>
-                    </div>
-                    <Btn secondary onClick={() => open('adjust-picker')}>
-                      Record adjustment
-                    </Btn>
-                  </div>
-                  <DataTable
-                    rows={state.ledger
-                      .filter((l) =>
-                        ['waste', 'spoilage', 'adjustment'].includes(l.type),
-                      )
-                      .map(inventoryMovementView)}
-                    columns={[
-                      ['name', 'Item'],
-                      ['quantity', 'Change'],
-                      ['unit', 'Unit'],
-                      ['reason', 'Reason'],
-                      ['date', 'Date'],
-                    ]}
-                  />
-                </>
-              ) : (
-                <>
-                  <div className="production-layout">
-                    <section className="panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>
-                            {sub === 'Batch runs'
-                              ? 'Your batch history'
-                              : 'On the kitchen calendar'}
-                          </h2>
-                          <p>Plan thoughtfully. Bake confidently.</p>
-                        </div>
-                        <Btn secondary small onClick={() => open('prep-batch')}>
-                          Plan compound prep
-                        </Btn>
-                      </div>
-                      {batches
-                        .filter(
-                          (b) =>
-                            state.recipes.find((r) => r.id === b.recipeId)
-                              ?.workflow !== 'handmade',
-                        )
-                        .filter((b) =>
-                          sub === 'Batch runs'
-                            ? true
-                            : !['completed', 'canceled'].includes(b.status),
-                        )
-                        .map((b) => (
-                          <div className="batch-row" key={b.id}>
-                            <div className="batch-date">
-                              <small>
-                                {new Date(
-                                  b.date + 'T12:00:00',
-                                ).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                })}
-                              </small>
-                              <strong>{b.date.slice(-2)}</strong>
-                            </div>
-                            <div className="batch-info">
-                              <h3>{b.name}</h3>
-                              <p>
-                                {b.productionVersion
-                                  ? `${b.actualYield || b.quantity} selling packages`
-                                  : `${b.count} batches · ${b.actualYield || b.yield}`}{' '}
-                                {!b.productionVersion &&
-                                  recipes.find((r) => r.id === b.recipeId)
-                                    ?.yieldUnit}
-                              </p>
-                              <small>
-                                {b.note ||
-                                  (b.historicalCost &&
-                                    `Historical cost locked: ${money(b.historicalCost)}`)}
-                              </small>
-                            </div>
-                            <Badge
-                              tone={
-                                b.status === 'in_progress' ? 'amber' : 'green'
-                              }
-                            >
-                              {b.status.replaceAll('_', ' ')}
-                            </Badge>
-                            <Btn
-                              secondary
-                              small
-                              onClick={() =>
-                                open(
-                                  ['completed', 'canceled'].includes(b.status)
-                                    ? 'batch-detail'
-                                    : 'complete',
-                                  b,
-                                )
-                              }
-                            >
-                              {['completed', 'canceled'].includes(b.status)
-                                ? 'View run'
-                                : b.productionVersion
-                                  ? b.status === 'draft'
-                                    ? 'Review draft'
-                                    : b.kind === 'assembly'
-                                      ? 'Assemble'
-                                      : 'Produce'
-                                  : 'Complete batch'}
-                              <ChevronRight size={14} />
-                            </Btn>
-                          </div>
-                        ))}
-                    </section>
-                    <section className="panel shortage-panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>Before you start</h2>
-                          <p>Stock check for upcoming batches</p>
-                        </div>
-                        <Package size={19} />
-                      </div>
-                      {batches
-                        .filter(
-                          (b) =>
-                            b.productionVersion && b.status === 'scheduled',
-                        )
-                        .map((b) => (
-                          <div className="shortage-row" key={b.id}>
-                            <span>
-                              <strong>{b.name}</strong>
-                              <small>
-                                {b.quantity} selling packages · requirements
-                                pinned
-                              </small>
-                            </span>
-                            <Btn
-                              small
-                              secondary
-                              onClick={() => open('production', b)}
-                            >
-                              Review stock
-                            </Btn>
-                          </div>
-                        ))}
-                      {(() => {
-                        const requirements = new Map<string, number>()
-                        for (const b of batches.filter(
-                          (b) =>
-                            !b.productionVersion &&
-                            !['completed', 'canceled'].includes(b.status),
-                        )) {
-                          const r = recipes.find((r) => r.id === b.recipeId)
-                          for (const l of r?.lines || []) {
-                            const i = ingredients.find(
-                              (i) => i.id === l.ingredientId,
-                            )!
-                            try {
-                              requirements.set(
-                                i.id,
-                                (requirements.get(i.id) || 0) +
-                                  convert(
-                                    l.quantity * b.count,
-                                    l.unit,
-                                    i.unit,
-                                    i.conversions,
-                                  ),
-                              )
-                            } catch {}
-                          }
-                        }
-                        return [...requirements].map(([id, q]) => {
-                          const i = ingredients.find((i) => i.id === id)!
-                          const short = q > i.quantity
-                          return (
-                            <div className="shortage-row" key={id}>
-                              <span>
-                                <strong>{i.name}</strong>
-                                <small>
-                                  Need {q.toFixed(2)} {i.unit} · Have{' '}
-                                  {i.quantity.toFixed(2)}
-                                </small>
-                              </span>
-                              {short ? (
-                                <Badge tone="amber">
-                                  Short {(q - i.quantity).toFixed(2)}
-                                </Badge>
-                              ) : (
-                                <CircleCheck size={18} className="positive" />
-                              )}
-                            </div>
-                          )
-                        })
-                      })()}
-                      <Btn
-                        secondary
-                        onClick={() => {
-                          go('Pantry')
-                          setFilter('Low stock')
-                        }}
-                      >
-                        View pantry <ArrowRight size={15} />
-                      </Btn>
-                    </section>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-          {page === 'Labels' && (
-            <LabelStudio
-              initialProductId={labelProduct}
-              initialLabelId={labelDesign}
-              initialCreateRequest={labelCreateRequest}
-              onCreateRequestHandled={() => setLabelCreateRequest(0)}
-              initialSection={sub}
-              onSectionChange={(section) => go('Labels', section)}
-              onDirtyChange={(dirty) => {
-                labelUnsaved.current = dirty
-              }}
-              workspace={state}
-              onWorkspace={setState}
-              ready={ready}
-              role={role}
-            />
-          )}
-          {['Finance', 'Purchasing'].includes(route.section) && (
-            <FinanceWorkspace
-              workspace={state}
-              onWorkspace={(workspace) => {
-                setState(workspace)
-                setReceiptRevision((n) => n + 1)
-              }}
-              section="Upload receipt"
-              ready={ready}
-              role={role}
-              initialEntry={financeReceiptEntry}
-              onEntryOpened={() => setFinanceReceiptEntry('')}
-              onCreatePantryItem={(kind) => open(kind)}
-            />
-          )}
-          {['Finance', 'Purchasing'].includes(route.section) && (
-            <LinkedPurchaseRecords
-              workspace={state}
-              role={role}
-              onReceipt={(id) => setFinanceReceiptEntry('receipt:' + id)}
-            />
-          )}
-          {route.section === 'Purchasing' &&
-            ['Owner', 'Manager'].includes(role) && (
-              <div className="book-actions button-row">
-                <Btn
-                  disabled={!ready}
-                  onClick={() => setFinanceReceiptEntry('receiptUpload')}
-                >
-                  Upload receipt
-                </Btn>
-                <Btn
-                  secondary
-                  disabled={!ready}
-                  onClick={() => setFinanceReceiptEntry('purchaseManual')}
-                >
-                  Record purchase
-                </Btn>
-              </div>
-            )}
-          {page === 'Finances' && (
-            <>
-              {[
-                'Overview',
-                'Register',
-                'Accounts',
-                'Bills',
-                'Invoices',
-                'Mileage',
-                'Bookkeeping reports',
-                'Settings / Categories',
-              ].includes(sub) ? (
-                <Checkbook
-                  key={sub}
-                  initialTab={sub === 'Bookkeeping reports' ? 'Reports' : sub}
-                  workspace={state}
-                  onWorkspace={setState}
-                  ready={ready}
-                  role={role}
-                  onSectionChange={(section) => go('Finances', section)}
-                  onReceipts={() => go('Finances', 'Receipt inbox')}
-                  onViewReceipt={(id) =>
-                    setFinanceReceiptEntry('receipt:' + id)
-                  }
-                  onUploadReceipt={() =>
-                    setFinanceReceiptEntry('receiptUpload')
-                  }
-                  onRecordTransaction={() =>
-                    setFinanceReceiptEntry('transaction')
-                  }
-                  receiptRevision={receiptRevision}
-                  onLegacySale={() => {
-                    setFinanceEntry('sale')
-                    go('Finances', 'Advanced')
+                  exportData={(type, template) => {
+                    if (template) {
+                      const fields: Record<string, string[]> = {
+                        ingredients: [
+                          'name',
+                          'usedAs',
+                          'category',
+                          'purchaseQuantity',
+                          'purchaseUnit',
+                          'packagePrice',
+                          'unit',
+                          'threshold',
+                          'vendor',
+                        ],
+                        recipes: [
+                          'name',
+                          'category',
+                          'yield',
+                          'yieldUnit',
+                          'laborMinutes',
+                          'laborRate',
+                          'overhead',
+                          'lines',
+                        ],
+                        products: [
+                          'name',
+                          'recipeId',
+                          'unitsPerPackage',
+                          'price',
+                          'wholesale',
+                          'targetMargin',
+                          'packagingLines',
+                        ],
+                        sales: [
+                          'name',
+                          'date',
+                          'productId',
+                          'quantity',
+                          'unitPrice',
+                          'fees',
+                        ],
+                        expenses: [
+                          'name',
+                          'date',
+                          'category',
+                          'amount',
+                          'vendor',
+                        ],
+                      }
+                      exportData(type + '-template', [
+                        Object.fromEntries(
+                          (fields[type] || ['name']).map((key) => [key, '']),
+                        ) as Item,
+                      ])
+                    } else exportData(type)
+                  }}
+                  backup={() => {
+                    const url = URL.createObjectURL(
+                      new Blob([JSON.stringify(state, null, 2)], {
+                        type: 'application/json',
+                      }),
+                    )
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download =
+                      'cottage-pantry-backup-' + ovenToday(business) + '.json'
+                    a.click()
+                    URL.revokeObjectURL(url)
                   }}
                 />
-              ) : ['Receipt inbox', 'Money activity', 'Consignment'].includes(
-                  sub,
-                ) ? (
-                <>
-                  <FinanceWorkspace
-                    workspace={state}
-                    onWorkspace={(workspace) => {
-                      setState(workspace)
-                      setError('')
-                    }}
-                    section={sub}
-                    onNavigate={(section) =>
-                      section === 'Reports'
-                        ? go('Reports')
-                        : go('Finances', section)
-                    }
-                    ready={ready}
-                    loadError={error}
-                    role={role}
-                    initialEntry={financeEntry}
-                    onEntryOpened={() => setFinanceEntry('')}
-                    onCreatePantryItem={(kind) => open(kind)}
-                  />
-                  {sub === 'Receipt inbox' && (
-                    <PurchaseStockReceipts
-                      correctDate={(data) =>
-                        mutate('receivedDateCorrection', 'ledger', data)
-                      }
-                      workspace={state}
-                      role={role}
-                      open={open}
-                    />
-                  )}
-                </>
-              ) : sub === 'Sales' || sub === 'Expenses' ? (
-                <>
-                  <div className="toolbar">
-                    <h2>
-                      {sub === 'Sales'
-                        ? 'Every sale, accounted for.'
-                        : 'The cost of doing good business.'}
-                    </h2>
-                    <div className="button-row">
-                      <Btn
-                        secondary
-                        onClick={() => exportData(sub.toLowerCase())}
-                      >
-                        <Download size={16} />
-                        Export
-                      </Btn>
-                      <Btn
-                        onClick={() =>
-                          open(sub === 'Sales' ? 'sale' : 'expense')
-                        }
-                      >
-                        <Plus size={16} />
-                        Record {sub === 'Sales' ? 'sale' : 'expense'}
-                      </Btn>
-                    </div>
-                  </div>
-                  <DataTable
-                    rows={state[sub.toLowerCase()]}
-                    columns={
-                      sub === 'Sales'
-                        ? [
-                            ['name', 'Description'],
-                            ['date', 'Date'],
-                            ['channel', 'Channel'],
-                            ['amount', 'Net sales'],
-                            ['tax', 'Tax collected'],
-                            ['fees', 'Fees'],
-                          ]
-                        : [
-                            ['name', 'Expense'],
-                            ['date', 'Date'],
-                            ['category', 'Category'],
-                            ['amount', 'Amount'],
-                            ['inventory', 'Inventory purchase'],
-                          ]
-                    }
-                    onRow={(i) =>
-                      open(sub === 'Sales' ? 'sale-detail' : 'expense', i)
-                    }
-                  />
-                </>
-              ) : sub === 'Tax center' ? (
-                <TaxCenter
-                  workspace={state}
-                  configure={() => go('Settings', 'Taxes')}
-                  exportData={exportData}
-                />
-              ) : sub === 'Integrations' ? (
-                <section className="panel settings-panel">
-                  <h2>Sales exports</h2>
-                  <p>Export your recorded manual sales for reconciliation.</p>
-                  <Btn secondary onClick={() => exportData('sales')}>
-                    <Download size={16} />
-                    Export manual sales
-                  </Btn>
-                </section>
-              ) : sub === 'Chart of accounts' ? (
-                <>
-                  <div className="toolbar">
-                    <h2>Your accounting foundation</h2>
-                    <Btn onClick={() => open('journal')}>
-                      <Plus size={16} />
-                      Post balanced entry
-                    </Btn>
-                  </div>
-                  <DataTable
-                    rows={[
-                      { id: '1000', name: 'Cash', type: 'Asset' },
-                      { id: '1200', name: 'Inventory', type: 'Asset' },
-                      {
-                        id: '2100',
-                        name: 'Sales tax payable',
-                        type: 'Liability',
-                      },
-                      { id: '3000', name: 'Owner equity', type: 'Equity' },
-                      { id: '4000', name: 'Product sales', type: 'Income' },
-                      {
-                        id: '5000',
-                        name: 'Cost of goods sold',
-                        type: 'Cost of goods sold',
-                      },
-                      {
-                        id: '6000',
-                        name: 'Operating expenses',
-                        type: 'Expense',
-                      },
-                    ]}
-                    columns={[
-                      ['id', 'Account'],
-                      ['name', 'Name'],
-                      ['type', 'Type'],
-                    ]}
-                  />
-                  <h2 className="spaced-title">Posted journal entries</h2>
-                  <DataTable
-                    rows={state.journals || []}
-                    columns={[
-                      ['name', 'Memo'],
-                      ['date', 'Date'],
-                      ['status', 'Status'],
-                    ]}
-                  />
-                </>
-              ) : (
-                <>
-                  <section className="stat-grid">
-                    <Stat
-                      title="Sales · excluding tax"
-                      value={money(totalSales)}
-                      icon={<Wallet size={18} />}
-                      foot="All recorded October sales"
-                      trend="Revenue"
-                    />
-                    <Stat
-                      title="Estimated COGS"
-                      value={money(cogs)}
-                      icon={<CookingPot size={18} />}
-                      foot="Historical when available"
-                      trend="Cost of sales"
-                    />
-                    <Stat
-                      title="Operating expenses"
-                      value={money(operating + fees + consignmentFees)}
-                      icon={<Receipt size={18} />}
-                      foot="Excludes inventory purchases"
-                      trend="Expenses"
-                    />
-                    <Stat
-                      title="Estimated net profit"
-                      value={money(netProfit)}
-                      icon={<TrendingUp size={18} />}
-                      foot={`${(totalSales + commissionIncome > 0 ? (netProfit / (totalSales + commissionIncome)) * 100 : 0).toFixed(1)}% net margin`}
-                      trend="After expenses"
-                    />
-                  </section>
-                  <div className="finance-grid">
-                    <section className="panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>
-                            {sub === 'Cash flow'
-                              ? 'Cash-flow summary'
-                              : 'Profit & loss'}
-                          </h2>
-                          <p>October 1–31, 2026 · USD · estimated</p>
-                        </div>
-                        <Btn
-                          secondary
-                          small
-                          onClick={() =>
-                            exportData(
-                              sub === 'Cash flow'
-                                ? 'cash-flow'
-                                : 'profit-and-loss',
-                              reportRows(
-                                sub === 'Cash flow'
-                                  ? 'Cash-flow summary'
-                                  : 'Profit & loss',
-                                state,
-                              ),
-                            )
-                          }
-                        >
-                          <Download size={14} />
-                          Export
-                        </Btn>
-                      </div>
-                      {(sub === 'Cash flow'
-                        ? [
-                            ['Sales receipts', totalSales],
-                            [
-                              'Sales tax held',
-                              state.sales.reduce((s, i) => s + (i.tax || 0), 0),
-                            ],
-                            [
-                              'Cash paid for purchases & expenses',
-                              -totalExpense,
-                            ],
-                            ['Payment processing fees', -fees],
-                            [
-                              'Net cash movement',
-                              totalSales +
-                                state.sales.reduce(
-                                  (s, i) => s + (i.tax || 0),
-                                  0,
-                                ) -
-                                totalExpense -
-                                fees,
-                            ],
-                          ]
-                        : [
-                            ['Net product sales', totalSales],
-                            ['Consignment commission income', commissionIncome],
-                            ['Cost of goods sold', -cogs],
-                            ['Gross profit', grossProfit + commissionIncome],
-                            ['Operating expenses', -operating],
-                            [
-                              'Payment processing fees',
-                              -fees - consignmentFees,
-                            ],
-                            ['Estimated net profit', netProfit],
-                          ]
-                      ).map(([label, value], index) => (
-                        <div
-                          className={`financial-line ${index === 2 || index === 5 ? 'total' : ''}`}
-                          key={String(label)}
-                        >
-                          <span>{label}</span>
-                          <strong>{money(Number(value))}</strong>
-                        </div>
-                      ))}
-                      <p className="panel-note">
-                        Estimates combine saved sales costs and current costs
-                        where historical sales snapshots are unavailable.
-                        Inventory purchases are tracked separately from
-                        operating expenses.
-                      </p>
-                    </section>
-                    <section className="panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>Where your sales happen</h2>
-                          <p>Revenue by sales channel</p>
-                        </div>
-                      </div>
-                      {[
-                        'Farmers market',
-                        'Pre-order',
-                        'Wholesale',
-                        'Custom order',
-                      ].map((channel, index) => {
-                        const amount = state.sales
-                          .filter((s) => s.channel === channel)
-                          .reduce((s, i) => s + i.amount, 0)
-                        return (
-                          <div className="channel-row" key={channel}>
-                            <div>
-                              <span>{channel}</span>
-                              <strong>{money(amount)}</strong>
-                            </div>
-                            <span className={`channel-bar bar-${index}`}>
-                              <i
-                                style={{
-                                  width: `${(amount / totalSales) * 100}%`,
-                                }}
-                              />
-                            </span>
-                          </div>
-                        )
-                      })}
-                      <div className="panel-note">
-                        Sales tax collected{' '}
-                        <strong>
-                          {money(
-                            state.sales.reduce((s, i) => s + (i.tax || 0), 0),
-                          )}
-                        </strong>
-                        <p>Tracked as a liability, separate from revenue.</p>
-                      </div>
-                    </section>
-                  </div>
-                  <p className="table-note">
-                    Cottage Pantry supports recordkeeping. It does not replace a
-                    licensed CPA or tax professional.
-                  </p>
-                </>
               )}
-            </>
-          )}
-          {page === 'Reports' && (
-            <>
-              <div className="info-banner">
-                <ChartNoAxesCombined size={22} />
-                <div>
-                  <strong>A clear view of what’s working.</strong>
-                  <p>
-                    Explore your operational and financial records. Export CSV
-                    files for a closer look.
-                  </p>
-                </div>
-              </div>
-              <div className="report-grid">
-                {[
-                  {
-                    name: 'Profit & loss',
-                    desc: 'Revenue, costs, and estimated bottom line.',
-                    table: 'sales',
-                    section: 'Profit & loss',
-                  },
-                  {
-                    name: 'Cash-flow summary',
-                    desc: 'Cash coming in and going out.',
-                    table: 'expenses',
-                    section: 'Cash flow',
-                  },
-                  {
-                    name: 'Sales by product',
-                    desc: 'See which products earn their shelf space.',
-                    table: 'sales',
-                  },
-                  {
-                    name: 'Sales by channel',
-                    desc: 'Markets, pre-orders, and wholesale.',
-                    table: 'sales',
-                  },
-                  {
-                    name: 'Sales tax collected',
-                    desc: 'Tax held separately from revenue.',
-                    table: 'sales',
-                    section: 'Tax center',
-                  },
-                  {
-                    name: 'Expense categories',
-                    desc: 'Where your business dollars go.',
-                    table: 'expenses',
-                  },
-                  {
-                    name: 'Inventory valuation',
-                    desc: 'On-hand quantities at current unit costs.',
-                    table: 'ingredients',
-                  },
-                  {
-                    name: 'Product profitability',
-                    desc: 'Recipe cost, retail price, and margin.',
-                    table: 'products',
-                  },
-                  {
-                    name: 'Batch cost variance',
-                    desc: 'Planned production and locked actual costs.',
-                    table: 'batches',
-                  },
-                  {
-                    name: 'Low stock & reorders',
-                    desc: 'Your pantry’s next shopping list.',
-                    table: 'ingredients',
-                  },
-                  {
-                    name: 'Waste & spoilage',
-                    desc: 'Track waste and stock adjustments.',
-                    table: 'ledger',
-                  },
-                  {
-                    name: 'Ingredient purchase history',
-                    desc: 'Purchase receipts and historical costs.',
-                    table: 'ledger',
-                  },
-                ].map((r) => (
-                  <section key={r.name} className="panel report-card">
-                    <ChartNoAxesCombined size={23} />
-                    <h2>{r.name}</h2>
-                    <p>{r.desc}</p>
-                    <div>
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          r.section
-                            ? go('Finances', r.section)
-                            : open('report', { id: r.table, name: r.name })
-                        }
-                      >
-                        View report <ArrowRight size={14} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        aria-label={'Export ' + r.name}
-                        onClick={() =>
-                          exportData(r.name, reportRows(r.name, state))
-                        }
-                      >
-                        <Download size={17} />
-                      </button>
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </>
-          )}
-          {page === 'Settings' && (
-            <SettingsWorkspace
-              openTaxReports={() => go('Finances', 'Tax center')}
-              isOwner={ready && role === 'Owner'}
-              workspace={state}
-              section={sub}
-              go={(section) => go('Settings', section)}
-              open={open}
-              appearance={appearance}
-              preview={(next) => {
-                setAppearancePreview(next)
-                cacheAppearance(next)
-                setStartupAppearance(next)
-                if (ready && ['Owner', 'Manager'].includes(role))
-                  void persistAppearance(next)
-              }}
-              busy={busy}
-              canSave={ready && ['Owner', 'Manager'].includes(role)}
-              saveAppearance={async () => {
-                if (await persistAppearance(appearance))
-                  setAppearancePreview(null)
-              }}
-              saveBusiness={(item) => mutate('save', 'settings', item)}
-              onCategoryConfig={(patch) =>
-                setState((w) => ({
-                  ...w,
-                  settings: w.settings.map((s, i) =>
-                    i === 0 ? { ...s, ...patch } : s,
-                  ),
-                }))
-              }
-              exportData={(type, template) => {
-                if (template) {
-                  const fields: Record<string, string[]> = {
-                    ingredients: [
-                      'name',
-                      'usedAs',
-                      'category',
-                      'purchaseQuantity',
-                      'purchaseUnit',
-                      'packagePrice',
-                      'unit',
-                      'threshold',
-                      'vendor',
-                    ],
-                    recipes: [
-                      'name',
-                      'category',
-                      'yield',
-                      'yieldUnit',
-                      'laborMinutes',
-                      'laborRate',
-                      'overhead',
-                      'lines',
-                    ],
-                    products: [
-                      'name',
-                      'recipeId',
-                      'unitsPerPackage',
-                      'price',
-                      'wholesale',
-                      'targetMargin',
-                      'packagingLines',
-                    ],
-                    sales: [
-                      'name',
-                      'date',
-                      'productId',
-                      'quantity',
-                      'unitPrice',
-                      'fees',
-                    ],
-                    expenses: ['name', 'date', 'category', 'amount', 'vendor'],
-                  }
-                  exportData(type + '-template', [
-                    Object.fromEntries(
-                      (fields[type] || ['name']).map((key) => [key, '']),
-                    ) as Item,
-                  ])
-                } else exportData(type)
-              }}
-              backup={() => {
-                const url = URL.createObjectURL(
-                  new Blob([JSON.stringify(state, null, 2)], {
-                    type: 'application/json',
-                  }),
-                )
-                const a = document.createElement('a')
-                a.href = url
-                a.download =
-                  'cottage-pantry-backup-' + ovenToday(business) + '.json'
-                a.click()
-                URL.revokeObjectURL(url)
-              }}
-            />
-          )}
+            </SectionContent>
+          </SectionWorkspace>
         </main>
       </div>
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
@@ -5188,38 +5249,66 @@ export function WorkspaceApp() {
               assets={state.graphic_assets || []}
               kind="product"
               footer={
-                selected.workflow === 'handmade' ? (
-                  <p className="table-note">
-                    <button
-                      className="text-button"
-                      onClick={() => open('product', selected)}
-                    >
-                      Open bill of materials
-                    </button>
-                    {selected.bom
-                      ? ` · Version ${selected.bom.version}`
-                      : ' · Legacy design needs review'}
-                  </p>
-                ) : (
-                  <p className="table-note product-detail-recipe">
-                    Connected recipe:{' '}
-                    {recipes.find((r) => r.id === selected.recipeId)?.name ||
-                      'Not linked — current recipe cost unavailable'}
-                    {recipes.find((r) => r.id === selected.recipeId) && (
+                <>
+                  {selected.workflow === 'handmade' ? (
+                    <p className="table-note">
                       <button
                         className="text-button"
-                        onClick={() =>
-                          open(
-                            'recipe-detail',
-                            recipes.find((r) => r.id === selected.recipeId)!,
-                          )
-                        }
+                        onClick={() => open('product', selected)}
                       >
-                        Open recipe
+                        Open bill of materials
                       </button>
+                      {selected.bom
+                        ? ` · Version ${selected.bom.version}`
+                        : ' · Legacy design needs review'}
+                    </p>
+                  ) : (
+                    <p className="table-note product-detail-recipe">
+                      Connected recipe:{' '}
+                      {recipes.find((r) => r.id === selected.recipeId)?.name ||
+                        'Not linked — current recipe cost unavailable'}
+                      {recipes.find((r) => r.id === selected.recipeId) && (
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            open(
+                              'recipe-detail',
+                              recipes.find((r) => r.id === selected.recipeId)!,
+                            )
+                          }
+                        >
+                          Open recipe
+                        </button>
+                      )}
+                    </p>
+                  )}
+                  <div className="button-row product-detail-toolbar">
+                    <Btn secondary onClick={() => setModal(null)}>
+                      Close
+                    </Btn>
+                    {selected.workflow !== 'kit' && (
+                      <Btn
+                        secondary
+                        onClick={() => open('label-preview', selected)}
+                      >
+                        Preview Label
+                      </Btn>
                     )}
-                  </p>
-                )
+                    {selected.workflow !== 'kit' && (
+                      <Btn onClick={() => open('product', selected)}>
+                        Edit Product
+                      </Btn>
+                    )}
+                    {selected.workflow !== 'resale' && (
+                      <Btn
+                        disabled={!ready}
+                        onClick={() => open('batch', selected)}
+                      >
+                        {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
+                      </Btn>
+                    )}
+                  </div>
+                </>
               }
               photoDetails={
                 selected.workflow === 'kit' ? (
@@ -5245,6 +5334,11 @@ export function WorkspaceApp() {
                   </>
                 ) : (
                   <>
+                    <ProductMarginCard
+                      product={selected}
+                      cost={productCost(selected)}
+                      workspace={state}
+                    />
                     <section
                       aria-label="Product labels"
                       className="product-linked-labels"
@@ -5330,21 +5424,6 @@ export function WorkspaceApp() {
                 )
               }
             >
-              <div className="button-row product-detail-toolbar">
-                {selected.workflow !== 'kit' && (
-                  <Btn onClick={() => open('product', selected)}>
-                    Edit Product
-                  </Btn>
-                )}
-                {selected.workflow !== 'resale' && (
-                  <Btn
-                    disabled={!ready}
-                    onClick={() => open('batch', selected)}
-                  >
-                    {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
-                  </Btn>
-                )}
-              </div>
               {selected.workflow === 'kit' ? (
                 <KitCostCards
                   product={selected}
