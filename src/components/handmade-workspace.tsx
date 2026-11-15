@@ -1,4 +1,8 @@
-import { ScopedCategorySelect, SectionCategoryTools } from './section-categories'
+import { PageOverview, PageActions } from './application-page'
+import {
+  ScopedCategorySelect,
+  SectionCategoryTools,
+} from './section-categories'
 import { assignedCategoryId } from '@/lib/section-categories'
 import * as Tabs from '@radix-ui/react-tabs'
 import { isFabric } from '../lib/fabric'
@@ -87,9 +91,13 @@ export function HandmadeWorkspace({
         ? '?product=' + encodeURIComponent(p.id) + (edit ? '&edit=' + edit : '')
         : '')
   }
-  const [categoryFilter,setCategoryFilter]=useState('all')
-  useEffect(()=>setCategoryFilter('all'),[tab])
-  const categorySettings=(patch: Partial<Item>)=>onWorkspace({...w,settings:w.settings.map((b,i)=>i===0 ? {...b,...patch} : b)})
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  useEffect(() => setCategoryFilter('all'), [tab])
+  const categorySettings = (patch: Partial<Item>) =>
+    onWorkspace({
+      ...w,
+      settings: w.settings.map((b, i) => (i === 0 ? { ...b, ...patch } : b)),
+    })
   const [editing, setEditing] = useState<Item | null>(null)
   const [mode, setMode] = useState('')
   const products = w.products.filter((p) => p.workflow === 'handmade')
@@ -184,44 +192,69 @@ export function HandmadeWorkspace({
         <div>
           <h2>{tab}</h2>
         </div>
-        <div className="button-row">
-          {manage && (
-            <>
-              <button className="btn secondary" onClick={() => editMaterial()}>
-                Add material
-              </button>
-              <button className="btn" onClick={() => open('trade-product')}>
-                Create handmade product
-              </button>
-            </>
-          )}
-        </div>
+        <PageActions>
+          {' '}
+          <div className="button-row">
+            {manage && (
+              <>
+                <button
+                  className="btn secondary"
+                  onClick={() => editMaterial()}
+                >
+                  Add material
+                </button>
+                <button className="btn" onClick={() => open('trade-product')}>
+                  Create handmade product
+                </button>
+              </>
+            )}
+          </div>
+        </PageActions>
       </section>
-      {['Products & Bills of Materials','Finished Inventory','Materials & Supplies'].includes(tab) && <SectionCategoryTools workspace={w} scope={tab==='Materials & Supplies' ? 'handmade-materials' : 'handmade-products'} canManage={manage} onSettings={categorySettings} value={categoryFilter} onFilter={setCategoryFilter} />}
+      {[
+        'Products & Bills of Materials',
+        'Finished Inventory',
+        'Materials & Supplies',
+      ].includes(tab) && (
+        <SectionCategoryTools
+          workspace={w}
+          scope={
+            tab === 'Materials & Supplies'
+              ? 'handmade-materials'
+              : 'handmade-products'
+          }
+          canManage={manage}
+          onSettings={categorySettings}
+          value={categoryFilter}
+          onFilter={setCategoryFilter}
+        />
+      )}
       {tab === 'Overview' && (
         <>
-          <div className="handmade-summary">
-            <div>
-              <strong>{products.length}</strong>
-              <span>Handmade products & variants</span>
+          <PageOverview>
+            <div className="handmade-summary">
+              <div>
+                <strong>{products.length}</strong>
+                <span>Handmade products & variants</span>
+              </div>
+              <div>
+                <strong>
+                  {
+                    materials.filter(
+                      (i) => Number(i.quantity) <= Number(i.threshold || 0),
+                    ).length
+                  }
+                </strong>
+                <span>Materials at reorder level</span>
+              </div>
+              <div>
+                <strong>
+                  {products.filter((p) => !p.bom || !estimate(p)).length}
+                </strong>
+                <span>Products needing cost review</span>
+              </div>
             </div>
-            <div>
-              <strong>
-                {
-                  materials.filter(
-                    (i) => Number(i.quantity) <= Number(i.threshold || 0),
-                  ).length
-                }
-              </strong>
-              <span>Materials at reorder level</span>
-            </div>
-            <div>
-              <strong>
-                {products.filter((p) => !p.bom || !estimate(p)).length}
-              </strong>
-              <span>Products needing cost review</span>
-            </div>
-          </div>
+          </PageOverview>
           <section className="panel">
             <h3>Ready for your attention</h3>
             {materials
@@ -274,44 +307,53 @@ export function HandmadeWorkspace({
                 </tr>
               </thead>
               <tbody>
-                {materials.filter(i=>categoryFilter==='all' || (categoryFilter==='uncategorized' ? !assignedCategoryId(i,w,'handmade-materials') : assignedCategoryId(i,w,'handmade-materials')===categoryFilter)).map((i) => (
-                  <tr key={i.id}>
-                    <td>
-                      <strong>{i.name}</strong>
-                      <small>
-                        {i.materialCategory} · {i.sku}
-                      </small>
-                    </td>
-                    <td>
-                      {i.quantity} {i.unit}
-                      {Number(i.quantity) <= Number(i.threshold || 0) &&
-                        ' · Reorder'}
-                    </td>
-                    <td>
-                      {i.needsCostSetup || i.cost == null
-                        ? 'Cost missing'
-                        : money(i.cost)}
-                    </td>
-                    <td>
-                      {manage && (
-                        <div className="button-row">
-                          <button
-                            className="btn secondary"
-                            onClick={() => editMaterial(i)}
-                          >
-                            Details & history
-                          </button>
-                          <button
-                            className="btn secondary"
-                            onClick={() => editMaterial(i, true)}
-                          >
-                            Receive purchase
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {materials
+                  .filter(
+                    (i) =>
+                      categoryFilter === 'all' ||
+                      (categoryFilter === 'uncategorized'
+                        ? !assignedCategoryId(i, w, 'handmade-materials')
+                        : assignedCategoryId(i, w, 'handmade-materials') ===
+                          categoryFilter),
+                  )
+                  .map((i) => (
+                    <tr key={i.id}>
+                      <td>
+                        <strong>{i.name}</strong>
+                        <small>
+                          {i.materialCategory} · {i.sku}
+                        </small>
+                      </td>
+                      <td>
+                        {i.quantity} {i.unit}
+                        {Number(i.quantity) <= Number(i.threshold || 0) &&
+                          ' · Reorder'}
+                      </td>
+                      <td>
+                        {i.needsCostSetup || i.cost == null
+                          ? 'Cost missing'
+                          : money(i.cost)}
+                      </td>
+                      <td>
+                        {manage && (
+                          <div className="button-row">
+                            <button
+                              className="btn secondary"
+                              onClick={() => editMaterial(i)}
+                            >
+                              Details & history
+                            </button>
+                            <button
+                              className="btn secondary"
+                              onClick={() => editMaterial(i, true)}
+                            >
+                              Receive purchase
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -332,7 +374,13 @@ export function HandmadeWorkspace({
             </h3>
           )}
           <ProductCards
-            products={products.filter(p=>categoryFilter==='all' || (categoryFilter==='uncategorized' ? !p.productCategoryId : p.productCategoryId===categoryFilter))}
+            products={products.filter(
+              (p) =>
+                categoryFilter === 'all' ||
+                (categoryFilter === 'uncategorized'
+                  ? !p.productCategoryId
+                  : p.productCategoryId === categoryFilter),
+            )}
             workspace={w}
             open={(kind, p) => {
               if (kind === 'product-detail') go(p)
@@ -514,7 +562,7 @@ function MaterialDialog({
 }: {
   item: Item
   receipt: boolean
-  onSettings: (patch: Partial<Item>)=>void
+  onSettings: (patch: Partial<Item>) => void
   w: Workspace
   mutate: Mutate
   close: () => void
@@ -631,7 +679,16 @@ function MaterialDialog({
               ) : (
                 <>
                   {field('Material name', 'name', 'text', true)}
-                  <ScopedCategorySelect workspace={w} scope="handmade-materials" item={d} canManage onSettings={onSettings} onChange={(key,value)=>setD(old=>({...old,[key]:value}))} />
+                  <ScopedCategorySelect
+                    workspace={w}
+                    scope="handmade-materials"
+                    item={d}
+                    canManage
+                    onSettings={onSettings}
+                    onChange={(key, value) =>
+                      setD((old) => ({ ...old, [key]: value }))
+                    }
+                  />
                   {field('Supplier (optional)', 'supplier')}
                   {field('SKU / internal reference', 'sku')}
                   {unit('Stock / usage unit', 'unit')}
