@@ -9,7 +9,7 @@
   padding: 0;
   margin: 0 0 25px;
   flex-wrap: wrap;
-  font-size: max(var(--interface-text-min, 0px), 12px);
+  font-size: var(--public-control, 1rem);
 }
 .registration-steps li {
   display: flex;
@@ -49,7 +49,7 @@
 }
 .registration-lead {
   color: var(--muted);
-  font-size: 17px;
+  font-size: var(--public-body, 1.125rem);
 }
 .registration-plan {
   display: flex;
@@ -68,7 +68,7 @@
 }
 .registration-plan small {
   display: block;
-  font-size: max(var(--interface-text-min, 0px), 12px);
+  font-size: var(--public-control, 1rem);
 }
 .registration-notice {
   padding: 16px;
@@ -83,7 +83,7 @@
 .registration-form label {
   display: grid;
   gap: 6px;
-  font-size: max(var(--interface-text-min, 0px), 14px);
+  font-size: var(--public-control, 1rem);
   font-weight: 600;
 }
 .registration-form input,
@@ -131,7 +131,7 @@
   z-index: 1;
 }
 .registration-help {
-  font-size: max(var(--interface-text-min, 0px), 13px);
+  font-size: var(--public-control, 1rem);
   color: var(--muted);
 }
 .registration-checklist {
@@ -175,7 +175,7 @@
   }
   .registration-steps {
     gap: 8px 12px;
-    font-size: max(var(--interface-text-min, 0px), 11px);
+    font-size: var(--public-control, 1rem);
   }
   .registration-paper {
     padding: 22px 18px;
@@ -183,7 +183,7 @@
 }
 .signup-plan-scope {
   display: block;
-  font-size: max(var(--interface-text-min, 0px), 14px);
+  font-size: var(--public-control, 1rem);
   line-height: 1.6;
 }
 .signup-plan-choice {
@@ -196,7 +196,7 @@
   align-items: start;
   gap: 10px;
 }
-.signup-plan-choice input[type='radio'] {
+.signup-plan-choice input[type="radio"] {
   width: auto;
   margin-top: 5px;
   padding: 0;
@@ -233,7 +233,7 @@
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
-.signup-plan-choice input[type='radio'] {
+.signup-plan-choice input[type="radio"] {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
@@ -248,7 +248,7 @@
   font-weight: 600;
 }
 .signup-plan-price > span {
-  font-size: 14px;
+  font-size: var(--public-control, 1rem);
   font-weight: 400;
   color: var(--muted);
 }
@@ -261,14 +261,14 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 14px;
+  font-size: var(--public-control, 1rem);
 }
 .signup-plan-links a {
   font-weight: 600;
 }
 .signup-payment-note {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--public-control, 1rem);
   color: var(--muted);
 }
 @media (max-width: 580px) {
