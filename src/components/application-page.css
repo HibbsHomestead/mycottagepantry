@@ -88,3 +88,44 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Width follows the workspace after both navigation columns are deducted. */
+.main-shell > main.application-page {
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  --workspace-card-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+}
+.application-page
+  :is(
+    .section-workspace,
+    .section-workspace-content,
+    .pantry-v2,
+    .handmade-workspace
+  ) {
+  min-width: 0;
+  max-width: 100%;
+}
+.application-page
+  :is(
+    .pantry-card-grid,
+    .product-photo-grid.pantry-card-grid,
+    .recipe-grid,
+    .card-grid
+  ) {
+  display: grid;
+  grid-template-columns: var(--workspace-card-columns);
+  gap: 1.5rem;
+  align-items: stretch;
+}
+.application-page
+  :is(.pantry-card-grid, .recipe-grid, .card-grid)
+  > :not(.calm-empty) {
+  min-width: 0;
+  width: 100%;
+  max-width: 26rem;
+  justify-self: start;
+}
+.application-page .recipe-grid > * {
+  overflow-wrap: anywhere;
+}

@@ -1,740 +1,913 @@
+import { useRef, useState, useEffect, type ComponentProps } from 'react'
+import { type Item, money, units } from '../lib/domain'
 import { ovenToday } from '../lib/oven-dates'
-import './production-run.css'
-import { useRef, useState } from 'react'
-import { type Item, type Workspace, convert, money, units } from '../lib/domain'
-import { productionDefinition, productionRequirements } from '../lib/production'
 import { workflowOf } from '../lib/product-workflows'
-import { PantryPhoto } from './pantry-photo'
+import { productionDefinition } from '../lib/production'
+import {
+  combinedProductionRequirements,
+  productionRunLines,
+} from '../lib/production-run'
+import { LegacyProductionRun } from './legacy-production-run'
+import './production-run.css'
 
-export function ProductionRun({
+type Props = ComponentProps<typeof LegacyProductionRun> & {
+  onDirtyChange?: (dirty: boolean) => void
+}
+const blank = (productId = ''): Item => ({
+  id: crypto.randomUUID(),
+  name: '',
+  productId,
+  quantity: 1,
+  output: '',
+  waste: 0,
+  laborMinutes: '',
+  wasteReason: '',
+  definition: undefined,
+  mapping: { quantity: '', unit: '', verified: false },
+  usage: {},
+  materialWaste: {},
+  note: '',
+})
+export function ProductionRun(props: Props) {
+  const [copy, setCopy] = useState<Item>()
+  if (copy) return <RunEditor {...props} run={copy} />
+  if (
+    props.run?.productionVersion === 1 &&
+    ['completed', 'canceled'].includes(props.run.status)
+  )
+    return (
+      <>
+        <LegacyProductionRun {...props} />
+        {['Owner', 'Manager'].includes(props.role || 'Owner') && (
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() =>
+              setCopy({
+                id: crypto.randomUUID(),
+                name: props.run!.name + ' — copy',
+                status: 'draft',
+                productionVersion: 2,
+                revision: 0,
+                date: ovenToday(props.state.settings[0]),
+                lines: productionRunLines(props.run).map((l) => ({
+                  ...blank(l.productId),
+                  quantity: l.quantity,
+                  mapping: l.mapping,
+                  note: l.note,
+                })),
+              })
+            }
+          >
+            Duplicate as new draft
+          </button>
+        )}
+      </>
+    )
+  return <RunEditor {...props} />
+}
+function RunEditor({
   state,
   run,
   productId,
   legacyRunId,
   mutate,
   edit,
-  startComponent,
   busy,
+  onDirtyChange,
   role = 'Owner',
-}: {
-  role?: string
-  state: Workspace
-  run?: Item
-  productId?: string
-  legacyRunId?: string
-  mutate: (action: string, table: string, data: Item) => Promise<unknown>
-  edit: (kind: string, item: Item) => void
-  startComponent: (productId: string) => void
-  busy: boolean
-}) {
-  const [id] = useState(() => run?.id || crypto.randomUUID())
-  const [product, setProduct] = useState(run?.productId || productId || '')
-  const [quantity, setQuantity] = useState(String(run?.quantity || 1))
+}: Props) {
+  const [id, setId] = useState(run?.id || crypto.randomUUID())
+  const [revision, setRevision] = useState(Number(run?.revision || 0))
+  const [status, setStatus] = useState(run?.status || 'draft')
+  const [name, setName] = useState(run?.name || 'Production run')
   const [date, setDate] = useState(run?.date || ovenToday(state.settings[0]))
-  const [mapping, setMapping] = useState(
-    run?.mapping || { quantity: '', unit: '', verified: false },
+  const [note, setNote] = useState(run?.note || '')
+  const [lines, setLines] = useState<Item[]>(() =>
+    run ? structuredClone(productionRunLines(run)) : [blank(productId)],
   )
-  const [review, setReview] = useState(!!run?.definition)
-  const [output, setOutput] = useState(
-    String(run?.actualYield || run?.quantity || 1),
-  )
-  const [waste, setWaste] = useState('0')
-  const [wasteReason, setWasteReason] = useState('')
-  const [labor, setLabor] = useState('')
-  const [usage, setUsage] = useState<Record<string, string>>({})
-  const [materialWaste, setMaterialWaste] = useState<Record<string, string>>({})
+  const [review, setReview] = useState(false)
+  const [dirty, setDirty] = useState(false)
   const [error, setError] = useState('')
   const [reversalReason, setReversalReason] = useState('')
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
   const saving = useRef(false)
-  const p =
-    run?.definition?.product || state.products.find((p) => p.id === product)
-  const recipe =
-    run?.definition?.recipe || state.recipes.find((r) => r.id === p?.recipeId)
-  const kit = p?.workflow === 'kit'
-  const handmade = p?.workflow === 'handmade'
-  const terminal = ['completed', 'canceled'].includes(run?.status)
-  const scheduled = run?.status === 'scheduled'
-  let definition: Item | undefined,
-    result: ReturnType<typeof productionRequirements> | undefined,
-    setupError = ''
-  try {
-    if (p) {
-      definition = run?.definition || productionDefinition(p, state, mapping)
-      result = productionRequirements(
-        definition!,
-        Number(quantity),
-        scheduled
-          ? {
-              id: '',
-              name: '',
-              output: Number(output),
-              waste: Number(waste),
-              wasteReason,
-              usage,
-              materialWaste,
-              ...(labor !== '' ? { laborMinutes: Number(labor) } : {}),
-            }
-          : undefined,
-      )
-    }
-  } catch (e) {
-    setupError = (e as Error).message
-  }
-  const availability = (line: Item) =>
-    (line.kind === 'product' ? state.products : state.ingredients).find(
-      (i) => i.id === line.itemId,
+  const terminal = ['completed', 'canceled'].includes(status)
+  const canEdit = ['Owner', 'Manager'].includes(role) && !terminal
+  const canRecordActuals =
+    ['Owner', 'Manager', 'Production Staff'].includes(role) && !terminal
+  const canFinalize =
+    ['Owner', 'Manager', 'Production Staff'].includes(role) && !terminal
+  const change = (lineId: string, patch: Partial<Item>) => {
+    setLines((previous) =>
+      previous.map((l) => (l.id === lineId ? { ...l, ...patch } : l)),
     )
-  const availableQuantity = (line: Item): number | null => {
-    const item = availability(line)
-    if (!item) return null
-    try {
-      return line.kind === 'product'
-        ? Number(item.quantity || 0)
-        : convert(
-            Number(item.quantity || 0),
-            item.unit,
-            line.unit,
-            item.conversions,
-          )
-    } catch {
-      return null
-    }
+    setDirty(true)
+    setReview(false)
   }
-  const estimatedInputCost = (line: Item) => {
-    const item = availability(line)
-    if (!item) return 0
+  let calculation: ReturnType<typeof combinedProductionRequirements> | undefined
+  let setupError = ''
+  const prepared = lines.map((l) => {
+    const product = state.products.find((p) => p.id === l.productId)
     try {
-      return (
-        line.quantity *
-        Number(item.cost || 0) *
-        (line.kind === 'product'
-          ? 1
-          : convert(1, line.unit, item.unit, item.conversions))
-      )
-    } catch {
-      return 0
+      return {
+        ...l,
+        definition:
+          l.definition ||
+          (product && productionDefinition(product, state, l.mapping || {})),
+      }
+    } catch (e) {
+      setupError ||= (e as Error).message
+      return l
     }
-  }
-  const shortages =
-    result?.requirements.filter(
-      (l) =>
-        l.tracked &&
-        (availableQuantity(l) == null ||
-          availableQuantity(l)! < l.quantity ||
-          (l.kind === 'product' && availability(l)?.stockCostKnown !== true)),
-    ) || []
-  const costIncomplete = result?.requirements.some((line) => {
-    const item = availability(line)
-    return (
-      !item ||
-      item.needsCostSetup ||
-      item.cost == null ||
-      !Number.isFinite(Number(item.cost)) ||
-      (line.kind === 'product' && item.stockCostKnown !== true) ||
-      availableQuantity(line) == null
-    )
   })
-  async function act(action: string, status?: string) {
+  try {
+    if (!terminal) calculation = combinedProductionRequirements(prepared, state)
+  } catch (e) {
+    setupError ||= (e as Error).message
+  }
+  function hasActuals(l: Item) {
+    return (
+      (l.output !== '' && l.output != null) ||
+      Number(l.waste) > 0 ||
+      Object.keys(l.usage || {}).length > 0 ||
+      Object.keys(l.materialWaste || {}).length > 0 ||
+      (l.laborMinutes !== '' && l.laborMinutes != null)
+    )
+  }
+  async function act(action: string, nextStatus = status) {
     if (saving.current) return
     saving.current = true
     setError('')
     try {
       await mutate(action, 'batches', {
         id,
-        name: p?.name || 'Production',
-        legacyRunId: run?.legacyRunId || legacyRunId,
-        productId: product,
-        quantity: Number(quantity),
-        mapping,
+        name,
         date,
-        status,
-        output: Number(output),
-        waste: Number(waste),
-        wasteReason,
-        materialWaste,
-        usage,
-        ...(labor !== '' ? { laborMinutes: Number(labor) } : {}),
+        note,
+        lines,
         reason: reversalReason,
+        status: nextStatus,
+        expectedRevision: revision,
+        legacyRunId:
+          run && id !== run.id ? undefined : run?.legacyRunId || legacyRunId,
       })
+      setRevision(revision + 1)
+      setDirty(false)
+      setReview(false)
+      setStatus(
+        action === 'productionComplete'
+          ? 'completed'
+          : action === 'productionCancel'
+            ? 'canceled'
+            : nextStatus,
+      )
     } catch (e) {
       setError((e as Error).message)
     } finally {
       saving.current = false
     }
   }
-  if (terminal)
-    return (
-      <section>
-        <p>
-          {run?.name} · {run?.status}
-        </p>
-        <p>
-          {run?.actualYield ?? run?.quantity}{' '}
-          {handmade ? 'finished units' : 'selling packages'} ·{' '}
-          {money(run?.historicalCost || 0)}
-        </p>
-        <details>
-          <summary>Recorded requirements and cost</summary>
-          <p>
-            {run?.definition?.bom
-              ? `Bill of materials · version ${run.definition.bom.version}`
-              : run?.definition?.recipe?.name || 'Kit assembly'}{' '}
-            · definition saved when planned.
-          </p>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Input</th>
-                  <th>Actual use</th>
-                  <th>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(run?.usage || []).map((line: Item) => (
-                  <tr key={line.id}>
-                    <td>{line.name}</td>
-                    <td>
-                      {line.quantity} {line.unit}
-                    </td>
-                    <td>{money(line.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p>
-            Labor: {money(run?.costSnapshot?.labor || 0)} · Packaging:{' '}
-            {money(run?.costSnapshot?.packagingCost || 0)} · Output waste:{' '}
-            {run?.waste || 0} units · Overhead:{' '}
-            {money(run?.costSnapshot?.overhead || 0)}
-          </p>
-          {run?.wasteReason && <p>{run.wasteReason}</p>}
-        </details>
-        <p>
-          Recorded costs and stock movements are immutable. Corrections create
-          compensating entries.
-        </p>
-        {handmade &&
-          run?.status === 'completed' &&
-          (state.ledger.some(
-            (l) => l.id === 'production-reversal-' + run.id,
-          ) ? (
-            <p>
-              This production run was reversed. Its original snapshot remains
-              available.
-            </p>
-          ) : (
-            ['Owner', 'Manager'].includes(role) && (
-              <div>
-                <label>
-                  Reason for whole-run reversal
-                  <input
-                    value={reversalReason}
-                    onChange={(e) => setReversalReason(e.target.value)}
-                  />
-                </label>
-                <p>
-                  Reversal removes the original output and restores its consumed
-                  materials at recorded costs. Downstream stock consumption
-                  blocks reversal. Create a new run for corrected production.
-                </p>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  disabled={busy || !reversalReason.trim()}
-                  onClick={() => act('productionReverse')}
-                >
-                  Reverse production run
-                </button>
-              </div>
-            )
-          ))}
-        {error && <p role="alert">{error}</p>}
-      </section>
+  function duplicate() {
+    setId(crypto.randomUUID())
+    setRevision(0)
+    setStatus('draft')
+    setName(name + ' — copy')
+    setLines(
+      lines.map((l) => ({
+        ...blank(l.productId),
+        name: l.name,
+        quantity: l.quantity,
+        mapping: l.mapping,
+        note: l.note,
+      })),
     )
+    setDirty(true)
+    setReview(false)
+  }
+  const finalRun =
+    state.batches.find((b) => b.id === id) || (run?.id === id ? run : undefined)
   return (
-    <div className="production-run">
-      {(legacyRunId || run?.legacyRunId) && (
-        <p>
-          Reviewing legacy plan:{' '}
-          {
-            state.batches.find(
-              (b) => b.id === (legacyRunId || run?.legacyRunId),
-            )?.name
-          }
-          . Verify the requested product output. Confirming this new plan
-          cancels the original uncompleted plan without moving stock; saving a
-          draft leaves it unchanged.
-        </p>
-      )}
+    <div className="production-run multi-production-run">
+      <p>
+        <strong>
+          {status === 'completed'
+            ? 'Finalized'
+            : status === 'scheduled'
+              ? 'In progress'
+              : status === 'canceled'
+                ? 'Cancelled'
+                : 'Draft'}
+        </strong>{' '}
+        · {lines.length} product {lines.length === 1 ? 'line' : 'lines'}
+      </p>
       <div className="form-grid">
         <label>
-          Product
-          <select
-            aria-label="Product"
-            value={product}
-            disabled={scheduled}
-            onChange={(e) => {
-              setProduct(e.target.value)
-              setReview(false)
-              setMapping({ quantity: '', unit: '', verified: false })
-            }}
-          >
-            <option value="">Choose product</option>
-            {state.products
-              .filter(
-                (p) =>
-                  ['food', 'kit', 'handmade'].includes(workflowOf(p)) &&
-                  !p.archived,
-              )
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.workflow === 'kit' ? ' · Kit' : ''}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          {kit
-            ? 'Kits to assemble'
-            : handmade
-              ? 'Finished units to produce'
-              : 'Selling packages to produce'}
+          Run name / reference
           <input
-            type="number"
-            min="1"
-            step="1"
-            value={quantity}
-            disabled={scheduled}
+            value={name}
+            disabled={!canEdit}
             onChange={(e) => {
-              setQuantity(e.target.value)
-              setOutput(e.target.value)
+              setName(e.target.value)
+              setDirty(true)
               setReview(false)
             }}
           />
         </label>
-      </div>
-      {p && (
-        <div className="selected-item">
-          <PantryPhoto item={p} assets={state.graphic_assets} kind="product" />
-          <span>
-            <strong>{p.name}</strong>
-            <small>
-              {kit ? 'Kit · Assemble' : `${workflowOf(p)} · Produce`} ·{' '}
-              {quantity} selling packages
-            </small>
-          </span>
-        </div>
-      )}
-      {!scheduled && (
         <label>
           Production date
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            disabled={!canEdit}
+            onChange={(e) => {
+              setDate(e.target.value)
+              setDirty(true)
+              setReview(false)
+            }}
           />
         </label>
+      </div>
+      <details>
+        <summary>Run notes</summary>
+        <label>
+          Run notes
+          <textarea
+            value={note}
+            disabled={!canEdit}
+            onChange={(e) => {
+              setNote(e.target.value)
+              setDirty(true)
+              setReview(false)
+            }}
+          />
+        </label>
+      </details>
+      {(legacyRunId || run?.legacyRunId) && (
+        <p>
+          Starting this replacement cancels the original recipe plan. Saving a
+          draft leaves the original unchanged. No stock moves until
+          finalization.
+        </p>
       )}
-      {p && !kit && !scheduled && recipe && (
-        <fieldset>
-          <legend>Verified package output</legend>
-          <div className="form-grid">
-            <label>
-              Recipe output per selling package
-              <input
-                type="number"
-                min="0.000001"
-                step="any"
-                value={mapping.quantity}
-                onChange={(e) => {
-                  setMapping({
-                    ...mapping,
-                    quantity: e.target.value,
-                    verified: false,
-                  })
-                  setReview(false)
-                }}
-              />
-            </label>
-            <label>
-              Output unit
-              <select
-                value={mapping.unit}
-                onChange={(e) => {
-                  setMapping({
-                    ...mapping,
-                    unit: e.target.value,
-                    conversions: [],
-                    verified: false,
-                  })
-                  setReview(false)
-                }}
-              >
-                <option value="">Choose yield unit</option>
-                {recipe.yieldUnit &&
-                  !Object.hasOwn(units, recipe.yieldUnit) && (
-                    <option value={recipe.yieldUnit}>
-                      {recipe.yieldUnit} (recipe yield)
-                    </option>
-                  )}
-                {Object.keys(units)
-                  .filter((u) => units[u].factor > 0)
-                  .map((u) => (
-                    <option key={u}>{u}</option>
-                  ))}
-              </select>
-            </label>
-          </div>
-          <p>
-            Recipe: {recipe.name} · {recipe.yield} {recipe.yieldUnit} per batch.
-          </p>
-          {mapping.unit &&
-            recipe.yieldUnit &&
-            mapping.unit !== recipe.yieldUnit && (
-              <details>
-                <summary>Set a verified yield conversion if required</summary>
-                <p>
-                  Enter a measured relationship. No density or count equivalence
-                  is assumed.
-                </p>
+      {lines.map((l, index) => {
+        const product = state.products.find((p) => p.id === l.productId)
+        const definition = prepared[index].definition
+        const result = calculation?.products[index]
+        const recipe =
+          definition?.recipe ||
+          state.recipes.find((r) => r.id === product?.recipeId)
+        const needsMapping =
+          product && workflowOf(product) !== 'kit' && !product.bom
+        const snapshot = l.costSnapshot
+        return (
+          <fieldset key={l.id} className="production-product-line">
+            <legend>
+              Product {index + 1}
+              {terminal ? ` · ${l.name}` : ''}
+            </legend>
+            <div className="form-grid">
+              <label>
+                Product
+                <select
+                  value={l.productId}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    if (
+                      hasActuals(l) &&
+                      !window.confirm(
+                        'Changing this product clears its entered actual output, labor and material usage. Continue?',
+                      )
+                    )
+                      return
+                    change(l.id, { ...blank(e.target.value), id: l.id })
+                  }}
+                >
+                  <option value="">Choose product</option>
+                  {state.products
+                    .filter(
+                      (p) =>
+                        !p.archived &&
+                        ['food', 'handmade', 'kit'].includes(workflowOf(p)),
+                    )
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} · {workflowOf(p)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Planned selling packages / finished units
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={l.quantity}
+                  disabled={!canEdit}
+                  onChange={(e) => change(l.id, { quantity: e.target.value })}
+                />
+              </label>
+            </div>
+            {recipe && (
+              <p>
+                Recipe: {recipe.name} · {recipe.yield} {recipe.yieldUnit} per
+                batch.{' '}
+                {result && `${result.multiplier.toFixed(4)} batches planned.`}
+              </p>
+            )}
+            {product?.workflow === 'kit' && (
+              <p>
+                Uses existing finished stock. Component manufacturing is
+                separate.
+              </p>
+            )}
+            {definition?.bom && (
+              <p>
+                BOM: {definition.bom.name || product?.name} ·{' '}
+                {result?.multiplier.toFixed(4)} BOM runs
+              </p>
+            )}
+            {needsMapping && !terminal && (
+              <details open={!definition}>
+                <summary>Verified recipe output per selling package</summary>
                 <div className="form-grid">
                   <label>
-                    Measured {mapping.unit}
+                    Recipe output per selling package
                     <input
                       type="number"
                       min="0.000001"
                       step="any"
-                      value={mapping.conversions?.[0]?.amountFrom || ''}
-                      onChange={(e) => {
-                        setMapping({
-                          ...mapping,
-                          verified: false,
-                          conversions: [
-                            {
-                              ...mapping.conversions?.[0],
-                              from: mapping.unit,
-                              to: recipe.yieldUnit,
-                              amountFrom: e.target.value,
-                              verified: true,
-                            },
-                          ],
+                      disabled={!canEdit}
+                      value={l.mapping?.quantity || ''}
+                      onChange={(e) =>
+                        change(l.id, {
+                          definition: undefined,
+                          mapping: {
+                            ...l.mapping,
+                            quantity: e.target.value,
+                            verified: false,
+                          },
                         })
-                        setReview(false)
-                      }}
+                      }
                     />
                   </label>
                   <label>
-                    Equivalent {recipe.yieldUnit}
-                    <input
-                      type="number"
-                      min="0.000001"
-                      step="any"
-                      value={mapping.conversions?.[0]?.amountTo || ''}
-                      onChange={(e) => {
-                        setMapping({
-                          ...mapping,
-                          verified: false,
-                          conversions: [
-                            {
-                              ...mapping.conversions?.[0],
-                              from: mapping.unit,
-                              to: recipe.yieldUnit,
-                              amountTo: e.target.value,
-                              verified: true,
-                            },
-                          ],
+                    Output unit
+                    <select
+                      value={l.mapping?.unit || ''}
+                      disabled={!canEdit}
+                      onChange={(e) =>
+                        change(l.id, {
+                          definition: undefined,
+                          mapping: {
+                            ...l.mapping,
+                            unit: e.target.value,
+                            conversions: [],
+                            verified: false,
+                          },
                         })
-                        setReview(false)
-                      }}
-                    />
+                      }
+                    >
+                      <option value="">Choose yield unit</option>
+                      {[...new Set([recipe?.yieldUnit, ...Object.keys(units)])]
+                        .filter(Boolean)
+                        .map((u) => (
+                          <option key={u} value={u}>
+                            {u}
+                          </option>
+                        ))}
+                    </select>
                   </label>
                 </div>
-              </details>
-            )}
-          <label>
-            <input
-              type="checkbox"
-              checked={mapping.verified}
-              onChange={(e) => {
-                setMapping({ ...mapping, verified: e.target.checked })
-                setReview(false)
-              }}
-            />{' '}
-            I verified this output quantity and unit for one selling package.
-          </label>
-        </fieldset>
-      )}
-      {definition?.bom?.instructions && (
-        <section>
-          <h3>Production instructions</h3>
-          <p>{definition.bom.instructions}</p>
-        </section>
-      )}
-      {setupError && <p role="alert">{setupError}</p>}
-      {p && !scheduled && (
-        <div className="button-row">
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={() => edit('product', p)}
-          >
-            Edit product setup
-          </button>
-          {recipe && (
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => edit('recipe', recipe)}
-            >
-              Edit recipe / yield / conversions
-            </button>
-          )}
-        </div>
-      )}
-      {scheduled && (
-        <>
-          <div className="form-grid">
-            <label>
-              Actual usable output (packages)
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={output}
-                onChange={(e) => setOutput(e.target.value)}
-              />
-            </label>
-            <label>
-              Output waste (packages)
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={waste}
-                onChange={(e) => setWaste(e.target.value)}
-              />
-            </label>
-            <label>
-              Actual labor (minutes)
-              <input
-                type="number"
-                min="0"
-                step="any"
-                placeholder={String(result?.cost.laborMinutes || 0)}
-                value={labor}
-                onChange={(e) => setLabor(e.target.value)}
-              />
-            </label>
-            <label>
-              Waste reason
-              <input
-                value={wasteReason}
-                onChange={(e) => setWasteReason(e.target.value)}
-              />
-            </label>
-          </div>
-          <p>
-            Only usable output enters finished stock. Review actual usage before
-            completion.
-          </p>
-        </>
-      )}
-      {result && review && (
-        <section>
-          <h3>{kit ? 'Assembly requirements' : 'Production requirements'}</h3>
-          <p>
-            {definition?.bom
-              ? `${result.multiplier.toFixed(4)} BOM runs · ${quantity} planned finished units`
-              : kit
-                ? 'Uses existing finished stock. Component manufacturing is separate.'
-                : `${result.multiplier.toFixed(4)} recipe batches · ${quantity} requested selling packages`}
-          </p>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Requirement</th>
-                  <th>Required</th>
-                  <th>Available</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.requirements.map((l) => (
-                  <tr key={l.id}>
-                    <td>{l.name}</td>
-                    <td>
-                      {l.quantity.toFixed(3)} {l.unit}
-                    </td>
-                    <td>
-                      {l.tracked
-                        ? availableQuantity(l) == null
-                          ? 'Conversion needs review'
-                          : `${availableQuantity(l)!.toFixed(3)} ${l.unit}`
-                        : 'Not tracked'}
-                    </td>
-                    <td>
-                      {shortages.some((s) => s.id === l.id) ? (
-                        <>
-                          Shortage
-                          {l.kind === 'product' &&
-                            workflowOf(
-                              availability(l) || { id: '', name: '' },
-                            ) !== 'resale' && (
-                              <button
-                                type="button"
-                                className="btn secondary"
-                                onClick={() => startComponent(l.itemId)}
-                              >
-                                Produce separately
-                              </button>
-                            )}
-                        </>
-                      ) : (
-                        'Available'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p>
-            Estimated stock cost + labor/allocations:{' '}
-            {costIncomplete
-              ? 'Cost incomplete — review stock cost setup.'
-              : money(
-                  result.requirements.reduce(
-                    (sum, l) => sum + estimatedInputCost(l),
-                    0,
-                  ) +
-                    result.cost.labor +
-                    result.cost.overhead +
-                    result.cost.waste +
-                    (definition?.recipe
-                      ? Number(definition.recipe.packagingCost || 0) *
-                        result.multiplier
-                      : 0),
-                )}
-          </p>
-          <details>
-            <summary>
-              Calculation details
-              {scheduled
-                ? handmade
-                  ? ' and actual component use'
-                  : ' and actual ingredient use'
-                : ''}
-            </summary>
-            <p>
-              Stock costs are locked at completion. Selling price is excluded.
-              Packaging and configured labor are included once.
-            </p>
-            {scheduled &&
-              !kit &&
-              result.requirements
-                .filter(
-                  (l) =>
-                    l.kind === 'ingredient' &&
-                    l.source.ingredientId &&
-                    (handmade ||
-                      !definition?.product.packagingLines?.some(
-                        (p: Item) => p.ingredientId === l.itemId,
-                      )),
-                )
-                .map((l) => (
-                  <div key={l.id} className="form-grid">
-                    <label>
-                      {l.name} actual use ({l.unit})
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={
-                          usage[l.itemId] ??
-                          l.quantity - Number(materialWaste[l.itemId] || 0)
-                        }
-                        onChange={(e) =>
-                          setUsage({ ...usage, [l.itemId]: e.target.value })
-                        }
-                      />
-                    </label>
-                    {p.workflow === 'handmade' && (
+                {l.mapping?.unit &&
+                  recipe?.yieldUnit &&
+                  l.mapping.unit !== recipe.yieldUnit && (
+                    <div className="form-grid">
                       <label>
-                        {l.name} material waste ({l.unit})
+                        Measured {l.mapping.unit}
                         <input
                           type="number"
-                          min="0"
+                          min="0.000001"
                           step="any"
-                          value={materialWaste[l.itemId] || '0'}
+                          disabled={!canEdit}
+                          value={l.mapping.conversions?.[0]?.amountFrom || ''}
                           onChange={(e) =>
-                            setMaterialWaste({
-                              ...materialWaste,
-                              [l.itemId]: e.target.value,
+                            change(l.id, {
+                              definition: undefined,
+                              mapping: {
+                                ...l.mapping,
+                                verified: false,
+                                conversions: [
+                                  {
+                                    ...l.mapping.conversions?.[0],
+                                    from: l.mapping.unit,
+                                    to: recipe.yieldUnit,
+                                    amountFrom: e.target.value,
+                                    verified: true,
+                                  },
+                                ],
+                              },
                             })
                           }
                         />
                       </label>
+                      <label>
+                        Equivalent {recipe.yieldUnit}
+                        <input
+                          type="number"
+                          min="0.000001"
+                          step="any"
+                          disabled={!canEdit}
+                          value={l.mapping.conversions?.[0]?.amountTo || ''}
+                          onChange={(e) =>
+                            change(l.id, {
+                              definition: undefined,
+                              mapping: {
+                                ...l.mapping,
+                                verified: false,
+                                conversions: [
+                                  {
+                                    ...l.mapping.conversions?.[0],
+                                    from: l.mapping.unit,
+                                    to: recipe.yieldUnit,
+                                    amountTo: e.target.value,
+                                    verified: true,
+                                  },
+                                ],
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  )}
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={!canEdit}
+                    checked={l.mapping?.verified === true}
+                    onChange={(e) =>
+                      change(l.id, {
+                        definition: undefined,
+                        mapping: { ...l.mapping, verified: e.target.checked },
+                      })
+                    }
+                  />
+                  I verified this output quantity and unit for one selling
+                  package.
+                </label>
+              </details>
+            )}
+            <details>
+              <summary>
+                Output, waste and notes ·{' '}
+                {terminal ? (l.actualYield ?? '—') : l.output || 'Not recorded'}{' '}
+                good · {l.waste || 0} rejected
+              </summary>
+              <div className="form-grid">
+                <label>
+                  Actual good output (selling packages / finished units)
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    disabled={!canRecordActuals}
+                    value={terminal ? (l.actualYield ?? '') : (l.output ?? '')}
+                    onChange={(e) => change(l.id, { output: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Waste / rejected output
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    disabled={!canRecordActuals}
+                    value={l.waste || 0}
+                    onChange={(e) => change(l.id, { waste: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Actual labor (minutes)
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder={String(result?.cost.laborMinutes || 0)}
+                    disabled={!canRecordActuals}
+                    value={
+                      terminal
+                        ? (snapshot?.laborMinutes ?? '')
+                        : (l.laborMinutes ?? '')
+                    }
+                    onChange={(e) =>
+                      change(l.id, { laborMinutes: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Waste reason
+                  <input
+                    value={l.wasteReason || ''}
+                    disabled={!canRecordActuals}
+                    onChange={(e) =>
+                      change(l.id, { wasteReason: e.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <label>
+                Product-specific notes
+                <textarea
+                  value={l.note || ''}
+                  disabled={!canEdit}
+                  onChange={(e) => change(l.id, { note: e.target.value })}
+                />
+              </label>
+            </details>
+            {terminal ? (
+              <>
+                <p>
+                  Actual locked cost: {money(l.historicalCost || 0)} · labor{' '}
+                  {money(snapshot?.labor || 0)} · overhead{' '}
+                  {money(snapshot?.overhead || 0)} · packaging{' '}
+                  {money(snapshot?.packagingCost || 0)}
+                </p>
+                {(l.usage || []).map((u: Item) => (
+                  <p key={u.id}>
+                    {u.name}: {u.quantity} {u.unit} consumed · {money(u.cost)}
+                  </p>
+                ))}
+              </>
+            ) : (
+              <>
+                <p>
+                  Estimated cost:{' '}
+                  {result
+                    ? calculation?.costKnown
+                      ? money(result.estimate)
+                      : 'Cost setup needs review'
+                    : 'Complete setup'}
+                  {result &&
+                    ` · labor ${money(result.cost.labor)} · overhead ${money(result.cost.overhead)}`}
+                  . Actual costs lock at finalization.
+                </p>
+                {result && (
+                  <details>
+                    <summary>
+                      Product requirements and actual material usage
+                    </summary>
+                    {result.requirements.map((r: Item) => (
+                      <div key={r.id}>
+                        <p>
+                          {r.name}: {Number(r.quantity).toFixed(3)} {r.unit}{' '}
+                          required
+                        </p>
+                        {r.kind === 'ingredient' &&
+                          r.source.ingredientId &&
+                          (definition?.bom ||
+                            !definition?.product.packagingLines?.some(
+                              (p: Item) => p.ingredientId === r.itemId,
+                            )) && (
+                            <div className="form-grid">
+                              <label>
+                                Actual {r.name} use ({r.unit})
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  disabled={!canRecordActuals}
+                                  value={l.usage?.[r.itemId] ?? ''}
+                                  placeholder={String(
+                                    r.quantity -
+                                      Number(l.materialWaste?.[r.itemId] || 0),
+                                  )}
+                                  onChange={(e) =>
+                                    change(l.id, {
+                                      usage: {
+                                        ...l.usage,
+                                        [r.itemId]:
+                                          e.target.value === ''
+                                            ? undefined
+                                            : e.target.value,
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label>
+                                {r.name} material waste ({r.unit})
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  disabled={!canRecordActuals}
+                                  value={l.materialWaste?.[r.itemId] ?? 0}
+                                  onChange={(e) =>
+                                    change(l.id, {
+                                      materialWaste: {
+                                        ...l.materialWaste,
+                                        [r.itemId]: e.target.value,
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                          )}
+                      </div>
+                    ))}
+                  </details>
+                )}
+                {canEdit && (
+                  <div className="button-row">
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          hasActuals(l) &&
+                          !window.confirm(
+                            'Remove this product and its entered actual output and material usage?',
+                          )
+                        )
+                          return
+                        setLines(lines.filter((item) => item.id !== l.id))
+                        setDirty(true)
+                        setReview(false)
+                      }}
+                    >
+                      Remove product
+                    </button>
+                    {product && (
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          if (
+                            !dirty ||
+                            window.confirm(
+                              'Discard unsaved run changes and open product setup? Save first to continue editing this run later.',
+                            )
+                          )
+                            edit('product', product)
+                        }}
+                      >
+                        Edit product setup
+                      </button>
                     )}
                   </div>
-                ))}
-          </details>
+                )}
+              </>
+            )}
+          </fieldset>
+        )
+      })}
+      {canEdit && (
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => {
+            setLines([...lines, blank()])
+            setDirty(true)
+            setReview(false)
+          }}
+        >
+          Add product
+        </button>
+      )}
+      {!terminal && (
+        <section aria-label="Combined material requirements">
+          <h3>Combined material requirements</h3>
+          <p>
+            Planned only: no stock reserved, consumed or received before
+            finalization. Current stock is shared with other work.
+          </p>
+          {setupError && <p role="status">{setupError}</p>}
+          {calculation && (
+            <>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Material</th>
+                      <th>Total required</th>
+                      <th>Available</th>
+                      <th>Status</th>
+                      <th>Estimated cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calculation.requirements.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.name}</td>
+                        <td>
+                          {Number(r.quantity).toFixed(3)} {r.unit}
+                        </td>
+                        <td>
+                          {r.tracked
+                            ? `${r.available} ${r.unit}`
+                            : 'Not tracked'}
+                        </td>
+                        <td>
+                          {r.tracked && r.quantity > r.available + 1e-8
+                            ? 'Shortage'
+                            : 'Available'}
+                        </td>
+                        <td>
+                          {r.costKnown ? money(r.cost) : 'Needs cost setup'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p>
+                Run estimated cost:{' '}
+                {calculation.costKnown
+                  ? money(calculation.total)
+                  : 'Cost setup needs review'}
+              </p>
+            </>
+          )}
+          <p>
+            Labor and overhead use each line’s existing scaled recipe/BOM policy
+            once. There are no additional shared run charges. Enter each
+            product’s portion of shared labor in its actual minutes; do not
+            repeat the full run time on every line.
+          </p>
         </section>
       )}
-      <p>
-        Drafts and plans move no stock. Completion consumes requirements and
-        receives usable output atomically.
-      </p>
-      {error && <p role="alert">{error}</p>}
-      <div className="button-row">
-        {!scheduled && (
-          <>
-            <button
-              type="button"
-              className="btn secondary"
-              disabled={busy || !p}
-              onClick={() => act('productionSave', 'draft')}
-            >
-              Save draft
-            </button>
-            <button
-              type="button"
-              className="btn"
-              disabled={busy || !!setupError || !result}
-              onClick={() =>
-                review ? act('productionSave', 'scheduled') : setReview(true)
-              }
-            >
-              {review ? 'Confirm plan' : 'Review requirements'}
-            </button>
-          </>
-        )}
-        {scheduled && (
+      {review && (
+        <section className="calculation-box" aria-label="Finalization review">
+          <h3>Finalization review</h3>
+          {lines.map((l) => (
+            <p key={l.id}>
+              {state.products.find((p) => p.id === l.productId)?.name}:{' '}
+              {l.output} good selling packages / finished units added ·{' '}
+              {l.waste || 0} rejected · estimated cost{' '}
+              {money(
+                calculation?.products.find((p) => p.line.id === l.id)
+                  ?.estimate || 0,
+              )}
+            </p>
+          ))}
+          <p>
+            The combined materials above are consumed once. No earlier inventory
+            movements exist for this run. Actual stock costs and the existing
+            line allocations lock together. Finalization records your identity
+            and time and makes this run read-only.
+          </p>
           <button
             type="button"
             className="btn"
-            disabled={
-              busy || !!setupError || !!costIncomplete || shortages.length > 0
-            }
+            disabled={busy}
             onClick={() => act('productionComplete')}
           >
-            {kit ? 'Confirm assembly' : 'Confirm production'}
+            Finalize run
           </button>
+        </section>
+      )}
+      {terminal && (
+        <>
+          <p>
+            {status === 'completed'
+              ? `Finalized ${finalRun?.completedAt || ''} by ${finalRun?.finalizedBy || 'recorded operator'}. Actual run cost: ${money(finalRun?.historicalCost || 0)}.`
+              : 'Cancelled. No stock was posted.'}
+          </p>
+          <p>
+            Posted quantities, usage and costs are read-only. Corrections use
+            linked adjustments. Handmade-only runs support whole-run reversal;
+            food and mixed runs require separately linked stock corrections.
+          </p>
+          {['Owner', 'Manager'].includes(role) && (
+            <button type="button" className="btn secondary" onClick={duplicate}>
+              Duplicate as new draft
+            </button>
+          )}
+        </>
+      )}
+      {status === 'completed' &&
+        ['Owner', 'Manager'].includes(role) &&
+        lines.every((l) => l.definition?.product?.workflow === 'handmade') && (
+          <section>
+            <label>
+              Reason for whole-run reversal
+              <input
+                value={reversalReason}
+                onChange={(e) => setReversalReason(e.target.value)}
+              />
+            </label>
+            <p>
+              Reversal removes all original output and restores recorded
+              materials. Later output movements block reversal. The finalized
+              record remains locked.
+            </p>
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={busy || !reversalReason.trim()}
+              onClick={() => act('productionReverse')}
+            >
+              Reverse production run
+            </button>
+          </section>
         )}
-        {run && (
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={busy}
-            onClick={() => act('productionCancel')}
-          >
-            Cancel run
-          </button>
-        )}
-      </div>
+      {!!finalRun?.auditTrail?.length && (
+        <details>
+          <summary>Run audit history</summary>
+          {finalRun.auditTrail.map((entry: Item, index: number) => (
+            <p key={index}>
+              {entry.at} · {entry.event} · {entry.actor}
+              {entry.revision ? ` · revision ${entry.revision}` : ''}
+            </p>
+          ))}
+        </details>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {!terminal && (
+        <div className="button-row">
+          {canEdit && (
+            <>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy || !lines.length}
+                onClick={() =>
+                  act(
+                    'productionSave',
+                    status === 'scheduled' ? 'scheduled' : 'draft',
+                  )
+                }
+              >
+                {status === 'scheduled' ? 'Save changes' : 'Save draft'}
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy || !!setupError || !lines.length}
+                onClick={() => act('productionSave', 'scheduled')}
+              >
+                Start run
+              </button>
+            </>
+          )}
+          {role === 'Production Staff' && canRecordActuals && (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => act('productionRecordActuals')}
+            >
+              Save actuals
+            </button>
+          )}
+          {canFinalize && (
+            <button
+              type="button"
+              className="btn"
+              disabled={
+                busy ||
+                dirty ||
+                !state.batches.some((b) => b.id === id) ||
+                !!setupError ||
+                !calculation?.costKnown ||
+                !!calculation.shortages.length ||
+                lines.some((l) => l.output == null || l.output === '')
+              }
+              onClick={() => setReview(true)}
+            >
+              Review finalization
+            </button>
+          )}
+          {canEdit && run && (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  window.confirm('Cancel this run? No stock has been posted.')
+                )
+                  void act('productionCancel')
+              }}
+            >
+              Cancel run
+            </button>
+          )}
+        </div>
+      )}
+      {!terminal && (
+        <p>
+          {dirty
+            ? 'Unsaved changes. Save before closing or reviewing finalization.'
+            : 'Save and close to continue editing later. Start run does not finalize or move stock.'}
+        </p>
+      )}
     </div>
   )
 }

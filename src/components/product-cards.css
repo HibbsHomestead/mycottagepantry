@@ -9,7 +9,10 @@
 
 /* Product-overview styles leave inventory cards, detail dialogs and editors alone. */
 .product-photo-grid.pantry-card-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: var(
+    --workspace-card-columns,
+    repeat(auto-fill, minmax(min(100%, 20rem), 1fr))
+  );
   gap: 24px;
 }
 
@@ -30,10 +33,10 @@
   display: flex;
   width: 100%;
   height: auto;
-  min-height: 200px;
+  min-height: 0;
   aspect-ratio: 4 / 3;
   border-radius: inherit;
-  background: var(--accent-soft);
+  background: transparent;
 }
 
 .product-card-photo-first .pantry-photo img {
@@ -139,13 +142,19 @@
 
 @media (max-width: 1200px) {
   .product-photo-grid.pantry-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: var(
+      --workspace-card-columns,
+      repeat(auto-fill, minmax(min(100%, 20rem), 1fr))
+    );
   }
 }
 
 @media (max-width: 640px) {
   .product-photo-grid.pantry-card-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: var(
+      --workspace-card-columns,
+      repeat(auto-fill, minmax(min(100%, 20rem), 1fr))
+    );
     gap: 16px;
   }
 }

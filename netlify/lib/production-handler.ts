@@ -12,6 +12,11 @@ import {
   productionRequirements,
   productionYieldConvert,
 } from '../../src/lib/production'
+import {
+  productionRunLines,
+  combinedProductionRequirements,
+} from '../../src/lib/production-run'
+import { workflowOf } from '../../src/lib/product-workflows'
 import { finishedMovement } from './product-workflow-handler'
 
 type Context = {
@@ -20,10 +25,11 @@ type Context = {
   today: string
   actor: string
   audit: (name: string, detail: string) => Promise<void>
+  assertProductAccess?: (product: Item) => void
 }
 const digest = (data: unknown) =>
   createHash('sha256').update(JSON.stringify(data)).digest('hex')
-export async function handleProduction(
+async function handleSingleProduction(
   action: string,
   table: string,
   data: Item,
@@ -449,6 +455,381 @@ export async function handleProduction(
   await ctx.audit(
     'Production completed',
     `${existing.name}: ${result.output} packages`,
+  )
+  return true
+}
+
+/** Product lines share the enclosing workspace transaction and tenant lock. The
+ * established single-product engine retains all unit, stock and costing rules. */
+export async function handleProduction(
+  action: string,
+  table: string,
+  data: Item,
+  ctx: Context,
+) {
+  const existing = ctx.state.batches.find((b) => b.id === data.id)
+  if (!Array.isArray(data.lines) && existing?.productionVersion !== 2)
+    return handleSingleProduction(action, table, data, ctx)
+  if (
+    ![
+      'productionSave',
+      'productionComplete',
+      'productionCancel',
+      'productionReverse',
+      'productionRecordActuals',
+    ].includes(action)
+  )
+    return false
+  if (table !== 'batches' || !/^[a-zA-Z0-9_-]{8,100}$/.test(data.id || ''))
+    throw new Error('A stable production run ID is required.')
+  if (existing && !existing.productionVersion)
+    throw new Error('Use the original workflow for this legacy recipe run.')
+  const revision = Number(existing?.revision || 0)
+  const completionHash = digest(['finalize', data.expectedRevision])
+  if (action === 'productionComplete' && existing?.status === 'completed') {
+    if (existing.completionHash === completionHash) return true
+    throw new Error(
+      'This run is finalized. Reopen it to view its recorded output.',
+    )
+  }
+  if (action === 'productionReverse') {
+    if (
+      !existing ||
+      existing.status !== 'completed' ||
+      productionRunLines(existing).some(
+        (l) => l.definition?.product?.workflow !== 'handmade',
+      )
+    )
+      throw new Error(
+        'Automatic reversal supports handmade-only runs. Food or mixed runs require separately linked authorized stock corrections.',
+      )
+    for (const line of productionRunLines(existing)) {
+      const childId = 'line-' + digest([existing.id, line.id]).slice(0, 40)
+      const child = {
+        ...line,
+        id: childId,
+        completedAt: existing.completedAt,
+        status: 'completed',
+        productionVersion: 1,
+      }
+      await handleSingleProduction(
+        action,
+        table,
+        { ...data, id: childId },
+        {
+          ...ctx,
+          state: { ...ctx.state, batches: [...ctx.state.batches, child] },
+          save: async (target, item) =>
+            ctx.save(target, {
+              ...item,
+              ...(['ledger', 'batch_usage'].includes(target)
+                ? { batchId: existing.id, productionLineId: line.id }
+                : {}),
+              ...(['ledger', 'journals'].includes(target)
+                ? { sourceId: existing.id, productionLineId: line.id }
+                : {}),
+            }),
+        },
+      )
+    }
+    await ctx.audit('Production reversed', existing.name + ': ' + data.reason)
+    return true
+  }
+  if (existing && ['completed', 'canceled'].includes(existing.status)) {
+    if (action === 'productionCancel' && existing.status === 'canceled')
+      return true
+    throw new Error('Finalized or cancelled runs are read-only.')
+  }
+  if (existing && data.expectedRevision !== revision)
+    throw new Error(
+      'This run changed in another session. Close and reopen it before saving; your changes have not overwritten it.',
+    )
+  if (action === 'productionRecordActuals') {
+    if (!existing || !Array.isArray(data.lines))
+      throw new Error('Choose a saved production run.')
+    const lines = productionRunLines(existing).map((line) => {
+      const input = data.lines.find((l: Item) => l.id === line.id)
+      if (!input) throw new Error('Reopen this run before recording actuals.')
+      return {
+        ...line,
+        output: input.output,
+        waste: input.waste,
+        wasteReason: input.wasteReason,
+        laborMinutes: input.laborMinutes,
+        usage: input.usage,
+        materialWaste: input.materialWaste,
+      }
+    })
+    return handleProduction(
+      'productionSave',
+      table,
+      { ...existing, lines, expectedRevision: revision },
+      ctx,
+    )
+  }
+  if (action === 'productionCancel') {
+    if (!existing) throw new Error('Run unavailable.')
+    await ctx.save('batches', {
+      ...existing,
+      status: 'canceled',
+      auditTrail: [
+        ...(existing.auditTrail || []),
+        { event: 'Cancelled', actor: ctx.actor, at: new Date().toISOString() },
+      ],
+      revision: revision + 1,
+    })
+    await ctx.audit('Production cancelled', existing.name)
+    return true
+  }
+  if (action === 'productionSave') {
+    if (!['draft', 'scheduled'].includes(data.status))
+      throw new Error('Choose Save draft or Start run.')
+    if (
+      !Array.isArray(data.lines) ||
+      !data.lines.length ||
+      data.lines.length > 100
+    )
+      throw new Error('Add between one and 100 products.')
+    const ids = new Set<string>()
+    const lines = data.lines.map((input: Item) => {
+      if (!/^[a-zA-Z0-9_-]{8,100}$/.test(input.id) || ids.has(input.id))
+        throw new Error(
+          'Each product line needs a unique reference. Reopen the run.',
+        )
+      ids.add(input.id)
+      const product = ctx.state.products.find(
+        (p) => p.id === input.productId && !p.archived,
+      )
+      if (!product)
+        throw new Error('Choose an active product from this business.')
+      if (!['food', 'handmade', 'kit'].includes(workflowOf(product)))
+        throw new Error(
+          'Receive resale products through stock receipts; they cannot be manufactured.',
+        )
+      ctx.assertProductAccess?.(product)
+      const quantity = number(input.quantity, 'Planned selling packages', 1)
+      if (!Number.isInteger(quantity))
+        throw new Error('Use whole selling packages.')
+      const prior = productionRunLines(existing).find((l) => l.id === input.id)
+      const sameSetup =
+        prior?.productId === input.productId &&
+        digest(prior?.mapping || {}) === digest(input.mapping || {})
+      let definition = sameSetup ? prior?.definition : undefined
+      // Drafts can retain incomplete setup. Starting/finalizing requires a valid definition.
+      if (!definition) {
+        try {
+          definition = productionDefinition(
+            product,
+            ctx.state,
+            input.mapping || {},
+          )
+        } catch (e) {
+          if (data.status !== 'draft') throw e
+        }
+      }
+      const actual = {
+        id: input.id,
+        name: product.name,
+        ...(input.output !== '' && input.output != null
+          ? { output: number(input.output, 'Actual good output', 1) }
+          : {}),
+        waste: number(input.waste || 0, 'Rejected output'),
+        wasteReason: String(input.wasteReason || '').slice(0, 2000),
+        ...(input.laborMinutes !== '' && input.laborMinutes != null
+          ? { laborMinutes: number(input.laborMinutes, 'Actual labor minutes') }
+          : {}),
+        usage: input.usage || {},
+        materialWaste: input.materialWaste || {},
+      }
+      if (definition)
+        productionRequirements(definition, quantity, actual as Item)
+      return {
+        productId: product.id,
+        quantity,
+        mapping: input.mapping || {},
+        definition,
+        ...actual,
+        note: String(input.note || '').slice(0, 2000),
+      }
+    })
+    for (const line of lines) {
+      try {
+        const estimate = combinedProductionRequirements(
+          [
+            {
+              ...line,
+              output: undefined,
+              waste: 0,
+              usage: {},
+              materialWaste: {},
+              laborMinutes: undefined,
+            },
+          ],
+          ctx.state,
+        )
+        Object.assign(line, {
+          estimatedCost: estimate.costKnown ? estimate.total : null,
+        })
+      } catch {
+        Object.assign(line, { estimatedCost: null })
+      }
+    }
+    const first = lines[0]
+    const legacyRunId = existing?.legacyRunId || data.legacyRunId
+    const legacy = legacyRunId
+      ? ctx.state.batches.find((b) => b.id === legacyRunId)
+      : undefined
+    if (
+      legacyRunId &&
+      (!legacy ||
+        legacy.productionVersion ||
+        (['completed', 'canceled'].includes(legacy.status) &&
+          legacy.replacementRunId !== data.id))
+    )
+      throw new Error(
+        'The original recipe plan is unavailable or already closed.',
+      )
+    await ctx.save('batches', {
+      ...existing,
+      id: data.id,
+      name: String(data.name || 'Production run').slice(0, 200),
+      estimatedCost: lines.every((l: Item) => l.estimatedCost != null)
+        ? lines.reduce((sum: number, l: Item) => sum + l.estimatedCost, 0)
+        : null,
+      auditTrail: [
+        ...(existing?.auditTrail || []),
+        {
+          event:
+            data.status === 'scheduled' ? 'Saved in progress' : 'Saved draft',
+          actor: ctx.actor,
+          at: new Date().toISOString(),
+          revision: revision + 1,
+        },
+      ],
+      productionVersion: 2,
+      revision: revision + 1,
+      lines,
+      legacyRunId,
+      productId: first.productId,
+      recipeId: first.definition?.recipe?.id || null,
+      quantity: lines.reduce((sum: number, l: Item) => sum + l.quantity, 0),
+      kind: 'manufacture',
+      status: data.status,
+      date: validateDate(data.date || ctx.today),
+      note: String(data.note || '').slice(0, 2000),
+      costingPolicy:
+        'Per-line existing recipe/BOM allocations; no additional shared run charges',
+    } as Item)
+    if (data.status === 'scheduled' && legacy && legacy.status !== 'canceled') {
+      await ctx.save('batches', {
+        ...legacy,
+        status: 'canceled',
+        replacementRunId: data.id,
+      })
+      await ctx.audit('Legacy plan replaced', legacy.name)
+    }
+    await ctx.audit(
+      'Production saved',
+      `${data.name || 'Production run'}: ${data.status}; ${lines.length} products; revision ${revision + 1}`,
+    )
+    return true
+  }
+  if (!existing) throw new Error('Save this run before finalizing.')
+  const lines = productionRunLines(existing)
+  for (const line of lines) {
+    const currentProduct = ctx.state.products.find(
+      (p) => p.id === line.productId,
+    )
+    if (!currentProduct) throw new Error('Output product unavailable.')
+    if (
+      currentProduct.archived ||
+      workflowOf(currentProduct) !==
+        workflowOf(line.definition?.product || currentProduct)
+    )
+      throw new Error(
+        `${currentProduct.name}: product setup changed. Review this line before finalizing.`,
+      )
+    ctx.assertProductAccess?.(currentProduct)
+    if (!line.definition)
+      throw new Error(
+        `${line.name}: complete the recipe/BOM setup before finalizing.`,
+      )
+    if (line.output == null || line.output === '')
+      throw new Error(
+        `${line.name}: record actual good output before finalizing.`,
+      )
+  }
+  // Check the aggregate against current stock before applying any product line.
+  combinedProductionRequirements(lines, ctx.state, true)
+  const completed: Item[] = []
+  for (const line of lines) {
+    const childId = 'line-' + digest([existing.id, line.id]).slice(0, 40)
+    const child = {
+      ...existing,
+      ...line,
+      id: childId,
+      productionVersion: 1,
+      status: 'scheduled',
+      lines: undefined,
+    }
+    const childState = { ...ctx.state, batches: [...ctx.state.batches, child] }
+    await handleSingleProduction(
+      'productionComplete',
+      'batches',
+      { ...line, id: childId } as Item,
+      {
+        ...ctx,
+        state: childState,
+        save: async (target, item) => {
+          if (target === 'batches') {
+            completed.push({
+              ...line,
+              ...item,
+              id: line.id,
+              runId: existing.id,
+              lines: undefined,
+            })
+            return
+          }
+          await ctx.save(target, {
+            ...item,
+            ...(['batch_usage', 'ledger'].includes(target)
+              ? { batchId: existing.id, productionLineId: line.id }
+              : {}),
+            ...(['ledger', 'journals'].includes(target)
+              ? { sourceId: existing.id, productionLineId: line.id }
+              : {}),
+          })
+        },
+      },
+    )
+  }
+  await ctx.save('batches', {
+    ...existing,
+    lines: completed,
+    status: 'completed',
+    completionHash,
+    revision: revision + 1,
+    completedAt: new Date().toISOString(),
+    finalizedBy: ctx.actor,
+    auditTrail: [
+      ...(existing.auditTrail || []),
+      {
+        event: 'Finalized',
+        actor: ctx.actor,
+        at: new Date().toISOString(),
+        revision: revision + 1,
+      },
+    ],
+    historicalCost: completed.reduce((sum, l) => sum + l.historicalCost, 0),
+    actualYield: completed.reduce((sum, l) => sum + l.actualYield, 0),
+    usage: completed.flatMap((l) =>
+      l.usage.map((u: Item) => ({ ...u, productionLineId: l.id })),
+    ),
+  })
+  await ctx.audit(
+    'Production finalized',
+    `${existing.name}: ${lines.length} products; all stock and costs posted`,
   )
   return true
 }

@@ -18,7 +18,10 @@
 }
 .pantry-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  grid-template-columns: var(
+    --workspace-card-columns,
+    repeat(auto-fill, minmax(min(100%, 20rem), 1fr))
+  );
   gap: 24px;
   align-items: stretch;
 }
@@ -118,7 +121,7 @@
   padding: 6px 12px;
   border-radius: 7px;
 }
-.pantry-view-toggle button[aria-pressed="true"] {
+.pantry-view-toggle button[aria-pressed='true'] {
   background: var(--accent-soft);
   color: var(--primary);
   font-weight: 700;
@@ -130,14 +133,8 @@
   width: 100%;
   height: 128px;
 }
-@media (min-width: 1500px) {
-  .pantry-card-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 @media (max-width: 640px) {
   .pantry-card-grid {
-    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
   .pantry-card-main,
@@ -241,19 +238,19 @@
   }
 }
 /* Letterboxing belongs to the card surface, never a decorative gray frame. */
-.app-shell .pantry-photo[data-photo-state="image"],
+.app-shell .pantry-photo[data-photo-state='image'],
 .app-shell .pantry-card-photo-button:has(img),
 .app-shell .pantry-card-photo-button:has(img):hover {
   background: transparent;
 }
-.app-shell .pantry-photo[data-photo-state="image"] img {
+.app-shell .pantry-photo[data-photo-state='image'] img {
   width: auto;
   height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
 }
-.pantry-photo[data-photo-state="missing"] {
+.pantry-photo[data-photo-state='missing'] {
   background: var(--surface-soft);
 }
 .app-shell .pantry-photo[data-photo-state='loading'] {

@@ -1,3 +1,4 @@
+import { planGateDecision } from '../lib/plan-feature-gates'
 import { prepareMockup } from '../lib/mockup-handler'
 import {
   consolidateCategories,
@@ -2514,6 +2515,7 @@ export default async (req: Request, context: Context) => {
         ![
           'complete',
           'productionComplete',
+          'productionRecordActuals',
           'receive',
           'adjust',
           'pantrySort',
@@ -2671,6 +2673,24 @@ export default async (req: Request, context: Context) => {
         await handleProduction(action, table, data, {
           ...stockContext(),
           audit,
+          assertProductAccess: (product) => {
+            if (
+              moduleAccess &&
+              !planGateDecision(moduleAccess, {
+                method: 'POST',
+                url: requestUrl,
+                body: {
+                  action,
+                  table: 'batches',
+                  data: { productId: product.id },
+                },
+                existing: product,
+              }).allowed
+            )
+              throw new Error(
+                `${product.name}: production is not included in this business’s current plan.`,
+              )
+          },
         })
       ) {
         // Product production and assembly post atomically under the workspace lock.

@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test'
+test.beforeEach(({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept())
+})
+import type { Item } from '../src/lib/domain'
 import { demoData } from '../src/lib/demo'
 import {
   installWorkspaceFixture,
@@ -56,14 +60,12 @@ for (const width of [390, 820, 1440])
       .getByRole('combobox', { name: 'Output unit', exact: true })
       .selectOption('each')
     await dialog.getByRole('checkbox').check()
-    await dialog.getByRole('button', { name: 'Review requirements' }).click()
     await expect(
-      dialog.getByRole('heading', { name: 'Production requirements' }),
+      dialog.getByRole('heading', { name: 'Combined material requirements' }),
     ).toBeVisible()
     await dialog
       .getByRole('combobox', { name: 'Product', exact: true })
       .selectOption('test-kit')
-    await dialog.getByRole('button', { name: 'Review requirements' }).click()
     await expect(
       dialog.getByText(
         'Uses existing finished stock. Component manufacturing is separate.',
@@ -184,9 +186,10 @@ test('all production entry points use the shared product workflow', async ({
       .getByRole('combobox', { name: 'Product', exact: true }),
   ).toHaveValue(kit.id)
   await expect(
-    page
-      .getByRole('dialog')
-      .getByRole('spinbutton', { name: 'Kits to assemble', exact: true }),
+    page.getByRole('dialog').getByRole('spinbutton', {
+      name: 'Planned selling packages / finished units',
+      exact: true,
+    }),
   ).toBeVisible()
 })
 
@@ -205,15 +208,19 @@ test('confirmed plan stays open for actual-output review and final production', 
       const body = r.request().postDataJSON()
       expect(body.action).toBe('productionSave')
       const product = workspace.products.find(
-        (p) => p.id === body.data.productId,
+        (p) => p.id === body.data.lines[0].productId,
       )!
       workspace.batches.push({
         ...body.data,
         name: product.name,
         status: 'scheduled',
-        productionVersion: 1,
+        productionVersion: 2,
+        revision: 1,
         recipeId: product.recipeId,
-        definition: productionDefinition(product, workspace, body.data.mapping),
+        lines: body.data.lines.map((l: Item) => ({
+          ...l,
+          definition: productionDefinition(product, workspace, l.mapping),
+        })),
       })
     }
     return r.fulfill({ json: { workspace, role: 'Owner', demo: false } })
@@ -237,22 +244,22 @@ test('confirmed plan stays open for actual-output review and final production', 
     .getByRole('combobox', { name: 'Output unit', exact: true })
     .selectOption('each')
   await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button', { name: 'Start run', exact: true }).click()
   await dialog
-    .getByRole('button', { name: 'Review requirements', exact: true })
-    .click()
-  await dialog
-    .getByRole('button', { name: 'Confirm plan', exact: true })
+    .locator('summary')
+    .filter({ hasText: 'Output, waste and notes' })
+    .first()
     .click()
   await expect(
     dialog.getByRole('spinbutton', {
-      name: 'Actual usable output (packages)',
+      name: 'Actual good output (selling packages / finished units)',
       exact: true,
     }),
   ).toBeVisible()
   await expect(
-    dialog.getByRole('button', { name: 'Confirm production', exact: true }),
+    dialog.getByRole('button', { name: 'Review finalization', exact: true }),
   ).toBeVisible()
   await expect(
     dialog.getByRole('combobox', { name: 'Product', exact: true }),
-  ).toBeDisabled()
+  ).toBeEnabled()
 })

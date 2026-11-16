@@ -1,0 +1,122 @@
+[
+  {
+    "viewport": 1366,
+    "columns": 2,
+    "gridWidth": 796,
+    "overflow": false
+  },
+  {
+    "viewport": 1366,
+    "scenario": "simulated collapsed sidebar",
+    "columns": 2
+  },
+  {
+    "viewport": 1366,
+    "scenario": "simulated internal menu absent",
+    "columns": 2
+  },
+  {
+    "viewport": 1366,
+    "scenario": "simulated collapsed sidebar and internal menu absent",
+    "columns": 3
+  },
+  {
+    "viewport": 1440,
+    "columns": 2,
+    "gridWidth": 870,
+    "overflow": false
+  },
+  {
+    "viewport": 1440,
+    "scenario": "simulated collapsed sidebar",
+    "columns": 3
+  },
+  {
+    "viewport": 1440,
+    "scenario": "simulated internal menu absent",
+    "columns": 3
+  },
+  {
+    "viewport": 1440,
+    "scenario": "simulated collapsed sidebar and internal menu absent",
+    "columns": 3
+  },
+  {
+    "viewport": 1920,
+    "columns": 3,
+    "gridWidth": 1350,
+    "overflow": false
+  },
+  {
+    "viewport": 1920,
+    "scenario": "simulated collapsed sidebar",
+    "columns": 4
+  },
+  {
+    "viewport": 1920,
+    "scenario": "simulated internal menu absent",
+    "columns": 4
+  },
+  {
+    "viewport": 1920,
+    "scenario": "simulated collapsed sidebar and internal menu absent",
+    "columns": 5
+  },
+  {
+    "viewport": 2560,
+    "columns": 5,
+    "gridWidth": 1990,
+    "overflow": false
+  },
+  {
+    "viewport": 2560,
+    "scenario": "simulated collapsed sidebar",
+    "columns": 6
+  },
+  {
+    "viewport": 2560,
+    "scenario": "simulated internal menu absent",
+    "columns": 6
+  },
+  {
+    "viewport": 2560,
+    "scenario": "simulated collapsed sidebar and internal menu absent",
+    "columns": 6
+  },
+  {
+    "viewport": 390,
+    "columns": 1,
+    "gridWidth": 358,
+    "overflow": false
+  },
+  {
+    "scenario": "simulated collapsed main sidebar",
+    "viewport": 2560,
+    "columns": 6
+  },
+  {
+    "scenario": "simulated collapsed main sidebar, internal menu absent",
+    "viewport": 2560,
+    "columns": 6
+  },
+  {
+    "zoom": "200% equivalent reflow",
+    "effectiveViewport": 683,
+    "columns": 1
+  },
+  {
+    "zoom": "200% equivalent reflow",
+    "effectiveViewport": 720,
+    "columns": 1
+  },
+  {
+    "zoom": "200% equivalent reflow",
+    "effectiveViewport": 960,
+    "columns": 2
+  },
+  {
+    "zoom": "200% equivalent reflow",
+    "effectiveViewport": 1280,
+    "columns": 2
+  }
+]
