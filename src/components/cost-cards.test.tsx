@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { IngredientCostCards } from './ingredient-cost-cards'
 import { ProductCostCards } from './product-cost-cards'
 import { costMoney } from './cost-cards'
@@ -97,7 +97,11 @@ it.each(['inclusive', 'exclusive'] as const)(
         active: true,
       },
     ]
-    const product = { ...workspace.products[0], taxRateIds: ['tax'], price: 10 }
+    const product = {
+      ...workspace.products[0],
+      taxRateIds: ['tax'],
+      price: 10,
+    }
     const original = JSON.stringify({ product, workspace })
     const cost = productCosting(product, workspace).perPackage
     const pricing = profitability(product, cost, workspace.settings[0])
@@ -132,18 +136,93 @@ it.each(['inclusive', 'exclusive'] as const)(
 )
 
 it('keeps known package and saved costs readable while the inventory relationship is missing', () => {
-  render(<IngredientCostCards ingredient={{
-    id: 'pumpkin', name: 'Pumpkin', unit: 'each', storageUnit: 'can', recipeUnit: 'can',
-    quantity: 7, cost: 1.25, currentCost: 1.5, purchaseQuantity: 1,
-    purchaseUnit: 'can', packagePrice: 3, conversions: [],
-  }} />)
+  render(
+    <IngredientCostCards
+      ingredient={{
+        id: 'pumpkin',
+        name: 'Pumpkin',
+        unit: 'each',
+        storageUnit: 'can',
+        recipeUnit: 'can',
+        quantity: 7,
+        cost: 1.25,
+        currentCost: 1.5,
+        purchaseQuantity: 1,
+        purchaseUnit: 'can',
+        packagePrice: 3,
+        conversions: [],
+      }}
+    />,
+  )
   expect(screen.getByText('7 each')).toBeVisible()
   expect(screen.getByText('$1.50 / each')).toBeVisible()
   expect(screen.getByText('$3.00 / can')).toBeVisible()
   expect(screen.getByText('Conversion required')).toBeVisible()
 })
 it('propagates unsupported-unit errors instead of labeling them a missing relationship', () => {
-  expect(() => render(<IngredientCostCards ingredient={{
-    id: 'invalid', name: 'Invalid fixture', unit: 'unsupported', storageUnit: 'can', conversions: [],
-  }} />)).toThrow('Choose a supported unit')
+  expect(() =>
+    render(
+      <IngredientCostCards
+        ingredient={{
+          id: 'invalid',
+          name: 'Invalid fixture',
+          unit: 'unsupported',
+          storageUnit: 'can',
+          conversions: [],
+        }}
+      />,
+    ),
+  ).toThrow('Choose a supported unit')
 })
+
+it.each([true, false])(
+  'retains reliable product costs and stored price basis when category tax is unresolved (can configure: %s)',
+  (authorized) => {
+    const workspace = demoData()
+    workspace.settings[0].productCategories = [
+      { id: 'craft', name: 'Craft', classification: 'non_food' },
+    ]
+    workspace.settings[0].categoryTaxMappings = { non_food: [] }
+    const product = {
+      ...workspace.products[0],
+      taxSource: 'category',
+      productCategoryId: 'craft',
+      price: 27,
+      priceTaxMode: 'includes',
+    }
+    const before = JSON.stringify(workspace)
+    const review = vi.fn()
+    render(
+      <ProductCostCards
+        product={product}
+        cost={3}
+        workspace={workspace}
+        onReviewTax={authorized ? review : undefined}
+      />,
+    )
+    expect(screen.getByText('Tax setup needs attention')).toBeVisible()
+    expect(screen.getByText('Cost to make')).toBeVisible()
+    expect(screen.getByText('Packaging', { exact: true })).toBeVisible()
+    expect(screen.getByText('Labor', { exact: true })).toBeVisible()
+    expect(screen.getByText('Saved price · includes tax')).toBeVisible()
+    expect(
+      screen.queryByText('Gross profit', { exact: true }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Suggested selling price', { exact: true }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/No configured category tax/),
+    ).not.toBeInTheDocument()
+    if (authorized) {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Review tax settings' }),
+      )
+      expect(review).toHaveBeenCalledOnce()
+    } else
+      expect(
+        screen.queryByRole('button', { name: 'Review tax settings' }),
+      ).not.toBeInTheDocument()
+    expect(JSON.stringify(workspace)).toBe(before)
+  },
+)

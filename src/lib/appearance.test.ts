@@ -23,12 +23,14 @@ const contrast = (a: string, b: string) => {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
 describe('oven appearance', () => {
-  it('keeps light page and content surfaces cool and neutral for every accent', () => {
+  it('coordinates warm surfaces and atmospheric glows for every accent', () => {
     for (const theme of accentThemes) {
       const v = appearanceVariables({ theme: theme.id, mode: 'light' })
-      expect(v['--background']).toBe('#f5f6fa')
-      expect(v['--card']).toBe('#ffffff')
-      expect(v['--surface-soft']).toBe('#f0f2f7')
+      expect(v['--background']).toBe('#fcfaf8')
+      expect(v['--background-glow']).not.toBe(v['--background'])
+      expect(v['--background-edge']).not.toBe(v['--background-glow'])
+      expect(v['--card']).toBe('#fffefd')
+      expect(v['--surface-soft']).not.toBe(v['--card'])
     }
   })
   for (const theme of accentThemes)
@@ -204,4 +206,13 @@ it('uses sampled logo purple before mount while preserving explicitly saved pale
   expect(document.documentElement.style.getPropertyValue('--primary')).toBe(
     '#742b60',
   )
+})
+
+it('keeps the business startup hint out of platform administration', () => {
+  const storage = { getItem: () => JSON.stringify({ theme: 'orchard', mode: 'dark' }) }
+  for (const pathname of ['/admin', '/platform-support']) {
+    new Function('localStorage', 'window', appearanceBootScript())(storage, { location: { pathname } })
+    expect(document.documentElement.dataset.mode).toBe('light')
+    expect(document.documentElement.style.getPropertyValue('--primary')).toBe('#5c3a83')
+  }
 })

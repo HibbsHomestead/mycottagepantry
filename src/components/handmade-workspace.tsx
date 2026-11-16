@@ -1,3 +1,4 @@
+import { ProductMockups } from './product-mockup'
 import { PageOverview, PageActions } from './application-page'
 import {
   ScopedCategorySelect,
@@ -183,6 +184,7 @@ export function HandmadeWorkspace({
               product={product}
               w={w}
               manage={manage}
+              onWorkspace={onWorkspace}
               open={(kind, item) => {
                 go()
                 open(kind, item)
@@ -1206,7 +1208,7 @@ export function HandmadeProductEditor({
   )
 }
 
-import { profitability } from '../lib/domain'
+import { profitability, applicableTaxes } from '../lib/domain'
 function HandmadeMargin({
   product,
   unitCost,
@@ -1242,12 +1244,14 @@ function HandmadeProductDetail({
   product: p,
   w,
   manage,
+  onWorkspace,
   open,
   edit,
 }: {
   product: Item
   w: Workspace
   manage: boolean
+  onWorkspace: Props['onWorkspace']
   open: Props['open']
   edit: (tab: string) => void
 }) {
@@ -1373,7 +1377,18 @@ function HandmadeProductDetail({
             </button>
           </div>
         )}
-        <HandmadeCostCards product={p} cost={cost} w={w} />
+        <ProductMockups
+          productId={p.id}
+          assets={w.graphic_assets || []}
+          canEdit={manage}
+          onWorkspace={onWorkspace}
+        />
+        <HandmadeCostCards
+          product={p}
+          cost={cost}
+          w={w}
+          canConfigure={manage}
+        />
         {(!p.bom || reason) && (
           <details className="calculation-box">
             <summary>
@@ -1546,10 +1561,12 @@ function HandmadeCostCards({
   product,
   cost,
   w,
+  canConfigure,
 }: {
   product: Item
   cost?: ReturnType<typeof handmadeEstimate>
   w: Workspace
+  canConfigure: boolean
 }) {
   let pricing: ReturnType<typeof profitability> | undefined
   let pricingReason = ''
@@ -1564,9 +1581,32 @@ function HandmadeCostCards({
       pricingReason = (e as Error).message
     }
   }
+  let taxIssue = false
+  try {
+    applicableTaxes(product, w.settings[0])
+  } catch {
+    taxIssue = true
+  }
+  if (taxIssue) pricingReason = 'Needs tax setup'
   const target = Number(product.targetMargin ?? 65)
   return (
     <div className="pricing-summary cost-summary">
+      {taxIssue && (
+        <div className="notice warning" role="status">
+          <strong>Tax setup needs attention</strong>
+          <p>
+            We can show your product costs, but some pricing totals need a tax
+            setting.
+          </p>
+          {canConfigure ? (
+            <a className="text-button" href="/oven#Settings/Taxes">
+              Review tax settings
+            </a>
+          ) : (
+            <p>Ask an Owner or Manager to review tax settings.</p>
+          )}
+        </div>
+      )}
       <div
         className="cost-card-grid cost-breakdown-grid"
         aria-label="Estimated cost breakdown per production run"
@@ -1613,7 +1653,13 @@ function HandmadeCostCards({
         <CostCard
           label="Selling price"
           value={missingPrice ? 'Price missing' : money(product.price)}
-          note="Saved selling price"
+          note={
+            product.priceTaxMode === 'includes'
+              ? 'Saved price · includes tax'
+              : product.priceTaxMode === 'before'
+                ? 'Saved price · before tax'
+                : 'Saved price · per-rate tax behaviors'
+          }
           tone="blue"
         />
         <CostCard

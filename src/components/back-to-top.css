@@ -11,18 +11,18 @@
   padding: 0;
   display: grid;
   place-items: center;
-  border: 1px solid #5d3f76;
+  border: 1px solid var(--primary);
   border-radius: 50%;
-  background: #705287;
-  color: white;
-  box-shadow: 0 2px 7px #30253825;
+  background: var(--primary);
+  color: var(--primary-ink);
+  box-shadow: var(--shadow-panel);
   cursor: pointer;
 }
 .back-to-top[hidden] {
   display: none;
 }
 .back-to-top:focus-visible {
-  outline: 3px solid #b29ac5;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .back-to-top-dock {

@@ -164,3 +164,15 @@ it('retains explicit sale-level rate overrides without altering product inherita
     'city',
   ])
 })
+
+it('includes both effective-date boundaries and rejects the adjacent dates without assuming exemption', () => {
+  const configured = {
+    ...business,
+    categoryTaxMappings: { food: ['state'] },
+    taxRates: [{ ...rate, start: '2026-11-15', end: '2026-11-16' }],
+  }
+  expect(applicableTaxes(product, configured, '2026-11-15')).toHaveLength(1)
+  expect(applicableTaxes(product, configured, '2026-11-16')).toHaveLength(1)
+  for (const date of ['2026-11-14', '2026-11-17'])
+    expect(() => applicableTaxes(product, configured, date)).toThrow(/not tax exempt/)
+})

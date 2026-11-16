@@ -110,11 +110,27 @@ export function appearanceVariables(
     '--focus-ring': dark ? t.dark : t.primary,
     '--primary-ink': dark ? '#211b24' : '#ffffff',
     '--accent-soft': dark ? mixColor(t.primary, '#22252c', 0.78) : t.accent,
-    '--background': dark ? '#17191e' : t.background,
+    '--background': dark ? '#17191e' : '#fcfaf8',
+    '--background-glow': mixColor(
+      t.primary,
+      dark ? '#17191e' : '#fcfaf8',
+      dark ? 0.82 : 0.88,
+    ),
+    '--background-edge': mixColor(
+      t.primary,
+      dark ? '#17191e' : '#fcfaf8',
+      dark ? 0.91 : 0.95,
+    ),
+    '--shadow-panel': `0 2px 12px ${mixColor(t.primary, dark ? '#17191e' : '#fcfaf8', 0.8)}33`,
+    '--shadow-dialog': '0 18px 56px #17191e33',
     '--foreground': dark ? '#f2f1f6' : '#111827',
-    '--card': dark ? '#22252c' : '#ffffff',
-    '--surface-soft': dark ? '#2b2e36' : '#f1f5f9',
-    '--border': dark ? '#424650' : '#e2e8f0',
+    '--card': dark ? '#22252c' : '#fffefd',
+    '--surface-soft': dark ? '#2b2e36' : mixColor(t.primary, '#fffefd', 0.96),
+    '--border': mixColor(
+      t.primary,
+      dark ? '#424650' : '#fffefd',
+      dark ? 0.85 : 0.83,
+    ),
     '--muted': dark ? '#b9bdc9' : '#475569',
     '--success': dark ? '#a4e7bd' : '#226342',
     '--success-bg': dark ? '#203e31' : '#edf6f2',
@@ -182,5 +198,5 @@ export function appearanceBootScript() {
       },
     ]),
   )
-  return `(()=>{var palettes=${JSON.stringify(palettes)},a=${JSON.stringify(defaultAppearance)};try{var saved=JSON.parse(localStorage.getItem('${appearanceCacheKey}')||'null');if(saved&&Object.hasOwn(palettes,saved.theme)&&['light','dark','system'].includes(saved.mode))a=saved}catch{}var dark=a.mode==='dark'||(a.mode==='system'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches),r=document.documentElement;Object.entries(palettes[a.theme][dark?'dark':'light']).forEach(([k,v])=>r.style.setProperty(k,v));r.dataset.mode=dark?'dark':'light';r.classList.toggle('dark',!!dark);r.style.colorScheme=dark?'dark':'light'})()`
+  return `(()=>{var palettes=${JSON.stringify(palettes)},a=${JSON.stringify(defaultAppearance)};try{var saved=JSON.parse(localStorage.getItem('${appearanceCacheKey}')||'null');if(!(window.location?.hostname==='admin.mycottagepantry.com'||window.location?.pathname==='/platform-support'||window.location?.pathname==='/admin'||(window.location?.pathname||'').startsWith('/admin/'))&&saved&&Object.hasOwn(palettes,saved.theme)&&['light','dark','system'].includes(saved.mode))a=saved}catch{}var dark=a.mode==='dark'||(a.mode==='system'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches),r=document.documentElement;Object.entries(palettes[a.theme][dark?'dark':'light']).forEach(([k,v])=>r.style.setProperty(k,v));r.dataset.mode=dark?'dark':'light';r.classList.toggle('dark',!!dark);r.style.colorScheme=dark?'dark':'light'})()`
 }

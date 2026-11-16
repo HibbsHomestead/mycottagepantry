@@ -44,12 +44,22 @@
   --icon-text-gap: 16px;
   --action-gap: 12px;
   --section-gap: 24px;
-  --background: #f8fafc;
+  --background: #fcfaf8;
+  --background-glow: #e9e3ee;
+  --background-edge: #f4f0f4;
+  --page-atmosphere:
+    radial-gradient(ellipse at 0% 0%, var(--background-glow), transparent 55%),
+    radial-gradient(
+      ellipse at 100% 100%,
+      var(--background-edge),
+      transparent 60%
+    );
   --foreground: #111827;
   --card: #ffffff;
   --surface-soft: #f1f5f9;
   --primary: #5c3a83;
   --primary-ink: #ffffff;
+  --primary-foreground: var(--primary-ink);
   --primary-hover: #4d316e;
   --primary-pressed: #452c62;
   --accent-soft: #f0edf4;
@@ -89,7 +99,8 @@ body {
   font-family: var(--font-body);
   font-size: max(var(--interface-body-min, 0px), 13px);
   color: var(--foreground);
-  background: var(--background);
+  background: var(--page-atmosphere), var(--background);
+  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -3636,4 +3647,19 @@ main > .recipe-grid {
 .product-card-photo-first .pantry-card-photo-button .pantry-photo:has(img),
 .app-shell .pantry-photo.photo-box:has(img) {
   background: transparent;
+}
+
+/* Source photos and artwork retain their original colors. */
+.item-detail-dialog .product-detail-photo.pantry-photo[data-photo-state='missing'] {
+  min-height: 0;
+  height: auto;
+  aspect-ratio: auto;
+  padding: 16px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+  font-size: var(--text-body);
 }

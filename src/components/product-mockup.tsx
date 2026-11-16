@@ -916,6 +916,13 @@ function MockupEditor({
               {n('Export width (pixels)', exportWidth, (v) =>
                 setExportWidth(v),
               )}
+              <p className="form-hint">
+                {base
+                  ? `Export: ${exportWidth} × ${Math.round((exportWidth * base.height) / base.width)} pixels. `
+                  : ''}
+                Maximum 6000 pixels wide and 24 megapixels. PNG/JPG mockup
+                image; original artwork stays unchanged.
+              </p>
               <label className="field">
                 <span>JPG background (required)</span>
                 <input

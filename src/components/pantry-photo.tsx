@@ -83,10 +83,15 @@ export function PantryPhoto({
           label={`${category?.name || 'Uncategorized'} recipe icon for ${item.name}`}
         />
       ) : (
-        <Icon
-          aria-label={`${kind !== 'pantry' ? kind : isPackaging(item) ? 'packaging' : item.usedAs || 'ingredient'} icon for ${item.name}`}
-          size={28}
-        />
+        <>
+          <Icon
+            aria-label={`${kind !== 'pantry' ? kind : isPackaging(item) ? 'packaging' : item.usedAs || 'ingredient'} icon for ${item.name}`}
+            size={28}
+          />
+          {kind === 'product' && className.includes('detail-photo') && (
+            <span>No product image yet</span>
+          )}
+        </>
       )}
     </span>
   )

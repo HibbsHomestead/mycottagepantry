@@ -1,16 +1,15 @@
 .cp-admin {
-  --admin-purple: #7352b6;
-  --admin-ink: #252a38;
-  --admin-muted: #72798a;
-  --admin-line: #e6e8ef;
+  --admin-purple: var(--primary);
+  --admin-ink: var(--foreground);
+  --admin-muted: var(--muted);
+  --admin-line: var(--border);
   min-height: 100dvh;
-  background: #f5f6fa;
+  background: var(--page-atmosphere), var(--background);
   color: var(--admin-ink);
   font-family: var(--font-body);
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   font-size: max(var(--interface-body-min, 0px), 14px);
-  color-scheme: light;
 }
 .cp-admin * {
   box-sizing: border-box;
@@ -59,7 +58,7 @@
   opacity: 0.55;
 }
 .cp-admin :is(a, button, input):focus-visible {
-  outline: 3px solid #bda8e5;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 .cp-admin small {
@@ -76,7 +75,7 @@
   top: 0;
   height: 100dvh;
   padding: 30px 14px 18px;
-  background: #fff;
+  background: var(--card);
   border-right: 1px solid var(--admin-line);
   display: flex;
   flex-direction: column;
@@ -134,8 +133,8 @@
   text-decoration: none;
 }
 .cp-admin .admin-sidebar nav a[aria-current='page'] {
-  background: #eee8f8;
-  color: #6844aa;
+  background: var(--accent-soft);
+  color: var(--primary);
 }
 .admin-sidebar-footer {
   margin-top: auto;
@@ -155,7 +154,7 @@
 }
 .admin-topbar {
   min-height: 70px;
-  background: #ffffff;
+  background: var(--card);
   border-bottom: 1px solid var(--admin-line);
   display: flex;
   align-items: center;
@@ -226,15 +225,15 @@
 }
 .cp-admin .admin-primary {
   background: var(--admin-purple);
-  color: #fff;
+  color: var(--primary-ink);
 }
 .cp-admin .admin-primary:hover {
-  background: #62429f;
+  background: var(--primary-hover);
 }
 .cp-admin .admin-secondary {
   border-color: var(--admin-line);
-  background: #fff;
-  color: #606878;
+  background: var(--card);
+  color: var(--muted);
 }
 .admin-badge {
   display: inline-flex;
@@ -249,7 +248,8 @@
   white-space: normal;
 }
 .admin-panel {
-  background: #fff;
+  box-shadow: var(--shadow-panel);
+  background: var(--card);
   border: 1px solid var(--admin-line);
   border-radius: 10px;
   padding: 23px;
@@ -301,7 +301,7 @@
   padding: 20px 20px 18px;
   border-radius: 9px;
   border: 1px solid var(--admin-line);
-  background: #fff;
+  background: var(--card);
 }
 .admin-metric p {
   color: #717889;
@@ -453,7 +453,7 @@
   gap: 8px;
 }
 .cp-admin input:not([type='checkbox']):not([type='radio']) {
-  background: #fff;
+  background: var(--card);
   border: 1px solid #dce0e9;
   border-radius: 6px;
   padding: 11px 12px;
@@ -534,7 +534,7 @@
 .admin-template-list button {
   text-align: left;
   border: 1px solid var(--admin-line);
-  background: #fff;
+  background: var(--card);
   border-radius: 7px;
   padding: 13px;
   font-size: max(var(--interface-text-min, 0px), 12px);
@@ -559,7 +559,7 @@
 .admin-template-preview svg {
   max-height: 420px;
   max-width: 100%;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 5px 24px #252b3810;
 }
 .admin-template-preview p {
@@ -592,7 +592,7 @@
 }
 .admin-loading {
   padding: 45px 24px;
-  background: #fff;
+  background: var(--card);
   border-radius: 8px;
   border: 1px solid var(--admin-line);
   font-size: max(var(--interface-text-min, 0px), 12px);
@@ -607,7 +607,7 @@
   margin-bottom: 14px;
 }
 .admin-auth {
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--admin-line);
   border-radius: 13px;
   max-width: 540px;
@@ -942,7 +942,7 @@
   padding: 10px;
   border: 1px solid #d8cfe5;
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   color: #30233e;
 }
 .stripe-settings details {
