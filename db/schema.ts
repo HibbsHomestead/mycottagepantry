@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  type AnyPgColumn,
   check,
   pgTable,
   primaryKey,
@@ -1368,4 +1369,65 @@ export const subscriptionExpensePayments = pgTable(
       sql`${t.environment} IN ('test','live')`,
     ),
   ],
+)
+
+// Event relationships reference existing records; they never post stock or money.
+export const events = orgTable('events')
+const eventLink = (
+  name: string,
+  target: { businessId: AnyPgColumn; id: AnyPgColumn },
+  column: string,
+  exclusive = false,
+) =>
+  pgTable(
+    name,
+    {
+      ...base(),
+      eventId: text('event_id').notNull(),
+      recordId: text(column).notNull(),
+    },
+    (t) => [
+      uniqueIndex(`${name}_org_id`).on(t.businessId, t.id),
+      uniqueIndex(`${name}_pair`).on(t.businessId, t.eventId, t.recordId),
+      ...(exclusive
+        ? [uniqueIndex(`${name}_exclusive`).on(t.businessId, t.recordId)]
+        : []),
+      foreignKey({
+        columns: [t.businessId, t.eventId],
+        foreignColumns: [events.businessId, events.id],
+      }),
+      foreignKey({
+        columns: [t.businessId, t.recordId],
+        foreignColumns: [target.businessId, target.id],
+      }),
+    ],
+  )
+export const eventBatchLinks = eventLink(
+  'event_batch_links',
+  batches,
+  'batch_id',
+)
+export const eventSaleLinks = eventLink(
+  'event_sale_links',
+  sales,
+  'sale_id',
+  true,
+)
+export const eventExpenseLinks = eventLink(
+  'event_expense_links',
+  expenses,
+  'expense_id',
+  true,
+)
+export const eventPickups = eventLink(
+  'event_pickups',
+  financeTransactions,
+  'invoice_id',
+  true,
+)
+export const eventFinanceExpenseLinks = eventLink(
+  'event_finance_expense_links',
+  financeTransactions,
+  'expense_id',
+  true,
 )

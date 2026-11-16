@@ -1,3 +1,5 @@
+import { handleEvent } from '../lib/events-handler'
+import { eventTables, validateAllocations } from '../../src/lib/events'
 import { planGateDecision } from '../lib/plan-feature-gates'
 import { prepareMockup } from '../lib/mockup-handler'
 import {
@@ -215,6 +217,7 @@ import {
 } from '../../src/lib/domain'
 import type { Item, Workspace } from '../../src/lib/domain'
 const tables = [
+  ...eventTables,
   ...financeTables,
   'lots',
   'inventory_counts',
@@ -590,12 +593,22 @@ export default async (req: Request, context: Context) => {
         workspace = { ...workspace }
         for (const table of [
           ...financeTables,
+          'event_sale_links',
+          'event_expense_links',
+          'event_finance_expense_links',
+          'event_pickups',
           'accounts',
           'journals',
           'sales',
           'expenses',
         ])
           workspace[table] = []
+        workspace.events = (workspace.events || []).map((event) => {
+          const view = { ...event }
+          delete view.budget
+          delete view.plannedRevenue
+          return view
+        })
         workspace.settings = workspace.settings.map((s) => {
           const view = { ...s }
           delete view.bookkeeping
@@ -2486,6 +2499,8 @@ export default async (req: Request, context: Context) => {
     }
     if (req.method === 'POST') {
       const { action, table, data } = await req.json()
+      if (eventTables.includes(table) && !String(action).startsWith('event'))
+        throw new Error('Use the event workflow for event records.')
       if (table === 'batch_usage')
         throw new Error('Production usage is written only by completion.')
       if (
@@ -2598,7 +2613,9 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Produce component products separately; kit production is unavailable.',
         )
-      if (action === 'inventoryMarkReviewed') {
+      if (String(action).startsWith('event')) {
+        await handleEvent(action, data, { client, org, role, state, audit })
+      } else if (action === 'inventoryMarkReviewed') {
         if (table !== 'ingredients')
           throw new Error('Choose an inventory item from this oven.')
         const existing = state.ingredients.find((item) => item.id === data.id)
@@ -5300,6 +5317,17 @@ export default async (req: Request, context: Context) => {
         r.added_at ? { ...r.data, addedAt: r.added_at } : r.data,
       )
     }
+    if (req.method === 'POST')
+      for (const link of result.event_batch_links || []) {
+        const batch = result.batches.find((b) => b.id === link.recordId)
+        if (batch)
+          validateAllocations(
+            link.eventId,
+            batch,
+            link.allocations || [],
+            result,
+          )
+      }
     if (!metadataOnly) rollup(result)
     if (!metadataOnly)
       for (const i of result.ingredients.filter((i) => i.compoundRecipeId))

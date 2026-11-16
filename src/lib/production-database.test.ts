@@ -1207,3 +1207,159 @@ it('handmade-only multi-line reversals restore posted usage once without unlocki
     reversed.ledger,
   )
 })
+
+it('connects events to existing production and separates sales attribution from invoice pickups without changing stock or posted history', async () => {
+  session.user = 'production-owner-a'
+  let w = await ok()
+  const day = '2026-11-16'
+  for (const [index, type] of [
+    'Market / sale event',
+    'Pickup day',
+    'Other event',
+  ].entries()) {
+    w = await ok('eventSave', 'events', {
+      id: `event-acceptance-${index}`,
+      name: `Acceptance ${type}`,
+      type,
+      status: 'Scheduled',
+      allDay: true,
+      startDate: day,
+      endDate: '2026-11-17',
+      budget: 60,
+      plannedRevenue: 150,
+    })
+    expect(
+      w.events.find((e: Item) => e.id === `event-acceptance-${index}`).timezone,
+    ).toBe('America/Chicago')
+  }
+  const product = w.products[0]
+  for (const id of ['event-run-one', 'event-run-two'])
+    await db.query(
+      'INSERT INTO batches(id,business_id,data,product_id) VALUES($1,$2,$3,$4)',
+      [
+        id,
+        a,
+        JSON.stringify({
+          id,
+          name: id,
+          status: 'draft',
+          productionVersion: 2,
+          date: day,
+          lines: [{ id: 'line', productId: product.id, quantity: 10 }],
+        }),
+        product.id,
+      ],
+    )
+  await db.query(
+    'INSERT INTO finance_transactions(id,business_id,data) VALUES($1,$2,$3)',
+    [
+      'event-invoice',
+      a,
+      JSON.stringify({
+        id: 'event-invoice',
+        name: 'Invoice for pickup',
+        kind: 'invoice',
+        amount: 100,
+        paid: 25,
+        status: 'posted',
+        date: day,
+      }),
+    ],
+  )
+  const before = await ok()
+  const financialTables = [
+    'ingredients',
+    'products',
+    'batches',
+    'sales',
+    'expenses',
+    'ledger',
+    'journals',
+    'orders',
+    'finance_transactions',
+  ]
+  for (const recordId of ['event-run-one', 'event-run-two'])
+    w = await ok('eventLink', 'events', {
+      eventId: 'event-acceptance-0',
+      kind: 'batch',
+      recordId,
+      allocations: [{ lineId: 'line', productId: product.id, quantity: 8 }],
+    })
+  expect(
+    w.event_batch_links.filter((l: Item) => l.eventId === 'event-acceptance-0'),
+  ).toHaveLength(2)
+  expect(
+    (
+      await call('eventLink', 'events', {
+        eventId: 'event-acceptance-1',
+        kind: 'batch',
+        recordId: 'event-run-one',
+        allocations: [{ lineId: 'line', productId: product.id, quantity: 3 }],
+      })
+    ).status,
+  ).toBe(400)
+  w = await ok('eventLink', 'events', {
+    eventId: 'event-acceptance-1',
+    kind: 'batch',
+    recordId: 'event-run-one',
+    allocations: [{ lineId: 'line', productId: product.id, quantity: 2 }],
+  })
+  const sale = w.sales.find((s: Item) => !s.refundOf)!
+  w = await ok('eventLink', 'events', {
+    eventId: 'event-acceptance-0',
+    kind: 'sale',
+    recordId: sale.id,
+  })
+  expect(
+    (
+      await call('eventLink', 'events', {
+        eventId: 'event-acceptance-1',
+        kind: 'sale',
+        recordId: sale.id,
+      })
+    ).status,
+  ).toBe(400)
+  w = await ok('eventLink', 'events', {
+    eventId: 'event-acceptance-1',
+    kind: 'pickup',
+    recordId: 'event-invoice',
+    pickupStatus: 'Awaiting pickup',
+  })
+  w = await ok('eventLink', 'events', {
+    eventId: 'event-acceptance-1',
+    kind: 'pickup',
+    recordId: 'event-invoice',
+    pickupStatus: 'Picked up',
+  })
+  expect(w.event_pickups[0].pickedUpAt).toBeTruthy()
+  const event = w.events.find((e: Item) => e.id === 'event-acceptance-0')
+  w = await ok('eventSave', 'events', {
+    ...event,
+    expectedRevision: event.revision,
+    status: 'Cancelled',
+  })
+  for (const table of financialTables)
+    expect(w[table], table).toEqual(before[table])
+  expect(w.event_sale_links).toHaveLength(1)
+  session.user = 'production-staff'
+  const staff = await ok()
+  expect(staff.event_sale_links).toEqual([])
+  expect(staff.event_pickups).toEqual([])
+  expect(
+    staff.events.find((e: Item) => e.id === event.id).budget,
+  ).toBeUndefined()
+  expect((await call('eventSave', 'events', event)).status).toBe(400)
+  session.user = 'production-owner-b'
+  const foreign = await ok()
+  expect(foreign.events).toEqual([])
+  expect(
+    (
+      await call('eventLink', 'events', {
+        eventId: event.id,
+        kind: 'sale',
+        recordId: sale.id,
+      })
+    ).status,
+  ).toBe(400)
+  session.user = 'production-owner-a'
+})

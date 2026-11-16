@@ -1,3 +1,5 @@
+import { CalendarDays } from 'lucide-react'
+import { EventsWorkspace } from './events-workspace'
 import { ProductMockups } from './product-mockup'
 import {
   ApplicationPage,
@@ -223,6 +225,7 @@ const navigation = [
   { name: 'Handmade', icon: Package },
   { name: 'Production', icon: CookingPot },
   { name: 'Sales', icon: TrendingUp },
+  { name: 'Events', icon: CalendarDays },
   { name: 'Purchasing', icon: Receipt },
   { name: 'Finance', icon: Wallet },
   { name: 'Labels', icon: StickyNote },
@@ -1625,13 +1628,15 @@ export function WorkspaceApp() {
                 <span className="eyebrow">COTTAGE PANTRY</span>
               )}
               <h1>
-                {page === 'Dashboard'
-                  ? `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}.`
-                  : page === 'Finances' && sub === 'Tax center'
-                    ? 'Tax Center'
-                    : page === 'Products & Pricing' && sub === 'Categories'
-                      ? 'Product Categories'
-                      : route.section}
+                {page === 'Events'
+                  ? 'Events & Pickup Days'
+                  : page === 'Dashboard'
+                    ? `Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}.`
+                    : page === 'Finances' && sub === 'Tax center'
+                      ? 'Tax Center'
+                      : page === 'Products & Pricing' && sub === 'Categories'
+                        ? 'Product Categories'
+                        : route.section}
               </h1>
               <p>
                 {route.section === 'Purchasing'
@@ -1648,20 +1653,35 @@ export function WorkspaceApp() {
                             ? sub === 'Categories'
                               ? 'Organize products and review their inherited tax treatment.'
                               : 'Build prices that cover your costs and support your profit goals.'
-                            : page === 'Production'
-                              ? 'Plan production and keep every completed run traceable.'
-                              : page === 'Finances' && sub === 'Tax center'
-                                ? 'Track tax collected, review what is due, and export records for filing.'
-                                : page === 'Finances'
-                                  ? 'Keep sales, costs, and business profit in clear view.'
-                                  : page === 'Settings'
-                                    ? 'Make this oven work for your business.'
-                                    : page === 'Reports'
-                                      ? 'Turn your business records into useful answers.'
-                                      : 'Create labels with your branding and the product details you can verify.'}
+                            : page === 'Events'
+                              ? 'Plan markets and pickups, connect production, and review recorded results.'
+                              : page === 'Production'
+                                ? 'Plan production and keep every completed run traceable.'
+                                : page === 'Finances' && sub === 'Tax center'
+                                  ? 'Track tax collected, review what is due, and export records for filing.'
+                                  : page === 'Finances'
+                                    ? 'Keep sales, costs, and business profit in clear view.'
+                                    : page === 'Settings'
+                                      ? 'Make this oven work for your business.'
+                                      : page === 'Reports'
+                                        ? 'Turn your business records into useful answers.'
+                                        : 'Create labels with your branding and the product details you can verify.'}
               </p>
             </div>
           </div>
+          {page === 'Events' && (
+            <EventsWorkspace
+              state={state}
+              role={role}
+              view={sub}
+              busy={busy}
+              mutate={mutate}
+              openRecord={open}
+              onDirty={(dirty) => {
+                workflowDirty.current = dirty
+              }}
+            />
+          )}
           <PageOverviewOutlet />
           {route.section === 'Inventory' && (
             <PantrySummary
@@ -3326,7 +3346,7 @@ export function WorkspaceApp() {
           showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
-          className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
+          className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production', 'event-source'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
         >
           {modal === 'product-detail' && selected ? (
             <ItemDetailHeader name={selected.name} close>
@@ -3355,6 +3375,7 @@ export function WorkspaceApp() {
               <DialogTitle>
                 {(
                   {
+                    'event-source': 'Linked financial record',
                     ingredient: packagingDraft
                       ? 'Add packaging'
                       : 'Add ingredient',
@@ -5200,6 +5221,59 @@ export function WorkspaceApp() {
               </div>
             </form>
           ) : null}
+          {modal === 'event-source' && selected && (
+            <div className="calculation-box">
+              <h3>{selected.name}</h3>
+              <p>
+                Record {selected.id} · {selected.date} ·{' '}
+                {selected.kind || selected.category}
+              </p>
+              <p>
+                Amount: {money(selected.amount || 0)} ·{' '}
+                {selected.kind === 'invoice'
+                  ? `Paid: ${money(selected.paid || 0)}`
+                  : 'Recorded expense'}
+              </p>
+              <p>{selected.notes || ''}</p>
+              <a
+                className="btn secondary"
+                href={
+                  selected.sourceTable === 'expenses'
+                    ? '#Finance/Register'
+                    : '#Finance/Invoices'
+                }
+                onClick={() => setModal(null)}
+              >
+                Open in Finance
+              </a>
+            </div>
+          )}
+          {modal === 'production' &&
+            selected &&
+            (state.event_batch_links || []).filter(
+              (l) => l.recordId === selected.id,
+            ).length > 0 && (
+              <section className="calculation-box">
+                <h3>Connected events</h3>
+                <p>
+                  Planning links do not assign this run’s full cost to each
+                  event.
+                </p>
+                {(state.event_batch_links || [])
+                  .filter((l) => l.recordId === selected.id)
+                  .map((l) => (
+                    <p key={l.id}>
+                      <a
+                        href={`#Events/List?event=${encodeURIComponent(l.eventId)}`}
+                        onClick={() => setModal(null)}
+                      >
+                        {state.events?.find((e) => e.id === l.eventId)?.name ||
+                          l.eventId}
+                      </a>
+                    </p>
+                  ))}
+              </section>
+            )}
           {modal === 'production' && (
             <ProductionRun
               onDirtyChange={setFormDirty}
