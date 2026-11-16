@@ -13,18 +13,31 @@ export function ItemDetailHeader({
   name,
   children,
   close = false,
+  onClose,
 }: {
   name: string
   close?: boolean
+  onClose?: () => void
   children: ReactNode
 }) {
   return (
     <DialogHeader>
       <div className="eyebrow">COTTAGE PANTRY · YOUR OVEN</div>
-      {close && (
-        <DialogClose className="product-header-close" aria-label="Close">
+      {close && onClose ? (
+        <button
+          type="button"
+          className="product-header-close"
+          aria-label="Close"
+          onClick={onClose}
+        >
           ×
-        </DialogClose>
+        </button>
+      ) : (
+        close && (
+          <DialogClose className="product-header-close" aria-label="Close">
+            ×
+          </DialogClose>
+        )
       )}
       <DialogTitle>{name}</DialogTitle>
       <DialogDescription>{children}</DialogDescription>
