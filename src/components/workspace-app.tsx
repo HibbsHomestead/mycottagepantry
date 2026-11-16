@@ -771,8 +771,10 @@ export function WorkspaceApp() {
             'The save response did not confirm this product. Your changes are still here; select Save again. No duplicate is created by retrying.',
           )
       }
-      const keepProductionOpen =
-        action === 'productionSave' && data.status === 'scheduled'
+      const keepProductionOpen = [
+        'productionSave',
+        'productionRecordActuals',
+      ].includes(action)
       const savedProduction = action.startsWith('production')
         ? result.workspace?.batches?.find((run: Item) => run.id === data.id)
         : undefined
@@ -2293,7 +2295,7 @@ export function WorkspaceApp() {
                                   <h3>{b.name}</h3>
                                   <p>
                                     {b.productionVersion
-                                      ? `${b.actualYield || b.quantity} selling packages`
+                                      ? `${b.lines?.length ? `${b.lines.length} products · ` : ''}${b.actualYield || b.quantity} selling packages / finished units`
                                       : `${b.count} batches · ${b.actualYield || b.yield}`}{' '}
                                     {!b.productionVersion &&
                                       recipes.find((r) => r.id === b.recipeId)
@@ -2312,7 +2314,13 @@ export function WorkspaceApp() {
                                       : 'green'
                                   }
                                 >
-                                  {b.status.replaceAll('_', ' ')}
+                                  {b.productionVersion &&
+                                  b.status === 'completed'
+                                    ? 'Finalized'
+                                    : b.productionVersion &&
+                                        b.status === 'scheduled'
+                                      ? 'In progress'
+                                      : b.status.replaceAll('_', ' ')}
                                 </Badge>
                                 <Btn
                                   secondary
@@ -3295,6 +3303,14 @@ export function WorkspaceApp() {
         }
         onOpenChange={(v) => {
           if (!v) {
+            if (
+              modal === 'production' &&
+              formDirty &&
+              !window.confirm(
+                'Discard unsaved production changes? Save this run to continue editing later.',
+              )
+            )
+              return
             const kit =
               modal === 'product-detail' && selected?.workflow !== 'kit'
                 ? state.products.find((p) => p.id === kitContext)
@@ -3310,7 +3326,7 @@ export function WorkspaceApp() {
           showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
-          className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
+          className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
         >
           {modal === 'product-detail' && selected ? (
             <ItemDetailHeader name={selected.name} close>
@@ -4501,7 +4517,10 @@ export function WorkspaceApp() {
                             (b) =>
                               b.status === 'completed' &&
                               !!draft.id &&
-                              b.productId === draft.id,
+                              (b.productId === draft.id ||
+                                b.lines?.some(
+                                  (l: Item) => l.productId === draft.id,
+                                )),
                           ).length
                           return runs
                             ? `${runs} completed production ${runs === 1 ? 'run' : 'runs'} recorded for this product.`
@@ -5183,6 +5202,7 @@ export function WorkspaceApp() {
           ) : null}
           {modal === 'production' && (
             <ProductionRun
+              onDirtyChange={setFormDirty}
               role={role}
               key={selected?.id || draft.productId || 'new'}
               state={state}

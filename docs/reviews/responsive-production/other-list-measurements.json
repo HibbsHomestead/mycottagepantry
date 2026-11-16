@@ -1,0 +1,137 @@
+[
+  {
+    "page": "products",
+    "width": 1366,
+    "columns": 2
+  },
+  {
+    "page": "products",
+    "width": 1440,
+    "columns": 2
+  },
+  {
+    "page": "products",
+    "width": 1920,
+    "columns": 3
+  },
+  {
+    "page": "products",
+    "width": 2560,
+    "columns": 5
+  },
+  {
+    "page": "products",
+    "width": 390,
+    "columns": 1
+  },
+  {
+    "page": "products",
+    "width": 683,
+    "columns": 1
+  },
+  {
+    "page": "products",
+    "width": 720,
+    "columns": 1
+  },
+  {
+    "page": "products",
+    "width": 960,
+    "columns": 2
+  },
+  {
+    "page": "products",
+    "width": 1280,
+    "columns": 2
+  },
+  {
+    "page": "recipes",
+    "width": 1366,
+    "columns": 2
+  },
+  {
+    "page": "recipes",
+    "width": 1440,
+    "columns": 2
+  },
+  {
+    "page": "recipes",
+    "width": 1920,
+    "columns": 3
+  },
+  {
+    "page": "recipes",
+    "width": 2560,
+    "columns": 5
+  },
+  {
+    "page": "recipes",
+    "width": 390,
+    "columns": 1
+  },
+  {
+    "page": "recipes",
+    "width": 683,
+    "columns": 1
+  },
+  {
+    "page": "recipes",
+    "width": 720,
+    "columns": 1
+  },
+  {
+    "page": "recipes",
+    "width": 960,
+    "columns": 2
+  },
+  {
+    "page": "recipes",
+    "width": 1280,
+    "columns": 2
+  },
+  {
+    "page": "handmade",
+    "width": 1366,
+    "columns": 2
+  },
+  {
+    "page": "handmade",
+    "width": 1440,
+    "columns": 2
+  },
+  {
+    "page": "handmade",
+    "width": 1920,
+    "columns": 3
+  },
+  {
+    "page": "handmade",
+    "width": 2560,
+    "columns": 5
+  },
+  {
+    "page": "handmade",
+    "width": 390,
+    "columns": 1
+  },
+  {
+    "page": "handmade",
+    "width": 683,
+    "columns": 1
+  },
+  {
+    "page": "handmade",
+    "width": 720,
+    "columns": 1
+  },
+  {
+    "page": "handmade",
+    "width": 960,
+    "columns": 2
+  },
+  {
+    "page": "handmade",
+    "width": 1280,
+    "columns": 2
+  }
+]

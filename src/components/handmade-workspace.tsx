@@ -104,7 +104,11 @@ export function HandmadeWorkspace({
   const materials = w.ingredients.filter((i) => i.usedAs === 'material')
   const runs = w.batches.filter(
     (b) =>
-      products.some((p) => p.id === b.productId) ||
+      products.some(
+        (p) =>
+          p.id === b.productId ||
+          b.lines?.some((l: Item) => l.productId === p.id),
+      ) ||
       w.recipes.some((r) => r.id === b.recipeId && r.workflow === 'handmade'),
   )
   const manage = ['Owner', 'Manager'].includes(role)
@@ -1256,7 +1260,32 @@ function HandmadeProductDetail({
     reason = (e as Error).message
   }
   const bom = handmadeBom(p, w)
-  const runs = w.batches.filter((r) => r.productId === p.id)
+  const runs = w.batches
+    .filter(
+      (r) =>
+        r.productId === p.id ||
+        r.lines?.some((l: Item) => l.productId === p.id),
+    )
+    .map((r) => {
+      if (!r.lines) return r
+      const lines = r.lines.filter((l: Item) => l.productId === p.id)
+      return {
+        ...r,
+        runHeader: r,
+        actualYield: lines.reduce(
+          (sum: number, l: Item) => sum + Number(l.actualYield || 0),
+          0,
+        ),
+        quantity: lines.reduce(
+          (sum: number, l: Item) => sum + Number(l.quantity || 0),
+          0,
+        ),
+        historicalCost: lines.reduce(
+          (sum: number, l: Item) => sum + Number(l.historicalCost || 0),
+          0,
+        ),
+      }
+    })
   const movements = w.ledger.filter((r) => r.productId === p.id)
   const sales = w.sales.filter(
     (r) =>
@@ -1457,7 +1486,7 @@ function HandmadeProductDetail({
                     </span>
                     <button
                       className="btn secondary"
-                      onClick={() => open('batch-detail', r)}
+                      onClick={() => open('batch-detail', r.runHeader || r)}
                     >
                       Review run
                     </button>

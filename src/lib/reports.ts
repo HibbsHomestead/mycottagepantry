@@ -243,7 +243,12 @@ export function reportRows(name: string, state: Workspace): Item[] {
   if (name === 'Batch cost variance')
     return batches.map((b) => {
       const r = recipes.find((r) => r.id === b.recipeId)!
-      const planned = recipeCost(r, ingredients) * b.count
+      const planned =
+        b.productionVersion === 2
+          ? (b.estimatedCost ?? null)
+          : r
+            ? recipeCost(r, ingredients) * b.count
+            : null
       return {
         id: b.id,
         name: b.name,
@@ -252,7 +257,9 @@ export function reportRows(name: string, state: Workspace): Item[] {
         plannedCost: planned,
         historicalCost: b.historicalCost ?? null,
         variance:
-          b.historicalCost !== undefined ? b.historicalCost - planned : null,
+          b.historicalCost !== undefined && planned != null
+            ? b.historicalCost - planned
+            : null,
       }
     })
   if (name === 'Waste & spoilage')

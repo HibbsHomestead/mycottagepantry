@@ -107,7 +107,12 @@ beforeAll(async () => {
           ],
           productCategories: [
             { id: 'food', name: 'Packaged foods', classification: 'food' },
-            { id: 'goods', name: 'Handmade goods', classification: 'non_food' },
+            {
+              id: 'goods',
+              name: 'Handmade goods',
+              classification: 'non_food',
+              scope: 'handmade-products',
+            },
           ],
           categoryTaxMappings: {
             food: ['food-tax'],
@@ -888,4 +893,317 @@ it('adopts a legacy handmade design without replacing its product, stock, photos
     find(before.sales, 'legacy-handmade-sale'),
   )
   expect(after.ledger).toEqual(before.ledger)
+})
+
+it('multi-product runs save actuals, enforce revisions and aggregate shortages, finalize once and lock history', async () => {
+  session.user = 'production-owner-a'
+  // Independent stock fixture; no opening quantities bypass ledger guards.
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  const input = {
+    id: 'multi-input',
+    name: 'Shared material',
+    usedAs: 'material',
+    unit: 'g',
+    quantity: 1000,
+    cost: 0.01,
+  }
+  await db.query(
+    'INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5)',
+    [input.id, a, JSON.stringify(input), 1000, 0.01],
+  )
+  const recipe = {
+    id: 'multi-recipe',
+    name: 'Shared recipe',
+    yield: 1,
+    yieldUnit: 'each',
+    laborMinutes: 10,
+    laborRate: 12,
+    overhead: 1,
+    lines: [{ ingredientId: input.id, quantity: 100, unit: 'g' }],
+  }
+  await db.query('INSERT INTO recipes(id,business_id,data) VALUES($1,$2,$3)', [
+    recipe.id,
+    a,
+    JSON.stringify(recipe),
+  ])
+  for (const id of ['multi-food-one', 'multi-food-two']) {
+    const product = {
+      id,
+      name: id,
+      workflow: 'food',
+      recipeId: recipe.id,
+      quantity: 0,
+      cost: 0,
+    }
+    await db.query(
+      'INSERT INTO products(id,business_id,data,quantity,cost) VALUES($1,$2,$3,0,0)',
+      [id, a, JSON.stringify(product)],
+    )
+  }
+  const line = (id: string, productId: string, quantity: number) => ({
+    id,
+    productId,
+    quantity,
+    output: quantity,
+    waste: 0,
+    mapping,
+  })
+  const draft = {
+    id: 'multi-product-run',
+    name: 'Combined run',
+    status: 'draft',
+    date: '2026-11-16',
+    lines: [
+      line('multi-line-one', 'multi-food-one', 6),
+      line('multi-line-two', 'multi-food-two', 6),
+    ],
+  }
+  const before = await ok()
+  let w = await ok('productionSave', 'batches', draft)
+  expect(w.ledger).toEqual(before.ledger)
+  expect(find(w.batches, draft.id).revision).toBe(1)
+  expect(
+    (await call('productionSave', 'batches', { ...draft, expectedRevision: 0 }))
+      .status,
+  ).toBe(400)
+  expect(
+    (
+      await call('productionComplete', 'batches', {
+        id: draft.id,
+        expectedRevision: 1,
+      })
+    ).error,
+  ).toMatch(/combined/)
+  expect((await ok()).ledger).toEqual(before.ledger)
+  const edited = {
+    ...draft,
+    status: 'scheduled',
+    expectedRevision: 1,
+    lines: [
+      line('multi-line-one', 'multi-food-one', 4),
+      line('multi-line-two', 'multi-food-two', 3),
+    ],
+  }
+  w = await ok('productionSave', 'batches', edited)
+  expect(find(w.batches, draft.id).lines[1].output).toBe(3)
+  expect(w.ledger).toEqual(before.ledger)
+  // In-progress runs remain editable; removal, addition and notes persist.
+  w = await ok('productionSave', 'batches', {
+    ...edited,
+    expectedRevision: 2,
+    note: 'Continue tomorrow',
+  })
+  expect(find(w.batches, draft.id).note).toBe('Continue tomorrow')
+  const request = { id: draft.id, expectedRevision: 3 }
+  const done = await ok('productionComplete', 'batches', request)
+  expect(find(done.ingredients, input.id).quantity).toBe(300)
+  expect(find(done.products, 'multi-food-one').quantity).toBe(4)
+  expect(find(done.products, 'multi-food-two').quantity).toBe(3)
+  const run = find(done.batches, draft.id)
+  expect(run.historicalCost).toBeCloseTo(28) // $7 materials + $14 labor + $7 overhead
+  expect(run.finalizedBy).toBe('production-owner-a')
+  expect(run.lines).toHaveLength(2)
+  expect(
+    done.batch_usage
+      .filter((u: Item) => u.batchId === draft.id)
+      .every((u: Item) => !!u.productionLineId),
+  ).toBe(true)
+  expect((await ok('productionComplete', 'batches', request)).ledger).toEqual(
+    done.ledger,
+  )
+  expect(
+    (
+      await call('productionSave', 'batches', {
+        ...edited,
+        expectedRevision: 4,
+      })
+    ).status,
+  ).toBe(400)
+  session.user = 'production-owner-b'
+  expect((await call('productionComplete', 'batches', request)).status).toBe(
+    400,
+  )
+  session.user = 'production-owner-a'
+})
+
+it('mixed food/BOM lines retain editable actuals, rollback late failures, and keep staff permissions scoped', async () => {
+  session.user = 'production-owner-a'
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  const product = {
+    id: 'mixed-craft',
+    name: 'Craft sample',
+    workflow: 'handmade',
+    quantity: 0,
+    cost: 0,
+    bom: {
+      id: 'mixed-bom',
+      name: 'Craft BOM',
+      version: 1,
+      output: 1,
+      laborMinutes: 15,
+      laborRate: 12,
+      overhead: 0.5,
+      scrapPercent: 0,
+      lines: [{ ingredientId: 'multi-input', quantity: 0.1, unit: 'kg' }],
+    },
+  }
+  await db.query(
+    'INSERT INTO products(id,business_id,data,quantity,cost) VALUES($1,$2,$3,0,0)',
+    [product.id, a, JSON.stringify(product)],
+  )
+  let lines = [
+    {
+      id: 'mixed-food-line',
+      productId: 'multi-food-one',
+      quantity: 1,
+      output: 1,
+      mapping,
+      waste: 0,
+    },
+    {
+      id: 'mixed-craft-line',
+      productId: product.id,
+      quantity: 1,
+      output: 1,
+      mapping: {},
+      waste: 1,
+    },
+  ]
+  const draft = {
+    id: 'mixed-draft-run',
+    name: 'Food and craft',
+    date: '2026-11-16',
+    status: 'draft',
+    lines,
+  }
+  await ok('productionSave', 'batches', draft)
+  session.user = 'production-staff'
+  expect(
+    (await call('productionSave', 'batches', { ...draft, expectedRevision: 1 }))
+      .status,
+  ).toBe(400)
+  // Staff can record actuals, but forged header, quantity, product and definition changes are ignored.
+  await ok('productionRecordActuals', 'batches', {
+    ...draft,
+    expectedRevision: 1,
+    name: 'Forged',
+    lines: lines.map((l) => ({
+      ...l,
+      productId: 'other-business',
+      quantity: 999,
+    })),
+  })
+  session.user = 'production-owner-a'
+  let w = await ok()
+  expect(find(w.batches, draft.id).name).toBe('Food and craft')
+  expect(find(w.batches, draft.id).lines[0].quantity).toBe(1)
+  const before = await ok()
+  expect(
+    (
+      await call('productionComplete', 'batches', {
+        id: draft.id,
+        expectedRevision: 2,
+      })
+    ).error,
+  ).toMatch(/waste/)
+  w = await ok()
+  expect(w.ingredients).toEqual(before.ingredients)
+  expect(w.products).toEqual(before.products)
+  expect(w.ledger).toEqual(before.ledger)
+  expect(w.batch_usage).toEqual(before.batch_usage)
+  lines = lines.map((l) => ({ ...l, waste: 0 }))
+  await ok('productionSave', 'batches', {
+    ...draft,
+    lines,
+    expectedRevision: 2,
+  })
+  const done = await ok('productionComplete', 'batches', {
+    id: draft.id,
+    expectedRevision: 3,
+  })
+  expect(find(done.ingredients, 'multi-input').quantity).toBe(100)
+  expect(find(done.products, product.id).quantity).toBe(1)
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  await expect(
+    db.query(
+      "UPDATE batches SET data=jsonb_set(data,'{note}','\"changed\"') WHERE business_id=$1 AND id=$2",
+      [a, draft.id],
+    ),
+  ).rejects.toThrow('immutable')
+  const cancel = { ...draft, id: 'cancel-multi-run' }
+  const ledger = (await ok()).ledger
+  await ok('productionSave', 'batches', cancel)
+  await ok('productionCancel', 'batches', {
+    id: cancel.id,
+    expectedRevision: 1,
+  })
+  expect((await ok()).ledger).toEqual(ledger)
+})
+
+it('handmade-only multi-line reversals restore posted usage once without unlocking the header', async () => {
+  session.user = 'production-owner-a'
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  const i = {
+    id: 'reverse-material',
+    name: 'Blank card',
+    usedAs: 'material',
+    unit: 'each',
+    quantity: 10,
+    cost: 1,
+  }
+  await db.query(
+    'INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,10,1)',
+    [i.id, a, JSON.stringify(i)],
+  )
+  const p = {
+    id: 'reverse-product',
+    name: 'Handmade card',
+    workflow: 'handmade',
+    quantity: 0,
+    cost: 0,
+    bom: {
+      id: 'reverse-bom',
+      name: 'Card BOM',
+      version: 1,
+      output: 1,
+      laborMinutes: 0,
+      laborRate: 0,
+      overhead: 0,
+      scrapPercent: 0,
+      lines: [{ ingredientId: i.id, quantity: 1, unit: 'each' }],
+    },
+  }
+  await db.query(
+    'INSERT INTO products(id,business_id,data,quantity,cost) VALUES($1,$2,$3,0,0)',
+    [p.id, a, JSON.stringify(p)],
+  )
+  const draft = {
+    id: 'reverse-multi-run',
+    name: 'Cards',
+    status: 'scheduled',
+    lines: ['reverse-line-one', 'reverse-line-two'].map((id) => ({
+      id,
+      productId: p.id,
+      quantity: 1,
+      output: 1,
+    })),
+  }
+  await ok('productionSave', 'batches', draft)
+  const done = await ok('productionComplete', 'batches', {
+    id: draft.id,
+    expectedRevision: 1,
+  })
+  expect(find(done.products, p.id).quantity).toBe(2)
+  const request = {
+    id: draft.id,
+    reason: 'Correction fixture',
+    expectedRevision: 2,
+  }
+  const reversed = await ok('productionReverse', 'batches', request)
+  expect(find(reversed.ingredients, i.id).quantity).toBe(10)
+  expect(find(reversed.products, p.id).quantity).toBe(0)
+  expect(find(reversed.batches, draft.id)).toEqual(find(done.batches, draft.id))
+  expect((await ok('productionReverse', 'batches', request)).ledger).toEqual(
+    reversed.ledger,
+  )
 })

@@ -52,3 +52,38 @@
 .production-run p {
   margin: 0.25rem 0;
 }
+.multi-production-run .production-product-line {
+  padding: 1rem;
+  display: grid;
+  gap: 0.875rem;
+  border-color: var(--border);
+  background: var(--card);
+}
+.multi-production-run legend {
+  padding-inline: 0.35rem;
+  font-weight: 700;
+}
+.multi-production-run :is(p, legend, td) {
+  overflow-wrap: anywhere;
+}
+.multi-production-run :is(input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.multi-production-run label,
+.multi-production-run .form-grid > * {
+  min-width: 0;
+}
+.multi-production-run :is(input, select, textarea) {
+  width: 100%;
+  box-sizing: border-box;
+}
+.multi-production-run input[type='checkbox'] {
+  width: auto;
+}
+@media (max-width: 700px) {
+  .multi-production-run .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
