@@ -1,3 +1,4 @@
+import { ProductMockups } from './product-mockup'
 import { ArtworkPicker } from './artwork-picker'
 import { libraryArtwork } from '@/lib/artwork-library'
 import { useId, useState, type ReactNode } from 'react'
@@ -70,10 +71,12 @@ export function ItemImagesPanel({
   onWorkspace,
   onBusy,
   photoLabel = 'Product photo',
+  mockupProductId,
   labelArtwork = true,
   children,
 }: {
   value: Item
+  mockupProductId?: string
   assets: Item[]
   canUpload: boolean
   disabled: boolean
@@ -205,6 +208,15 @@ export function ItemImagesPanel({
             </div>
           </div>
         </section>
+      )}
+      {mockupProductId && (
+        <ProductMockups
+          productId={mockupProductId}
+          assets={assets}
+          canEdit={canUpload && !disabled}
+          onWorkspace={onWorkspace}
+          onPrimaryImage={(id) => onChange('imageAssetId', id)}
+        />
       )}
       {children}
       {status && (

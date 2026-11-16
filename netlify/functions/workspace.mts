@@ -1,3 +1,4 @@
+import { prepareMockup } from '../lib/mockup-handler'
 import {
   consolidateCategories,
   canonicalCategoryName,
@@ -1961,6 +1962,7 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Use a valid PNG, JPEG, or WebP image up to 40 megapixels. SVG and PDF uploads are not supported.',
         )
+      await sharp(bytes, { limitInputPixels: 40000000 }).stats() // Verify full decoding before retaining originals.
       const metadata = await sharp(bytes).metadata()
       const rotated = [5, 6, 7, 8].includes(metadata.orientation || 0)
       const id = randomUUID(),
@@ -1979,6 +1981,34 @@ export default async (req: Request, context: Context) => {
           tags: String(form.get('tags') || '').slice(0, 200),
           fileUrl: '/api/workspace?asset=' + id,
         }
+      if (form.has('mockup')) {
+        const input = JSON.parse(String(form.get('mockup')))
+        const prepared = prepareMockup(
+          input,
+          state,
+          role,
+          requestUrl,
+          moduleAccess,
+        )
+        const { product } = prepared
+        Object.assign(asset, prepared.metadata)
+        if (prepared.primary) {
+          // Lock and patch image metadata only; never rewrite stock/cost columns from a workspace snapshot.
+          const current = (
+            await client.query(
+              'SELECT data FROM products WHERE business_id=$1 AND id=$2 FOR UPDATE',
+              [org, product.id],
+            )
+          ).rows[0]?.data
+          if (!current) throw new Error('Product unavailable in this business.')
+          const patch = { imageAssetId: id }
+          await client.query(
+            'UPDATE products SET data=data || $3::jsonb,updated_at=now() WHERE business_id=$1 AND id=$2',
+            [org, product.id, JSON.stringify(patch)],
+          )
+          Object.assign(product, current, patch)
+        }
+      }
       await getStore('label-graphics').set(`${org}/${id}`, bytes.buffer)
       await save('graphic_assets', asset)
       state.graphic_assets.push(asset)

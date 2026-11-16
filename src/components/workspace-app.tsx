@@ -1,3 +1,4 @@
+import { ProductMockups } from './product-mockup'
 import {
   ApplicationPage,
   PageOverviewOutlet,
@@ -5465,6 +5466,12 @@ export function WorkspaceApp() {
                 )
               }
             >
+              <ProductMockups
+                productId={selected.id}
+                assets={state.graphic_assets || []}
+                canEdit={ready && ['Owner', 'Manager'].includes(role)}
+                onWorkspace={setState}
+              />
               {selected.workflow === 'kit' ? (
                 <KitCostCards
                   product={selected}

@@ -968,6 +968,7 @@ export function HandmadeProductEditor({
                 }
               />
               <ItemImagesPanel
+                mockupProductId={item?.id}
                 value={d}
                 assets={w.graphic_assets || []}
                 labelArtwork={false}
