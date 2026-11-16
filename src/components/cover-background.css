@@ -1,0 +1,120 @@
+/* Original vector artwork: flowing layered corners and the cover's connected
+   parcel / receipt / calculator motif. Deliberately text-free and static. */
+.cover-background {
+  --cover-ribbon: color-mix(in srgb, var(--primary) 25%, var(--background));
+  --cover-underlay: color-mix(in srgb, var(--primary) 11%, var(--background));
+  --cover-fold: color-mix(in srgb, var(--primary) 34%, var(--background));
+  --cover-line: color-mix(in srgb, var(--primary) 38%, var(--background));
+  --cover-highlight: color-mix(in srgb, var(--card) 75%, transparent);
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--page-atmosphere), var(--background);
+}
+body:has(.cover-background) {
+  isolation: isolate;
+}
+body:has(.cover-background) :is(.public-site, .cp-admin) {
+  background: transparent;
+}
+.cover-ribbons {
+  position: absolute;
+  width: 100%;
+  height: 34%;
+}
+.cover-ribbons-top {
+  top: 0;
+  left: 0;
+}
+.cover-ribbons-bottom {
+  right: 0;
+  bottom: 0;
+  height: 45%;
+}
+.cover-thread {
+  position: absolute;
+  right: -4%;
+  top: 10%;
+  width: min(78%, 1100px);
+  height: 150px;
+  opacity: 0.6;
+}
+/* Public compositions are stronger; the center remains open for approved copy. */
+body:has(.public-site):not(:has(.public-auth)) .cover-background {
+  --cover-ribbon: color-mix(in srgb, var(--primary) 37%, var(--background));
+  --cover-fold: color-mix(in srgb, var(--primary) 54%, var(--background));
+  --cover-underlay: color-mix(in srgb, var(--primary) 19%, var(--background));
+}
+body:has(.public-site):not(:has(.public-auth)) .cover-ribbons-top {
+  height: 46%;
+}
+body:has(.public-site):not(:has(.public-auth)) .cover-thread {
+  top: 7.5%;
+  opacity: 0.75;
+}
+/* Solid form panel; ribbons and line art sit around it. */
+body:has(.cover-background) .public-auth {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  padding: 32px;
+}
+/* Working surfaces use small edge motifs rather than a new banner. */
+body:has(:is(.app-shell, .cp-admin)) .cover-thread {
+  width: 580px;
+  height: 90px;
+  right: -230px;
+  top: 360px;
+  transform: rotate(90deg);
+  opacity: 0.65;
+}
+body:has(.cp-admin) .cover-background {
+  --cover-fold: color-mix(in srgb, var(--primary) 23%, var(--background));
+}
+body:has(.cp-admin) .cover-thread {
+  opacity: 0.4;
+}
+html[data-mode="dark"] body:has(.cover-background) .cover-background {
+  --cover-ribbon: color-mix(in srgb, var(--primary) 12%, var(--background));
+  --cover-underlay: color-mix(in srgb, var(--primary) 6%, var(--background));
+  --cover-fold: color-mix(in srgb, var(--primary) 20%, var(--background));
+  --cover-line: color-mix(in srgb, var(--primary) 32%, var(--background));
+  --cover-highlight: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+@media (max-width: 640px) {
+  .cover-ribbons-top {
+    width: 160%;
+    height: 24%;
+  }
+  .cover-ribbons-bottom {
+    width: 170%;
+    height: 35%;
+  }
+  .cover-thread {
+    top: 10%;
+    right: -210px;
+    width: 600px;
+    opacity: 0.35;
+  }
+  body:has(.public-site):not(:has(.public-auth)) .cover-thread {
+    top: 10%;
+    opacity: 0.35;
+  }
+  body:has(.cover-background) .public-auth {
+    padding: 24px;
+  }
+}
+@media print {
+  .cover-background {
+    display: none;
+  }
+}
+
+body:has(:is(.app-shell, .cp-admin)) .cover-motif {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: rotate(-90deg);
+}
