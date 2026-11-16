@@ -1,3 +1,4 @@
+import { CoverBackground } from '@/components/cover-background'
 import { FloatingControls } from '@/components/floating-controls'
 import {
   appearanceBootScript,
@@ -96,6 +97,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <script dangerouslySetInnerHTML={{ __html: adminHeadBootScript }} />
+        <CoverBackground />
         <TooltipProvider>{children}</TooltipProvider>
         <FloatingControls />
         <Toaster />

@@ -1,3 +1,4 @@
+import { CoverBackground } from '@/components/cover-background'
 import { FloatingControls } from '@/components/floating-controls'
 import { BackToTop } from '@/components/back-to-top'
 import '../styles.css'
@@ -21,6 +22,7 @@ export function mountScreenshotWorkspace() {
   document.body.replaceChildren(host)
   createRoot(host).render(
     <TooltipProvider>
+      <CoverBackground />
       <WorkspaceApp />
       <FloatingControls />
       <Toaster />
