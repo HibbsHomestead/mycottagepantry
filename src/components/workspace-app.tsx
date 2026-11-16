@@ -41,6 +41,7 @@ import {
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
 import './workspace-standard.css'
+import './inventory-refinement.css'
 import { OvenLoading } from './oven-loading'
 import { restoreIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
