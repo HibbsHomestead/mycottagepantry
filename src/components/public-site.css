@@ -1,7 +1,12 @@
 .public-site {
-  background: var(--page-atmosphere), var(--background);
   color: var(--foreground);
-  font: 16px/1.7 var(--font-body);
+  --public-body: 1.125rem;
+  --public-control: 1rem;
+  --text-caption: 1rem;
+  --public-gutter: clamp(1.125rem, 3vw, 4rem);
+  --public-width: 120rem;
+  background: var(--page-atmosphere), var(--background);
+  font: var(--public-body)/1.7 var(--font-body);
   min-height: 100vh;
 }
 .public-site * {
@@ -16,17 +21,17 @@
   color: var(--foreground);
 }
 .public-site h1 {
-  font-size: clamp(2.7rem, 4.45vw, 5rem);
+  font-size: clamp(2.25rem, 4.45vw, 3.5rem);
   line-height: 1.12;
   margin: 20px 0 28px;
 }
 .public-site h2 {
-  font-size: clamp(2rem, 3.25vw, 3.5rem);
+  font-size: clamp(1.75rem, 3.25vw, 2.25rem);
   line-height: 1.18;
   margin: 12px 0 24px;
 }
 .public-site h3 {
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   line-height: 1.35;
 }
 .public-site em {
@@ -60,18 +65,18 @@
   outline-offset: 5px;
 }
 .public-width {
-  max-width: 1340px;
+  max-width: var(--public-width);
   margin: auto;
-  padding-left: 48px;
-  padding-right: 48px;
+  padding-left: var(--public-gutter);
+  padding-right: var(--public-gutter);
 }
 .public-header {
-  max-width: 1440px;
+  max-width: var(--public-width);
   margin: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 48px;
+  padding: 24px var(--public-gutter);
   gap: 24px;
   border-bottom: 1px solid var(--border);
 }
@@ -94,7 +99,7 @@
 .public-brand small {
   display: block;
   font-family: var(--font-body);
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   letter-spacing: 0.065em;
   margin-top: 4px;
   text-transform: uppercase;
@@ -104,7 +109,7 @@
   display: flex;
   align-items: center;
   gap: 27px;
-  font-size: 14px;
+  font-size: var(--public-control);
 }
 .public-login {
   display: flex;
@@ -122,7 +127,7 @@
   color: var(--primary-ink) !important;
   padding: 14px 23px;
   border-radius: var(--radius-control);
-  font-size: 14px;
+  font-size: var(--public-control);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.18s;
@@ -152,7 +157,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 14px;
+  font-size: var(--public-control);
   font-weight: 600;
   color: var(--primary) !important;
 }
@@ -164,7 +169,7 @@
   margin: 28px 0 16px;
 }
 .public-eyebrow {
-  font-size: var(--text-caption, 14px) !important;
+  font-size: var(--text-caption, 1rem) !important;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--primary);
@@ -172,13 +177,13 @@
   line-height: 1.7;
 }
 .public-lead {
-  font-size: 17px;
+  font-size: var(--public-control);
   line-height: 1.85;
   color: var(--muted);
   max-width: 650px;
 }
 .public-fine {
-  font-size: var(--text-caption, 14px) !important;
+  font-size: var(--text-caption, 1rem) !important;
   color: var(--muted);
   line-height: 1.7;
 }
@@ -200,7 +205,7 @@
   max-width: 530px;
 }
 .hero-copy h1 {
-  font-size: clamp(2.6rem, 3.85vw, 4rem);
+  font-size: clamp(2.25rem, 3.85vw, 3.5rem);
   letter-spacing: -0.05em;
 }
 .hero-product {
@@ -214,7 +219,7 @@
   line-height: 1.5;
 }
 .hero-product-heading em {
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
   font-weight: 400;
 }
@@ -238,7 +243,7 @@
   align-items: center;
   padding: 10px 13px;
   background: var(--surface-soft);
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   color: var(--muted);
 }
 .browser-chrome i {
@@ -251,7 +256,7 @@
   margin: auto;
 }
 .hero-screen figcaption {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   padding: 8px 14px;
   color: var(--muted);
   background: var(--card);
@@ -259,7 +264,7 @@
 .hero-note {
   margin-top: 16px;
   color: var(--muted);
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   line-height: 1.6;
 }
 .public-workflow {
@@ -293,7 +298,7 @@
   margin-left: 15px;
 }
 .public-workflow p:last-child {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   color: var(--muted);
   margin: 23px 0 0;
 }
@@ -318,7 +323,7 @@
   border-bottom: 1px solid var(--border);
 }
 .story-items article > span {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--primary);
@@ -327,7 +332,7 @@
   margin: 10px 0;
 }
 .story-items p {
-  font-size: 14px;
+  font-size: var(--public-control);
   margin: 0;
 }
 .public-cta {
@@ -358,7 +363,7 @@
   padding-bottom: 65px;
 }
 .public-page-intro h1 {
-  font-size: clamp(2.6rem, 4vw, 4.6rem);
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
 }
 .public-page-intro.narrow {
   max-width: 950px;
@@ -388,7 +393,7 @@
   background: var(--surface-soft);
 }
 .plan-caption {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   min-height: 28px;
@@ -400,7 +405,7 @@
   margin: 5px 0 16px;
 }
 .pricing-plan p {
-  font-size: 14px;
+  font-size: var(--public-control);
   margin-bottom: 12px;
 }
 .pricing-plan .plan-price {
@@ -428,7 +433,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-size: 14px;
+  font-size: var(--public-control);
   line-height: 1.65;
   padding: 6px 0;
 }
@@ -459,10 +464,10 @@
 .help-layout summary {
   cursor: pointer;
   font-weight: 600;
-  font-size: 15px;
+  font-size: var(--public-control);
 }
 .help-layout details p {
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
   margin: 16px 0 0;
 }
@@ -476,13 +481,13 @@
   font-size: 30px;
 }
 .contact-paper p {
-  font-size: 14px;
+  font-size: var(--public-control);
 }
 .public-footer {
-  max-width: 1340px;
+  max-width: var(--public-width);
   margin: auto;
   border-top: 1px solid var(--border);
-  padding: 45px 48px 25px;
+  padding: 45px var(--public-gutter) 25px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
@@ -493,7 +498,7 @@
   color: var(--primary) !important;
 }
 .public-footer p {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   color: var(--muted);
   margin-top: 14px;
 }
@@ -503,7 +508,7 @@
   justify-content: end;
   gap: 22px;
   flex-wrap: wrap;
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
 }
 .public-footer > .public-fine {
   grid-column: 1/-1;
@@ -536,7 +541,7 @@
 }
 .public-auth label {
   display: block;
-  font-size: 14px;
+  font-size: var(--public-control);
   margin: 18px 0;
 }
 .public-auth input {
@@ -571,20 +576,20 @@
 .registration-paper pre {
   max-width: 100%;
   overflow-x: auto;
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   padding: 12px;
   background: var(--surface-soft);
   border-radius: var(--radius-control);
 }
-.public-auth [role='alert'],
-.registration-paper [role='alert'] {
+.public-auth [role="alert"],
+.registration-paper [role="alert"] {
   color: var(--danger);
   background: var(--danger-bg);
   padding: 14px;
   border-radius: var(--radius-control);
 }
-.public-auth input[aria-invalid='true'],
-.registration-paper input[aria-invalid='true'] {
+.public-auth input[aria-invalid="true"],
+.registration-paper input[aria-invalid="true"] {
   border-color: var(--danger);
 }
 .public-auth h1,
@@ -596,11 +601,11 @@
   white-space: normal;
   max-width: 100%;
 }
-.public-auth [role='alert'] {
-  font-size: 14px;
+.public-auth [role="alert"] {
+  font-size: var(--public-control);
 }
 .public-auth p {
-  font-size: 14px;
+  font-size: var(--public-control);
 }
 .public-auth fieldset {
   border: 0;
@@ -707,17 +712,17 @@
     gap: 0;
   }
   .hero-copy h1 {
-    font-size: clamp(2.6rem, 7vw, 3.8rem);
+    font-size: clamp(2.25rem, 7vw, 3.5rem);
   }
   .public-lead {
-    font-size: 15px;
+    font-size: var(--public-control);
   }
   .hero-product {
     padding-block: 24px;
     margin: 20px 0 0;
   }
   .hero-note {
-    font-size: var(--text-caption, 14px);
+    font-size: var(--text-caption, 1rem);
   }
   .public-actions {
     gap: 20px;
@@ -728,7 +733,7 @@
     gap: 22px 12px;
   }
   .workflow-chain > span {
-    font-size: 17px;
+    font-size: var(--public-control);
     gap: 6px;
   }
   .workflow-chain svg {
@@ -787,7 +792,7 @@
     min-height: 470px;
   }
   .public-site .public-eyebrow {
-    font-size: var(--text-caption, 14px) !important;
+    font-size: var(--text-caption, 1rem) !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -835,11 +840,11 @@
 .tour-faq summary {
   font-weight: 600;
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--public-control);
 }
 .pricing-faq details p,
 .tour-faq details p {
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
   margin: 16px 0 0;
   max-width: 800px;
@@ -867,12 +872,12 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 14px;
+  font-size: var(--public-control);
   font-weight: 600;
 }
 .tour-navigation small {
   color: var(--muted);
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   font-weight: 400;
 }
 .tour-section {
@@ -900,7 +905,7 @@
 }
 .tour-copy > p:not(.public-eyebrow),
 .tour-copy li {
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
 }
 .tour-copy ul {
@@ -914,7 +919,7 @@
   line-height: 1.65;
 }
 .tour-copy li::before {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   top: 16px;
@@ -931,13 +936,13 @@
   font-size: 16px !important;
 }
 .tour-copy .tour-note {
-  font-size: var(--text-caption, 14px) !important;
+  font-size: var(--text-caption, 1rem) !important;
   line-height: 1.7;
 }
 .tour-availability {
   border-top: 1px solid var(--border);
   padding-top: 12px;
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
 }
 .tour-availability p {
   display: flex;
@@ -994,12 +999,12 @@
   gap: 7px;
   padding: 9px;
   color: var(--primary);
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   border-top: 1px solid var(--border);
   background: var(--surface-soft);
 }
 .tour-screen figcaption {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   text-align: center;
   color: var(--muted);
   padding: 8px 3px 0;
@@ -1039,7 +1044,7 @@
 }
 .tour-lightbox-heading p {
   margin: 0;
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   color: var(--muted);
 }
 .tour-lightbox-heading button {
@@ -1077,7 +1082,7 @@
 }
 .tour-connected > div > p {
   max-width: 700px;
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
 }
 .tour-connected ol {
@@ -1104,7 +1109,7 @@
   margin: 0 0 12px;
 }
 .tour-connected li p {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   line-height: 1.75;
   color: var(--muted);
   margin-bottom: 0;
@@ -1117,7 +1122,7 @@
   padding-bottom: 70px;
 }
 .tour-plan-summary p {
-  font-size: 14px;
+  font-size: var(--public-control);
   color: var(--muted);
 }
 .tour-plan-summary ul {
@@ -1132,14 +1137,14 @@
   gap: 8px;
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: var(--public-control);
 }
 .tour-plan-summary strong {
   color: var(--primary);
   font-weight: 600;
 }
 .tour-plan-summary small {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   font-weight: 400;
 }
 .tour-faq {
@@ -1219,7 +1224,7 @@
 }
 .plan-comparison-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: 16px;
   margin-top: 16px;
 }
@@ -1241,13 +1246,13 @@
 .plan-card ul {
   margin: 0;
   padding-left: 18px;
-  font-size: 15px;
+  font-size: var(--public-control);
 }
 .plan-price strong {
   font-size: 26px;
 }
 .plan-status {
-  font-size: 15px;
+  font-size: var(--public-control);
   font-weight: 600;
 }
 .plan-comparison-heading {
@@ -1273,7 +1278,7 @@
   background: color-mix(in srgb, var(--primary) 7%, var(--background));
 }
 .plan-card .public-eyebrow {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   letter-spacing: 0.08em;
   margin-bottom: 10px;
 }
@@ -1299,10 +1304,10 @@
   font-size: 38px;
 }
 .plan-card .plan-price span {
-  font-size: 14px;
+  font-size: var(--public-control);
 }
 .plan-audience {
-  font-size: 15px;
+  font-size: var(--public-control);
 }
 .plan-card .plan-audience {
   margin: 0;
@@ -1317,7 +1322,7 @@
 .plan-limits {
   border-top: 1px solid var(--border);
   padding-top: 18px;
-  font-size: 15px;
+  font-size: var(--public-control);
 }
 .plan-card .plan-limits p {
   margin: 0 0 12px;
@@ -1343,7 +1348,7 @@
 }
 .plan-details-table small {
   display: block;
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
   font-weight: 400;
   margin-top: 0.4rem;
   line-height: 1.5;
@@ -1364,11 +1369,11 @@
 .feature-state-needs_refinement,
 .feature-state-planned,
 .feature-state-launch_review {
-  font-size: var(--text-caption, 14px);
+  font-size: var(--text-caption, 1rem);
 }
 .plan-card .plan-cta-note {
   margin: 12px 0 0;
-  font-size: 14px;
+  font-size: var(--public-control);
   line-height: 1.55;
 }
 .plan-table-heading {
@@ -1390,7 +1395,7 @@
   min-width: 1080px !important;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 15px;
+  font-size: var(--public-control);
   line-height: 1.6;
 }
 .plan-details-table thead {
@@ -1434,7 +1439,7 @@
 }
 .plan-details-table thead span {
   display: block;
-  font-size: 14px;
+  font-size: var(--public-control);
   font-weight: 400;
   color: var(--foreground);
   margin-top: 6px;
@@ -1454,26 +1459,16 @@
 }
 .plan-table-note {
   margin-top: 20px !important;
-  font-size: 15px;
+  font-size: var(--public-control);
 }
-@media (max-width: 1199px) {
-  .plan-comparison-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
+
 @media (max-width: 850px) {
-  .plan-comparison-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .plan-comparison-heading {
     grid-template-columns: 1fr;
     gap: 0;
   }
 }
 @media (max-width: 560px) {
-  .plan-comparison-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .plan-card {
     padding: 24px;
   }
@@ -1486,7 +1481,6 @@
 
 /* Pricing follows plan → price → audience → available features → action. */
 .plan-comparison-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
 }
 .plan-card {
@@ -1521,16 +1515,86 @@
 #plan-details-title {
   scroll-margin-top: 24px;
 }
-@media (max-width: 1050px) {
-  .plan-comparison-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
+
 @media (max-width: 620px) {
-  .plan-comparison-grid {
-    grid-template-columns: 1fr;
-  }
   .plan-card-footer {
     margin-top: 0;
   }
+}
+
+/* Public reading scale is independent of customer workspace density settings. */
+.public-site p {
+  max-inline-size: 65ch;
+}
+.public-site
+  :is(
+    .public-lead,
+    .story-items p,
+    .pricing-plan p,
+    .plan-audience,
+    .help-layout details p,
+    .contact-paper p,
+    .tour-copy p,
+    .tour-connected > div > p,
+    .tour-plan-summary p,
+    .public-auth p
+  ) {
+  font-size: var(--public-body);
+}
+.public-site :is(input, select, textarea) {
+  font: inherit;
+  font-size: var(--public-control);
+}
+.public-site :is(.public-width, .public-header, .public-footer) {
+  min-width: 0;
+}
+.public-site :is(.public-width, .public-header, .public-footer) > * {
+  min-width: 0;
+}
+.public-site :is(.plan-card, .pricing-plan, .public-auth) {
+  overflow-wrap: anywhere;
+}
+.public-header {
+  flex-wrap: wrap;
+}
+.public-header nav {
+  flex-wrap: wrap;
+}
+.public-auth {
+  width: min(calc(100% - 2 * var(--public-gutter)), 36rem);
+}
+.public-cta {
+  max-width: min(calc(100% - 2 * var(--public-gutter)), 112rem);
+}
+.plan-comparison-grid {
+  gap: 1.5rem;
+}
+.plan-card h3 {
+  font-size: 1.375rem;
+}
+.plan-details-table {
+  font-size: var(--public-control);
+  background: var(--card);
+}
+.public-site :is(.plan-audience, .plan-benefits, .public-lead) {
+  color: var(--foreground);
+}
+@media (max-width: 1100px) {
+  .public-header {
+    gap: 1rem;
+  }
+  .public-header nav {
+    gap: 1rem;
+  }
+}
+@media (max-width: 780px) {
+  .public-header {
+    flex-wrap: nowrap;
+  }
+  .public-brand > span {
+    font-size: 1.25rem;
+  }
+}
+.public-site .plan-details-table :is(th, td) {
+  font-size: var(--public-control);
 }
