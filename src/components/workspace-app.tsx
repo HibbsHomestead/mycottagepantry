@@ -5321,7 +5321,7 @@ export function WorkspaceApp() {
                         Open bill of materials
                       </button>
                       {selected.bom
-                        ? ` · Version ${selected.bom.version}`
+                        ? ` · Version ${selected.bom.version ?? 'not recorded'}`
                         : ' · Legacy design needs review'}
                     </p>
                   ) : (
@@ -5511,6 +5511,14 @@ export function WorkspaceApp() {
                   product={selected}
                   cost={productCost(selected)}
                   workspace={state}
+                  onReviewTax={
+                    ready && ['Owner', 'Manager'].includes(role)
+                      ? () => {
+                          setModal(null)
+                          go('Settings', 'Taxes')
+                        }
+                      : undefined
+                  }
                 />
               )}
             </ItemDetailLayout>

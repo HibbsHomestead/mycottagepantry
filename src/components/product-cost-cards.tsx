@@ -69,20 +69,114 @@ export function ProductCostCards({
   product,
   cost,
   workspace,
+  onReviewTax,
 }: {
   product: Item
   cost: number
   workspace: Workspace
+  onReviewTax?: () => void
 }) {
   const data = productCostCardData({ product, cost, workspace })
-  if ('error' in data)
+  if ('error' in data) {
+    // Costing is independent of tax resolution. Never replace costs with a zero tax rate.
+    let costs: ReturnType<typeof productCosting> | undefined
+    let costIssue = ''
+    let taxIssue = false
+    try {
+      applicableTaxes(product, workspace.settings[0])
+    } catch {
+      taxIssue = true
+    }
+    try {
+      costs = productCosting(product, workspace)
+    } catch (error) {
+      costIssue = (error as Error).message
+    }
     return (
-      <div className="pricing-summary">
-        <p role="alert" className="warning-text">
-          Pricing unavailable: {data.error}
-        </p>
+      <div className="pricing-summary cost-summary">
+        <div role="status" className="notice warning">
+          <strong>
+            {!costs
+              ? 'Product costs need attention'
+              : taxIssue
+                ? 'Tax setup needs attention'
+                : 'Pricing setup needs attention'}
+          </strong>
+          <p>
+            {costs && taxIssue
+              ? 'We can show your product costs, but some pricing totals need a tax setting.'
+              : costs
+                ? 'We can show your product costs. Review selling price and target margin in Edit Product.'
+                : costIssue}
+          </p>
+          {costs && taxIssue && onReviewTax && (
+            <button type="button" className="text-button" onClick={onReviewTax}>
+              Review tax settings
+            </button>
+          )}
+          {costs && taxIssue && !onReviewTax && (
+            <p>Ask an Owner or Manager to review tax settings.</p>
+          )}
+        </div>
+        <div className="detail-stats cost-card-grid">
+          {costs && (
+            <CostCard
+              label="Cost to make"
+              value={money(costs.perPackage)}
+              note="Per sellable package"
+            />
+          )}
+          <CostCard
+            label="Selling price"
+            value={
+              product.price == null ? 'Not set' : money(Number(product.price))
+            }
+            note={
+              product.priceTaxMode === 'includes'
+                ? 'Saved price · includes tax'
+                : product.priceTaxMode === 'before'
+                  ? 'Saved price · before tax'
+                  : 'Saved price · per-rate tax behaviors'
+            }
+            tone="blue"
+          />
+        </div>
+        {costs && (
+          <section
+            className="product-money-breakdown"
+            aria-label="Cost breakdown per package"
+          >
+            <h3>Where your money goes</h3>
+            <dl>
+              {[
+                [
+                  product.workflow === 'handmade' ? 'Materials' : 'Ingredients',
+                  costs.ingredient,
+                ],
+                ['Packaging', costs.packagingCost],
+                ['Labor', costs.labor],
+                ['Overhead', costs.overhead],
+                ['Waste', costs.waste],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <dt>{label}</dt>
+                  <dd>{costMoney(Number(value) / costs!.packages)}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="product-cost-total">
+              <strong>Total cost per package</strong>
+              <strong>{money(costs.perPackage)}</strong>
+            </div>
+            <p className="table-note">
+              Profit, margin, tax totals and suggested pricing are unavailable
+              until pricing setup is resolved.
+            </p>
+          </section>
+        )}
       </div>
     )
+  }
   const { c, p, wholesale, target, taxes, inclusive, exclusive, breakdown } =
     data
   return (

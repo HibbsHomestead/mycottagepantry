@@ -1,5 +1,5 @@
 .public-site {
-  background: var(--background);
+  background: var(--page-atmosphere), var(--background);
   color: var(--foreground);
   font: 16px/1.7 var(--font-body);
   min-height: 100vh;
