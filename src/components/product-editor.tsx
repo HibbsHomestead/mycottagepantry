@@ -377,6 +377,7 @@ export function ProductEditor({
 
   const images = (
     <ItemImagesPanel
+      mockupProductId={item?.id}
       value={draft}
       assets={workspace.graphic_assets || []}
       canUpload={canManage}
