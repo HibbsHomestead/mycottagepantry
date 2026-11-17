@@ -1,3 +1,4 @@
+import { deliverGraphic } from '../lib/graphic-delivery'
 import { handleEvent } from '../lib/events-handler'
 import { eventTables, validateAllocations } from '../../src/lib/events'
 import { planGateDecision } from '../lib/plan-feature-gates'
@@ -711,6 +712,23 @@ export default async (req: Request, context: Context) => {
     }
 
     await client.query("SELECT set_config('app.business_id',$1,true)", [org])
+    // Images need one owned asset, not every table in the workspace. All
+    // membership/entitlement checks above still run before conditional replies.
+    if (req.method === 'GET' && requestUrl.searchParams.has('asset')) {
+      const result = await client.query(
+        'SELECT data FROM graphic_assets WHERE business_id=$1 AND id=$2',
+        [org, requestUrl.searchParams.get('asset')],
+      )
+      const asset = result.rows[0]?.data
+      if (!asset) throw new Error('Graphic is unavailable.')
+      await client.query('COMMIT')
+      return await deliverGraphic({
+        request: req,
+        org,
+        asset,
+        store: getStore('label-graphics'),
+      })
+    }
     const state: Workspace = {}
     async function save(
       table: string,
@@ -1899,40 +1917,6 @@ export default async (req: Request, context: Context) => {
       )
     }
 
-    if (req.method === 'GET' && requestUrl.searchParams.has('asset')) {
-      const asset = state.graphic_assets.find(
-        (a) => a.id === requestUrl.searchParams.get('asset'),
-      )
-      if (!asset) throw new Error('Graphic is unavailable.')
-      const bytes = await getStore('label-graphics').get(`${org}/${asset.id}`, {
-        type: 'arrayBuffer',
-      })
-      if (!bytes) throw new Error('Graphic file is unavailable.')
-      const previewWidth = Number(requestUrl.searchParams.get('imageWidth'))
-      const preview =
-        [128, 480, 800].includes(previewWidth) &&
-        ['image/png', 'image/jpeg', 'image/webp'].includes(asset.fileType)
-          ? await sharp(Buffer.from(bytes), { limitInputPixels: 40000000 })
-              .rotate()
-              .resize({
-                width: previewWidth,
-                height: previewWidth,
-                fit: 'inside',
-                withoutEnlargement: true,
-              })
-              .webp({ quality: 85 })
-              .toBuffer()
-          : null
-      await client.query('COMMIT')
-      return new Response(preview ? new Uint8Array(preview) : bytes, {
-        headers: {
-          'Content-Type': preview ? 'image/webp' : asset.fileType,
-          'Cache-Control': 'private, no-store',
-          'X-Content-Type-Options': 'nosniff',
-          'Content-Security-Policy': "default-src 'none'",
-        },
-      })
-    }
     if (
       req.method === 'POST' &&
       (requestUrl.searchParams.has('upload') ||

@@ -1,0 +1,54 @@
+{
+  "conditions": "Local Chromium, desktop 1440x1000, unthrottled localhost. Six unique assets made from two real photos at 1200px. Actual old Sharp algorithm versus new delivery helper, synthetic cookie authorization and memory Blob adapter. Workspace API supplied by an isolated fixture proxy; no production database, Identity or Blob latency included.",
+  "results": [
+    {
+      "phase": "before",
+      "load": "cold",
+      "serverRequests": 6,
+      "responseImageBytes": 328446,
+      "originalReads": 6,
+      "transforms": 6,
+      "resourceRequests": 6,
+      "transferredBytes": 330246,
+      "imagesReadyMs": 876
+    },
+    {
+      "phase": "before",
+      "load": "repeat",
+      "serverRequests": 6,
+      "responseImageBytes": 328446,
+      "originalReads": 6,
+      "transforms": 6,
+      "resourceRequests": 6,
+      "transferredBytes": 330246,
+      "imagesReadyMs": 824
+    },
+    {
+      "phase": "after",
+      "load": "cold",
+      "serverRequests": 6,
+      "responseImageBytes": 328446,
+      "originalReads": 6,
+      "transforms": 6,
+      "resourceRequests": 6,
+      "transferredBytes": 330246,
+      "imagesReadyMs": 867
+    },
+    {
+      "phase": "after",
+      "load": "repeat",
+      "serverRequests": 6,
+      "responseImageBytes": 0,
+      "originalReads": 0,
+      "transforms": 0,
+      "resourceRequests": 6,
+      "transferredBytes": 1800,
+      "imagesReadyMs": 605
+    },
+    {
+      "phase": "after",
+      "load": "filter-and-navigation",
+      "additionalImageBytes": 0
+    }
+  ]
+}
