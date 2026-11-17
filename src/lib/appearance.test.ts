@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   accentThemes,
   appearanceBootScript,
@@ -22,6 +22,8 @@ const contrast = (a: string, b: string) => {
     y = luminance(b)
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
 }
+beforeEach(() => window.history.replaceState({}, '', '/oven'))
+
 describe('oven appearance', () => {
   it('coordinates warm surfaces and atmospheric glows for every accent', () => {
     for (const theme of accentThemes) {
@@ -209,10 +211,29 @@ it('uses sampled logo purple before mount while preserving explicitly saved pale
 })
 
 it('keeps the business startup hint out of platform administration', () => {
-  const storage = { getItem: () => JSON.stringify({ theme: 'orchard', mode: 'dark' }) }
+  const storage = {
+    getItem: () => JSON.stringify({ theme: 'orchard', mode: 'dark' }),
+  }
   for (const pathname of ['/admin', '/platform-support']) {
-    new Function('localStorage', 'window', appearanceBootScript())(storage, { location: { pathname } })
+    new Function('localStorage', 'window', appearanceBootScript())(storage, {
+      location: { pathname },
+    })
     expect(document.documentElement.dataset.mode).toBe('light')
-    expect(document.documentElement.style.getPropertyValue('--primary')).toBe('#5c3a83')
+    expect(document.documentElement.style.getPropertyValue('--primary')).toBe(
+      '#5c3a83',
+    )
+  }
+})
+
+it('keeps private business preferences out of ordinary public startup', () => {
+  for (const pathname of ['/', '/features', '/pricing', '/login', '/signup']) {
+    new Function('localStorage', 'window', appearanceBootScript())(
+      { getItem: () => JSON.stringify({ theme: 'orchard', mode: 'dark' }) },
+      { location: { pathname } },
+    )
+    expect(document.documentElement.dataset.mode).toBe('light')
+    expect(document.documentElement.style.getPropertyValue('--primary')).toBe(
+      '#5c3a83',
+    )
   }
 })
