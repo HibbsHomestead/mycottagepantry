@@ -446,7 +446,11 @@ export function PantryInventory({
                   aria-label={`View photo and details for ${i.name}`}
                   onClick={() => open('ingredient-detail', i)}
                 >
-                  <PantryPhoto item={i} assets={assets} />
+                  <PantryPhoto
+                    item={i}
+                    assets={assets}
+                    presentation="ingredient-card"
+                  />
                 </button>
                 <div className="pantry-card-main">
                   <button
