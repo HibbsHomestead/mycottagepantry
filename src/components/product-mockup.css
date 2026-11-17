@@ -198,3 +198,39 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+.dropbox-import {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-block: 1rem;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+.dropbox-import h4 {
+  font-size: 1.15rem;
+  margin-block: 0 0.65rem;
+}
+.dropbox-import p {
+  overflow-wrap: anywhere;
+}
+.dropbox-review {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.dropbox-image {
+  padding: 1rem;
+  border-radius: 8px;
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+}
+.dropbox-image img {
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+}
+.dropbox-import .btn {
+  white-space: normal;
+}

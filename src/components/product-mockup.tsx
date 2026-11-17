@@ -1,3 +1,4 @@
+import { DropboxArtworkImport } from './dropbox-artwork-import'
 import { useEffect, useRef, useState } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import {
@@ -655,6 +656,16 @@ function MockupEditor({
                 </label>
               </fieldset>
             </details>
+            <DropboxArtworkImport
+              productId={productId}
+              disabled={busy}
+              updated={artAsset?.sourceMetadata?.provider === 'dropbox'}
+              onBusy={setBusy}
+              onImported={(result) => {
+                onWorkspace(result.workspace)
+                change({ ...c, artworkId: result.asset.id })
+              }}
+            />
             <fieldset disabled={!art || busy}>
               <legend>Artwork placement · source pixels</legend>
               <div className="mockup-numbers">
