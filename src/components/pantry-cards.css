@@ -258,3 +258,50 @@
   outline: 1px dashed var(--border);
   outline-offset: -1px;
 }
+
+/* Card photos fill the available box, including small source images. Contain
+   preserves packaging; whitespace baked into originals is left intact. */
+.app-shell .pantry-photo.ingredient-card .photo-foreground,
+.app-shell .pantry-photo.product-card .photo-foreground {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  object-fit: contain;
+}
+.pantry-card-photo-button:has(.ingredient-card) {
+  padding: 6px 8px 0;
+}
+.pantry-card-photo-button .ingredient-card {
+  /* Keep the existing photo-row height while reclaiming side padding. */
+  aspect-ratio: auto;
+  height: auto;
+}
+.pantry-card-photo-button:has(.ingredient-card) {
+  container-type: inline-size;
+}
+.pantry-card-photo-button .ingredient-card {
+  height: calc((100cqw - 32px) * 2 / 3);
+}
+.app-shell .pantry-photo.product-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+.app-shell .pantry-photo.product-card .product-photo-extension {
+  position: absolute;
+  inset: -24px;
+  width: calc(100% + 48px);
+  height: calc(100% + 48px);
+  max-width: none;
+  max-height: none;
+  object-fit: cover;
+  filter: blur(18px);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: -1;
+}
+.pantry-photo.product-card .photo-foreground {
+  position: relative;
+}

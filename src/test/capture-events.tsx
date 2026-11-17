@@ -94,6 +94,8 @@ export function mountEventsFixture() {
           mutate={async (action, _table, data) => {
             document.body.dataset.lastAction = action
             if (action === 'eventSave') {
+              if (params.get('failSave') === '1')
+                throw new Error('Connection interrupted')
               const saved = validateEvent(
                 data as Parameters<typeof validateEvent>[0],
                 state.settings[0],

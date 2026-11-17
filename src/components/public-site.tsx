@@ -6,10 +6,20 @@ import { getSessionStatus } from '@/lib/session.functions'
 import { useRegistrationPolicy } from '@/lib/registration-policy-client'
 import { ProductTour } from './product-tour'
 import { PricingComparison } from './pricing-comparison'
+import { WorkspaceBackground } from './workspace-background'
+import {
+  applyAppearance,
+  appearanceVariables,
+  defaultAppearance,
+} from '@/lib/appearance'
+import type { CSSProperties } from 'react'
 import './public-site.css'
 
 export function PublicSite({ children }: { children: ReactNode }) {
   useWorkspaceViewport()
+  useEffect(() => {
+    applyAppearance(defaultAppearance)
+  }, [])
   const policies = useRegistrationPolicy()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)
@@ -51,7 +61,11 @@ export function PublicSite({ children }: { children: ReactNode }) {
     }
   }, [])
   return (
-    <div className="public-site">
+    <div
+      className="public-site"
+      style={appearanceVariables(defaultAppearance) as CSSProperties}
+    >
+      <WorkspaceBackground />
       <a className="public-skip" href="#main">
         Skip to content
       </a>
@@ -174,12 +188,22 @@ export function HomePage() {
               <i />
               <span>Cottage Pantry / Products</span>
             </div>
-            <img
-              src="/screenshots/current-hero.webp"
-              alt="Current Cottage Pantry product list with bread and cookie photographs, selling prices and calculated costs using sample data"
-              width="1440"
-              height="960"
-            />
+            <picture>
+              <source
+                media="(max-width: 780px)"
+                srcSet="/screenshots/home-products-mobile.webp"
+                width="390"
+                height="960"
+              />
+              <img
+                src="/screenshots/home-products.webp"
+                alt="Current Cottage Pantry products with bread and cookie photographs, prices and stock using demonstration data"
+                width="1440"
+                height="960"
+                fetchPriority="high"
+                decoding="async"
+              />
+            </picture>
             <figcaption>
               Actual oven · demonstration data ·{' '}
               <a href="/demo-photos/credits.html">Photo credits</a>

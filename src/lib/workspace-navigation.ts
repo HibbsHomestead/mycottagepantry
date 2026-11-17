@@ -1,7 +1,7 @@
 /** Canonical hash routes retain compatibility with previously shared workspace links. */
 export const sectionTabs: Record<string, string[]> = {
   Dashboard: [],
-  Events: ['List', 'Month', 'Week', 'Day'],
+  Events: ['Month', 'Week', 'Day', 'List'],
   Handmade: [
     'Overview',
     'Materials & Supplies',

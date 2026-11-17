@@ -1,0 +1,11 @@
+{
+  "evidence": "Synthetic Dropbox and storage fixtures only. No real large source file or live storage tested.",
+  "sourceBytes": "Unknown; the 100123456 value is fabricated fixture metadata",
+  "copyBytes": 10348,
+  "copyWidth": 500,
+  "copyHeight": 300,
+  "copyFormat": "image/png",
+  "alpha": true,
+  "exportWidth": 1600,
+  "exportHeight": 1760
+}

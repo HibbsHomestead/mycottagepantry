@@ -1,3 +1,4 @@
+import { installMarketingPhotos } from './marketing-photo-fixture'
 import { test, expect } from '@playwright/test'
 import sharp from 'sharp'
 import { demoData } from '../src/lib/demo'
@@ -30,6 +31,7 @@ test('captures current feature screens with demonstration records', async ({
       revision: 1,
     },
   ]
+  await installMarketingPhotos(page, workspace)
   await installWorkspaceFixture(page)
   await page.route('**/api/workspace*', (route) => {
     expect(route.request().method()).toBe('GET')
@@ -65,9 +67,11 @@ test('captures current feature screens with demonstration records', async ({
       }
       if (name === 'labels') {
         await page
-          .getByRole('button', { name: 'Saved Labels', exact: true })
+          .getByRole('button', {
+            name: 'Edit White bread · demonstration design',
+            exact: true,
+          })
           .click()
-        await page.getByRole('button', { name: 'Open label' }).click()
         await expect(page.locator('.studio-editor')).toBeVisible()
         if (mobile) {
           await page
@@ -80,12 +84,13 @@ test('captures current feature screens with demonstration records', async ({
         target = page.locator(mobile ? '.studio-stage-area' : '.studio-editor')
       }
       if (name === 'finances')
-        await page
-          .getByRole('combobox', { name: 'Tax reporting period', exact: true })
-          .selectOption('Last month')
+        target = page
+          .locator('.finance-workspace, .finance-reports, .application-page')
+          .first()
       if (mobile && name === 'pantry') target = page.locator('.pantry-table')
       if (mobile && name === 'recipes') target = page.locator('.recipe-grid')
-      if (mobile && name === 'finances') target = page.locator('.tax-center-v2')
+      if (mobile && name === 'finances')
+        target = page.locator('.application-page').first()
       if (mobile && name === 'production')
         target = page.locator('.production-layout')
       await page.evaluate(() => document.fonts.ready)
@@ -108,7 +113,10 @@ test('captures current feature screens with demonstration records', async ({
         clip.width = box!.width
         clip.height = Math.min(box!.height, mobile ? 693 : box!.width * 0.75)
       }
-      const screenshot = await page.screenshot({ clip, animations: 'disabled' })
+      const screenshot = await page.screenshot({
+        clip,
+        animations: 'disabled',
+      })
       await sharp(screenshot)
         .resize(mobile ? 390 : 1000, mobile ? 693 : 750, {
           fit: 'contain',
