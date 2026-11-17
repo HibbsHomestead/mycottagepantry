@@ -14,6 +14,8 @@ import {
 import { Dialog, DialogContent } from './ui/dialog'
 import { ItemDetailHeader } from './item-detail-layout'
 import './events-workspace.css'
+import { EventCalendar } from './event-calendar'
+import { validateCalendarChange } from '../lib/event-calendar'
 
 type Props = {
   state: Workspace
@@ -53,6 +55,9 @@ export function EventsWorkspace({
   const [draft, setDraft] = useState<Item | null>(null)
   const [tab, setTab] = useState('Overview')
   const [error, setError] = useState('')
+  const [calendarMessage, setCalendarMessage] = useState('')
+  const [calendarError, setCalendarError] = useState('')
+  const [pendingEvent, setPendingEvent] = useState<Item | null>(null)
   const [kind, setKind] = useState('batch')
   const [recordId, setRecordId] = useState('')
   const [allocations, setAllocations] = useState<Record<string, string>>({})
@@ -120,7 +125,7 @@ export function EventsWorkspace({
     setError('')
     setRecordId('')
   }
-  function create() {
+  function create(day = anchor, time?: string, allDay = false) {
     setSelected(null)
     setTab('Overview')
     setError('')
@@ -129,11 +134,15 @@ export function EventsWorkspace({
       name: '',
       type: eventTypes[0],
       status: 'Draft',
-      startDate: anchor,
-      endDate: anchor,
-      startTime: '09:00',
-      endTime: '13:00',
-      allDay: false,
+      startDate: day,
+      endDate: day,
+      startTime: time || '09:00',
+      endTime: time
+        ? Number(time.slice(0, 2)) === 23
+          ? '23:59'
+          : `${String(Number(time.slice(0, 2)) + 1).padStart(2, '0')}:${time.slice(3)}`
+        : '13:00',
+      allDay,
       location: '',
       description: '',
       notes: '',
@@ -213,8 +222,14 @@ export function EventsWorkspace({
           year: 'numeric',
         })
       : first === last
-        ? first
-        : `${first} – ${last}`
+        ? date.toLocaleDateString(undefined, {
+            timeZone: 'UTC',
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : `${new Date(first + 'T12:00:00Z').toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric' })} – ${new Date(last + 'T12:00:00Z').toLocaleDateString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}`
   function step(amount: number) {
     if (view === 'Month' || view === 'List')
       setAnchor(
@@ -228,15 +243,31 @@ export function EventsWorkspace({
   }
   const timing = (e: Item) =>
     `${e.startDate}${e.startDate !== e.endDate ? ' – ' + e.endDate : ''} · ${e.allDay ? 'All day' : e.startTime + '–' + e.endTime}`
-  const chip = (e: Item) => (
-    <button key={e.id} className="event-chip" onClick={() => show(e)}>
-      <strong>{e.name}</strong>
-      <span>
-        {e.allDay ? 'All day' : e.startTime}
-        {e.startDate !== e.endDate ? ' · Multi-day' : ''} · {e.status}
-      </span>
-    </button>
-  )
+  async function reschedule(next: Item) {
+    if (saving.current || busy) return
+    saving.current = true
+    setCalendarError('')
+    try {
+      validateCalendarChange(next, state.settings[0])
+      setPendingEvent(next)
+      setCalendarMessage('Saving schedule…')
+      await mutate('eventSave', 'events', {
+        ...next,
+        expectedRevision: next.revision,
+      })
+      setCalendarMessage(
+        'Event rescheduled. Linked runs and pickup promises are unchanged; no notifications sent.',
+      )
+    } catch (e) {
+      setCalendarMessage('')
+      setCalendarError(
+        `${(e as Error).message} The original schedule is unchanged.`,
+      )
+    } finally {
+      setPendingEvent(null)
+      saving.current = false
+    }
+  }
   const related = (table: string) =>
     (state[table] || []).filter((l) => l.eventId === event?.id)
   const sources: Record<string, Item[]> = {
@@ -425,15 +456,25 @@ export function EventsWorkspace({
           </button>
         </div>
         <h2 aria-live="polite">{heading}</h2>
+        <Label name="Go to date">
+          <input
+            type="date"
+            value={anchor}
+            onChange={(e) => {
+              if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value))
+                setAnchor(e.target.value)
+            }}
+          />
+        </Label>
         {editable && (
-          <button className="btn" onClick={create}>
+          <button className="btn" onClick={() => create()}>
             New event
           </button>
         )}
       </div>
       <div className="event-toolbar">
         <div className="button-row" aria-label="Event view">
-          {['List', 'Month', 'Week', 'Day'].map((v) => (
+          {['Month', 'Week', 'Day', 'List'].map((v) => (
             <a
               key={v}
               className={view === v ? 'btn' : button}
@@ -535,53 +576,35 @@ export function EventsWorkspace({
           </table>
         </div>
       ) : (
-        <>
-          <div
-            className={`event-calendar event-calendar-${view.toLowerCase()}`}
-            aria-label={`${view} calendar`}
-          >
-            {Array.from(
-              { length: view === 'Month' ? 42 : view === 'Week' ? 7 : 1 },
-              (_, index) => {
-                const day = addDays(first, index)
-                return (
-                  <section
-                    key={day}
-                    className={
-                      day === today ? 'event-day is-today' : 'event-day'
-                    }
-                    aria-label={day}
-                  >
-                    <h3>
-                      {new Date(day + 'T12:00:00Z').toLocaleDateString(
-                        undefined,
-                        {
-                          timeZone: 'UTC',
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        },
-                      )}
-                    </h3>
-                    {visible
-                      .filter(
-                        (e) => e.startDate <= day && eventLastDay(e) >= day,
-                      )
-                      .map(chip)}
-                  </section>
-                )
-              },
-            )}
-          </div>
-          <div className="event-mobile-agenda">
-            {visible.map((e) => (
-              <article key={e.id}>
-                <p>{timing(e)}</p>
-                {chip(e)}
-              </article>
-            ))}
-          </div>
-        </>
+        <EventCalendar
+          view={view}
+          anchor={anchor}
+          first={first}
+          today={today}
+          timezone={timezone}
+          events={
+            pendingEvent
+              ? [
+                  ...visible.filter((e) => e.id !== pendingEvent.id),
+                  pendingEvent,
+                ]
+              : visible
+          }
+          editable={editable}
+          busy={busy || !!pendingEvent}
+          select={setAnchor}
+          create={create}
+          show={show}
+          reschedule={reschedule}
+        />
+      )}
+      <p className="calendar-feedback" role="status">
+        {calendarMessage}
+      </p>
+      {calendarError && (
+        <p className="connection-note error" role="alert">
+          {calendarError}
+        </p>
       )}
       <Dialog
         open={!!draft || !!event}
