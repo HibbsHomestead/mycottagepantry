@@ -47,7 +47,7 @@ const sections = [
       'Update the price of your flour without adding a bag to the shelf. Receive the bag when it arrives.',
     note: 'Lot selection and expiration-based stock allocation are not available.',
     image: 'pantry',
-    alt: 'Current Inventory with ingredient photographs, demonstration quantities, unit costs and stock status',
+    alt: 'Current Inventory ingredient list with demonstration balances, unit costs and reorder status',
     availability: [{ label: 'Pantry & stock', feature: 'inventory' }],
   },
   {
@@ -66,7 +66,7 @@ const sections = [
       'A recipe makes four loaves. Link it to your existing single-loaf product and review the output-to-selling-unit relationship.',
     note: 'Source formats vary. Review every import; some pages need pasted text or manual entry. Automatic PDF and image reading are unavailable.',
     image: 'recipes',
-    alt: 'Current recipe list with bread, cookie and cinnamon roll photographs, demonstration yields and calculated batch and per-unit costs',
+    alt: 'Current Recipes & Designs list showing demonstration white bread and other recipes with batch and per-unit costs',
     availability: [
       { label: 'Recipes & links', feature: 'productPricing' },
       { label: 'Reviewed import', feature: 'recipeImport' },
@@ -158,10 +158,7 @@ function ExpandableScreenshot({
             <Expand size={15} aria-hidden="true" /> Take a closer look
           </span>
         </Dialog.Trigger>
-        <figcaption>
-          Actual app screen · demonstration data ·{' '}
-          <a href="/demo-photos/credits.html">Photo credits</a>
-        </figcaption>
+        <figcaption>Actual app screen · demonstration data</figcaption>
       </figure>
       <Dialog.Portal>
         <Dialog.Overlay className="tour-lightbox-overlay" />
@@ -211,12 +208,12 @@ function FeatureScreenshot({
     <picture>
       <source
         media="(max-width: 780px)"
-        srcSet={`/screenshots/current-${image}-mobile.webp`}
+        srcSet={`/screenshots/features-${image}-mobile.webp`}
         width="390"
         height="693"
       />
       <img
-        src={`/screenshots/current-${image}.webp`}
+        src={`/screenshots/features-${image}.webp`}
         width="1000"
         height="750"
         alt={alt}

@@ -1,15 +1,8 @@
-/* Default Inventory polish. Inventory scope and semantic palette tokens
-   preserve unrelated pages and all business appearance preferences. */
-body:has(.inventory-layout-page) .inventory-layout-page {
+/* Approved Inventory presentation; semantic tokens preserve appearance preferences. */
+body:has(.cover-background) .inventory-layout-page {
   --inventory-border: color-mix(in srgb, var(--primary) 12%, var(--border));
 }
-body:has(.inventory-layout-page) .cover-background {
-  background: color-mix(in srgb, var(--primary) 4%, var(--background));
-}
-body:has(.inventory-layout-page) .cover-background > svg {
-  opacity: 0.28;
-}
-body:has(.inventory-layout-page)
+body:has(.cover-background)
   .inventory-layout-page
   :is(
     .pantry-summary > span,
@@ -22,68 +15,59 @@ body:has(.inventory-layout-page)
   border-radius: 14px;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--foreground) 3%, transparent);
 }
-body:has(.inventory-layout-page) .inventory-layout-page .pantry-summary strong {
+body:has(.cover-background) .inventory-layout-page .pantry-summary strong {
   font-variant-numeric: tabular-nums;
 }
-body:has(.inventory-layout-page) .inventory-layout-page .pantry-v2 > .toolbar {
+body:has(.cover-background) .inventory-layout-page .pantry-v2 > .toolbar {
   padding: 14px;
   border: 1px solid var(--inventory-border);
   border-radius: 12px;
   background: var(--card);
   gap: 12px;
 }
-body:has(.inventory-layout-page) .inventory-layout-page .inventory-tabs {
+body:has(.cover-background) .inventory-layout-page .inventory-tabs {
   column-gap: 8px;
 }
-body:has(.inventory-layout-page) .inventory-layout-page .pantry-table {
+body:has(.cover-background) .inventory-layout-page .pantry-table {
   padding: 0;
   min-width: 0;
 }
-body:has(.inventory-layout-page)
-  .inventory-layout-page
-  .pantry-table
-  .table-wrap {
+body:has(.cover-background) .inventory-layout-page .pantry-table .table-wrap {
   max-width: 100%;
   overflow-x: auto;
   border-radius: inherit;
 }
 @media screen and (min-width: 701px) {
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-table table {
+  body:has(.cover-background) .inventory-layout-page .pantry-table table {
     min-width: 72rem;
     table-layout: auto;
   }
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-table th {
+  body:has(.cover-background) .inventory-layout-page .pantry-table th {
     background: var(--surface-soft, var(--accent-soft));
     white-space: nowrap !important;
     overflow-wrap: normal;
     word-break: normal;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-table
-    :is(th, td) {
+  body:has(.cover-background) .inventory-layout-page .pantry-table :is(th, td) {
     padding: 12px 14px !important;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     .sort-heading {
     white-space: nowrap;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     :is(th, td):first-child {
     min-width: 17rem;
     max-width: 21rem;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-table
-    .item-name {
+  body:has(.cover-background) .inventory-layout-page .pantry-table .item-name {
     width: 18rem;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     .item-name
@@ -91,7 +75,7 @@ body:has(.inventory-layout-page)
     overflow-wrap: break-word;
     word-break: normal;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     :is(th, td):is(:nth-child(2), :nth-child(8)) {
@@ -101,28 +85,22 @@ body:has(.inventory-layout-page)
   }
 }
 @media screen and (max-width: 700px) {
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-summary {
+  body:has(.cover-background) .inventory-layout-page .pantry-summary {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
     gap: 6px;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-summary
-    > span {
+  body:has(.cover-background) .inventory-layout-page .pantry-summary > span {
     padding: 10px;
     gap: 5px;
     align-items: flex-start;
     flex-direction: column;
     min-width: 0;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-summary
-    strong {
+  body:has(.cover-background) .inventory-layout-page .pantry-summary strong {
     font-size: 1.125rem;
     overflow-wrap: anywhere;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-summary
     > span
@@ -130,7 +108,7 @@ body:has(.inventory-layout-page)
     width: 16px;
     height: 16px;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .inventory-filter-actions
     > .inventory-tabs {
@@ -138,21 +116,15 @@ body:has(.inventory-layout-page)
     overflow-x: auto;
     width: 100%;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .inventory-tabs
-    > button {
+  body:has(.cover-background) .inventory-layout-page .inventory-tabs > button {
     flex-shrink: 0;
     white-space: nowrap;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-v2
-    > .toolbar {
+  body:has(.cover-background) .inventory-layout-page .pantry-v2 > .toolbar {
     padding: 10px;
     gap: 8px;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     :is(table, tbody) {
@@ -160,21 +132,17 @@ body:has(.inventory-layout-page)
     min-width: 0;
     width: 100%;
   }
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-table thead {
+  body:has(.cover-background) .inventory-layout-page .pantry-table thead {
     display: none;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-table
-    tbody
-    > tr {
+  body:has(.cover-background) .inventory-layout-page .pantry-table tbody > tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(5rem, 28%) 44px;
     gap: 4px 8px;
     padding: 12px;
     border-bottom: 1px solid var(--inventory-border);
   }
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-table td {
+  body:has(.cover-background) .inventory-layout-page .pantry-table td {
     display: block;
     width: auto;
     min-width: 0;
@@ -185,28 +153,25 @@ body:has(.inventory-layout-page)
     overflow-wrap: break-word;
     word-break: normal;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='Item'] {
     grid-column: 1;
     grid-row: 1;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-table
-    .item-name {
+  body:has(.cover-background) .inventory-layout-page .pantry-table .item-name {
     width: auto;
     align-items: flex-start;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     .item-name
     > span {
     overflow-wrap: break-word;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='Category'] {
@@ -214,7 +179,7 @@ body:has(.inventory-layout-page)
     grid-row: 2;
     color: var(--muted);
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='On hand'] {
@@ -223,7 +188,7 @@ body:has(.inventory-layout-page)
     text-align: right !important;
     font-variant-numeric: tabular-nums;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='On hand']::before {
@@ -233,13 +198,13 @@ body:has(.inventory-layout-page)
     font-weight: normal;
     margin-bottom: 4px;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='Status'] {
     grid-column: 1 / 3;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td[data-label='Actions'] {
@@ -247,7 +212,7 @@ body:has(.inventory-layout-page)
     grid-row: 1 / 3;
   }
   /* These secondary values remain in the existing item-details dialog. */
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-table
     td:is(
@@ -258,24 +223,21 @@ body:has(.inventory-layout-page)
     ) {
     display: none;
   }
-  body:has(.inventory-layout-page) .inventory-layout-page {
+  body:has(.cover-background) .inventory-layout-page {
     padding-bottom: calc(
       var(--mobile-nav-height, 80px) + 110px + env(safe-area-inset-bottom)
     );
   }
 }
 @media screen and (max-width: 374px) {
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-summary {
+  body:has(.cover-background) .inventory-layout-page .pantry-summary {
     grid-template-columns: 1fr;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .pantry-summary
-    > span {
+  body:has(.cover-background) .inventory-layout-page .pantry-summary > span {
     flex-direction: row;
     align-items: center;
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     .pantry-summary
     > span
@@ -288,28 +250,25 @@ body:has(.inventory-layout-page)
   }
 }
 @media screen and (max-width: 700px) {
-  body:has(.inventory-layout-page) [data-sonner-toaster] {
+  body:has(.cover-background):has(.inventory-layout-page)
+    [data-sonner-toaster] {
     top: calc(64px + env(safe-area-inset-top)) !important;
     bottom: auto !important;
   }
 }
 @media screen and (max-width: 700px) {
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .inventory-order-controls {
+  body:has(.cover-background) .inventory-layout-page .inventory-order-controls {
     width: 100%;
   }
-  body:has(.inventory-layout-page)
-    .inventory-layout-page
-    .section-category-tools {
+  body:has(.cover-background) .inventory-layout-page .section-category-tools {
     flex-basis: 100%;
     max-width: 100%;
   }
-  body:has(.inventory-layout-page) .inventory-layout-page .pantry-sort {
+  body:has(.cover-background) .inventory-layout-page .pantry-sort {
     flex: 1 1 9rem;
     min-width: min(9rem, 100%);
   }
-  body:has(.inventory-layout-page)
+  body:has(.cover-background)
     .inventory-layout-page
     [aria-label='Reverse sort direction'] {
     flex: 0 1 auto;
