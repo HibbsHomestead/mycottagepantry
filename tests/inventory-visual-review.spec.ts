@@ -181,14 +181,14 @@ test("preview palettes, responsive rows and existing actions", async ({
     }
   }
   await page.goto(workspaceFixtureUrl("Inventory/Ingredients"));
-  await expect(page.locator(".cover-background")).toHaveCount(0);
+  await expect(page.locator(".inventory-background")).toBeVisible();
   expect(
     await page
       .locator(".inventory-layout-page")
       .evaluate((el) =>
         getComputedStyle(el).getPropertyValue("--inventory-border"),
       ),
-  ).toBe("");
+  ).not.toBe("");
 });
 
 test("long inventory text and enlarged phone text remain contained", async ({

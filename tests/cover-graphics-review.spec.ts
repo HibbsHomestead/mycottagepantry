@@ -18,13 +18,13 @@ const variants = [
   { theme: "cottage", mode: "dark" },
 ] as const;
 async function assertDecorative(page: import("@playwright/test").Page) {
-  await expect(page.locator(".cover-background")).toBeVisible();
+  await expect(page.locator(".cover-background:visible")).toBeVisible();
   expect(
-    await page.locator(".cover-background").getAttribute("aria-hidden"),
+    await page.locator(".cover-background:visible").getAttribute("aria-hidden"),
   ).toBe("true");
   expect(
     await page
-      .locator(".cover-background")
+      .locator(".cover-background:visible")
       .evaluate((el) => getComputedStyle(el).pointerEvents),
   ).toBe("none");
   expect(
