@@ -3,8 +3,8 @@
   --public-body: 1.125rem;
   --public-control: 1rem;
   --text-caption: 1rem;
-  --public-gutter: clamp(1.125rem, 3vw, 4rem);
-  --public-width: 120rem;
+  --public-gutter: clamp(18px, 3vw, 32px);
+  --public-width: 1600px;
   background: var(--page-atmosphere), var(--background);
   font: var(--public-body)/1.7 var(--font-body);
   min-height: 100vh;
@@ -189,12 +189,12 @@
 }
 .public-hero {
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  align-items: center;
-  gap: 24px;
-  min-height: 710px;
-  padding-top: 70px;
-  padding-bottom: 95px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 40px;
+  min-height: 0;
+  padding-top: 36px;
+  padding-bottom: 56px;
   overflow: hidden;
 }
 .hero-copy {
@@ -209,7 +209,7 @@
   letter-spacing: -0.05em;
 }
 .hero-product {
-  padding: 24px 0;
+  padding: 0;
   min-width: 0;
 }
 .hero-product-heading {
@@ -626,11 +626,11 @@
     display: none;
   }
   .public-width {
-    padding-left: 30px;
-    padding-right: 30px;
+    padding-left: var(--public-gutter);
+    padding-right: var(--public-gutter);
   }
   .public-hero {
-    min-height: 650px;
+    min-height: 0;
   }
   .hero-copy h1 {
     font-size: 3rem;
@@ -702,12 +702,12 @@
     margin: 0;
   }
   .public-width {
-    padding-left: 22px;
-    padding-right: 22px;
+    padding-left: var(--public-gutter);
+    padding-right: var(--public-gutter);
   }
   .public-hero {
     grid-template-columns: 1fr;
-    padding-top: 45px;
+    padding-top: 24px;
     padding-bottom: 50px;
     gap: 0;
   }
@@ -804,7 +804,7 @@
 
 /* Public tour: editorial sections and inspectable real application screens. */
 .pricing-width {
-  max-width: 1520px;
+  max-width: var(--public-width);
 }
 
 .pricing-plan {
@@ -1564,7 +1564,7 @@
   width: min(calc(100% - 2 * var(--public-gutter)), 36rem);
 }
 .public-cta {
-  max-width: min(calc(100% - 2 * var(--public-gutter)), 112rem);
+  max-width: calc(min(100%, var(--public-width)) - 2 * var(--public-gutter));
 }
 .plan-comparison-grid {
   gap: 1.5rem;
@@ -1760,5 +1760,17 @@
 @media (max-width: 600px) {
   .tour-lightbox-image img {
     max-height: calc(94dvh - 190px);
+  }
+}
+
+/* Keep the homepage preview readable at tablet widths. */
+@media (min-width: 781px) and (max-width: 1000px) {
+  .public-hero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .hero-product {
+    max-width: 760px;
+    width: 100%;
   }
 }

@@ -204,7 +204,10 @@ export function HomePage() {
                 decoding="async"
               />
             </picture>
-            <figcaption>Actual oven · demonstration data</figcaption>
+            <figcaption>
+              Actual oven · demonstration data ·{' '}
+              <a href="/demo-photos/credits.html">Photo credits</a>
+            </figcaption>
           </figure>
           <div className="hero-note">
             From a bag of flour
