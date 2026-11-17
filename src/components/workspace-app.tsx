@@ -103,7 +103,8 @@ import { ItemImagesPanel } from '@/components/item-images-panel'
 import { ItemPhotoField } from '@/components/item-photo-field'
 import * as Tabs from '@radix-ui/react-tabs'
 import '@/components/product-editor.css'
-import { ProductCards } from '@/components/product-cards'
+import { ProductBrowse } from '@/components/product-browse'
+import { defaultProductCriteria } from '@/lib/product-browse'
 import { LabelStudio } from '@/components/label-studio'
 import { LabelPreviewDialog } from './label-preview-dialog'
 import {
@@ -341,7 +342,7 @@ export function WorkspaceApp() {
   const [managingRecipeCategories, setManagingRecipeCategories] =
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
-  const [productCategoryFilter, setProductCategoryFilter] = useState('all')
+  const [productCriteria, setProductCriteria] = useState(defaultProductCriteria)
   const categorySettings = (patch: Partial<Item>) =>
     setState((w) => workspaceCategorySettings(w, patch))
   const [draft, setDraft] = useState<Record<string, any>>({}),
@@ -556,6 +557,20 @@ export function WorkspaceApp() {
     setSub(next.sub)
     setFilter(query.get('filter') || next.filter)
     setSearch(query.get('search') || '')
+    if (
+      next.page === 'Products & Pricing' &&
+      [...query.keys()].some(key => key.startsWith('product_') || key === 'search')
+    ) {
+      setProductCriteria(
+        Object.fromEntries(
+          Object.entries(defaultProductCriteria).map(([key, value]) => [
+            key,
+            query.get('product_' + key) ??
+              (key === 'search' ? query.get('search') : null) ?? value,
+          ]),
+        ) as typeof defaultProductCriteria,
+      )
+    }
     setMobile(false)
   }
   function go(name: string, section?: string) {
@@ -644,13 +659,18 @@ export function WorkspaceApp() {
         if (value) query.set(key, value)
       }
     }
-    if (search) query.set('search', search)
+    if (route.page === 'Products & Pricing') {
+      for (const [key, value] of Object.entries(productCriteria)) {
+        if (value !== defaultProductCriteria[key as keyof typeof defaultProductCriteria])
+          query.set('product_' + key, value)
+      }
+    } else if (search) query.set('search', search)
     if (filter !== route.filter) query.set('filter', filter)
     const hash =
       destinationHash(route) + (query.size ? '?' + query.toString() : '')
     window.history.replaceState(null, '', hash)
     lastHash.current = hash
-  }, [search, filter, route, ready])
+  }, [search, filter, route, ready, productCriteria])
   const loadingWorkspace = useRef<Promise<void> | null>(null)
   const hasLoadedWorkspace = useRef(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
@@ -2150,24 +2170,18 @@ export function WorkspaceApp() {
                           </p>
                         </div>
                       </div>
-                      <div className="toolbar">
-                        <div className="search-field">
-                          <Search size={17} />
-                          <input
-                            aria-label="Search products"
-                            placeholder="Find a product…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                          />
-                        </div>
-                        <PageActions>
-                          {' '}
-                          <Btn secondary onClick={() => exportData('products')}>
-                            <Download size={16} />
-                            Export products
-                          </Btn>
-                        </PageActions>
-                      </div>
+                      <PageActions>
+                        <Btn secondary onClick={() => exportData('products')}>
+                          <Download size={16} />Export products
+                        </Btn>
+                        <SectionCategoryTools
+                          workspace={state}
+                          scope={sub === 'Handmade' ? 'handmade-products' : sub === 'Resale' ? 'resale-products' : sub === 'Kits' ? 'kits' : 'food-products'}
+                          canManage={ready && ['Owner', 'Manager'].includes(role)}
+                          onSettings={categorySettings}
+                          compact
+                        />
+                      </PageActions>
                       <PageActions>
                         {' '}
                         {sub !== 'Kits' &&
@@ -2200,38 +2214,13 @@ export function WorkspaceApp() {
                             </div>
                           )}
                       </PageActions>
-                      <SectionCategoryTools
-                        workspace={state}
-                        scope={
-                          sub === 'Handmade'
-                            ? 'handmade-products'
-                            : sub === 'Resale'
-                              ? 'resale-products'
-                              : sub === 'Kits'
-                                ? 'kits'
-                                : 'food-products'
-                        }
-                        canManage={ready && ['Owner', 'Manager'].includes(role)}
-                        onSettings={categorySettings}
-                        value={productCategoryFilter}
-                        onFilter={setProductCategoryFilter}
-                      />
-                      <ProductCards
-                        products={filtered(products)
-                          .filter(
-                            (p) =>
-                              productCategoryFilter === 'all' ||
-                              (productCategoryFilter === 'uncategorized'
-                                ? !p.productCategoryId
-                                : p.productCategoryId ===
-                                  productCategoryFilter),
-                          )
-                          .filter((p) =>
-                            sub === 'Kits'
-                              ? workflowOf(p) === 'kit'
-                              : !['Food', 'Handmade', 'Resale'].includes(sub) ||
-                                workflowOf(p) === sub.toLowerCase(),
-                          )}
+                      <ProductBrowse
+                        criteria={productCriteria}
+                        onCriteria={setProductCriteria}
+                        products={products.filter((p) =>
+                          sub === 'Kits' ? workflowOf(p) === 'kit' :
+                          !['Food', 'Handmade', 'Resale'].includes(sub) || workflowOf(p) === sub.toLowerCase()
+                        )}
                         workspace={state}
                         open={open}
                       />
