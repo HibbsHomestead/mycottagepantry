@@ -2348,3 +2348,77 @@ textarea,
   width: 100%;
   margin-inline: 0;
 }
+
+/* Recipe actions and discovery share the grid's content width. */
+.recipe-toolbar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.recipe-toolbar-actions,
+.recipe-toolbar-actions .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.recipe-toolbar-actions {
+  gap: 16px;
+}
+.recipe-toolbar .section-category-tools,
+.recipe-toolbar .section-category-tools .button-row {
+  margin: 0;
+}
+.recipe-toolbar-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.recipe-toolbar .field {
+  margin: 0;
+  min-width: 0;
+}
+.recipe-toolbar .recipe-search {
+  flex: 1 1 18rem;
+}
+.recipe-toolbar .search-field {
+  width: 100%;
+  max-width: none;
+}
+.recipe-toolbar .field:has(select) {
+  flex: 0 1 17rem;
+  max-width: 100%;
+}
+.recipe-toolbar select {
+  width: 100%;
+  text-overflow: ellipsis;
+}
+.recipe-toolbar :is(.btn, select, .search-field) {
+  min-height: 44px;
+}
+.recipe-toolbar .search-field input {
+  min-width: 0;
+  width: 100%;
+}
+.recipe-toolbar-find > .status {
+  align-self: flex-end;
+  margin-bottom: 10px;
+}
+@media (max-width: 700px) {
+  .recipe-toolbar-actions {
+    gap: 10px;
+  }
+  .recipe-toolbar .recipe-search {
+    flex-basis: 100%;
+  }
+  .recipe-toolbar .field:has(select) {
+    flex: 1 1 12rem;
+  }
+}
+
+.recipe-toolbar .btn {
+  padding: 10px 12px;
+  font-size: max(var(--interface-text-min, 0px), 14px);
+}

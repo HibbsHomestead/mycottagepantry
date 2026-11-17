@@ -192,6 +192,7 @@ export function ProductCards({
                   item={product}
                   assets={workspace.graphic_assets || []}
                   kind="product"
+                  presentation="product-card"
                 />
               </button>
             )}

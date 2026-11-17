@@ -42,7 +42,7 @@ import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
 import './workspace-standard.css'
 import './inventory-refinement.css'
-import { InventoryBackground } from './inventory-background'
+import { WorkspaceBackground } from './workspace-background'
 import { OvenLoading } from './oven-loading'
 import { restoreIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
@@ -1440,6 +1440,7 @@ export function WorkspaceApp() {
   if (!ready) return <OvenLoading error={error} retry={() => void load()} />
   return (
     <div className="app-shell stage-one-shell">
+      <WorkspaceBackground />
       <aside
         className={`sidebar ${mobile ? 'is-open' : ''}`}
         aria-label="Oven navigation"
@@ -1610,7 +1611,6 @@ export function WorkspaceApp() {
         <ApplicationPage
           className={`app-page${route.section === 'Inventory' ? ' inventory-layout-page' : ''}${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
-          {route.section === 'Inventory' && <InventoryBackground />}
           {page === 'Labels' &&
             productDetailReturn &&
             state.products.some((p) => p.id === productDetailReturn) && (
@@ -1776,6 +1776,7 @@ export function WorkspaceApp() {
                 ) &&
                   route.section !== 'Inventory' &&
                   page !== 'Dashboard' &&
+                  page !== 'Recipes' &&
                   page !== 'Settings' &&
                   (page !== 'Products & Pricing' || sub === 'Kits') &&
                   page !== 'Labels' &&
@@ -1974,54 +1975,69 @@ export function WorkspaceApp() {
               )}
               {page === 'Recipes' && (
                 <>
-                  <div className="toolbar">
-                    <div className="search-field">
-                      <Search size={17} />
-                      <input
-                        aria-label="Search recipes"
-                        placeholder="Find a recipe or prep…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                  <div className="recipe-toolbar">
+                    <div className="recipe-toolbar-actions">
+                      <div className="button-row">
+                        <Btn onClick={() => open('recipe')}>
+                          <Plus size={18} />
+                          Create recipe
+                        </Btn>
+                        <Btn secondary onClick={() => open('recipe-import')}>
+                          <Upload size={16} />
+                          Import recipe
+                        </Btn>
+                        <Btn secondary onClick={() => exportData('recipes')}>
+                          <Download size={16} />
+                          Export
+                        </Btn>
+                      </div>
+                      <SectionCategoryTools
+                        workspace={state}
+                        scope="recipes"
+                        canManage={ready && ['Owner', 'Manager'].includes(role)}
+                        onSettings={categorySettings}
                       />
                     </div>
-                    <Btn secondary onClick={() => open('recipe-import')}>
-                      <Upload size={16} /> Import recipe
-                    </Btn>
-                    <Badge>
-                      {recipes.filter((r) => r.workflow !== 'handmade').length}{' '}
-                      recipes & preps
-                    </Badge>
-                    <Btn secondary onClick={() => exportData('recipes')}>
-                      <Download size={16} />
-                      Export
-                    </Btn>
-                  </div>
-                  <div className="toolbar">
-                    <label className="field">
-                      <span>Filter by recipe category</span>
-                      <select
-                        aria-label="Filter by recipe category"
-                        value={recipeCategoryFilter}
-                        onChange={(e) =>
-                          setRecipeCategoryFilter(e.target.value)
-                        }
-                      >
-                        <option value="all">All categories</option>
-                        <option value="uncategorized">Uncategorized</option>
-                        {recipeCategoryOptions.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                            {c.active ? '' : ' (archived)'}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <SectionCategoryTools
-                      workspace={state}
-                      scope="recipes"
-                      canManage={ready && ['Owner', 'Manager'].includes(role)}
-                      onSettings={categorySettings}
-                    />
+                    <div className="recipe-toolbar-find">
+                      <label className="field recipe-search">
+                        <span>Search recipes</span>
+                        <div className="search-field">
+                          <Search size={17} />
+                          <input
+                            aria-label="Search recipes"
+                            placeholder="Find a recipe or prep…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                          />
+                        </div>
+                      </label>
+                      <label className="field">
+                        <span>Filter by recipe category</span>
+                        <select
+                          aria-label="Filter by recipe category"
+                          value={recipeCategoryFilter}
+                          onChange={(e) =>
+                            setRecipeCategoryFilter(e.target.value)
+                          }
+                        >
+                          <option value="all">All categories</option>
+                          <option value="uncategorized">Uncategorized</option>
+                          {recipeCategoryOptions.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                              {c.active ? '' : ' (archived)'}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <Badge>
+                        {
+                          recipes.filter((r) => r.workflow !== 'handmade')
+                            .length
+                        }{' '}
+                        recipes & preps
+                      </Badge>
+                    </div>
                   </div>
                   <div className="recipe-grid">
                     {filtered(recipes)

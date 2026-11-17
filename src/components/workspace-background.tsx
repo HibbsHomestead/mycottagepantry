@@ -1,3 +1,6 @@
+import './cover-background.css'
+import './workspace-background.css'
+
 /** Static, theme-colored vector frame. No business state or pointer targets. */
 function PantrySprig({ className }: { className: string }) {
   return (
@@ -25,11 +28,11 @@ function PantrySprig({ className }: { className: string }) {
         <path d="M42 277C22 280 15 266 12 256C26 255 37 263 42 277ZM32 253C41 238 40 228 35 218C26 230 27 241 32 253ZM110 254C109 236 117 225 128 221C130 236 121 248 110 254ZM122 230C139 229 147 217 149 206C135 207 126 217 122 230ZM49 181C31 181 24 168 24 158C38 161 46 169 49 181ZM115 133C106 120 109 108 115 101C123 112 122 123 115 133Z" />
       </g>
     </svg>
-  );
+  )
 }
-export function InventoryBackground() {
+export function WorkspaceBackground() {
   return (
-    <div className="cover-background inventory-background" aria-hidden="true">
+    <div className="cover-background workspace-background" aria-hidden="true">
       <svg
         className="inventory-flow"
         viewBox="0 0 1440 1000"
@@ -59,5 +62,5 @@ export function InventoryBackground() {
       <PantrySprig className="inventory-sprig inventory-sprig-left" />
       <PantrySprig className="inventory-sprig inventory-sprig-bottom" />
     </div>
-  );
+  )
 }
