@@ -1,7 +1,14 @@
 import { handleEvent } from '../lib/events-handler'
 import { eventTables, validateAllocations } from '../../src/lib/events'
 import { planGateDecision } from '../lib/plan-feature-gates'
-import { prepareMockup } from '../lib/mockup-handler'
+import { serverEnvironment } from '../lib/runtime-environment'
+import {
+  dropboxSelection,
+  prepareDropboxPreview,
+  validateDropboxCopy,
+  dropboxAssetIdentity,
+} from '../lib/dropbox-artwork'
+import { prepareMockup, authorizeMockupProduct } from '../lib/mockup-handler'
 import {
   consolidateCategories,
   canonicalCategoryName,
@@ -1899,12 +1906,49 @@ export default async (req: Request, context: Context) => {
       )
     }
 
+    if (req.method === 'GET' && requestUrl.searchParams.has('dropboxChooser')) {
+      if (!user) throw new Error('Sign in to choose artwork from Dropbox.')
+      await client.query('COMMIT')
+      return Response.json(
+        { appKey: serverEnvironment('DROPBOX_CHOOSER_APP_KEY') },
+        { headers: { 'Cache-Control': 'private, no-store' } },
+      )
+    }
+    if (
+      req.method === 'POST' &&
+      requestUrl.searchParams.has('dropboxPreview')
+    ) {
+      if (!user) throw new Error('Sign in to import Dropbox artwork.')
+      const raw = await req.text()
+      if (raw.length > 12000) throw new Error('Invalid artwork selection.')
+      const input = JSON.parse(raw)
+      authorizeMockupProduct(
+        input.productId,
+        state,
+        role,
+        requestUrl,
+        moduleAccess,
+      )
+      dropboxSelection(input.selection)
+      const preview = await prepareDropboxPreview(
+        input.thumbnailLink,
+        req.signal,
+      )
+      await client.query('COMMIT')
+      return Response.json(preview, {
+        headers: { 'Cache-Control': 'private, no-store' },
+      })
+    }
     if (req.method === 'GET' && requestUrl.searchParams.has('asset')) {
       const asset = state.graphic_assets.find(
         (a) => a.id === requestUrl.searchParams.get('asset'),
       )
       if (!asset) throw new Error('Graphic is unavailable.')
-      const bytes = await getStore('label-graphics').get(`${org}/${asset.id}`, {
+      // A just-imported copy must be readable immediately by the editor.
+      const bytes = await getStore({
+        name: 'label-graphics',
+        consistency: 'strong',
+      }).get(`${org}/${asset.id}`, {
         type: 'arrayBuffer',
       })
       if (!bytes) throw new Error('Graphic file is unavailable.')
@@ -1976,12 +2020,70 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Use a valid PNG, JPEG, or WebP image up to 40 megapixels. SVG and PDF uploads are not supported.',
         )
-      await sharp(bytes, { limitInputPixels: 40000000 }).stats() // Verify full decoding before retaining originals.
+      const imported = form.has('dropboxImport')
+        ? JSON.parse(String(form.get('dropboxImport')))
+        : null
+      // Apply the smaller Dropbox copy boundary before any full image decode.
+      const importedCopy = imported ? await validateDropboxCopy(bytes) : null
+      if (!importedCopy)
+        await sharp(bytes, { limitInputPixels: 40000000 }).stats()
       const metadata = await sharp(bytes).metadata()
       const rotated = [5, 6, 7, 8].includes(metadata.orientation || 0)
-      const id = randomUUID(),
+      let sourceMetadata
+      let importId = ''
+      if (imported) {
+        if (!user) throw new Error('Sign in to import Dropbox artwork.')
+        if (form.has('mockup'))
+          throw new Error('Save imported artwork before saving a mockup.')
+        authorizeMockupProduct(
+          imported.productId,
+          state,
+          role,
+          requestUrl,
+          moduleAccess,
+        )
+        const selection = dropboxSelection(imported.selection)
+        const copy = importedCopy!
+        const identity = dropboxAssetIdentity(
+          org,
+          imported.productId,
+          selection.id,
+          bytes,
+        )
+        importId = identity.id
+        const existing = state.graphic_assets.find((a) => a.id === importId)
+        if (existing) {
+          await client.query('COMMIT')
+          return Response.json(
+            {
+              workspace: workspaceForDevice(state),
+              asset: existing,
+              role,
+              demo: false,
+            },
+            { headers: { 'Cache-Control': 'no-store' } },
+          )
+        }
+        sourceMetadata = {
+          provider: 'dropbox',
+          fileId: selection.id,
+          filename: selection.name,
+          originalBytes: selection.bytes,
+          importedAt: new Date().toISOString(),
+          copyBytes: bytes.length,
+          copyWidth: copy.width,
+          copyHeight: copy.height,
+          copyFormat: 'image/png',
+          copySha256: identity.sha256,
+          metadataAuthority: 'chooser-client',
+        }
+      }
+      const id = importId || randomUUID(),
         asset = {
           id,
+          ...(sourceMetadata
+            ? { sourceMetadata, productId: imported.productId }
+            : {}),
           name: file.name.slice(0, 100),
           fileType: mime[size.type],
           widthPx: rotated ? size.height : size.width,
@@ -2023,8 +2125,15 @@ export default async (req: Request, context: Context) => {
           Object.assign(product, current, patch)
         }
       }
-      await getStore('label-graphics').set(`${org}/${id}`, bytes.buffer)
       await save('graphic_assets', asset)
+      try {
+        await getStore('label-graphics').set(`${org}/${id}`, bytes.buffer)
+      } catch {
+        await getStore('label-graphics')
+          .delete(`${org}/${id}`)
+          .catch(() => {})
+        throw new Error('Artwork could not be saved. Try again.')
+      }
       state.graphic_assets.push(asset)
       await client.query('COMMIT')
       return Response.json(

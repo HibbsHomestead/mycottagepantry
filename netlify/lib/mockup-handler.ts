@@ -11,25 +11,13 @@ export function prepareMockup(
   url: URL,
   access?: AccessResult,
 ) {
-  if (!['Owner', 'Manager'].includes(role))
-    throw new Error('Only an Owner or Manager can save mockups.')
-  const product = state.products.find((p) => p.id === input.productId)
-  if (!product)
-    throw new Error(
-      'Save a product in this business before creating its mockup.',
-    )
-  if (
-    access &&
-    !planGateDecision(access, {
-      method: 'POST',
-      url,
-      body: { action: 'save', table: 'products', data: { id: product.id } },
-      existing: product,
-    }).allowed
+  const product = authorizeMockupProduct(
+    input.productId,
+    state,
+    role,
+    url,
+    access,
   )
-    throw new Error(
-      'Product editing is unavailable on this business’s current plan.',
-    )
   const composition = validateComposition(
     input.composition,
     state.graphic_assets,
@@ -66,4 +54,33 @@ export function prepareMockup(
     gallery: input.gallery === true && !template,
     primary: input.primary === true && input.confirmPrimary === true,
   }
+}
+
+export function authorizeMockupProduct(
+  productId: unknown,
+  state: Workspace,
+  role: string,
+  url: URL,
+  access?: AccessResult,
+) {
+  if (!['Owner', 'Manager'].includes(role))
+    throw new Error('Only an Owner or Manager can save mockups.')
+  const product = state.products.find((p) => p.id === productId)
+  if (!product)
+    throw new Error(
+      'Save a product in this business before creating its mockup.',
+    )
+  if (
+    access &&
+    !planGateDecision(access, {
+      method: 'POST',
+      url,
+      body: { action: 'save', table: 'products', data: { id: product.id } },
+      existing: product,
+    }).allowed
+  )
+    throw new Error(
+      'Product editing is unavailable on this business’s current plan.',
+    )
+  return product
 }
