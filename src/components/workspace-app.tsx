@@ -42,6 +42,7 @@ import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import './workspace-mobile.css'
 import './workspace-standard.css'
 import './inventory-refinement.css'
+import { InventoryBackground } from './inventory-background'
 import { OvenLoading } from './oven-loading'
 import { restoreIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
@@ -1609,6 +1610,7 @@ export function WorkspaceApp() {
         <ApplicationPage
           className={`app-page${route.section === 'Inventory' ? ' inventory-layout-page' : ''}${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
+          {route.section === 'Inventory' && <InventoryBackground />}
           {page === 'Labels' &&
             productDetailReturn &&
             state.products.some((p) => p.id === productDetailReturn) && (
