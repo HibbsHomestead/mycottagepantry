@@ -1,0 +1,13 @@
+Events opened to Month by default, with Month, Week, Day and List sharing the selected date, search, type and status filters. The existing event details popup remained the entry point for operations, linked production, invoice pickups, expenses and financial reporting.
+
+The month calendar gained today and selection markers, a date picker, per-date creation, compact entries, overflow counts and a selected-day agenda. Week and Day gained timed slots, separate all-day entries, overlap columns, a business-timezone current-time marker, drag rescheduling and timed resize handles. The existing Edit event form provided a keyboard and touch alternative. Schedule changes used revision-checked event saves with optimistic feedback and restoration on failure. Business wall-time validation rejected daylight-saving gaps and ambiguous times. Rescheduling did not change linked records or send notifications.
+
+Phones retained a compact selectable month above the selected day's agenda. Week used a seven-day agenda below 1000px, and Day retained a single scrollable timeline. Screenshots used synthetic records through the development-only fixture, with no live business mutations or authentication bypass in production.
+
+Local verification passed TypeScript, 21 focused component/domain/navigation tests, four Chromium browser scenarios and focused lint/whitespace checks. Browser checks covered 320px, 390px and 1440px, event creation, view/date/filter continuity, horizontal overflow, drag saves, failure rollback, overlapping event columns, timed-slot prefill, resizing and subsequent accessible editing. Local screenshots were inspected for desktop Month/Week, phone Month and dark Day. Physical devices, other browser engines and live authenticated saves were not exercised. No performance benchmark was performed.
+
+[Desktop month](calendar-month-1440.png) · [Phone month](calendar-month-390.png) · [Narrow phone](calendar-month-320.png) · [Desktop week](calendar-week-1440.png) · [Phone week agenda](calendar-week-390.png) · [Dark day](calendar-day-dark-1440.png)
+
+No Events board existed in this checkout and none was introduced. Production was recommended for a future board because its existing draft, scheduled, completed and canceled states already controlled run preparation, actual recording and finalization. Orders currently represented supplier purchase orders with receiving tracked separately. No board or second status system was added.
+
+Build validation and deployment remained pending the platform's automatic workflow. No local production build or manual deployment was run, and no updated live deployment was verified.
