@@ -1,3 +1,4 @@
+import { CoverBackground } from './cover-background'
 import { CalendarDays } from 'lucide-react'
 import { EventsWorkspace } from './events-workspace'
 import { ProductMockups } from './product-mockup'
@@ -1609,6 +1610,7 @@ export function WorkspaceApp() {
         <ApplicationPage
           className={`app-page${route.section === 'Inventory' ? ' inventory-layout-page' : ''}${route.section === 'Purchasing' ? ' purchasing-page' : ' workspace-standard'}${['Finance', 'Purchasing'].includes(route.section) ? ' finance-page' : ''}`}
         >
+          {route.section === 'Inventory' && <CoverBackground inventory />}
           {page === 'Labels' &&
             productDetailReturn &&
             state.products.some((p) => p.id === productDetailReturn) && (

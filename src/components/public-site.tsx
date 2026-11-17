@@ -172,15 +172,18 @@ export function HomePage() {
               <i />
               <i />
               <i />
-              <span>Cottage Pantry / Recipes</span>
+              <span>Cottage Pantry / Products</span>
             </div>
             <img
-              src="/screenshots/recipes.webp"
-              alt="Cottage Pantry recipe oven showing recipe cards, costs and yields using demonstration data"
+              src="/screenshots/current-hero.webp"
+              alt="Current Cottage Pantry product list with bread and cookie photographs, selling prices and calculated costs using sample data"
               width="1440"
               height="960"
             />
-            <figcaption>Actual oven · demonstration data</figcaption>
+            <figcaption>
+              Actual oven · demonstration data ·{' '}
+              <a href="/demo-photos/credits.html">Photo credits</a>
+            </figcaption>
           </figure>
           <div className="hero-note">
             From a bag of flour
