@@ -10,19 +10,14 @@ function isPreview() {
   );
 }
 
-/** Inventory uses the approved artwork by default; other surfaces remain previews. */
-export function CoverBackground({
-  inventory = false,
-}: {
-  inventory?: boolean;
-}) {
+/** Review-only composition. No saved preference or business state is changed. */
+export function CoverBackground() {
   const preview = useSyncExternalStore(
     subscribeToLocation,
     isPreview,
     () => false,
   );
-  // The root already supplies the artwork when preview mode is enabled.
-  if (inventory ? preview : !preview) return null;
+  if (!preview) return null;
   return (
     <div className="cover-background" aria-hidden="true">
       <svg

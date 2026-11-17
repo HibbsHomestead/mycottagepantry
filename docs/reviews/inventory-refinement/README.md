@@ -1,13 +1,5 @@
 # Inventory visual refinement
 
-## Default activation
-
-The approved refinement is now the default in source for Inventory, including the compact phone layout. The stylesheet no longer depends on `cover-preview=1`. Inventory mounts the existing theme-aware artwork while open; leaving Inventory removes it. Other surfaces retain their existing preview-only artwork behavior. The ordinary entry is [Inventory](https://mycottagepantry.com/oven#Inventory/Ingredients); deployment of this activation has not been verified.
-
-The existing screenshots and theme/content comparison results below are retained as historical evidence. Activation verification uses ordinary URLs and focused checks instead of repeating the screenshot/theme matrix. Data, calculations, columns, actions, permissions and saved preferences were unchanged.
-
-## Original refinement review (historical)
-
 All changes are staged behind the existing `cover-preview=1` switch and apply only while Inventory is open. The switch now previews the Inventory surface, toolbar, table and phone styling alongside the existing artwork. Ordinary Inventory URLs and other pages retain their previous appearance. No preference is saved by this styling switch.
 
 [Inventory preview entry](https://mycottagepantry.com/oven?cover-preview=1#Inventory/Ingredients). **This URL displays the new refinement only after the platform deploys this change.** No new remote preview deployment was created or verified during this run; the platform-generated deployment preview is still pending. Use `/oven?cover-preview=1#Inventory/Ingredients` on that deployment when available. Existing login and workspace permissions still apply.
@@ -46,9 +38,3 @@ Three browser scenarios, eleven existing Inventory component/toolbar tests, Type
 Loading and connection-error states were preserved in source but were not exercised in this browser review. Live receiving, adjustments, imports/exports, every dialog, live category administration, physical devices, other browser engines, production authentication and exhaustive cross-page screenshot comparisons were not tested. All new CSS selectors were reviewed for Inventory and preview scoping. No production build was run under the platform's validation restrictions; automated deployment/build validation remained pending.
 
 No data, calculations, schema, migrations, API contracts, fetching, permissions, navigation destinations, default filter, page size, saved preferences or business workflows were changed. No changes were made to Dropbox, events, production, billing, subscriptions, Stripe or checkout.
-
-## Activation verification
-
-Fourteen focused component tests passed, including ordinary Inventory artwork, leaving Inventory and preview deduplication. The focused Chromium activation scenario passed at 320, 390 and 1440px without the preview parameter. It compared all table cell contents and summary text against the existing pre-refinement fixture evidence, checked compact phone rows, retained desktop columns, page overflow, search, item details and hash navigation to Finance and back. TypeScript, focused ESLint and whitespace checks passed. The previous full screenshot/theme matrix was reused rather than repeated.
-
-The production build was not run because this execution environment prohibited build commands and reserved build validation for the platform. Production deployment and the live ordinary Inventory URL were not verified; completion of the platform-managed build/deployment workflow remained the deployment blocker. No design approval was pending.

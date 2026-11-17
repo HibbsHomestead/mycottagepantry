@@ -22,7 +22,12 @@ test("capture Inventory with identical records and state", async ({ page }) => {
   const contents: Record<string, unknown> = {};
   for (const width of [1440, 820, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto(workspaceFixtureUrl("Inventory/Ingredients"));
+    await page.goto(
+      workspaceFixtureUrl("Inventory/Ingredients").replace(
+        "#",
+        "&cover-preview=1#",
+      ),
+    );
     const main = page.locator("main.inventory-layout-page");
     await expect(main.locator(".pantry-summary")).toBeVisible();
     await main.getByRole("button", { name: "Table", exact: true }).click();
@@ -62,7 +67,7 @@ test("capture Inventory with identical records and state", async ({ page }) => {
   );
 });
 
-test("default palettes, responsive rows and existing actions", async ({
+test("preview palettes, responsive rows and existing actions", async ({
   page,
 }) => {
   test.setTimeout(180000);
@@ -72,7 +77,10 @@ test("default palettes, responsive rows and existing actions", async ({
   await page.route("**/api/workspace*", (route) =>
     route.fulfill({ json: { workspace, role: "Owner", demo: true } }),
   );
-  const url = workspaceFixtureUrl("Inventory/Ingredients");
+  const url = workspaceFixtureUrl("Inventory/Ingredients").replace(
+    "#",
+    "&cover-preview=1#",
+  );
   for (const width of [320, 375, 390, 430, 820, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(url);
@@ -173,7 +181,7 @@ test("default palettes, responsive rows and existing actions", async ({
     }
   }
   await page.goto(workspaceFixtureUrl("Inventory/Ingredients"));
-  await expect(page.locator(".cover-background")).toHaveCount(1);
+  await expect(page.locator(".inventory-background")).toBeVisible();
   expect(
     await page
       .locator(".inventory-layout-page")
@@ -181,9 +189,6 @@ test("default palettes, responsive rows and existing actions", async ({
         getComputedStyle(el).getPropertyValue("--inventory-border"),
       ),
   ).not.toBe("");
-  await page.goto(workspaceFixtureUrl("Finance"));
-  await expect(page.locator(".inventory-layout-page")).toHaveCount(0);
-  await expect(page.locator(".cover-background")).toHaveCount(0);
 });
 
 test("long inventory text and enlarged phone text remain contained", async ({
@@ -200,7 +205,12 @@ test("long inventory text and enlarged phone text remain contained", async ({
     route.fulfill({ json: { workspace, role: "Owner", demo: true } }),
   );
   await page.setViewportSize({ width: 390, height: 1000 });
-  await page.goto(workspaceFixtureUrl("Inventory/Ingredients"));
+  await page.goto(
+    workspaceFixtureUrl("Inventory/Ingredients").replace(
+      "#",
+      "&cover-preview=1#",
+    ),
+  );
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await page.addStyleTag({ content: "html { font-size: 125% !important; }" });
   expect(
@@ -222,78 +232,4 @@ test("long inventory text and enlarged phone text remain contained", async ({
     path: `${directory}/long-text-125-percent-390.png`,
     fullPage: true,
   });
-});
-
-test("ordinary Inventory activates refinement and confines artwork to Inventory", async ({
-  page,
-}) => {
-  await installWorkspaceFixture(page);
-  const workspace = demoData();
-  await page.route("**/api/workspace*", (route) =>
-    route.fulfill({ json: { workspace, role: "Owner", demo: true } }),
-  );
-  for (const width of [320, 390, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await page.goto(workspaceFixtureUrl("Inventory/Ingredients"));
-    const main = page.locator(".inventory-layout-page");
-    await expect(main.locator(".pantry-summary")).toBeVisible();
-    expect(new URL(page.url()).searchParams.has("cover-preview")).toBe(false);
-    await expect(page.locator(".cover-background")).toHaveCount(1);
-    expect(
-      await main.evaluate((el) =>
-        getComputedStyle(el).getPropertyValue("--inventory-border"),
-      ),
-    ).not.toBe("");
-    await main.getByRole("button", { name: "Table", exact: true }).click();
-    const table = main.locator(".pantry-table");
-    const baseline = JSON.parse(
-      readFileSync(`${directory}/before-content.json`, "utf8"),
-    )[width];
-    expect(await main.locator(".pantry-summary").innerText()).toBe(
-      baseline.summary,
-    );
-    expect(await table.locator("tbody td").allTextContents()).toEqual(
-      baseline.cells,
-    );
-
-    if (width <= 700) {
-      await expect(table.locator("thead")).toBeHidden();
-      expect(
-        await table
-          .locator("tbody tr")
-          .first()
-          .evaluate((el) => getComputedStyle(el).display),
-      ).toBe("grid");
-    } else {
-      await expect(table.locator("thead")).toBeVisible();
-      await expect(table.locator("thead th")).toHaveCount(9);
-    }
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= innerWidth + 1,
-      ),
-    ).toBe(true);
-    const search = main.getByRole("textbox", { name: "Search pantry" });
-    await search.fill("Bread flour");
-    await expect(table.locator("tbody tr")).toHaveCount(1);
-    await table
-      .getByRole("button", { name: "Actions for Bread flour", exact: true })
-      .click();
-    await page
-      .getByRole("menuitem", { name: "View item", exact: true })
-      .click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.keyboard.press("Escape");
-    // Hash navigation must unmount the default artwork without reloading the app.
-    await page.evaluate(() => {
-      window.location.hash = "Finance";
-    });
-    await expect(page.locator(".inventory-layout-page")).toHaveCount(0);
-    await expect(page.locator(".cover-background")).toHaveCount(0);
-    await page.evaluate(() => {
-      window.location.hash = "Inventory/Ingredients";
-    });
-    await expect(page.locator(".inventory-layout-page")).toBeVisible();
-    await expect(page.locator(".cover-background")).toHaveCount(1);
-  }
 });
