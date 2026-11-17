@@ -1736,29 +1736,3 @@
     max-width: none;
   }
 }
-
-/* Fit screenshot viewers to the capture, with scrolling only when needed. */
-.tour-lightbox {
-  inset: auto;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(1100px, 94vw);
-  max-height: 94dvh;
-  height: fit-content;
-}
-.tour-lightbox-image {
-  flex: 0 1 auto;
-}
-.tour-lightbox-image img {
-  width: auto;
-  max-width: 100%;
-  max-height: calc(94dvh - 150px);
-  object-fit: contain;
-  height: auto;
-}
-@media (max-width: 600px) {
-  .tour-lightbox-image img {
-    max-height: calc(94dvh - 190px);
-  }
-}

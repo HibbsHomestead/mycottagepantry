@@ -334,16 +334,3 @@ button.dashboard-record:hover {
     grid-template-columns: 1fr;
   }
 }
-
-/* Compact, left-aligned action bar; only this dashboard section. */
-.dashboard-preview .dashboard-welcome { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 20px 24px; }
-.dashboard-preview .dashboard-welcome h2 { font-size: 20px; margin: 0; }
-.dashboard-preview .dashboard-quick-actions { justify-content: flex-start; gap: 10px; }
-.dashboard-quick-actions .btn { min-height: 44px; padding: 10px 14px; }
-.dashboard-quick-actions svg { width: 17px; height: 17px; flex-shrink: 0; }
-@media (max-width: 600px) {
- .dashboard-preview .dashboard-welcome { padding: 18px 20px; }
- .dashboard-preview .dashboard-quick-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
- .dashboard-quick-actions .btn { white-space: normal; }
- .dashboard-quick-actions .btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
-}
