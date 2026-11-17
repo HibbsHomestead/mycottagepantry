@@ -6,7 +6,8 @@
 body:has(.workspace-background) .cover-background:not(.workspace-background) {
   display: none;
 }
-.stage-one-shell > .workspace-background {
+.stage-one-shell > .workspace-background,
+.public-site > .workspace-background {
   --inventory-art-soft: color-mix(in srgb, var(--primary) 6%, transparent);
   --inventory-art-fold: color-mix(in srgb, var(--primary) 10%, transparent);
   --inventory-art-line: color-mix(
@@ -48,7 +49,7 @@ body:has(.workspace-background) .cover-background:not(.workspace-background) {
   bottom: -25px;
   transform: rotate(-9deg);
 }
-html[data-mode='dark'] .stage-one-shell > .workspace-background {
+html[data-mode="dark"] .stage-one-shell > .workspace-background {
   --inventory-art-soft: color-mix(in srgb, var(--primary) 7%, transparent);
   --inventory-art-fold: color-mix(in srgb, var(--primary) 12%, transparent);
   --inventory-art-line: color-mix(
@@ -89,5 +90,23 @@ html[data-mode='dark'] .stage-one-shell > .workspace-background {
 @media print {
   .stage-one-shell > .workspace-background {
     display: none;
+  }
+}
+
+/* Public pages reuse the approved vector frame with the public theme only. */
+.public-site {
+  position: relative;
+  isolation: isolate;
+}
+.public-site > .workspace-background {
+  inset: 0;
+  z-index: -1;
+}
+.public-site :is(.public-header, .public-footer) {
+  background: color-mix(in srgb, var(--background) 94%, transparent);
+}
+@media print {
+  .workspace-background {
+    display: none !important;
   }
 }
