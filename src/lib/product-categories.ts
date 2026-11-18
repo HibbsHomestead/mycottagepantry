@@ -38,19 +38,44 @@ export function productCategoryName(product: Item, business: Item) {
     ? `${category.name}${category.active === false ? ' (inactive)' : ''}`
     : 'Saved category unavailable'
 }
+/** Existing classification identifiers; labels are presentation only. */
+export const classificationIds = ['food', 'non_food'] as const
+export type ClassificationId = (typeof classificationIds)[number]
+export function businessClassifications(business: Item): ClassificationId[] {
+  return classificationIds.filter((id) =>
+    (business.productCategories || []).some((c: ProductCategory) => c.classification === id),
+  )
+}
+export function productClassification(product: Item, business: Item) {
+  const category: ProductCategory | undefined = (business.productCategories || []).find(
+    (c: ProductCategory) => c.id === product.productCategoryId,
+  )
+  return category && classificationIds.includes(category.classification as ClassificationId)
+    ? category.classification
+    : undefined
+}
 export function categoryTaxState(product: Item, business: Item) {
   const category: ProductCategory | undefined = (
     business.productCategories || []
   ).find((c: ProductCategory) => c.id === product.productCategoryId)
-  const ids: string[] = category?.classification
-    ? business.categoryTaxMappings?.[category.classification] || []
+  const classification = productClassification(product, business)
+  const mappedIds: string[] = classification
+    ? business.categoryTaxMappings?.[classification] || []
     : []
+  // Classification rules supplement explicit mappings; each durable rate ID runs once.
+  const ids = [...new Set([
+    ...mappedIds,
+    ...configuredTaxRates(business).filter((r) =>
+      r.appliesTo === 'classification' && r.active !== false &&
+      !!classification && r.classification === classification,
+    ).map((r) => r.id),
+  ])]
   const rates: TaxRate[] = configuredTaxRates(business).filter((r: TaxRate) =>
     ids.includes(r.id),
   )
   const issue = !category
     ? 'Product category not configured.'
-    : !category.classification
+    : !classification
       ? 'Category classification not configured; owner review needed.'
       : !ids.length
         ? 'Tax treatment not configured. Not configured does not mean tax exempt.'

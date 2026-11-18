@@ -1000,3 +1000,44 @@ it('leaves saved rate collections and legacy absence unchanged on a business no-
   expect(result.workspace.sales).toEqual(before.sales)
   expect(result.workspace.settings[0].productCategories).toEqual(before.settings[0].productCategories)
 })
+
+it('saves, edits and reopens classification rules with tenant validation and unchanged historical transactions', async () => {
+  session.user = 'category-owner-a'
+  const configured = await category({ operation: 'saveCategory', category: { name: 'Tax classification fixture', classification: 'non_food' } })
+  expect(configured.status, configured.error).toBe(200)
+  const before = (await call(undefined, '')).workspace
+  const originalRates = structuredClone(before.settings[0].taxRates)
+  const classificationRate = { ...rate, id: 'classification-roundtrip', appliesTo: 'classification', classification: 'non_food', ratePercent: 7 }
+  const saveRates = async (taxRates: unknown[], extra = {}) => call({ action: 'save', table: 'settings', data: { ...before.settings[0], taxRates, ...extra } }, '')
+  try {
+    const saved = await saveRates([...originalRates, classificationRate])
+    expect(saved.status, saved.error).toBe(200)
+    const reopened = (await call(undefined, '')).workspace
+    expect(reopened.settings[0].taxRates.find((r: Item) => r.id === classificationRate.id)).toEqual(classificationRate)
+    const handmade = { id: 'isolated-handmade', name: 'Bag', productType: 'handmade', productCategoryId: configured.selectedId, taxSource: 'category' }
+    expect(applicableTaxes(handmade, reopened.settings[0]).some(r => r.id === classificationRate.id)).toBe(true)
+    const edited = { ...classificationRate, classification: 'food', ratePercent: 9 }
+    const edit = await saveRates([...originalRates, edited])
+    expect(edit.status, edit.error).toBe(200)
+    const after = (await call(undefined, '')).workspace
+    expect(after.settings[0].taxRates.find((r: Item) => r.id === edited.id)).toEqual(edited)
+    expect(after.sales).toEqual(before.sales)
+    expect(after.products).toEqual(before.products)
+    const invalid = await saveRates([...originalRates, { ...classificationRate, classification: 'foreign-business-classification' }])
+    expect(invalid.status).toBe(400)
+    expect(invalid.error).toMatch(/classification from this business/)
+    // Supplying category data cannot manufacture a target: settings save preserves server-owned categories.
+    session.user = 'category-owner-b'
+    const foreign = await call({ action: 'save', table: 'settings', data: { ...before.settings[0], taxRates: [{ ...classificationRate, classification: configured.selectedId }] } }, '')
+    expect(foreign.status).toBe(400)
+    const absent = await call({ action: 'save', table: 'settings', data: { ...before.settings[0], taxRates: [classificationRate] } }, '')
+    expect(absent.status).toBe(400)
+    expect(absent.error).toMatch(/classification from this business/)
+    session.user = 'category-staff'
+    expect((await saveRates([...originalRates, classificationRate])).status).toBe(400)
+  } finally {
+    session.user = 'category-owner-a'
+    const restored = await saveRates(originalRates)
+    expect(restored.status, restored.error).toBe(200)
+  }
+})

@@ -122,6 +122,7 @@ export function BusinessTaxFields({
               </p>
             )}
             <TaxRateEditor
+                business={business}
               rates={rates}
               onChange={(value) => onChange('taxRates', value)}
               showPrimaryFields={false}
@@ -145,6 +146,7 @@ export function BusinessTaxFields({
               Component rates & advanced tax settings ({rates.length})
             </summary>
             <TaxRateEditor
+                business={business}
               rates={rates}
               onChange={(value) => onChange('taxRates', value)}
             />

@@ -7,7 +7,7 @@ import {
 } from './ui/dropdown-menu'
 import { pantryCategoryConflict } from '@/lib/section-categories'
 import { useEffect, useRef, useState } from 'react'
-import type { Item, Workspace } from '@/lib/domain'
+import { categoryTaxDescription, type Item, type Workspace } from '@/lib/domain'
 import {
   categoryScopes,
   productCategoryScope,
@@ -286,26 +286,13 @@ export function SectionCategoryManager({
                     </select>
                   </label>
                   <p className="form-hint">
-                    Classification uses the existing category tax mappings.
+                    Classification uses classification-scoped rules and existing category tax mappings.
                     Section does not determine tax treatment. Manage rate
                     mappings in Products → Categories → Tax Settings.
                   </p>
                   <p className="form-hint">
                     Inherited tax treatment:{' '}
-                    {(
-                      (w.settings[0].categoryTaxMappings?.[
-                        editing.classification || ''
-                      ] || []) as string[]
-                    )
-                      .map((id) => {
-                        const r = w.settings[0].taxRates?.find(
-                          (r: Item) => r.id === id,
-                        )
-                        return r
-                          ? `${r.name} · ${r.ratePercent}% · ${r.behavior}`
-                          : 'Saved rate unavailable'
-                      })
-                      .join('; ') || 'Not configured'}
+                    {categoryTaxDescription({ ...editing, id: editing.id || '', name: editing.name || '' }, w.settings[0])}
                   </p>
                   {changesTax && (
                     <label className="check-label">

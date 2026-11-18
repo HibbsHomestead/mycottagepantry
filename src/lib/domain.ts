@@ -1,6 +1,6 @@
 import { handmadeEstimate } from './handmade'
 import { configuredTaxRates } from './tax-configuration'
-import { categoryTaxState } from './product-categories'
+import { categoryTaxState, businessClassifications, classificationIds, productClassification } from './product-categories'
 export type Item = { id: string; name: string; [key: string]: any }
 export type Workspace = { [key: string]: Item[] }
 export const units: Record<string, { category: string; factor: number }> = {
@@ -794,8 +794,9 @@ export type TaxRate = {
   active?: boolean
   start?: string
   end?: string
-  appliesTo?: 'all_products' | 'product_category' | 'selected_products'
+  appliesTo?: 'all_products' | 'product_category' | 'selected_products' | 'classification'
   category?: string
+  classification?: 'food' | 'non_food'
   productIds?: string[]
   taxAccountId?: string
   notes?: string
@@ -809,7 +810,7 @@ export function validateDate(date: string) {
     throw new Error('Use a valid calendar date.')
   return date
 }
-export function validateTaxRates(rates: TaxRate[]) {
+export function validateTaxRates(rates: TaxRate[], business?: Item) {
   if (
     !Array.isArray(rates) ||
     new Set(rates.map((r) => r.id)).size !== rates.length
@@ -823,6 +824,10 @@ export function validateTaxRates(rates: TaxRate[]) {
       throw new Error('Tax rate must not exceed 100%.')
     if (!['inclusive', 'exclusive'].includes(r.behavior))
       throw new Error('Choose a tax behavior.')
+    if (r.appliesTo === 'classification' && (
+      !r.classification || !classificationIds.includes(r.classification) ||
+      (business && !businessClassifications(business).includes(r.classification))
+    )) throw new Error('Choose a classification from this business.')
     number(r.order ?? 0, 'Tax calculation order')
     for (const date of [r.start, r.end]) if (date) validateDate(date)
     if (r.start && r.end && r.start > r.end)
@@ -871,6 +876,9 @@ export function applicableTaxes(
                       r.category || '',
                     ))
                 : r.category === product.category)) ||
+            (r.appliesTo === 'classification' &&
+              !!r.classification &&
+              r.classification === productClassification(product, business)) ||
             (r.appliesTo === 'selected_products' &&
               r.productIds?.includes(product.id))),
     )
@@ -899,7 +907,23 @@ export function applicableTaxes(
     throw new Error(
       'No configured category tax treatment applies on this date. Review jurisdiction, scope and effective dates; this is not tax exempt.',
     )
+  validateTaxRates(result)
   return result
+}
+/** Resolve a category draft using the same scope, date and validity checks as pricing. */
+export function categoryTaxDescription(category: Item, business: Item) {
+  const id = category.id || 'category-tax-preview'
+  try {
+    return applicableTaxes(
+      { id: 'category-tax-preview', name: 'Category tax preview', productCategoryId: id, taxSource: 'category' },
+      { ...business, productCategories: [
+        ...(business.productCategories || []).filter((c: Item) => c.id !== id),
+        { ...category, id },
+      ] },
+    ).map((r) => `${r.name} · ${r.jurisdiction} · ${r.ratePercent}% · ${r.behavior}`).join('; ')
+  } catch (error) {
+    return (error as Error).message
+  }
 }
 export const roundMoney = (value: number) =>
   Math.round((value + Number.EPSILON) * 100) / 100

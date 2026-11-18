@@ -153,7 +153,7 @@ export async function handleProductCategories(
   } else if (input.operation === 'saveMappings') {
     const mappings = categoryMappingsSchema.parse(input.mappings)
     const rates = configuredTaxRates(settings)
-    validateTaxRates(rates)
+    validateTaxRates(rates, settings)
     for (const ids of Object.values(mappings)) {
       if (
         new Set(ids).size !== ids.length ||
