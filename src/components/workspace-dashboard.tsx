@@ -13,6 +13,12 @@ import {
 import { money, unitLabel, type Workspace, type Item } from '@/lib/domain'
 import { dashboardData, knownNumber } from '@/lib/dashboard'
 import { MonthlyFinanceCard } from './monthly-finance-card'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip'
 import './workspace-dashboard.css'
 type Props = {
   workspace: Workspace
@@ -50,33 +56,82 @@ export function WorkspaceDashboard({
           className="dashboard-quick-actions"
           aria-label="Dashboard quick actions"
         >
-          {canWrite && (
-            <>
-              <button className="btn" onClick={() => open('ingredient')}>
-                <Plus size={17} />
-                Add Item
-              </button>
-              <button className="btn secondary" onClick={() => open('product')}>
-                <Tag size={17} />
-                Add product
-              </button>
-              <button
-                className="btn secondary"
-                onClick={() => open('receive-picker')}
-              >
-                <Receipt size={17} />
-                Receive stock
-              </button>
-              <button className="btn secondary" onClick={() => open('batch')}>
-                <CookingPot size={17} />
-                Start production
-              </button>
-            </>
-          )}
-          <button className="btn secondary" onClick={() => go('Labels')}>
-            <StickyNote size={17} />
-            Open Label Studio
-          </button>
+          <TooltipProvider>
+            {canWrite && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="btn"
+                      onClick={() => open('ingredient')}
+                      aria-label="Add Item"
+                    >
+                      <Plus size={20} aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Add Item
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="btn secondary"
+                      onClick={() => open('product')}
+                      aria-label="Add product"
+                    >
+                      <Tag size={20} aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Add product
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="btn secondary"
+                      onClick={() => open('receive-picker')}
+                      aria-label="Receive stock"
+                    >
+                      <Receipt size={20} aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Receive stock
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="btn secondary"
+                      onClick={() => open('batch')}
+                      aria-label="Start production"
+                    >
+                      <CookingPot size={20} aria-hidden="true" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    Start production
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="btn secondary"
+                  onClick={() => go('Labels')}
+                  aria-label="Open Label Studio"
+                >
+                  <StickyNote size={20} aria-hidden="true" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Open Label Studio
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </section>
       <section
