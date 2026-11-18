@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { SectionCategoryTools } from './section-categories'
 import { assignedCategoryId } from '@/lib/section-categories'
 import type { CategoryScope } from '@/lib/category-details'
@@ -385,7 +386,7 @@ export function PantryInventory({
           {rows.map((i) => {
             const { unit, warning } = pantryDisplayUnit(i)
             const converted = (n: number) =>
-              precise(convert(n, i.unit, unit, i.conversions))
+              inventoryQuantity(convert(n, i.unit, unit, i.conversions))
             const cost =
               convert(1, unit, i.unit, i.conversions) *
               (i.currentCost ?? i.cost)
@@ -645,7 +646,7 @@ export function PantryInventory({
                       </td>
                       <td data-label="Category">{i.category || '—'}</td>
                       <td data-label="On hand">
-                        <strong>{precise(quantity)}</strong>{' '}
+                        <strong>{inventoryQuantity(quantity)}</strong>{' '}
                         <span className="muted">{unit}</span>
                       </td>
                       <td data-label="Unit cost">
@@ -668,7 +669,7 @@ export function PantryInventory({
                       <td data-label="Reorder point">
                         {threshold == null
                           ? 'Not set'
-                          : `${precise(threshold)} ${unit}`}
+                          : `${inventoryQuantity(threshold)} ${unit}`}
                       </td>
                       <td data-label="Preferred vendor">{i.vendor || '—'}</td>
                       <td data-label="Actions">

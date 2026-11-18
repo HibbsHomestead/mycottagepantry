@@ -319,3 +319,15 @@
     grid-template-columns: 2fr repeat(3, 1fr) 1.4fr;
   }
 }
+
+.count-print-quantity {
+  display: none;
+}
+@media print {
+  .count-screen-quantity {
+    display: none !important;
+  }
+  .count-print-quantity {
+    display: inline !important;
+  }
+}

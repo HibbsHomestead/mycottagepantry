@@ -6,7 +6,11 @@ import { demoData } from '@/lib/demo'
 import type { Item } from '@/lib/domain'
 
 afterEach(() => vi.unstubAllGlobals())
-function setup(mutate = vi.fn(async () => {}), onStockAction = vi.fn()) {
+function setup(
+  mutate = vi.fn(async () => {}),
+  onStockAction = vi.fn(),
+  overrides: Partial<Item> = {},
+) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () =>
@@ -32,6 +36,7 @@ function setup(mutate = vi.fn(async () => {}), onStockAction = vi.fn()) {
     sku: 'MUG-1',
     creationRequestId: 'create-mug-1',
     inventoryCreation: true,
+    ...overrides,
   }
   w.products = [
     ...w.products,
@@ -194,4 +199,21 @@ it('flags and opens the tab holding an invalid field', async () => {
   )
   expect(screen.getByLabelText('has errors')).toBeInTheDocument()
   expect(mutate).not.toHaveBeenCalled()
+})
+
+it('shows rounded stock while opening and saving preserve stored precision', async () => {
+  const mutate = vi.fn(async () => {})
+  setup(mutate, vi.fn(), { quantity: 12.345678, threshold: 1.234567 })
+  tab('Pricing & Stock')
+  expect(
+    screen.getByRole('region', { name: 'Stock on hand' }),
+  ).toHaveTextContent('12.35 items on hand')
+  expect(screen.getByLabelText('Reorder threshold (items)')).toHaveValue(
+    1.234567,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+  await waitFor(() => expect(mutate).toHaveBeenCalledOnce())
+  const payload = (mutate.mock.calls[0] as unknown as [string, string, Item])[2]
+  expect(payload.quantity).toBe(12.345678)
+  expect(Number(payload.threshold)).toBe(1.234567)
 })

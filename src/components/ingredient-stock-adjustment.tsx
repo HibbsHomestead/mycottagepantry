@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { Package } from 'lucide-react'
 import { convert, type Item } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
@@ -48,7 +49,7 @@ export function IngredientStockAdjustment({
       throw new Error(
         'The current stock balance is unavailable. Refresh before adjusting.',
       )
-    current = `${precise(convert(item.quantity, item.unit, unit, item.conversions))} ${unit} on hand`
+    current = `${inventoryQuantity(convert(item.quantity, item.unit, unit, item.conversions))} ${unit} on hand`
     if (draft.quantity !== '' && draft.quantity != null) {
       const plan = inventoryAdjustmentPlan(item, { ...draft, unit })
       preview = `Resulting balance: ${precise(plan.resultingInventoryQuantity)} ${unit} (${precise(plan.inventoryQuantity)} ${unit} change).`

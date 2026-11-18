@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { HandmadeProductEditor } from './handmade-workspace'
 import { ProductLinkImport } from './product-link-import'
 import { ProductEditor } from './product-editor'
@@ -810,8 +811,9 @@ function WorkflowDialog({
             {(isReceive || isAdjust) && (
               <>
                 <p>
-                  <strong>{item?.name}</strong> · {item?.quantity || 0} items on
-                  hand · {money(item?.cost || 0)} average item cost
+                  <strong>{item?.name}</strong> ·{' '}
+                  {inventoryQuantity(item?.quantity)} items on hand ·{' '}
+                  {money(item?.cost || 0)} average item cost
                 </p>
                 <Field
                   label={
@@ -953,7 +955,7 @@ function MaterialPlan({
       {rows.map((row) => (
         <p key={row.id}>
           <strong>{row.name}</strong>: {row.planned} {row.enteredUnit} planned ·{' '}
-          {row.available.toLocaleString('en-US', { maximumFractionDigits: 8 })}{' '}
+          {inventoryQuantity(row.available)}{' '}
           {row.unit} available · {money(row.cost)} estimated
           {row.shortage > 1e-9
             ? ` · Shortage: ${row.shortage.toLocaleString('en-US', { maximumFractionDigits: 8 })} ${row.unit}`

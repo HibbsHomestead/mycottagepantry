@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { useId } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
@@ -251,7 +252,7 @@ export function InventoryPackageFields({
               </div>
               {stockQuantity != null && (
                 <p className="inventory-package-summary" aria-live="polite">
-                  You’re adding {precise(stockQuantity)} {value.unit} to stock.
+                  You’re adding {inventoryQuantity(stockQuantity)} {value.unit} to stock.
                 </p>
               )}
               <p className="form-hint">

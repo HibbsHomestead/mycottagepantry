@@ -5,11 +5,28 @@ import { imageSize } from 'image-size'
 export const COPY_BYTES = 3_000_000
 export const COPY_EDGE = 2048
 const unavailable =
-  'Preview unavailable. Choose another file or upload a smaller transparent copy from your device.'
+  'Preview unavailable. Dropbox may not supply a usable bounded preview for this file.'
+export type PreviewDiagnostics = {
+  stage: string
+  httpStatus?: number
+  retrievedBytes?: number
+  width?: number
+  height?: number
+  preparedBytes?: number
+  preparationMs: number
+}
+export class DropboxPreviewError extends Error {
+  constructor(
+    message: string,
+    public diagnostics: PreviewDiagnostics,
+  ) {
+    super(message)
+  }
+}
 class PreviewLimitError extends Error {
   constructor() {
     super(
-      'Artwork exceeds supported processing limits. Use a smaller transparent copy: up to 2048 × 2048 pixels and a 3 MB saved PNG.',
+      'Artwork exceeds supported processing limits: retrieved preview up to 4 MB, decoded preview up to 2048 × 2048 pixels, saved PNG up to 3 MB.',
     )
   }
 }
@@ -83,33 +100,49 @@ export async function prepareDropboxPreview(
   link: string,
   signal?: AbortSignal,
 ) {
+  const started = performance.now()
+  const diagnostics: PreviewDiagnostics = {
+    stage: 'preview selection',
+    preparationMs: 0,
+  }
   try {
+    if (!link)
+      throw new Error(
+        'Dropbox supplied no thumbnail preview for this selection.',
+      )
+    diagnostics.stage = 'URL validation'
     const abort = AbortSignal.any([
       AbortSignal.timeout(15_000),
       ...(signal ? [signal] : []),
     ])
     let url = dropboxThumbnailUrl(link, true)
     for (let redirects = 0; redirects <= 3; redirects++) {
+      diagnostics.stage = 'preview retrieval'
       const response = await fetch(url, {
         redirect: 'manual',
         signal: abort,
         credentials: 'omit',
       })
+      diagnostics.httpStatus = response.status
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         await response.body?.cancel()
+        diagnostics.stage = 'redirect validation'
         url = dropboxThumbnailUrl(
           new URL(response.headers.get('location') || '', url).href,
         )
         continue
       }
+      diagnostics.stage = 'retrieved preview byte limit'
       if (Number(response.headers.get('content-length')) > 4_000_000) {
         await response.body?.cancel()
         throw new PreviewLimitError()
       }
       if (!response.ok || !response.body) {
         await response.body?.cancel()
+        diagnostics.stage = 'preview retrieval'
         throw new Error(unavailable)
       }
+      diagnostics.stage = 'preview retrieval'
       const reader = response.body.getReader(),
         chunks: Uint8Array[] = []
       let total = 0
@@ -118,12 +151,18 @@ export async function prepareDropboxPreview(
           const { done, value } = await reader.read()
           if (done) break
           total += value.length
-          if (total > 4_000_000) throw new PreviewLimitError()
+          diagnostics.retrievedBytes = total
+          if (total > 4_000_000) {
+            diagnostics.stage = 'retrieved preview byte limit'
+            throw new PreviewLimitError()
+          }
           chunks.push(value)
         }
       } finally {
         await reader.cancel().catch(() => {})
       }
+      diagnostics.retrievedBytes = total
+      diagnostics.stage = 'response format'
       const bytes = Buffer.concat(chunks),
         size = imageSize(bytes)
       if (
@@ -132,29 +171,50 @@ export async function prepareDropboxPreview(
         !size.height
       )
         throw new Error(unavailable)
+      diagnostics.width = size.width
+      diagnostics.height = size.height
+      diagnostics.stage = 'decoded preview pixel limit'
       if (size.width > COPY_EDGE || size.height > COPY_EDGE)
         throw new PreviewLimitError()
+      diagnostics.stage = 'image decode'
       const image = sharp(bytes, { limitInputPixels: COPY_EDGE ** 2 }).timeout({
         seconds: 8,
       })
       if (((await image.metadata()).pages || 1) !== 1)
         throw new Error(unavailable)
-      const copy = await image.rotate().png().toBuffer()
+      await image.stats()
+      diagnostics.stage = 'PNG conversion'
+      const copy = await image
+        .rotate()
+        .png({ compressionLevel: 9, adaptiveFiltering: true })
+        .toBuffer()
+      diagnostics.preparedBytes = copy.length
+      diagnostics.stage = 'optimized output size'
       if (copy.length > COPY_BYTES) throw new PreviewLimitError()
       const dimensions = await validateDropboxCopy(copy)
+      diagnostics.stage = 'ready for visual review'
+      diagnostics.preparationMs = Math.round(performance.now() - started)
       return {
+        diagnostics,
         ...dimensions,
         bytes: copy.length,
         format: 'image/png',
         data: copy.toString('base64'),
       }
     }
+    diagnostics.stage = 'redirect limit'
     throw new Error(unavailable)
   } catch (error) {
-    if (error instanceof PreviewLimitError) throw error
-    // Do not retain provider errors: causes may contain temporary signed URLs.
-    // eslint-disable-next-line preserve-caught-error
-    throw new Error(unavailable)
+    diagnostics.preparationMs = Math.round(performance.now() - started)
+    // Only fixed stage labels and numeric measurements leave this boundary.
+    throw new DropboxPreviewError(
+      error instanceof PreviewLimitError
+        ? error.message
+        : diagnostics.stage === 'preview selection'
+          ? 'Dropbox supplied no thumbnail preview for this selection. No original download was attempted.'
+          : unavailable,
+      diagnostics,
+    )
   }
 }
 export function dropboxAssetIdentity(

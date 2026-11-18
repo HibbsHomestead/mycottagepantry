@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { useRef, useState, type ReactElement, type ReactNode } from 'react'
 import {
   Plus,
@@ -586,8 +587,9 @@ export function InventoryTools({
               {item && (
                 <>
                   <p>
-                    Current system balance: {item.quantity} {item.unit}. Check
-                    the ledger if stock moved while you counted.
+                    Current system balance: {inventoryQuantity(item.quantity)}{' '}
+                    {item.unit}. Check the ledger if stock moved while you
+                    counted.
                   </p>
                   <label className="field">
                     Actual quantity on hand
@@ -639,9 +641,9 @@ export function InventoryTools({
                 {session.lines.map((l: Item) => (
                   <li key={l.ingredientId}>
                     {l.name}: counted {l.enteredQuantity} {l.enteredUnit} ={' '}
-                    {l.countedQuantity} {l.unit}; system at count{' '}
-                    {l.systemQuantity}; adjustment{' '}
-                    {Number((l.countedQuantity - l.systemQuantity).toFixed(8))}{' '}
+                    {inventoryQuantity(l.countedQuantity)} {l.unit}; system at
+                    count {inventoryQuantity(l.systemQuantity)}; adjustment{' '}
+                    {inventoryQuantity(l.countedQuantity - l.systemQuantity)}{' '}
                     {l.unit}
                     {items.find((i) => i.id === l.ingredientId)
                       ?.inventoryRevision !== l.inventoryRevision && (

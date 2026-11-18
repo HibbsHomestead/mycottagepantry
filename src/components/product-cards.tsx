@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { handmadeEstimate } from '../lib/handmade'
 import { stockUnitLabel } from '@/lib/resale-stock'
 import { productCategoryName } from '@/lib/product-categories'
@@ -294,7 +295,7 @@ export function ProductCards({
                 )}
               {['handmade', 'resale'].includes(product.workflow) && (
                 <p>
-                  {product.quantity || 0}{' '}
+                  {inventoryQuantity(product.quantity)}{' '}
                   {product.workflow === 'resale'
                     ? stockUnitLabel(product, Number(product.quantity || 0))
                     : 'items'}{' '}

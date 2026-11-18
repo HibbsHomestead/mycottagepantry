@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import {
   convert,
   isMissingUnitConversion,
@@ -56,7 +57,7 @@ export function IngredientCostCards({ ingredient: i }: { ingredient: Item }) {
   const onHand =
     i.quantity == null
       ? 'Not recorded'
-      : `${precise(convert(i.quantity, i.unit, display.unit, i.conversions))} ${display.unit}`
+      : `${inventoryQuantity(convert(i.quantity, i.unit, display.unit, i.conversions))} ${display.unit}`
   let recipeNote = 'Add a verified conversion to use this recipe unit.'
   try {
     const equivalent = convert(1, recipe, storage, i.conversions)

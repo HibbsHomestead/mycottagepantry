@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { ScopedCategorySelect, pantryCategoryScope } from './section-categories'
 import { IngredientPurchaseSetup } from './ingredient-purchase-setup'
@@ -1192,7 +1193,7 @@ export function IngredientDetail({
                         <h3>Opening stock</h3>
                         <p className="form-hint">
                           Current balance:{' '}
-                          {precise(
+                          {inventoryQuantity(
                             convert(
                               i.quantity,
                               i.unit,
@@ -1813,7 +1814,7 @@ export function IngredientDetail({
                             {() =>
                               i.threshold == null
                                 ? 'Not set'
-                                : `${precise(convert(i.threshold, i.unit, display.unit, i.conversions))} ${display.unit}`
+                                : `${inventoryQuantity(convert(i.threshold, i.unit, display.unit, i.conversions))} ${display.unit}`
                             }
                           </Measure>
                         </strong>
@@ -1825,7 +1826,7 @@ export function IngredientDetail({
                             {() =>
                               i.reorderQuantity == null
                                 ? 'Not set'
-                                : `${precise(convert(i.reorderQuantity, i.unit, display.unit, i.conversions))} ${display.unit}`
+                                : `${inventoryQuantity(convert(i.reorderQuantity, i.unit, display.unit, i.conversions))} ${display.unit}`
                             }
                           </Measure>
                         </strong>
@@ -1875,13 +1876,13 @@ export function IngredientDetail({
                               <td>{l.date}</td>
                               <td>{l.type}</td>
                               <td>
-                                {precise(l.quantity)} {l.unit}
+                                {inventoryQuantity(l.quantity)} {l.unit}
                                 {l.resultingInventoryQuantity != null &&
                                   l.inventoryUnit && (
                                     <small>
                                       {' '}
                                       · Balance:{' '}
-                                      {precise(
+                                      {inventoryQuantity(
                                         l.resultingInventoryQuantity,
                                       )}{' '}
                                       {l.inventoryUnit}
