@@ -334,3 +334,31 @@ button.dashboard-record:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Compact icon actions; only this dashboard section. */
+.dashboard-preview .dashboard-welcome {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+}
+.dashboard-preview .dashboard-welcome h2 {
+  font-size: 20px;
+  margin: 0;
+}
+.dashboard-preview .dashboard-quick-actions {
+  min-width: 0;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.dashboard-quick-actions .btn {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+.dashboard-quick-actions svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
