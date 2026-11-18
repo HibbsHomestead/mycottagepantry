@@ -22,6 +22,8 @@ type Props = {
   assets: Item[]
   canEdit: boolean
   onWorkspace: (w: Workspace) => void
+  consolidatedMedia?: boolean
+  primaryImageAssetId?: string
   onPrimaryImage?: (id: string) => void
 }
 const blank = (): MockupComposition => ({
@@ -87,7 +89,10 @@ export function ProductMockups(props: Props) {
       <div className="mockup-saved">
         {saved.map((a) => (
           <div key={a.id}>
-            <img src={`${a.fileUrl}&imageWidth=128`} alt={a.name} />
+            {(!props.consolidatedMedia ||
+              a.id !== props.primaryImageAssetId) && (
+              <img src={`${a.fileUrl}&imageWidth=128`} alt={a.name} />
+            )}
             <span>{a.name}</span>
             {props.canEdit && (
               <>
@@ -124,7 +129,11 @@ export function ProductMockups(props: Props) {
               .map((a) => (
                 <div key={a.id}>
                   <a href={a.fileUrl} target="_blank" rel="noreferrer">
-                    <img src={`${a.fileUrl}&imageWidth=128`} alt={a.name} />
+                    {props.consolidatedMedia ? (
+                      'Open image'
+                    ) : (
+                      <img src={`${a.fileUrl}&imageWidth=128`} alt={a.name} />
+                    )}
                   </a>
                   <span>{a.name}</span>
                 </div>
