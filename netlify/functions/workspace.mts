@@ -4465,7 +4465,7 @@ export default async (req: Request, context: Context) => {
             'pantryCategoryRevision',
           ])
             item[key] = state.settings[0]?.[key]
-          if (item.taxRates) validateTaxRates(item.taxRates)
+          if (item.taxRates) validateTaxRates(item.taxRates, state.settings[0])
           if (item.defaultOverhead !== undefined)
             item.defaultOverhead = number(
               item.defaultOverhead,

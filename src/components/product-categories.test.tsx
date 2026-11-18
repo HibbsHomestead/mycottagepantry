@@ -300,7 +300,7 @@ it('shows the real category list first, searches records and names products affe
   )!
   expect(within(bread).getByText('Food')).toBeVisible()
   expect(within(bread).getByText('1')).toBeVisible()
-  expect(within(bread).getByText('State treatment · Test · 5%')).toBeVisible()
+  expect(within(bread).getByText('State treatment · Test · 5% · exclusive')).toBeVisible()
   expect(
     within(bread).getByRole('button', { name: 'Archive Bread' }),
   ).toBeEnabled()
@@ -328,7 +328,7 @@ it('shows the real category list first, searches records and names products affe
   await screen.findByText('Category updated. Product associations preserved.')
   await userEvent.clear(screen.getByLabelText('Search categories'))
   expect(await screen.findByRole('heading', { name: 'Loaves' })).toBeVisible()
-  expect(screen.getAllByText('Not configured').length).toBeGreaterThan(0)
+  expect(screen.getAllByText(/Tax treatment not configured/).length).toBeGreaterThan(0)
 })
 
 it('uses honest loading and permission-error states, then offers first-category creation after a successful empty load', async () => {

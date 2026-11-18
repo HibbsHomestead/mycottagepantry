@@ -1,3 +1,4 @@
+import { businessClassifications, classificationLabel } from '@/lib/product-categories'
 import { isPackaging } from '@/lib/pantry-category'
 import { useRef, useState } from 'react'
 import {
@@ -372,11 +373,14 @@ export function TaxRateEditor({
   rates,
   onChange,
   showPrimaryFields = true,
+  business,
 }: {
+  business: Item
   showPrimaryFields?: boolean
   rates: TaxRate[]
   onChange: (rates: TaxRate[]) => void
 }) {
+  const classifications = businessClassifications(business)
   const update = (index: number, key: string, value: any) =>
     onChange(rates.map((r, i) => (i === index ? { ...r, [key]: value } : r)))
   return (
@@ -385,7 +389,7 @@ export function TaxRateEditor({
       <p>
         Rates run in calculation order. A compounding rate uses pre-tax revenue
         plus all preceding taxes. Inclusive rates are backed out of the entered
-        price.
+        price. Classification rules and applicable mapped category rules stack using calculation order; explicit product overrides take precedence. Each rate is applied once.
       </p>
       <p className="form-hint">Enter 8.25 for 8.25%. Zero is an explicit rate; a blank rate must be completed before saving.</p>
       {rates.map((r, index) => (
@@ -481,18 +485,34 @@ export function TaxRateEditor({
               >
                 <option value="all_products">All products by default</option>
                 <option value="product_category">Product category</option>
+                <option value="classification">Classification</option>
                 <option value="selected_products">
                   Only manually assigned products
                 </option>
               </select>
             </label>
-            <label>
+            {r.appliesTo === 'classification' && <label>
+              Classification
+              <select
+                required
+                value={r.classification || ''}
+                onChange={(e) => update(index, 'classification', e.target.value)}
+              >
+                <option value="">Choose classification</option>
+                {r.classification && !classifications.includes(r.classification) &&
+                  <option value={r.classification} disabled>Saved classification unavailable</option>}
+                {classifications.map((id) =>
+                  <option key={id} value={id}>{classificationLabel(id)}</option>,
+                )}
+              </select>
+            </label>}
+            {r.appliesTo !== 'classification' && <label>
               Product category
               <input
                 value={r.category || ''}
                 onChange={(e) => update(index, 'category', e.target.value)}
               />
-            </label>
+            </label>}
             <label>
               Notes
               <input

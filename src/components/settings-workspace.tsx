@@ -444,6 +444,7 @@ export function SettingsWorkspace({
                 keep their original rates.
               </p>
               <TaxRateEditor
+                business={business}
                 rates={rates}
                 onChange={(next) => {
                   taxDraftDirty.current = true

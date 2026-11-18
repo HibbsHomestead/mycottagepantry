@@ -6,7 +6,7 @@ import {
 } from '@/lib/category-details'
 import { SectionCategoryManager } from './section-categories'
 import { useEffect, useId, useRef, useState } from 'react'
-import { applicableTaxes, type Item, type TaxRate } from '@/lib/domain'
+import { applicableTaxes, categoryTaxDescription, type Item, type TaxRate } from '@/lib/domain'
 import {
   categoryTaxState,
   productCategoryName,
@@ -401,18 +401,12 @@ export function ProductCategoryManager({
   const archived = categories.filter((c) => c.active === false).length
   const treatment = (category: ProductCategory) => {
     if (!api.taxReady) return 'Tax settings unavailable — retry required'
-    const ids = category.classification
-      ? api.data?.tax?.mappings[category.classification] || []
-      : []
-    if (!ids.length) return 'Not configured'
-    return ids
-      .map((id) => {
-        const rate = api.data?.tax?.rates.find((r) => r.id === id)
-        return rate
-          ? `${rate.name} · ${rate.jurisdiction} · ${rate.ratePercent}%${rate.active === false ? ' (inactive)' : ''}`
-          : 'Configured treatment unavailable'
-      })
-      .join('; ')
+    return categoryTaxDescription(category, {
+      id: 'category-tax-preview', name: 'Category tax preview',
+      productCategories: categories,
+      categoryTaxMappings: api.data?.tax?.mappings || {},
+      taxRates: api.data?.tax?.rates || [],
+    })
   }
   return (
     <section
@@ -1042,7 +1036,7 @@ function taxSummaryState(product: Item, business: Item) {
   }
   const treatment =
     treatmentIssue ||
-    inherited.rates
+    proposedRates
       .map((r) => `${r.name} · ${r.jurisdiction} · ${r.ratePercent}%`)
       .join('; ')
   return {
@@ -1052,6 +1046,7 @@ function taxSummaryState(product: Item, business: Item) {
     migrationConflict,
     treatment,
     treatmentIssue,
+    proposedRates,
   }
 }
 
@@ -1078,8 +1073,8 @@ export function ProductTaxSummary({
             ? `Saved tax kept: ${state.preserved}`
             : state.treatmentIssue
               ? 'Tax treatment not configured'
-              : state.inherited.rates.length
-                ? state.inherited.rates
+              : state.proposedRates.length
+                ? state.proposedRates
                     .map((r) => `${r.name} ${r.ratePercent}%`)
                     .join(', ')
                 : 'No tax applied'}
@@ -1220,7 +1215,9 @@ function CategoryTaxSettingsFields({
           {!mappings[key]?.length && (
             <p>
               {api.taxReady
-                ? 'Not configured — not tax exempt.'
+                ? (api.data?.tax?.rates.some((r) => r.appliesTo === 'classification' && r.classification === key && r.active !== false)
+                  ? 'Classification-scoped rules apply automatically, subject to scope and effective dates. No additional mapping selected.'
+                  : 'Not configured — not tax exempt.')
                 : 'Tax settings unavailable — retry required.'}
             </p>
           )}
