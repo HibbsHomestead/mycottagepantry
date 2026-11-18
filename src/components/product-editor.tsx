@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductLabelsInfo } from './product-labels'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ItemEditorShell, invalidEditorTabs } from './item-editor-shell'
@@ -252,8 +253,7 @@ export function ProductEditor({
     draft.workflow
   const handmade = draft.workflow === 'handmade'
   const stockShown = !!(editing && current && tracksFinishedStock(current))
-  const quantityText = (n: unknown) =>
-    Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 4 })
+  const quantityText = inventoryQuantity
 
   const details = (
     <>

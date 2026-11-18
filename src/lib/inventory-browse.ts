@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { convert, parseQuantity, type Item, type Workspace } from './domain'
 import { fabricReceipt, isFabric } from './fabric'
 import { stockStatus } from './ingredients'
@@ -33,8 +34,7 @@ export function inventoryEntries(w: Workspace): InventoryEntry[] {
       })),
   ]
 }
-const display = (n: number) =>
-  n.toLocaleString('en-US', { maximumFractionDigits: 3 })
+const display = inventoryQuantity
 const known = (n: unknown) =>
   n !== '' && n != null && Number.isFinite(Number(n))
 export const inventoryLocation = (i: Item) =>
@@ -55,7 +55,7 @@ export function onHandText(i: Item) {
   if (!unit) return 'Stock unit not recorded'
   try {
     const q = convert(Number(i.quantity), base, unit, i.conversions)
-    return `${q > 0 && q < 0.001 ? '<0.001' : display(q)} ${unit}${unit === 'each' ? '' : ' remaining'}`
+    return `${display(q)} ${unit}${unit === 'each' ? '' : ' remaining'}`
   } catch {
     return `${display(Number(i.quantity))} ${base} · display conversion unavailable`
   }

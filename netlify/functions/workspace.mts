@@ -4,6 +4,7 @@ import { eventTables, validateAllocations } from '../../src/lib/events'
 import { planGateDecision } from '../lib/plan-feature-gates'
 import { serverEnvironment } from '../lib/runtime-environment'
 import {
+  DropboxPreviewError,
   dropboxSelection,
   prepareDropboxPreview,
   validateDropboxCopy,
@@ -5583,6 +5584,7 @@ export default async (req: Request, context: Context) => {
     }
     return Response.json(
       {
+        ...(error instanceof DropboxPreviewError ? { diagnostics: error.diagnostics } : {}),
         ...(saveTrace ? { traceId: saveTrace } : {}),
         ...(importTrace ? { traceId: importTrace, stage: importStage } : {}),
         ...(importValidation ? { fields: importValidation } : {}),

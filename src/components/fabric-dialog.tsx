@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ScopedCategorySelect } from './section-categories'
 import { ProductLinkImport } from './product-link-import'
 import { InventoryReviewNotice } from './inventory-review'
@@ -202,7 +203,7 @@ export function FabricDialog({
             <dl className="fabric-summary">
               <dt>Available</dt>
               <dd>
-                {precise(
+                {inventoryQuantity(
                   convert(
                     item.quantity,
                     item.unit,
@@ -224,7 +225,7 @@ export function FabricDialog({
               </dd>
               <dt>Reorder at</dt>
               <dd>
-                {item.threshold} {item.unit} ·{' '}
+                {inventoryQuantity(item.threshold)} {item.unit} ·{' '}
                 {item.quantity <= item.threshold ? 'Low stock' : 'In stock'}
               </dd>
             </dl>
@@ -281,7 +282,7 @@ export function FabricDialog({
                         <td>{l.date}</td>
                         <td>{l.type}</td>
                         <td>
-                          {precise(l.quantity)} {l.unit}
+                          {inventoryQuantity(l.quantity)} {l.unit}
                         </td>
                         <td>{l.reason}</td>
                       </tr>
@@ -327,8 +328,8 @@ export function FabricDialog({
           >
             <fieldset disabled={busy || !canWrite}>
               <p>
-                {item.name} · {precise(item.quantity)} {item.unit} on hand ·{' '}
-                {money(item.cost)} per {item.unit}
+                {item.name} · {inventoryQuantity(item.quantity)} {item.unit} on
+                hand · {money(item.cost)} per {item.unit}
               </p>
               {(edit || receive) && (
                 <>

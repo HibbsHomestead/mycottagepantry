@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductMockups } from './product-mockup'
 import { PageOverview, PageActions } from './application-page'
 import {
@@ -271,7 +272,8 @@ export function HandmadeWorkspace({
               .filter((i) => Number(i.quantity) <= Number(i.threshold || 0))
               .map((i) => (
                 <p key={i.id}>
-                  <strong>{i.name}</strong> · {i.quantity} {i.unit} remaining{' '}
+                  <strong>{i.name}</strong> · {inventoryQuantity(i.quantity)}{' '}
+                  {i.unit} remaining{' '}
                   {manage && (
                     <button
                       className="btn secondary"
@@ -335,7 +337,7 @@ export function HandmadeWorkspace({
                         </small>
                       </td>
                       <td>
-                        {i.quantity} {i.unit}
+                        {inventoryQuantity(i.quantity)} {i.unit}
                         {Number(i.quantity) <= Number(i.threshold || 0) &&
                           ' · Reorder'}
                       </td>
@@ -711,15 +713,15 @@ function MaterialDialog({
           {!receipt && (
             <details>
               <summary>
-                Purchase & cost history · {item.quantity || 0} {item.unit} on
-                hand
+                Purchase & cost history · {inventoryQuantity(item.quantity)}{' '}
+                {item.unit} on hand
               </summary>
               {w.ledger
                 .filter((l) => l.ingredientId === item.id)
                 .map((l) => (
                   <p key={l.id}>
-                    {l.date} · {l.type} · {l.quantity} {l.unit} ·{' '}
-                    {money(l.amount)}
+                    {l.date} · {l.type} · {inventoryQuantity(l.quantity)}{' '}
+                    {l.unit} · {money(l.amount)}
                     {l.unitCost != null && ` · ${money(l.unitCost)}/unit`}
                     {l.purchaseQuantity &&
                       ` · ${l.purchaseQuantity} ${l.purchaseUnit} × ${l.usagePerPurchase ?? 'recorded contents'}`}
@@ -1368,7 +1370,7 @@ function HandmadeProductDetail({
               </DropdownMenu>
             </div>
             <p className="table-note">
-              {p.quantity || 0} finished units ·{' '}
+              {inventoryQuantity(p.quantity)} finished units ·{' '}
               {p.stockCostKnown
                 ? `${money(p.cost)} recorded inventory cost / unit`
                 : 'Finished inventory valuation needs review.'}
@@ -1510,7 +1512,7 @@ function HandmadeProductDetail({
               {tab === 'Inventory & Sales' && (
                 <>
                   <p>
-                    {p.quantity || 0} finished units ·{' '}
+                    {inventoryQuantity(p.quantity)} finished units ·{' '}
                     {p.stockCostKnown
                       ? `${money(Number(p.quantity || 0) * Number(p.cost))} recorded inventory value`
                       : 'Inventory valuation needs review'}
@@ -1519,7 +1521,7 @@ function HandmadeProductDetail({
                   {sales.length ? (
                     sales.map((r) => (
                       <p key={r.id}>
-                        {r.date} · {r.quantity} units ·{' '}
+                        {r.date} · {inventoryQuantity(r.quantity)} units ·{' '}
                         {money(r.total ?? r.amount)}
                       </p>
                     ))
@@ -1530,7 +1532,8 @@ function HandmadeProductDetail({
                   {movements.length ? (
                     movements.map((r) => (
                       <p key={r.id}>
-                        {r.date} · {r.type} · {r.quantity} units
+                        {r.date} · {r.type} · {inventoryQuantity(r.quantity)}{' '}
+                        units
                       </p>
                     ))
                   ) : (
@@ -1695,7 +1698,7 @@ function HandmadeCostCards({
         />
         <CostCard
           label="Finished stock"
-          value={`${product.quantity || 0} units`}
+          value={`${inventoryQuantity(product.quantity)} units`}
           note="Recorded finished inventory"
           tone="neutral"
         />

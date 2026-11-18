@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { CalendarDays } from 'lucide-react'
 import { EventsWorkspace } from './events-workspace'
 import { ProductMockups } from './product-mockup'
@@ -2455,12 +2456,12 @@ export function WorkspaceApp() {
                                     <strong>{i.name}</strong>
                                     <small>
                                       Need {q.toFixed(2)} {i.unit} · Have{' '}
-                                      {i.quantity.toFixed(2)}
+                                      {inventoryQuantity(i.quantity)}
                                     </small>
                                   </span>
                                   {short ? (
                                     <Badge tone="amber">
-                                      Short {(q - i.quantity).toFixed(2)}
+                                      Short {inventoryQuantity(q - i.quantity)}
                                     </Badge>
                                   ) : (
                                     <CircleCheck
@@ -4002,7 +4003,8 @@ export function WorkspaceApp() {
                     <span>
                       <strong>{selected?.name}</strong>
                       <small>
-                        {selected?.quantity} {selected?.unit} currently on hand
+                        {inventoryQuantity(selected?.quantity)} {selected?.unit}{' '}
+                        currently on hand
                       </small>
                     </span>
                   </div>
@@ -5726,7 +5728,7 @@ export function WorkspaceApp() {
                   <span>
                     <strong>{i.name}</strong>
                     <small>
-                      {i.quantity.toFixed(2)} {i.unit} on hand
+                      {inventoryQuantity(i.quantity)} {i.unit} on hand
                     </small>
                   </span>
                   <ChevronRight size={16} />
@@ -5750,7 +5752,7 @@ export function WorkspaceApp() {
               {[
                 ...low.map((i) => ({
                   name: i.name,
-                  detail: `Low stock · ${i.quantity} ${i.unit} left`,
+                  detail: `Low stock · ${inventoryQuantity(i.quantity)} ${i.unit} left`,
                   id: i.id,
                 })),
                 ...expiring.map((i) => ({

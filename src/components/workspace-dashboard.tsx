@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import {
   ArrowRight,
   Package,
@@ -27,8 +28,7 @@ type Props = {
   go: (page: string, sub?: string) => void
   open: (kind: string, item?: Item) => void
 }
-const quantity = (value: number) =>
-  new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(value)
+const quantity = (value: number) => inventoryQuantity(value, new Intl.NumberFormat().resolvedOptions().locale)
 export function WorkspaceDashboard({
   workspace: w,
   go,

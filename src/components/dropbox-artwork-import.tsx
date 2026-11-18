@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { PreviewDiagnostics } from '../../netlify/lib/dropbox-artwork'
 import type { Item, Workspace } from '@/lib/domain'
 
 type Selection = {
@@ -81,6 +82,9 @@ export function DropboxArtworkImport({
     [approved, setApproved] = useState(false)
   const [dark, setDark] = useState(true),
     [progress, setProgress] = useState<number>()
+  const [diagnostics, setDiagnostics] = useState<PreviewDiagnostics>()
+  const [reviewedLight, setReviewedLight] = useState(false)
+  const [reviewedDark, setReviewedDark] = useState(false)
   const abort = useRef<AbortController | null>(null)
   const generation = useRef(0)
   useEffect(() => {
@@ -112,6 +116,10 @@ export function DropboxArtworkImport({
   }
   async function prepare(file: Selection) {
     setSelection({ id: file.id, name: file.name, bytes: file.bytes })
+    setDiagnostics(undefined)
+    setDark(true)
+    setReviewedLight(false)
+    setReviewedDark(false)
     setPhase('preparing')
     setPreview(undefined)
     setApproved(false)
@@ -123,12 +131,13 @@ export function DropboxArtworkImport({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId,
-          selection: file,
+          selection: { id: file.id, name: file.name, bytes: file.bytes },
           thumbnailLink: file.thumbnailLink,
         }),
         signal: controller.signal,
       })
       const result = await r.json()
+      setDiagnostics(result.diagnostics)
       if (!r.ok)
         throw new Error(
           result.error ||
@@ -179,7 +188,9 @@ export function DropboxArtworkImport({
     }
   }
   async function save() {
-    if (!preview || !selection || !approved) return
+    if (!preview || !selection || !approved || !reviewedLight || !reviewedDark)
+      return
+    setDiagnostics((d) => (d ? { ...d, stage: 'private storage/save' } : d))
     setPhase('saving')
     setMessage('Saving mockup copy')
     setProgress(undefined)
@@ -242,7 +253,8 @@ export function DropboxArtworkImport({
       <h4>Artwork from Dropbox · optional</h4>
       <p>
         Your original stays in Dropbox. Cottage Pantry saves an optimized copy
-        for mockups.
+        for mockups. Selecting a file can create a shareable Dropbox link;
+        selected source links are not guaranteed to expire.
       </p>
       <p className="form-hint">
         PNG, JPG and WebP sources. Preview availability depends on Dropbox.
@@ -267,6 +279,18 @@ export function DropboxArtworkImport({
       <p role="status">
         {phase === 'preparing' ? 'Preparing preview…' : message}
       </p>
+      {diagnostics && (
+        <p role="status">
+          Preview stage: {diagnostics.stage} · HTTP status:{' '}
+          {diagnostics.httpStatus ?? 'unavailable'} · Retrieved bytes:{' '}
+          {diagnostics.retrievedBytes ?? 'unavailable'} · Decoded preview:{' '}
+          {diagnostics.width && diagnostics.height
+            ? `${diagnostics.width} × ${diagnostics.height}`
+            : 'unavailable'}{' '}
+          · Prepared-copy bytes: {diagnostics.preparedBytes ?? 'unavailable'} ·
+          Preparation time: {diagnostics.preparationMs} ms
+        </p>
+      )}
       {preview && (
         <div className="dropbox-review">
           <h4>Review artwork</h4>
@@ -274,7 +298,10 @@ export function DropboxArtworkImport({
             type="button"
             className="btn secondary"
             disabled={phase === 'saving'}
-            onClick={() => setDark(!dark)}
+            onClick={() => {
+              setDark(!dark)
+              setApproved(false)
+            }}
           >
             Use {dark ? 'light' : 'dark'} review background
           </button>
@@ -287,6 +314,20 @@ export function DropboxArtworkImport({
               alt="Optimized artwork for approval"
             />
           </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={dark ? reviewedDark : reviewedLight}
+              disabled={phase === 'saving'}
+              onChange={(e) => {
+                if (dark) setReviewedDark(e.target.checked)
+                else setReviewedLight(e.target.checked)
+                setApproved(false)
+              }}
+            />
+            I reviewed transparency and detail on this {dark ? 'dark' : 'light'}{' '}
+            background.
+          </label>
           <p>
             {preview.width} × {preview.height} pixels ·{' '}
             {(preview.bytes / 1_000_000).toFixed(2)} MB · PNG ·{' '}
@@ -295,13 +336,14 @@ export function DropboxArtworkImport({
           <p>
             Check white artwork, transparency, color, aspect ratio and small
             text on both backgrounds. A preview cannot restore detail or
-            transparency lost by Dropbox. Export may enlarge this copy.
+            transparency lost by Dropbox. Enlarging an export cannot restore
+            detail missing from this copy.
           </p>
           <label className="check">
             <input
               type="checkbox"
               checked={approved}
-              disabled={phase === 'saving'}
+              disabled={phase === 'saving' || !reviewedLight || !reviewedDark}
               onChange={(e) => setApproved(e.target.checked)}
             />
             I approve this copy for mockups.
@@ -309,7 +351,9 @@ export function DropboxArtworkImport({
           <button
             type="button"
             className="btn"
-            disabled={!approved || phase === 'saving'}
+            disabled={
+              !approved || !reviewedLight || !reviewedDark || phase === 'saving'
+            }
             onClick={() => void save()}
           >
             Save mockup copy

@@ -9,7 +9,11 @@ import { inventoryAdjustmentPlan } from '@/lib/inventory-adjustment'
 import { demoData } from '@/lib/demo'
 import type { Item } from '@/lib/domain'
 
-vi.mock('@netlify/identity', () => ({ onAuthChange: () => () => {} }))
+vi.mock('@netlify/identity', () => ({
+  onAuthChange: () => () => {},
+  hydrateSession: vi.fn(async () => {}),
+  refreshSession: vi.fn(async () => {}),
+}))
 afterEach(() => vi.unstubAllGlobals())
 
 it.each(['each', 'g'])(

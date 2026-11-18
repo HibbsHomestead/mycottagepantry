@@ -138,3 +138,110 @@ describe('Dropbox bounded copy boundary (synthetic provider fixtures)', () => {
     expect(authorizeMockupProduct('mine', state, 'Owner', url).id).toBe('mine')
   })
 })
+
+it('reports safe failure stages and numeric retrieval evidence', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response('denied', { status: 403 })),
+  )
+  await expect(prepareDropboxPreview(thumbnail)).rejects.toMatchObject({
+    diagnostics: { stage: 'preview retrieval', httpStatus: 403 },
+  })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response('not an image')),
+  )
+  await expect(prepareDropboxPreview(thumbnail)).rejects.toMatchObject({
+    diagnostics: {
+      stage: 'response format',
+      httpStatus: 200,
+      retrievedBytes: 12,
+    },
+  })
+  await expect(
+    prepareDropboxPreview(undefined as unknown as string),
+  ).rejects.toMatchObject({
+    diagnostics: { stage: 'preview selection' },
+  })
+})
+
+it('reports exact prepared size and bounded decoded dimensions', async () => {
+  const image = await sharp({
+    create: { width: 200, height: 100, channels: 4, background: '#ffffff80' },
+  })
+    .png()
+    .toBuffer()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(image)))
+  const preview = await prepareDropboxPreview(thumbnail)
+  expect(preview.diagnostics).toMatchObject({
+    stage: 'ready for visual review',
+    httpStatus: 200,
+    retrievedBytes: image.length,
+    width: 200,
+    height: 100,
+    preparedBytes: Buffer.from(preview.data, 'base64').length,
+  })
+  expect(preview.diagnostics.preparationMs).toBeGreaterThanOrEqual(0)
+})
+
+it('distinguishes URL, redirect, byte, pixel and decode failures without retaining source links', async () => {
+  const failure = async (url = thumbnail) => {
+    try {
+      await prepareDropboxPreview(url)
+    } catch (e) {
+      return e as Error & {
+        diagnostics: { stage: string; retrievedBytes?: number }
+      }
+    }
+    throw new Error('Expected preview rejection')
+  }
+  expect(
+    (await failure('https://untrusted.test/private')).diagnostics.stage,
+  ).toBe('URL validation')
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://untrusted.test/private' },
+        }),
+      ),
+  )
+  const redirect = await failure()
+  expect(redirect.diagnostics.stage).toBe('redirect validation')
+  expect(JSON.stringify(redirect)).not.toMatch(/https:|private|token/)
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(new Uint8Array(4_000_001))),
+  )
+  expect((await failure()).diagnostics).toMatchObject({
+    stage: 'retrieved preview byte limit',
+    retrievedBytes: 4_000_001,
+  })
+  const png = await sharp({
+    create: { width: 2049, height: 1, channels: 4, background: '#fff' },
+  })
+    .png()
+    .toBuffer()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(png)))
+  expect((await failure()).diagnostics.stage).toBe(
+    'decoded preview pixel limit',
+  )
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(png.subarray(0, 33))),
+  )
+  // Use a bounded IHDR from a valid image so full decoding is the failing stage.
+  const bounded = await sharp({
+    create: { width: 10, height: 10, channels: 4, background: '#fff' },
+  })
+    .png()
+    .toBuffer()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(bounded.subarray(0, 33))),
+  )
+  expect((await failure()).diagnostics.stage).toBe('image decode')
+})

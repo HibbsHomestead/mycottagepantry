@@ -182,6 +182,9 @@ for (const width of [1440, 390])
     })
     await page.locator('.dropbox-review').scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${dir}/review-${width}.png` })
+    await page.getByLabel('I reviewed transparency and detail on this dark background.').check()
+    await page.getByRole('button', { name: 'Use light review background' }).click()
+    await page.getByLabel('I reviewed transparency and detail on this light background.').check()
     await page.getByLabel('I approve this copy for mockups.').check()
     fail = true
     await page

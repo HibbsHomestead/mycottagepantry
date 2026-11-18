@@ -1,3 +1,4 @@
+import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { useState } from 'react'
 import { ovenTimestamp } from '@/lib/oven-dates'
@@ -112,7 +113,7 @@ export function FinishedInventory({
               <dl>
                 <dt>On hand</dt>
                 <dd>
-                  {p.quantity || 0}{' '}
+                  {inventoryQuantity(p.quantity)}{' '}
                   {p.workflow === 'resale'
                     ? stockUnitLabel(p, Number(p.quantity || 0))
                     : 'each'}
@@ -134,7 +135,7 @@ export function FinishedInventory({
                   </>
                 )}
                 <dt>Reorder threshold</dt>
-                <dd>{p.threshold || 0}</dd>
+                <dd>{inventoryQuantity(p.threshold)}</dd>
                 {p.workflow === 'resale' && p.purchaseQuantity && (
                   <>
                     <dt>Last purchase</dt>
@@ -372,7 +373,7 @@ export function PurchaseStockReceipts({
                 <tr key={l.id}>
                   <td>{l.name}</td>
                   <td>
-                    {l.quantity} {l.unit}
+                    {inventoryQuantity(l.quantity)} {l.unit}
                   </td>
                   <td>{money(l.amount)}</td>
                   <td>

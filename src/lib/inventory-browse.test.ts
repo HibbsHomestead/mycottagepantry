@@ -29,9 +29,9 @@ it('labels remaining stock without inventing unopened packages or changing preci
 })
 it('labels fractional fabric and counted resale without changing stored values', () => {
   const i = { id: 'f', name: 'Cotton', unit: 'yd', quantity: 3.254321 }
-  expect(onHandText(i)).toBe('3.254 yd remaining')
+  expect(onHandText(i)).toBe('3.25 yd remaining')
   expect(i.quantity).toBe(3.254321)
-  expect(onHandText({ ...i, quantity: 0.0001 })).toBe('<0.001 yd remaining')
+  expect(onHandText({ ...i, quantity: 0.0001 })).toBe('<0.01 yd remaining')
   expect(onHandText({ ...i, workflow: 'resale', quantity: 50 })).toBe('50 each')
 })
 it('previews only convertible receipts and leaves the original record unchanged', () => {
@@ -83,4 +83,18 @@ it('keeps pantry and resale source identities separate without mutating records'
     `products:${w.ingredients[0].id}`,
   ])
   expect(w).toEqual(before)
+})
+
+it('keeps stock statuses based on actual quantities below display precision', () => {
+  const item = {
+    id: 'small',
+    name: 'Dye',
+    quantity: 0.004,
+    threshold: 0.003,
+    unit: 'kg',
+  }
+  expect(onHandText(item)).toBe('<0.01 kg remaining')
+  expect(inventoryStatus(item)).toBe('In stock')
+  expect(inventoryStatus({ ...item, threshold: 0.005 })).toBe('Low stock')
+  expect(onHandText({ ...item, quantity: -0.004 })).toContain('>-0.01 kg')
 })

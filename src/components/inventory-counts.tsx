@@ -1,3 +1,4 @@
+import { inventoryQuantity } from "@/lib/inventory-quantity";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ScanBarcode,
@@ -23,6 +24,14 @@ import { BarcodeScanner } from "./barcode-scanner";
 import "./inventory-counts.css";
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 8 });
+function StockQuantity({ value }: { value: number }) {
+  return (
+    <>
+      <span className="count-screen-quantity">{inventoryQuantity(value)}</span>
+      <span className="count-print-quantity">{fmt(value)}</span>
+    </>
+  );
+}
 const statusName = (s: string) =>
   s === "completed"
     ? "Applied"
@@ -230,7 +239,7 @@ export function InventoryCounts({
         },
       );
       setFeedback(
-        `${match.item.name} · ${match.package.name} · +${fmt(convert(match.package.stockQuantity, match.item.unit, match.item.storageUnit || match.item.unit, match.item.conversions))} ${match.item.storageUnit || match.item.unit}`,
+        `${match.item.name} · ${match.package.name} · +${inventoryQuantity(convert(match.package.stockQuantity, match.item.unit, match.item.storageUnit || match.item.unit, match.item.conversions))} ${match.item.storageUnit || match.item.unit}`,
       );
       if (haptic) navigator.vibrate?.(70);
     } else {
@@ -298,7 +307,7 @@ export function InventoryCounts({
         <div className="count-compact-row" key={l.ingredientId}>
           <span>{l.name}</span>
           <strong>
-            {fmt(l.countedQuantity)} {l.unit}
+            {<StockQuantity value={l.countedQuantity} />} {l.unit}
           </strong>
         </div>
       ))}
@@ -1255,14 +1264,18 @@ export function InventoryCounts({
                       <div className="count-review-row" role="row">
                         <strong role="cell">{l.name}</strong>
                         <span role="cell" data-label="Expected">
-                          {fmt(l.systemQuantity)}
+                          {<StockQuantity value={l.systemQuantity} />}
                         </span>
                         <span role="cell" data-label="Counted">
-                          {fmt(l.countedQuantity)}
+                          {<StockQuantity value={l.countedQuantity} />}
                         </span>
                         <strong role="cell" data-label="Difference">
                           {l.countedQuantity - l.systemQuantity > 0 ? "+" : ""}
-                          {fmt(l.countedQuantity - l.systemQuantity)}
+                          {
+                            <StockQuantity
+                              value={l.countedQuantity - l.systemQuantity}
+                            />
+                          }
                         </strong>
                         <span role="cell">
                           {l.unit} ·{" "}
@@ -1288,7 +1301,8 @@ export function InventoryCounts({
                             {e.package
                               ? `${e.package.name} · ${e.package.quantity} ${e.package.unit}`
                               : "Manual amount"}{" "}
-                            · {e.barcode || ""} · {fmt(e.quantity)} {l.unit} ·{" "}
+                            · {e.barcode || ""} ·{" "}
+                            {<StockQuantity value={e.quantity} />} {l.unit} ·{" "}
                             {time(e.at)}
                             {e.replaces ? " · replaces full scan" : ""}
                           </p>

@@ -1,9 +1,17 @@
-import { it, expect, vi } from 'vitest'
+import { it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IngredientDetail } from './ingredient-detail'
 import { demoData } from '@/lib/demo'
 import { updateIngredient } from '@/lib/ingredients'
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  })
+})
+afterEach(() => vi.unstubAllGlobals())
 function props() {
   return {
     workspace: demoData(),
