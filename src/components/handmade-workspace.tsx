@@ -9,7 +9,8 @@ import * as Tabs from '@radix-ui/react-tabs'
 import { isFabric } from '../lib/fabric'
 import { useEffect, useRef, useState } from 'react'
 import { ProductCards } from './product-cards'
-import { ItemDetailLayout, ItemDetailHeader } from './item-detail-layout'
+import { ItemDetailHeader } from './item-detail-layout'
+import { PantryPhoto } from './pantry-photo'
 import { CostCard, costMoney } from './cost-cards'
 import { invalidEditorTabs } from './item-editor-shell'
 import { productCategoryName } from '../lib/product-categories'
@@ -174,8 +175,11 @@ export function HandmadeWorkspace({
     <div className="handmade-workspace">
       {product && !params.has('edit') && (
         <Dialog open onOpenChange={(v) => !v && go()}>
-          <DialogContent className="app-dialog wide-dialog item-detail-dialog handmade-detail-dialog">
-            <ItemDetailHeader name={product.name}>
+          <DialogContent
+            showCloseButton={false}
+            className="app-dialog wide-dialog item-detail-dialog handmade-detail-dialog"
+          >
+            <ItemDetailHeader name={product.name} close>
               Handmade product · estimated BOM costs and recorded finished
               stock.
             </ItemDetailHeader>
@@ -1297,15 +1301,9 @@ function HandmadeProductDetail({
   )
   return (
     <>
-      <ItemDetailLayout
-        item={p}
-        assets={w.graphic_assets}
-        kind="product"
-        photoDetails={
-          <>
-            <p className="table-note">
-              {p.description || 'No description added.'}
-            </p>
+      <div className="handmade-product-layout">
+        <div className="handmade-product-information">
+          <div className="handmade-product-intro">
             <p className="table-note">
               {[
                 p.variantGroup,
@@ -1319,7 +1317,15 @@ function HandmadeProductDetail({
             <span className={`status ${p.archived ? 'amber' : 'green'}`}>
               {p.archived ? 'Archived' : 'Active'}
             </span>
+            <p className="table-note">
+              {p.description || 'No description added.'}
+            </p>
             <div className="button-row product-detail-actions">
+              {manage && !p.archived && (
+                <button className="btn" onClick={() => open('production', p)}>
+                  Start production run
+                </button>
+              )}
               {manage && (
                 <>
                   <button className="btn" onClick={() => edit('product')}>
@@ -1367,191 +1373,201 @@ function HandmadeProductDetail({
                 ? `${money(p.cost)} recorded inventory cost / unit`
                 : 'Finished inventory valuation needs review.'}
             </p>
-          </>
-        }
-      >
-        {manage && !p.archived && (
-          <div className="button-row">
-            <button className="btn" onClick={() => open('production', p)}>
-              Start production run
-            </button>
           </div>
-        )}
-        <ProductMockups
-          productId={p.id}
-          assets={w.graphic_assets || []}
-          canEdit={manage}
-          onWorkspace={onWorkspace}
-        />
-        <HandmadeCostCards
-          product={p}
-          cost={cost}
-          w={w}
-          canConfigure={manage}
-        />
-        {(!p.bom || reason) && (
-          <details className="calculation-box">
-            <summary>
-              {!p.bom
-                ? 'Legacy BOM needs review.'
-                : 'Estimated cost incomplete'}
-            </summary>
-            {reason && <p>{reason}</p>}
-            {!p.bom && <p>Save a product-owned BOM before new production.</p>}
-          </details>
-        )}
-      </ItemDetailLayout>
-      <Tabs.Root value={tab} onValueChange={setTab}>
-        <Tabs.List
-          className="section-tabs"
-          aria-label="Handmade product details"
-        >
-          {[
-            'Overview',
-            'Bill of Materials & Costing',
-            'Production History',
-            'Inventory & Sales',
-          ].map((t) => (
-            <Tabs.Trigger
-              className="btn secondary"
-              type="button"
-              key={t}
-              value={t}
+          <HandmadeCostCards
+            product={p}
+            cost={cost}
+            w={w}
+            canConfigure={manage}
+          />
+          {(!p.bom || reason) && (
+            <details className="calculation-box">
+              <summary>
+                {!p.bom
+                  ? 'Legacy BOM needs review.'
+                  : 'Estimated cost incomplete'}
+              </summary>
+              {reason && <p>{reason}</p>}
+              {!p.bom && <p>Save a product-owned BOM before new production.</p>}
+            </details>
+          )}
+          <Tabs.Root value={tab} onValueChange={setTab}>
+            <Tabs.List
+              className="section-tabs"
+              aria-label="Handmade product details"
             >
-              {t}
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List>
-        <Tabs.Content
-          key={tab}
-          value={tab}
-          className="handmade-detail-panel"
-          aria-label={tab}
-        >
-          <h3>{tab}</h3>
-          {tab === 'Overview' && (
-            <>
-              <p>{p.description || 'No description added.'}</p>
-              <p>
-                {bom?.output || 'Unconfigured'} finished units per production
-                run
-                {p.variant ? ` · ${p.variant}` : ''}
-              </p>
-            </>
-          )}
-          {tab === 'Bill of Materials & Costing' && (
-            <>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Material / packaging</th>
-                      <th>Quantity</th>
-                      <th>Unit</th>
-                      <th>Extended cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bom?.lines?.map((l: Item, i: number) => (
-                      <tr key={i}>
-                        <td>
-                          {w.ingredients.find((m) => m.id === l.ingredientId)
-                            ?.name || 'Unavailable material'}
-                        </td>
-                        <td>{l.quantity}</td>
-                        <td>{l.unit}</td>
-                        <td>
-                          {cost?.lines[i]
-                            ? money(cost.lines[i].cost)
-                            : 'Needs review'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <HandmadeCostSummary cost={cost} />
-              <p>Scrap allowance: {bom?.scrapPercent ?? 'Not configured'}%</p>
-              <p>{bom?.instructions || 'No production instructions added.'}</p>
-              <details>
-                <summary>Estimate basis</summary>
-                <p>
-                  Current material costs include the configured scrap allowance.
-                  Labor and overhead use the saved BOM allocations. Zero
-                  allocations exclude those costs. Selling expenses are
-                  excluded. Completed production retains its recorded cost
-                  snapshot.
-                </p>
-              </details>
-            </>
-          )}
-          {tab === 'Production History' && (
-            <>
-              {runs.length ? (
-                runs.map((r) => (
-                  <div className="handmade-run" key={r.id}>
-                    <span>
-                      <strong>{r.name}</strong>
-                      <small>
-                        {r.date} · {r.status} ·{' '}
-                        {r.status === 'completed'
-                          ? `${r.actualYield} finished units · ${money(r.historicalCost)} recorded cost`
-                          : `${r.quantity || r.yield} planned units`}
-                      </small>
-                    </span>
-                    <button
-                      className="btn secondary"
-                      onClick={() => open('batch-detail', r.runHeader || r)}
-                    >
-                      Review run
-                    </button>
+              {[
+                'Overview',
+                'Bill of Materials & Costing',
+                'Production History',
+                'Inventory & Sales',
+              ].map((t) => (
+                <Tabs.Trigger
+                  className="btn secondary"
+                  type="button"
+                  key={t}
+                  value={t}
+                >
+                  {t}
+                </Tabs.Trigger>
+              ))}
+            </Tabs.List>
+            <Tabs.Content
+              key={tab}
+              value={tab}
+              className="handmade-detail-panel"
+              aria-label={tab}
+            >
+              <h3>{tab}</h3>
+              {tab === 'Overview' && (
+                <>
+                  <p>{p.description || 'No description added.'}</p>
+                  <p>
+                    {bom?.output || 'Unconfigured'} finished units per
+                    production run
+                    {p.variant ? ` · ${p.variant}` : ''}
+                  </p>
+                </>
+              )}
+              {tab === 'Bill of Materials & Costing' && (
+                <>
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Material / packaging</th>
+                          <th>Quantity</th>
+                          <th>Unit</th>
+                          <th>Extended cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bom?.lines?.map((l: Item, i: number) => (
+                          <tr key={i}>
+                            <td>
+                              {w.ingredients.find(
+                                (m) => m.id === l.ingredientId,
+                              )?.name || 'Unavailable material'}
+                            </td>
+                            <td>{l.quantity}</td>
+                            <td>{l.unit}</td>
+                            <td>
+                              {cost?.lines[i]
+                                ? money(cost.lines[i].cost)
+                                : 'Needs review'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ))
-              ) : (
-                <p>No production runs recorded for this product.</p>
-              )}
-            </>
-          )}
-          {tab === 'Inventory & Sales' && (
-            <>
-              <p>
-                {p.quantity || 0} finished units ·{' '}
-                {p.stockCostKnown
-                  ? `${money(Number(p.quantity || 0) * Number(p.cost))} recorded inventory value`
-                  : 'Inventory valuation needs review'}
-              </p>
-              <h4>Sales</h4>
-              {sales.length ? (
-                sales.map((r) => (
-                  <p key={r.id}>
-                    {r.date} · {r.quantity} units · {money(r.total ?? r.amount)}
+                  <HandmadeCostSummary cost={cost} />
+                  <p>
+                    Scrap allowance: {bom?.scrapPercent ?? 'Not configured'}%
                   </p>
-                ))
-              ) : (
-                <p>No sales recorded for this product.</p>
-              )}
-              <h4>Stock movements</h4>
-              {movements.length ? (
-                movements.map((r) => (
-                  <p key={r.id}>
-                    {r.date} · {r.type} · {r.quantity} units
+                  <p>
+                    {bom?.instructions || 'No production instructions added.'}
                   </p>
-                ))
-              ) : (
-                <p>No product stock movements recorded.</p>
+                  <details>
+                    <summary>Estimate basis</summary>
+                    <p>
+                      Current material costs include the configured scrap
+                      allowance. Labor and overhead use the saved BOM
+                      allocations. Zero allocations exclude those costs. Selling
+                      expenses are excluded. Completed production retains its
+                      recorded cost snapshot.
+                    </p>
+                  </details>
+                </>
               )}
-              <details>
-                <summary>Inventory costing</summary>
-                <p>
-                  Finished goods retain perpetual weighted-average valuation.
-                  COGS is recorded when units are sold. Editing a product or BOM
-                  does not move stock or rewrite historical costs.
-                </p>
-              </details>
-            </>
-          )}
-        </Tabs.Content>
-      </Tabs.Root>
+              {tab === 'Production History' && (
+                <>
+                  {runs.length ? (
+                    runs.map((r) => (
+                      <div className="handmade-run" key={r.id}>
+                        <span>
+                          <strong>{r.name}</strong>
+                          <small>
+                            {r.date} · {r.status} ·{' '}
+                            {r.status === 'completed'
+                              ? `${r.actualYield} finished units · ${money(r.historicalCost)} recorded cost`
+                              : `${r.quantity || r.yield} planned units`}
+                          </small>
+                        </span>
+                        <button
+                          className="btn secondary"
+                          onClick={() => open('batch-detail', r.runHeader || r)}
+                        >
+                          Review run
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p>No production runs recorded for this product.</p>
+                  )}
+                </>
+              )}
+              {tab === 'Inventory & Sales' && (
+                <>
+                  <p>
+                    {p.quantity || 0} finished units ·{' '}
+                    {p.stockCostKnown
+                      ? `${money(Number(p.quantity || 0) * Number(p.cost))} recorded inventory value`
+                      : 'Inventory valuation needs review'}
+                  </p>
+                  <h4>Sales</h4>
+                  {sales.length ? (
+                    sales.map((r) => (
+                      <p key={r.id}>
+                        {r.date} · {r.quantity} units ·{' '}
+                        {money(r.total ?? r.amount)}
+                      </p>
+                    ))
+                  ) : (
+                    <p>No sales recorded for this product.</p>
+                  )}
+                  <h4>Stock movements</h4>
+                  {movements.length ? (
+                    movements.map((r) => (
+                      <p key={r.id}>
+                        {r.date} · {r.type} · {r.quantity} units
+                      </p>
+                    ))
+                  ) : (
+                    <p>No product stock movements recorded.</p>
+                  )}
+                  <details>
+                    <summary>Inventory costing</summary>
+                    <p>
+                      Finished goods retain perpetual weighted-average
+                      valuation. COGS is recorded when units are sold. Editing a
+                      product or BOM does not move stock or rewrite historical
+                      costs.
+                    </p>
+                  </details>
+                </>
+              )}
+            </Tabs.Content>
+          </Tabs.Root>
+        </div>
+        <aside className="handmade-product-media" aria-label="Product media">
+          <h3>Product image</h3>
+          <PantryPhoto
+            className="handmade-main-photo product-detail-photo"
+            item={p}
+            assets={w.graphic_assets}
+            kind="product"
+          />
+          <ProductMockups
+            productId={p.id}
+            assets={w.graphic_assets || []}
+            canEdit={manage}
+            onWorkspace={onWorkspace}
+            consolidatedMedia
+            primaryImageAssetId={p.imageAssetId}
+          />
+        </aside>
+      </div>
     </>
   )
 }
@@ -1609,7 +1625,7 @@ function HandmadeCostCards({
       )}
       <div
         className="cost-card-grid cost-breakdown-grid"
-        aria-label="Estimated cost breakdown per production run"
+        aria-label="Costing, pricing and stock summary"
       >
         <CostCard
           label="Materials"
@@ -1643,8 +1659,6 @@ function HandmadeCostCards({
           }
           tone="neutral"
         />
-      </div>
-      <div className="detail-stats cost-card-grid">
         <CostCard
           label="Cost per finished unit"
           value={cost ? costMoney(cost.unit) : 'Incomplete'}
@@ -1668,8 +1682,6 @@ function HandmadeCostCards({
           note={pricing ? 'Revenue less cost; excludes tax' : pricingReason}
           tone="green"
         />
-      </div>
-      <div className="cost-card-grid">
         <CostCard
           label="Estimated margin"
           value={pricing ? `${pricing.margin.toFixed(2)}%` : 'Incomplete'}

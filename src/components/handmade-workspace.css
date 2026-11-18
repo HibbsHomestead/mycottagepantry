@@ -231,3 +231,92 @@
 .handmade-detail-dialog .table-scroll {
   max-width: 100%;
 }
+
+/* Handmade details: one scroll surface, information first, all media together. */
+.app-dialog.wide-dialog.item-detail-dialog.handmade-detail-dialog {
+  width: min(1360px, calc(100vw - 40px));
+  max-width: min(1360px, calc(100vw - 40px)) !important;
+  overflow-y: auto;
+}
+.handmade-product-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+.handmade-product-information,
+.handmade-product-intro,
+.handmade-product-media {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  overflow-wrap: anywhere;
+}
+.handmade-product-intro {
+  gap: 10px;
+}
+.handmade-product-intro > p,
+.handmade-product-media h3 {
+  margin: 0;
+}
+.handmade-product-intro > .status {
+  justify-self: start;
+}
+.handmade-detail-dialog .cost-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 10px;
+}
+.handmade-detail-dialog .cost-card {
+  min-width: 0;
+  padding: 14px;
+}
+.handmade-detail-dialog .cost-card strong {
+  overflow-wrap: anywhere;
+}
+.handmade-detail-dialog .handmade-main-photo.pantry-photo {
+  grid-row: auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+  max-height: none;
+  min-height: 0;
+}
+.handmade-detail-dialog .handmade-main-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 55dvh;
+  object-fit: contain;
+}
+.handmade-product-media .mockup-saved {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  align-items: start;
+}
+.handmade-product-media .mockup-saved > div {
+  width: auto;
+  min-width: 0;
+}
+.handmade-detail-dialog .table-scroll {
+  overflow: visible;
+}
+.handmade-detail-dialog table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.handmade-detail-dialog th,
+.handmade-detail-dialog td {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 899px) {
+  .handmade-product-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  .app-dialog.wide-dialog.item-detail-dialog.handmade-detail-dialog {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px) !important;
+  }
+}
