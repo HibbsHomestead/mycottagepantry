@@ -7,6 +7,7 @@ import {
   categoryOrder,
   pantryCategoryScope,
   productCategoryScope,
+  productCategoryEligible,
   type CategoryScope,
 } from './category-details'
 import { pantryCategories } from './pantry-category'
@@ -238,7 +239,11 @@ export function assertSectionCategoryAssignment(
           : pantryCategoryScope(previous)))
   )
     return
-  const category = sectionCategories(w, scope).find((c) => c.id === item[key])
+  const category = table === 'products'
+    ? (w.settings[0]?.productCategories || []).find(
+        (c: SectionCategory) => c.id === item[key] && productCategoryEligible(c, scope),
+      )
+    : sectionCategories(w, scope).find((c) => c.id === item[key])
   if (!category || category.active === false)
     throw new Error('Choose an active category from this section and business.')
   if (table === 'ingredients') syncPantryCategory(item, category)
