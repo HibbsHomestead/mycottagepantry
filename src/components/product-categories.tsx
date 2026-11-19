@@ -1,6 +1,7 @@
 import {
   categoryScopes,
   productCategoryScope,
+  productCategoryEligible,
   categoryOrder,
   type CategoryScope,
 } from '@/lib/category-details'
@@ -655,9 +656,21 @@ export function ProductCategorySelector({
     [newName, setNewName] = useState('')
   const labelId = useId()
   const scope = productCategoryScope(product)
-  const categories = categoryOrder(api.data?.categories || []).filter(
-    (c) => c.scope === scope || c.id === product.productCategoryId,
+  const categories = categoryOrder<ProductCategory>(
+    api.data?.categories || business.productCategories || [],
+  ).filter(
+    (c) => productCategoryEligible(c, scope) || c.id === product.productCategoryId,
   )
+  const selectedCategory = categories.find(
+    (c) => c.id === product.productCategoryId,
+  )
+  const selectedIssue = !selectedCategory
+    ? 'unavailable'
+    : selectedCategory.active === false
+      ? 'inactive'
+      : !productCategoryEligible(selectedCategory, scope)
+        ? 'in another section'
+        : ''
   const begin = (category?: ProductCategory, name = '') => {
     setId(category?.id || '')
     setNewName(name)
@@ -715,6 +728,7 @@ export function ProductCategorySelector({
       <CategoryCombobox
         labelledBy={labelId}
         categories={categories}
+        scope={scope}
         value={product.productCategoryId || ''}
         legacyCategory={product.category}
         disabled={!api.ready || api.loading || api.saving}
@@ -731,16 +745,21 @@ export function ProductCategorySelector({
           }
         </p>
       )}
-      {product.productCategoryId &&
-        !categories.find((c) => c.id === product.productCategoryId)?.scope && (
-          <p className="form-hint">
-            Saved category has a legacy section assignment; review in Manage
-            categories.
-          </p>
-        )}
-      {api.ready && !categories.length && (
+      {api.ready && selectedCategory && !selectedCategory.scope && (
         <p className="form-hint">
-          No product categories yet. Use Add category to create one.
+          Saved category predates section-specific categories and remains
+          available.
+        </p>
+      )}
+      {api.ready && !categories.some((c) => c.active !== false && productCategoryEligible(c, scope)) && (
+        <p className="form-hint">
+          No active product categories configured for this section.
+        </p>
+      )}
+      {api.ready && product.productCategoryId && selectedIssue && (
+        <p role="status" className="form-hint">
+          Your saved category is {selectedIssue}. Its assignment is preserved
+          until you choose a replacement.
         </p>
       )}
       {api.taxReady ? (
@@ -838,6 +857,7 @@ function CategoryCombobox({
   categories,
   value,
   legacyCategory,
+  scope,
   disabled,
   canAdd,
   onSelect,
@@ -847,6 +867,7 @@ function CategoryCombobox({
   categories: ProductCategory[]
   value: string
   legacyCategory?: string
+  scope: CategoryScope
   disabled: boolean
   canAdd: boolean
   onSelect: (id: string) => void
@@ -864,19 +885,19 @@ function CategoryCombobox({
   const label = (c: ProductCategory) =>
     `${c.name} · ${classificationLabel(c.classification)}`
   const current = saved
-    ? `${label(saved)}${saved.active === false ? ' — inactive' : ''}`
+    ? `${label(saved)}${saved.active === false ? ' — inactive' : !productCategoryEligible(saved, scope) ? ' — another section' : ''}`
     : value
       ? 'Saved category unavailable'
       : empty
   const q = query.trim().toLowerCase()
   const options: { id: string; text: string; add?: boolean }[] = [
     ...(!q ? [{ id: '', text: empty }] : []),
-    ...(value && (!saved || saved.active === false) && !q
+    ...(value && (!saved || saved.active === false || !productCategoryEligible(saved, scope)) && !q
       ? [{ id: value, text: current }]
       : []),
     ...categories
       .filter(
-        (c) => c.active !== false && (!q || c.name.toLowerCase().includes(q)),
+        (c) => c.active !== false && productCategoryEligible(c, scope) && (!q || c.name.toLowerCase().includes(q)),
       )
       .map((c) => ({ id: c.id, text: label(c) })),
   ]

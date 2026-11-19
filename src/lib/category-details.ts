@@ -67,3 +67,16 @@ export function pantryCategoryScope(
       ? 'packaging'
       : 'food-ingredients'
 }
+
+/** Unscoped records predate section-specific product categories and belonged to
+ * the shared product list. Keep them usable without assigning a guessed scope.
+ * Call only on the business's productCategories, never pantry categories. */
+export function productCategoryEligible(
+  category: { scope?: CategoryScope },
+  scope: CategoryScope,
+) {
+  return (
+    (scope.endsWith('products') || scope === 'kits') &&
+    (!category.scope || category.scope === scope)
+  )
+}

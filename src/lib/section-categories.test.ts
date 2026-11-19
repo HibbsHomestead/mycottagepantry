@@ -29,7 +29,7 @@ it('retains exact legacy pantry labels for review without reassigning any record
   ).toBe(false)
   expect(w.ingredients).toEqual(before)
 })
-it('preserves archived assignments and legacy product scope while preventing new ones', () => {
+it('preserves archived assignments while allowing legacy shared product choices', () => {
   const w = demoData()
   w.settings[0].productCategories = [
     {
@@ -63,7 +63,7 @@ it('preserves archived assignments and legacy product scope while preventing new
       w,
       'products',
     ),
-  ).toThrow(/active category/)
+  ).not.toThrow()
 })
 it('rejects parent cycles and cross-section trees', () => {
   expect(() =>
@@ -207,4 +207,60 @@ it('retains and flags legacy ID/label conflicts before scoped categories existed
   }
   expect(pantryCategoryConflict(previous, w)).toContain('differs')
   expect(pantryCategoryView(previous, w)).toBe(previous)
+})
+
+it('keeps legacy product eligibility independent of tax classification and tenant', () => {
+  const w = demoData()
+  w.settings[0].productCategories = [
+    { id: 'shared', name: 'Shared', classification: 'food' },
+    {
+      id: 'craft',
+      name: 'Craft',
+      classification: 'non_food',
+      scope: 'handmade-products',
+    },
+    {
+      id: 'food',
+      name: 'Food',
+      classification: 'food',
+      scope: 'food-products',
+    },
+  ]
+  const before = structuredClone(w)
+  for (const [workflow, scope] of [
+    ['food', 'food-products'],
+    ['handmade', 'handmade-products'],
+    ['resale', 'resale-products'],
+    ['kit', 'kits'],
+  ] as const) {
+    expect(sectionCategories(w, scope).map((c) => c.id)).not.toContain('shared')
+    expect(() =>
+      assertSectionCategoryAssignment(
+        { id: 'new', name: 'New', workflow, productCategoryId: 'shared' },
+        undefined,
+        w,
+        'products',
+      ),
+    ).not.toThrow()
+    expect(() =>
+      assertSectionCategoryAssignment(
+        {
+          id: 'new',
+          name: 'New',
+          workflow,
+          productCategoryId: 'other-business',
+        },
+        undefined,
+        w,
+        'products',
+      ),
+    ).toThrow(/active category/)
+  }
+  expect(sectionCategories(w, 'handmade-products').map((c) => c.id)).toEqual([
+    'craft',
+  ])
+  expect(sectionCategories(w, 'food-products').map((c) => c.id)).toEqual([
+    'food',
+  ])
+  expect(w).toEqual(before)
 })

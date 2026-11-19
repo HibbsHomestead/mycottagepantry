@@ -1041,3 +1041,17 @@ it('saves, edits and reopens classification rules with tenant validation and unc
     expect(restored.status, restored.error).toBe(200)
   }
 })
+
+it('saves and reloads an existing unscoped product category without rewriting its definition', async () => {
+  session.user = 'category-owner-a'
+  const before = (await call()).categories
+  const saved = await saveProduct({
+    id: 'legacy-category-save', name: 'Legacy category regression',
+    recipeId: 'recipe', productCategoryId: 'unclassified',
+    price: 8, unpacked: true, unitsPerPackage: 1,
+  })
+  expect(saved.status, saved.error).toBe(200)
+  const reopened = await call(undefined, '')
+  expect(reopened.workspace.products.find((p: Item) => p.id === 'legacy-category-save').productCategoryId).toBe('unclassified')
+  expect((await call()).categories).toEqual(before)
+})
