@@ -546,3 +546,185 @@
     text-align: center;
   }
 }
+
+/* Food editor owns its scroll structure; other generic dialogs keep theirs. */
+.app-dialog.food-product-dialog[data-slot='dialog-content'] {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 !important;
+  width: min(1080px, calc(100vw - 32px));
+  max-width: 1080px !important;
+  max-height: calc(
+    var(--inventory-view-height, 100dvh) - max(16px, env(safe-area-inset-top)) -
+      max(16px, env(safe-area-inset-bottom))
+  );
+  overflow: hidden;
+  min-width: 0;
+}
+.food-product-dialog > [data-slot='dialog-header'] {
+  flex: none;
+  padding: 20px 56px 12px 24px;
+}
+.food-product-dialog .editor-form.editor-product {
+  align-items: stretch;
+  display: flex !important;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  gap: 0;
+  margin: 0;
+}
+.food-product-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 24px 24px;
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  container-type: inline-size;
+  scroll-padding-block: 70px 24px;
+}
+.food-product-dialog .form-footer {
+  flex: none;
+  position: static;
+  margin: 0;
+  padding: 12px 24px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+}
+.food-product-dialog .product-form-tab-list {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+}
+.food-product-scroll > .pricing-summary {
+  min-width: 0;
+  position: static;
+  grid-column: 1;
+  grid-row: auto;
+}
+.food-product-scroll .calculation-box {
+  min-width: 0;
+  container-type: inline-size;
+}
+.food-product-dialog .food-product-scroll .calculation-box > .packaging-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+  gap: 10px;
+}
+.food-product-dialog
+  .food-product-scroll
+  .calculation-box
+  > .packaging-editor
+  > label {
+  min-width: 0;
+}
+.food-product-dialog .packaging-editor > .check-label {
+  grid-column: 1 / -2;
+}
+.food-product-dialog
+  .food-product-scroll
+  .calculation-box
+  > .packaging-editor
+  > label:first-child,
+.food-product-dialog
+  .food-product-scroll
+  .calculation-box
+  > .packaging-editor
+  > label:nth-child(4) {
+  grid-column: 1 / -1;
+}
+.food-product-dialog
+  .food-product-scroll
+  .calculation-box
+  > .packaging-editor
+  input:not([type='checkbox']),
+.food-product-dialog
+  .food-product-scroll
+  .calculation-box
+  > .packaging-editor
+  select {
+  width: 100%;
+  min-width: 0;
+}
+.packaging-editor .packaging-remove {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  grid-column: -2 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.packaging-remove:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+@container (min-width: 480px) {
+  .food-product-dialog
+    .food-product-scroll
+    .calculation-box
+    > .packaging-editor {
+    grid-template-columns:
+      minmax(0, 2fr) minmax(70px, 1fr) minmax(70px, 1fr)
+      44px;
+  }
+  .food-product-dialog
+    .food-product-scroll
+    .calculation-box
+    > .packaging-editor
+    > label:first-child {
+    grid-column: 1 / -1;
+  }
+  .food-product-dialog
+    .food-product-scroll
+    .calculation-box
+    > .packaging-editor
+    > label:nth-child(4) {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1100px) {
+  .food-product-scroll {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .food-product-scroll > .pricing-summary {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .food-product-scroll > .form-error {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 640px) {
+  .food-product-dialog > [data-slot='dialog-header'] {
+    padding: 16px 52px 10px 16px;
+  }
+  .food-product-scroll {
+    padding-inline: 16px;
+  }
+  .food-product-dialog .form-footer {
+    padding-inline: 16px;
+  }
+}
+/* Let the tab bar stick against the entire scroll region, including the
+   summary below the form on narrow screens, rather than its tab root alone. */
+.food-product-scroll > .product-form-tabs { display: contents; }
+.food-product-scroll .product-form-tab-list {
+  grid-column: 1;
+  grid-row: 1;
+  margin-bottom: 0;
+}
+.food-product-scroll .product-form-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+@media (min-width: 1100px) {
+  .food-product-scroll > .pricing-summary { grid-row: 1 / span 2; }
+}
