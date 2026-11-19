@@ -6,7 +6,11 @@ import { TooltipProvider } from './ui/tooltip'
 import { demoData } from '@/lib/demo'
 import type { Item } from '@/lib/domain'
 
-vi.mock('@netlify/identity', () => ({ onAuthChange: () => () => {} }))
+vi.mock('@netlify/identity', () => ({
+  onAuthChange: () => () => {},
+  hydrateSession: async () => {},
+  refreshSession: async () => {},
+}))
 afterEach(() => vi.unstubAllGlobals())
 
 async function start() {
@@ -47,14 +51,18 @@ it('keeps one draft across food product tabs with the summary outside them', asy
     (await screen.findAllByRole('button', { name: /Create food product/ }))[0],
   )
   const dialog = await screen.findByRole('dialog')
-  const tabs = within(dialog).getByRole('tablist', { name: 'Product sections' })
+  const tabs = within(dialog).getByRole('tablist', {
+    name: 'Product sections',
+  })
   expect(
     within(tabs)
       .getAllByRole('tab')
       .map((t) => t.textContent),
   ).toEqual(['Details & Pricing', 'Images & Labels', 'Stock & Other Details'])
   // The cost summary is a sibling of the tabs, not inside a tab panel.
-  const summary = dialog.querySelector('.editor-product > .pricing-summary')
+  const summary = dialog.querySelector(
+    '.food-product-scroll > .pricing-summary',
+  )
   expect(summary).not.toBeNull()
   expect(summary!.closest('[role="tabpanel"]')).toBeNull()
 

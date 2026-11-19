@@ -1,3 +1,4 @@
+import { ProductFormBody } from './product-form-body'
 import { ActionTip } from './action-tip'
 import {
   CatalogAction,
@@ -3602,7 +3603,7 @@ export function WorkspaceApp() {
           showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
-          className={`app-dialog ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production', 'event-source'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
+          className={`app-dialog ${modal === 'product' ? 'food-product-dialog' : ''} ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production', 'event-source'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
         >
           {modal === 'product-detail' && selected ? (
             <ItemDetailHeader name={selected.name} close>
@@ -3731,6 +3732,7 @@ export function WorkspaceApp() {
               noValidate={modal === 'ingredient'}
               className={`editor-form editor-${modal}`}
             >
+              <ProductFormBody enabled={modal === 'product'}>
               {modal === 'import' && (
                 <>
                   <Field label="Record type">
@@ -5423,6 +5425,7 @@ export function WorkspaceApp() {
                   {formError}
                 </div>
               )}
+              </ProductFormBody>
               <div className="form-footer">
                 {modal === 'ingredient' && formError && (
                   <p role="alert" className="ingredient-save-error">

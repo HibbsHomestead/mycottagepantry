@@ -1,3 +1,5 @@
+import { Trash2 } from 'lucide-react'
+import { ActionTip } from './action-tip'
 import { businessClassifications, classificationLabel } from '@/lib/product-categories'
 import { isPackaging } from '@/lib/pantry-category'
 import { useRef, useState } from 'react'
@@ -329,15 +331,18 @@ export function PackagingEditor({
             />
             Required
           </label>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() =>
-              onChange(lines.filter((_: any, i: number) => i !== index))
-            }
-          >
-            Remove
-          </button>
+          <ActionTip label="Remove packaging item">
+            <button
+              type="button"
+              className="icon-button packaging-remove"
+              aria-label="Remove packaging item"
+              onClick={() =>
+                onChange(lines.filter((_: any, i: number) => i !== index))
+              }
+            >
+              <Trash2 size={18} aria-hidden="true" />
+            </button>
+          </ActionTip>
         </div>
       ))}
 
