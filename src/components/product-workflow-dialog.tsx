@@ -1,3 +1,4 @@
+import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { HandmadeProductEditor } from './handmade-workspace'
 import { ProductLinkImport } from './product-link-import'
@@ -281,6 +282,7 @@ function WorkflowDialog({
                 : 'Save to your oven.'}
           </DialogDescription>
         </DialogHeader>
+        {item && ['trade-design', 'trade-material'].includes(kind) && <ItemDeleteButton table={isDesign ? 'recipes' : 'ingredients'} item={item} draft />}
         <form
           className="app-form"
           onSubmit={async (event) => {

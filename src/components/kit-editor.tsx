@@ -1,3 +1,4 @@
+import { ItemDeleteButton } from './item-deletion'
 import { useState } from 'react'
 import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
@@ -434,6 +435,7 @@ export function KitEditor({
   )
   return (
     <ItemEditorShell
+      notice={item && <ItemDeleteButton table="products" item={item} draft />}
       title={item ? `Kit · ${item.name}` : 'Create kit'}
       description="Fixed contents, one selling price. Current estimates follow current component costs."
       tabs={[

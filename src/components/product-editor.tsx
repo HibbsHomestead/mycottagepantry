@@ -1,3 +1,4 @@
+import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductLabelsInfo } from './product-labels'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -508,11 +509,16 @@ export function ProductEditor({
       disabled={busy || !canManage}
       error={error}
       notice={
-        !canManage && (
-          <p className="form-hint">
-            Only an Owner or Manager can change products.
-          </p>
-        )
+        <>
+          {editing && item && (
+            <ItemDeleteButton table="products" item={item} draft={dirty} />
+          )}
+          {!canManage && (
+            <p className="form-hint">
+              Only an Owner or Manager can change products.
+            </p>
+          )}
+        </>
       }
       busy={busy}
       submitDisabled={working || !canManage}

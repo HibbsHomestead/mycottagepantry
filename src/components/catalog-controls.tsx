@@ -16,9 +16,10 @@ export function CatalogAction({
         {...props}
         type="button"
         aria-label={label}
-        className={`btn secondary${primary ? ' catalog-primary' : ''}`}
+        className={`btn secondary responsive-action${primary ? ' catalog-primary' : ''}`}
       >
         {children}
+        <span className="responsive-action-label">{label}</span>
       </button>
     </ActionTip>
   )

@@ -1,19 +1,13 @@
 import { ActionTip } from './action-tip'
 import { workflowOf } from '@/lib/product-workflows'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
-import { handmadeEstimate } from '../lib/handmade'
+import { productListMetrics } from '@/lib/product-list'
+import { ItemDeleteButton } from './item-deletion'
 import { stockUnitLabel } from '@/lib/resale-stock'
 import { productCategoryName } from '@/lib/product-categories'
 import { stockStatus } from '@/lib/ingredients'
 import { MoreHorizontal } from 'lucide-react'
-import {
-  money,
-  packagingLines,
-  productCosting,
-  profitability,
-  type Item,
-  type Workspace,
-} from '@/lib/domain'
+import { money, type Item, type Workspace } from '@/lib/domain'
 import { singularYield } from '@/lib/product-recipe-links'
 import { PantryPhoto } from './pantry-photo'
 import {
@@ -24,60 +18,6 @@ import {
 } from './ui/dropdown-menu'
 import './product-cards.css'
 import { KitProductList } from './kit-included-products'
-
-// Presentation guard: missing source prices must not look like a zero-cost product.
-// All amounts still come from the existing costing and profitability functions.
-function cardCost(product: Item, workspace: Workspace) {
-  if (['resale', 'kit'].includes(product.workflow)) {
-    try {
-      return { cost: productCosting(product, workspace).perPackage }
-    } catch (error) {
-      return {
-        reason:
-          product.workflow === 'kit'
-            ? (error as Error).message
-            : 'Receive resale stock to establish its cost.',
-      }
-    }
-  }
-  if (product.workflow === 'handmade') {
-    try {
-      return { cost: handmadeEstimate(product, workspace).unit }
-    } catch (error) {
-      return { reason: (error as Error).message }
-    }
-  }
-  const recipe = workspace.recipes.find((r) => r.id === product.recipeId)
-  if (!recipe?.lines?.length || product.needsCostSetup)
-    return { reason: 'Connect a recipe with ingredient cost details.' }
-  const sources = [...recipe.lines, ...packagingLines(product)]
-  if (
-    sources.some((line) => {
-      const item = workspace.ingredients.find((i) => i.id === line.ingredientId)
-      const price = item?.currentCost ?? item?.cost
-      return (
-        !item ||
-        item.needsCostSetup ||
-        price == null ||
-        String(price).trim() === '' ||
-        !Number.isFinite(Number(price)) ||
-        Number(price) < 0
-      )
-    })
-  )
-    return { reason: 'Review ingredient and packaging cost details.' }
-  try {
-    const cost = productCosting(product, workspace).perPackage
-    return Number.isFinite(cost)
-      ? { cost }
-      : { reason: 'Review recipe quantities and cost details.' }
-  } catch (error) {
-    return {
-      reason:
-        error instanceof Error ? error.message : 'Review recipe cost details.',
-    }
-  }
-}
 
 export function ProductCards({
   products,
@@ -108,19 +48,13 @@ export function ProductCards({
           (['handmade', 'resale'].includes(product.workflow)
             ? 'item'
             : 'package')
-        const { cost, reason } = cardCost(product, workspace)
-        const price =
-          product.price == null || String(product.price).trim() === ''
-            ? NaN
-            : Number(product.price)
-        let pricing: ReturnType<typeof profitability> | undefined
-        if (cost !== undefined && Number.isFinite(price) && price >= 0) {
-          try {
-            pricing = profitability(product, cost, workspace.settings[0])
-          } catch {
-            /* The existing pricing editor explains invalid tax/target settings. */
-          }
-        }
+        const {
+          cost,
+          reason,
+          price: resolvedPrice,
+          pricing,
+        } = productListMetrics(product, workspace)
+        const price = resolvedPrice ?? NaN
         const belowTarget =
           pricing && pricing.margin < Number(product.targetMargin ?? 65)
         const status = product.archived
@@ -156,6 +90,7 @@ export function ProductCards({
                   {stock}
                 </span>
               )}
+              <ItemDeleteButton table="products" item={product} />
               <ProductRecordActions product={product} open={open} />
             </div>
             {(product.workflow !== 'kit' || product.imageAssetId) && (
@@ -387,19 +322,12 @@ function ProductTable({
         </thead>
         <tbody>
           {products.map((product) => {
-            const { cost } = cardCost(product, workspace)
-            const price =
-              product.price == null || String(product.price).trim() === ''
-                ? NaN
-                : Number(product.price)
-            let pricing: ReturnType<typeof profitability> | undefined
-            if (cost !== undefined && Number.isFinite(price) && price >= 0) {
-              try {
-                pricing = profitability(product, cost, workspace.settings[0])
-              } catch {
-                /* Same incomplete pricing state as cards. */
-              }
-            }
+            const {
+              cost,
+              price: resolvedPrice,
+              pricing,
+            } = productListMetrics(product, workspace)
+            const price = resolvedPrice ?? NaN
             return (
               <tr key={product.id}>
                 <td>
@@ -428,6 +356,7 @@ function ProductTable({
                   )}
                 </td>
                 <td>
+                  <ItemDeleteButton table="products" item={product} />
                   <ProductRecordActions product={product} open={open} />
                 </td>
               </tr>

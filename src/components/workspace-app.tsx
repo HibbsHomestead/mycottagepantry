@@ -1,3 +1,6 @@
+import { ItemDeletionProvider, ItemDeleteButton } from './item-deletion'
+import { sortProducts, type ProductSort } from '@/lib/product-list'
+import { ProductSummaries, ProductSortControl } from './product-list-controls'
 import { ProductFormBody } from './product-form-body'
 import { ActionTip } from './action-tip'
 import {
@@ -351,6 +354,7 @@ export function WorkspaceApp() {
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
+  const [productSort, setProductSort] = useState<ProductSort>('name-asc')
   const saveCatalogView = (
     page: 'recipes' | 'products',
     view: 'cards' | 'table',
@@ -1451,7 +1455,7 @@ export function WorkspaceApp() {
           : recipeCategory(r, recipeCategoryOptions)?.id ===
             recipeCategoryFilter),
     )
-  const visibleProducts = filtered(products)
+  const visibleProducts = sortProducts(filtered(products)
     .filter(
       (p) =>
         productCategoryFilter === 'all' ||
@@ -1464,7 +1468,7 @@ export function WorkspaceApp() {
         ? workflowOf(p) === 'kit'
         : !['Food', 'Handmade', 'Resale'].includes(sub) ||
           workflowOf(p) === sub.toLowerCase(),
-    )
+    ), state, productSort)
   const pageAction = (
     {
       Pantry: ['Receive stock', 'receive-picker'],
@@ -1489,6 +1493,9 @@ export function WorkspaceApp() {
   const activeNavigation = page === 'Recipes' ? 'Recipes' : route.section
   if (!ready) return <OvenLoading error={error} retry={() => void load()} />
   return (
+    <ItemDeletionProvider canDelete={ready && ['Owner', 'Manager'].includes(role)} onWorkspace={setState} onDeleted={() => {
+      setModal(null); setFormDirty(false); workflowDirty.current = false; setSelected(null)
+    }}>
     <div className="app-shell stage-one-shell">
       <WorkspaceBackground />
       <aside
@@ -2173,6 +2180,7 @@ export function WorkspaceApp() {
                                   >
                                     View details
                                   </button>
+                                  <ItemDeleteButton table="recipes" item={r} />
                                 </td>
                               </tr>
                             )
@@ -2196,11 +2204,8 @@ export function WorkspaceApp() {
                           warning = (e as Error).message
                         }
                         return (
-                          <button
-                            className="panel recipe-card"
-                            key={r.id}
-                            onClick={() => open('recipe-detail', r)}
-                          >
+                          <article className="panel recipe-card" key={r.id}>
+                            <button type="button" className="recipe-card-open" aria-label={`View ${r.name}`} onClick={() => open('recipe-detail', r)}>
                             <div className="recipe-cover">
                               <PantryPhoto
                                 item={r}
@@ -2255,7 +2260,9 @@ export function WorkspaceApp() {
                                 </span>
                               </div>
                             </div>
-                          </button>
+                            </button>
+                            <ItemDeleteButton table="recipes" item={r} />
+                          </article>
                         )
                       })}
                     </div>
@@ -2282,7 +2289,8 @@ export function WorkspaceApp() {
                     />
                   ) : sub === 'All Products' ? (
                     <>
-                      <div className="catalog-toolbar">
+                      <ProductSummaries products={products} />
+                      <div className="catalog-toolbar products-toolbar">
                         <CatalogViewToggle
                           label="Products display"
                           view={productsView}
@@ -2304,10 +2312,10 @@ export function WorkspaceApp() {
                               <ActionTip label="Create product">
                                 <DropdownMenuTrigger asChild>
                                   <button
-                                    className="btn secondary catalog-primary"
+                                    className="btn secondary catalog-primary responsive-action"
                                     aria-label="Create product"
                                   >
-                                    <Plus size={21} />
+                                    <Plus size={21} /><span className="responsive-action-label">Create product</span>
                                   </button>
                                 </DropdownMenuTrigger>
                               </ActionTip>
@@ -2367,7 +2375,8 @@ export function WorkspaceApp() {
                           value={productCategoryFilter}
                           onFilter={setProductCategoryFilter}
                         />
-                        <Badge>{visibleProducts.length} products</Badge>
+                        <ProductSortControl value={productSort} onChange={setProductSort} />
+                        <Badge>{visibleProducts.length === products.length ? `${products.length} products` : `${visibleProducts.length} of ${products.length} products`}</Badge>
                       </div>
                       <ProductCards
                         view={productsView}
@@ -5427,6 +5436,8 @@ export function WorkspaceApp() {
               )}
               </ProductFormBody>
               <div className="form-footer">
+                {modal === 'recipe' && selected && <ItemDeleteButton table="recipes" item={selected} draft={formDirty} />}
+                {modal === 'product' && selected && <ItemDeleteButton table="products" item={selected} draft={formDirty} />}
                 {modal === 'ingredient' && formError && (
                   <p role="alert" className="ingredient-save-error">
                     {formError}
@@ -5679,6 +5690,7 @@ export function WorkspaceApp() {
                     </p>
                   )}
                   <div className="button-row product-detail-toolbar">
+                    <ItemDeleteButton table="products" item={selected} />
                     <Btn secondary onClick={() => setModal(null)}>
                       Close
                     </Btn>
@@ -6201,6 +6213,7 @@ export function WorkspaceApp() {
         </article>
       )}
     </div>
+    </ItemDeletionProvider>
   )
 }
 function Stat({

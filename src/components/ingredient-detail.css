@@ -382,12 +382,12 @@
 .ingredient-edit-grid .ingredient-section[open] > :not(summary) {
   margin-block: 0 12px;
 }
-.ingredient-edit-grid .ingredient-edit-labels fieldset {
+.ingredient-edit-grid .ingredient-edit-allergens fieldset {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px 12px;
 }
-.ingredient-edit-grid .ingredient-edit-labels .check-label {
+.ingredient-edit-grid .ingredient-edit-allergens .check-label {
   min-height: 36px;
   align-items: center;
 }
@@ -464,7 +464,6 @@
 .ingredient-tab-stock .ingredient-import-tools,
 .ingredient-tab-stock .ingredient-edit-identification,
 .ingredient-tab-stock .ingredient-edit-primary,
-.ingredient-tab-stock .ingredient-edit-labels,
 .ingredient-tab-labels .ingredient-import-tools,
 .ingredient-tab-labels .ingredient-edit-primary,
 .ingredient-tab-labels .ingredient-edit-identity-fields,
@@ -989,4 +988,118 @@
   grid-row: 3;
   justify-content: flex-start;
   flex-wrap: wrap;
+}
+/* Detail tabs keep the summary and media area in place. */
+.ingredient-details-tabs {
+  min-width: 0;
+  max-width: 100%;
+  grid-column: 1 / -1;
+}
+.ingredient-details-tab-scroll {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.ingredient-details-tab-scroll [role='tablist'] {
+  width: max-content;
+  height: auto;
+  min-height: 44px;
+  justify-content: flex-start;
+}
+.ingredient-details-tab-scroll [role='tab'] {
+  min-height: 44px;
+  padding: 10px 14px;
+  flex: 0 0 auto;
+}
+.ingredient-details-tabs [role='tabpanel'] {
+  min-width: 0;
+}
+.ingredient-detail-header .ingredient-setup-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.ingredient-detail-header .ingredient-setup-tabs .btn {
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 10px;
+  gap: 7px;
+  white-space: nowrap;
+}
+@media (min-width: 1024px) {
+  .ingredient-modal-shell:has(.ingredient-edit-grid) .ingredient-setup-tabs {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+/* This popup owns one scrolling middle region, including on mobile where the
+   older generic detail rule otherwise moves scrolling onto the whole dialog. */
+body:has(.stage-one-shell) [data-slot='dialog-content'].ingredient-detail-view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(var(--inventory-view-height, 100dvh) - 24px);
+}
+body:has(.stage-one-shell)
+  .ingredient-detail-view
+  > [data-slot='dialog-header'],
+body:has(.stage-one-shell) .ingredient-detail-view > .ingredient-detail-footer {
+  flex: 0 0 auto;
+}
+body:has(.stage-one-shell) .ingredient-detail-view .ingredient-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+.ingredient-detail-view > .ingredient-detail-footer {
+  margin-top: 12px;
+  padding: 12px 0 0;
+  flex-wrap: wrap;
+}
+.ingredient-detail-view .ingredient-detail-close {
+  z-index: 4;
+  color: var(--foreground);
+  background: var(--card);
+  position: absolute;
+  display: grid;
+  place-items: center;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  min-width: 36px;
+}
+.ingredient-detail-view .ingredient-detail-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Photos and supplier declarations share the editor draft, but have distinct panels. */
+.ingredient-modal-shell .ingredient-tab-labels .ingredient-edit-columns,
+.ingredient-modal-shell .ingredient-tab-allergens .ingredient-edit-general,
+.ingredient-modal-shell .ingredient-tab-allergens .ingredient-edit-primary,
+.ingredient-modal-shell
+  .ingredient-tab-allergens
+  .ingredient-edit-secondary
+  > :not(.ingredient-edit-allergens),
+.ingredient-modal-shell
+  .ingredient-edit-grid:not(.ingredient-modal-shell .ingredient-tab-allergens)
+  .ingredient-edit-allergens,
+.ingredient-modal-shell
+  .packaging-edit-grid:not(.ingredient-modal-shell .ingredient-tab-allergens)
+  .ingredient-edit-allergens {
+  display: none;
+}
+.ingredient-modal-shell .ingredient-tab-allergens .ingredient-edit-columns {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ingredient-modal-shell
+  .ingredient-tab-labels
+  .ingredient-edit-identification
+  > :not(.ingredient-edit-identity-body) {
+  display: none;
 }
