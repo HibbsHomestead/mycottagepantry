@@ -1,3 +1,4 @@
+import { handleItemDeletion } from '../lib/item-deletion-handler'
 import { deliverGraphic } from '../lib/graphic-delivery'
 import { handleEvent } from '../lib/events-handler'
 import { eventTables, validateAllocations } from '../../src/lib/events'
@@ -753,6 +754,11 @@ export default async (req: Request, context: Context) => {
       countPackageWrite = false,
     ) {
       if (!tables.includes(table)) throw new Error('Invalid record type.')
+      if (['ingredients', 'products', 'recipes'].includes(table) && state.activity?.some(entry => {
+        if (entry.type !== 'itemDelete') return false
+        try { const tombstone = JSON.parse(entry.detail); return tombstone.table === table && tombstone.recordId === item.id } catch { return false }
+      })) throw new Error('This item was permanently deleted. Discard the stale draft; create a new item with a new ID if needed.')
+
       if (table === 'ingredients' && typeof item.category === 'string')
         item.category = canonicalCategoryName(item.category)
       assertSectionCategoryAssignment(
@@ -2730,6 +2736,9 @@ export default async (req: Request, context: Context) => {
         ![
           'save',
           'archive',
+          'itemDeleteCheck',
+          'itemDelete',
+          'itemArchive',
           'productionSave',
           'productionComplete',
           'productionCancel',
@@ -2748,7 +2757,13 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Produce component products separately; kit production is unavailable.',
         )
-      if (String(action).startsWith('event')) {
+      if (['itemDeleteCheck', 'itemDelete', 'itemArchive'].includes(action)) {
+        const check = await handleItemDeletion(action, table, data, { client, org, role, state, audit })
+        if (check) {
+          await client.query('COMMIT')
+          return Response.json(check, { headers: { 'Cache-Control': 'private, no-store' } })
+        }
+      } else if (String(action).startsWith('event')) {
         await handleEvent(action, data, { client, org, role, state, audit })
       } else if (action === 'inventoryMarkReviewed') {
         if (table !== 'ingredients')

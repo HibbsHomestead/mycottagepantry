@@ -1,3 +1,4 @@
+import { ItemDeleteButton } from './item-deletion'
 import { useRef, useState } from 'react'
 import { recipeCategories, recipeCategoryLabel } from '@/lib/recipe-categories'
 import { ChevronDown, MoreHorizontal, Plus } from 'lucide-react'
@@ -636,6 +637,7 @@ export function RecipeDetail({
         )}
       </div>
       <footer className="recipe-detail-footer">
+        <ItemDeleteButton table="recipes" item={r} />
         {stage === 'details' ? (
           <>
             <button

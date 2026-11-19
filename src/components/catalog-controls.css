@@ -180,3 +180,127 @@
 .catalog-table-region .text-button {
   margin: 0;
 }
+/* Products retain Ingredients' controls, grouped from the content's left edge. */
+.products-toolbar {
+  justify-content: flex-start;
+  align-items: end;
+}
+.products-toolbar .inventory-primary-actions {
+  margin: 0;
+  order: 0;
+}
+.products-toolbar .search-field {
+  flex: 0 1 230px;
+  width: 230px;
+  min-height: 44px;
+  order: 0;
+}
+.products-toolbar .section-category-tools label {
+  flex: 0 1 190px;
+  order: 0;
+}
+.products-toolbar .product-sort-control {
+  flex: 0 1 230px;
+  order: 0;
+}
+.products-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.products-toolbar label.search-field {
+  flex-direction: row;
+  align-items: center;
+}
+.products-toolbar select {
+  min-height: 44px;
+  width: 100%;
+}
+.products-toolbar .section-category-tools > button {
+  order: 2;
+}
+.products-toolbar > .badge {
+  order: 3;
+  align-self: end;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.product-summaries {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.product-summaries > span {
+  min-width: 0;
+}
+.product-summaries strong > span {
+  display: block;
+  font-size: 15px;
+}
+.catalog-category-label {
+  display: none;
+}
+.recipe-card-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.recipe-card > .item-delete-action {
+  margin: 0 16px 16px;
+}
+@media (min-width: 1024px) {
+  .catalog-toolbar .inventory-primary-actions > .responsive-action,
+  .catalog-toolbar .section-category-tools > button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 44px;
+    height: auto;
+    min-height: 44px;
+    padding: 10px 12px;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .catalog-toolbar .catalog-category-label {
+    display: inline;
+  }
+}
+@media (max-width: 1023px) {
+  .product-summaries {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .products-toolbar .search-field {
+    flex: 0 1 230px;
+    order: 0;
+  }
+  .products-toolbar .section-category-tools label,
+  .products-toolbar .product-sort-control {
+    flex: 0 1 200px;
+    order: 0;
+  }
+}
+@media (max-width: 480px) {
+  .products-toolbar .search-field {
+    flex-basis: 100%;
+    width: 100%;
+  }
+  .products-toolbar .section-category-tools label,
+  .products-toolbar .product-sort-control {
+    flex: 1 1 140px;
+  }
+}
+.workspace-standard .pantry-summary.product-summaries {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1023px) {
+  .workspace-standard .pantry-summary.product-summaries {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-standard .pantry-summary.product-summaries > span {
+    padding: 12px;
+  }
+}

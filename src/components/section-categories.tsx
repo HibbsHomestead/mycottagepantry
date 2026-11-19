@@ -472,7 +472,7 @@ export function SectionCategoryTools({
                   className="btn secondary"
                   aria-label="Category actions"
                 >
-                  <MoreHorizontal size={18} />
+                  <MoreHorizontal size={18} /><span className="catalog-category-label">Category actions</span>
                 </button>
               </DropdownMenuTrigger>
             </ActionTip>

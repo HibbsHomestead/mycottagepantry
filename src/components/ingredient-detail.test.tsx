@@ -1,15 +1,27 @@
+import type { ReactElement } from 'react'
+import { TooltipProvider } from './ui/tooltip'
 import { it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import {
+  render as testingRender,
+  screen,
+  fireEvent,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { IngredientDetail } from './ingredient-detail'
+function render(ui: ReactElement) {
+  return testingRender(ui, { wrapper: TooltipProvider })
+}
 import { demoData } from '@/lib/demo'
 import { updateIngredient } from '@/lib/ingredients'
 beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
 afterEach(() => vi.unstubAllGlobals())
 function props() {
@@ -151,20 +163,24 @@ it('groups ingredient details into Product Details cards in a portal modal and r
   const modal = screen.getByRole('dialog')
   expect(container.contains(modal)).toBe(false)
   expect(modal).toHaveAttribute('data-presentation', 'modal')
-  expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('tablist', { name: 'Ingredient detail sections' }),
+  ).toBeVisible()
+  expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
   expect(
     screen.queryByRole('navigation', { name: 'Ingredient sections' }),
   ).not.toBeInTheDocument()
-  await user.click(screen.getByText('Inventory', { selector: 'summary' }))
+  await user.click(screen.getByRole('tab', { name: 'Inventory' }))
   expect(screen.getByRole('region', { name: 'Inventory' })).toBeVisible()
-  await user.click(screen.getByText('Purchasing', { selector: 'summary' }))
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   expect(
     screen.getByRole('region', { name: 'Purchase & costing' }),
   ).toBeVisible()
   expect(screen.getByRole('region', { name: 'Vendor quotes' })).toBeVisible()
-  await user.click(
-    screen.getByText('Label & ingredient details', { selector: 'summary' }),
-  )
+  await user.click(screen.getByRole('tab', { name: 'Identification & notes' }))
   expect(screen.getByRole('region', { name: 'Identification' })).toBeVisible()
   const content = modal.querySelector('.ingredient-detail-body')!
   content.scrollTop = 400
@@ -201,14 +217,14 @@ it('keeps missing purchase data blank, shows friendly inline validation, and sav
       barcode: '0012345',
     }
   render(<IngredientDetail ingredient={ingredient} {...p} />)
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   expect(
     screen.getAllByText('Purchase package details not set.')[0],
   ).toBeVisible()
   expect(screen.queryByText(/Package quantity must/)).not.toBeInTheDocument()
-  await user.click(
-    screen.getByText('Label & ingredient details', { selector: 'summary' }),
-  )
+  await user.click(screen.getByRole('tab', { name: 'Identification & notes' }))
   expect(screen.getByText('Barcode: 0012345')).toBeVisible()
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
 
   await user.click(
     screen.getAllByRole('button', { name: 'Add purchase details' })[0],
@@ -256,7 +272,7 @@ it('keeps missing purchase data blank, shows friendly inline validation, and sav
       barcode: '0012345',
     }),
   )
-  await user.click(screen.getByText('Purchasing', { selector: 'summary' }))
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   expect(
     screen.getByRole('region', { name: 'Purchase & costing' }),
   ).toBeVisible()
@@ -291,10 +307,10 @@ it('keeps saved store comparisons and linked inventory/recipe actions in the sam
     ],
   }
   render(<IngredientDetail ingredient={ingredient} {...p} />)
-  await user.click(screen.getByText('Purchasing', { selector: 'summary' }))
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   expect(screen.getByText('Cheaper', { exact: true })).toBeVisible()
 
-  await user.click(screen.getByText('Inventory', { selector: 'summary' }))
+  await user.click(screen.getByRole('tab', { name: 'Inventory' }))
   await user.click(screen.getByRole('button', { name: 'Receive stock' }))
   expect(p.open).toHaveBeenLastCalledWith(
     'receive',
@@ -310,6 +326,7 @@ it('keeps saved store comparisons and linked inventory/recipe actions in the sam
   )!
   await user.click(screen.getByRole('button', { name: recipe.name }))
   expect(p.open).toHaveBeenLastCalledWith('recipe-detail', recipe)
+  await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   await user.click(screen.getByRole('button', { name: 'Edit offer' }))
   expect(screen.getAllByRole('dialog')).toHaveLength(1)
   expect(screen.getByLabelText('Package barcode')).toHaveValue('000987')
@@ -358,7 +375,7 @@ it.each([false, true])(
         ).not.toBeInTheDocument()
       }
       hiddenSearch()
-      await user.click(screen.getByText('Purchasing', { selector: 'summary' }))
+      await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
       hiddenSearch()
       expect(
         screen.getByRole('region', { name: 'Purchase & costing' }),

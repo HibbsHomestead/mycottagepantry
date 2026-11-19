@@ -158,3 +158,11 @@
     gap: 16px;
   }
 }
+.product-card-photo-first .pantry-card-top {
+  flex-wrap: wrap;
+}
+.product-card-photo-first .pantry-card-top .status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}

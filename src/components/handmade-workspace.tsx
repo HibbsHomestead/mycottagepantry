@@ -1,3 +1,4 @@
+import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductMockups } from './product-mockup'
 import { PageOverview, PageActions } from './application-page'
@@ -1179,7 +1180,7 @@ export function HandmadeProductEditor({
           )}
         </section>
         {error && <p role="alert">{error}</p>}
-        <footer className="product-editor-actions">
+        <footer className="product-editor-actions">{item && <ItemDeleteButton table="products" item={item} draft={dirty} />}
           <div className="product-editor-buttons">
             <button
               type="button"

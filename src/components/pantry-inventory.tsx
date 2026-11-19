@@ -1,3 +1,5 @@
+import { SummaryCards } from './summary-cards'
+import { ItemDeleteButton } from './item-deletion'
 import { CatalogViewToggle } from './catalog-controls'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { SectionCategoryTools } from './section-categories'
@@ -506,6 +508,7 @@ export function PantryInventory({
                   )}
                 </div>
                 <footer>
+                  <ItemDeleteButton table="ingredients" item={i} />
                   <button
                     className="btn secondary"
                     onClick={() => open('ingredient-detail', i)}
@@ -664,6 +667,7 @@ export function PantryInventory({
                       </td>
                       <td data-label="Preferred vendor">{i.vendor || '—'}</td>
                       <td data-label="Actions">
+                        <ItemDeleteButton table="ingredients" item={i} />
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -771,28 +775,10 @@ export function PantrySummary({ ingredients }: { ingredients: Item[] }) {
       supportsExpiry(i) && i.expires && i.expires >= today && i.expires <= next,
   )
   return (
-    <div className="pantry-summary">
-      <span>
-        <Package size={21} />
-        <span>
-          Pantry value
-          <strong>
-            {money(ingredients.reduce((s, i) => s + i.quantity * i.cost, 0))}
-          </strong>
-        </span>
-      </span>
-      <span>
-        <TriangleAlert size={21} />
-        <span>
-          Low stock<strong>{low.length} items</strong>
-        </span>
-      </span>
-      <span>
-        <Clock3 size={21} />
-        <span>
-          Expiring soon<strong>{expiring.length} items</strong>
-        </span>
-      </span>
-    </div>
+    <SummaryCards cards={[
+      { label: 'Pantry value', value: money(ingredients.reduce((s, i) => s + i.quantity * i.cost, 0)), icon: <Package size={21} /> },
+      { label: 'Low stock', value: `${low.length} items`, icon: <TriangleAlert size={21} /> },
+      { label: 'Expiring soon', value: `${expiring.length} items`, icon: <Clock3 size={21} /> },
+    ]} />
   )
 }
