@@ -1468,6 +1468,42 @@ it('defaults Pantry to cards and persists the authenticated user’s explicit ta
   expect(result.workspace.settings[0].currentPantryView).toBe('table')
   expect(result.workspace.settings[0].pantryViewPreferences).toBeUndefined()
 })
+it('keeps recipe, product and pantry display preferences independent and private', async () => {
+  for (const role of ['Owner', 'Production Staff', 'Read-only Accountant']) {
+    database.role = role
+    const recipes = await post('pantryView', 'settings', {
+      page: 'recipes',
+      view: 'table',
+    })
+    expect(recipes.status).toBe(200)
+    expect(recipes.workspace.settings[0].currentRecipesView).toBe('table')
+    expect(recipes.workspace.settings[0].recipesViewPreferences).toBeUndefined()
+    const products = await post('pantryView', 'settings', {
+      page: 'products',
+      view: 'table',
+    })
+    expect(products.status).toBe(200)
+    expect(products.workspace.settings[0].currentProductsView).toBe('table')
+    expect(products.workspace.settings[0].currentRecipesView).toBe('table')
+    expect(products.workspace.settings[0].currentPantryView).toBe('cards')
+    expect(
+      products.workspace.settings[0].productsViewPreferences,
+    ).toBeUndefined()
+  }
+  database.userId = 'other-user'
+  const response = await handler(
+    new Request('https://cottage-pantry.test/api/workspace'),
+    context,
+  )
+  expect((await response.json()).workspace.settings[0].currentRecipesView).toBe(
+    'cards',
+  )
+  const invalid = await post('pantryView', 'settings', {
+    page: 'untrusted',
+    view: 'table',
+  })
+  expect(invalid.status).toBeGreaterThanOrEqual(400)
+})
 it('retains vendor, price, source, approved quote and history data with shopping search disabled', async () => {
   vi.stubGlobal('Netlify', { env: { get: () => undefined } })
   const fetcher = vi.fn()

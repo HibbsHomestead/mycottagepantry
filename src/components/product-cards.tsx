@@ -1,3 +1,5 @@
+import { ActionTip } from './action-tip'
+import { workflowOf } from '@/lib/product-workflows'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { handmadeEstimate } from '../lib/handmade'
 import { stockUnitLabel } from '@/lib/resale-stock'
@@ -81,11 +83,17 @@ export function ProductCards({
   products,
   workspace,
   open,
+  view = 'cards',
 }: {
+  view?: 'cards' | 'table'
   products: Item[]
   workspace: Workspace
   open: (kind: string, product: Item) => void
 }) {
+  if (view === 'table')
+    return (
+      <ProductTable products={products} workspace={workspace} open={open} />
+    )
   return (
     <div
       className="pantry-card-grid product-photo-grid"
@@ -148,40 +156,7 @@ export function ProductCards({
                   {stock}
                 </span>
               )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="icon-button"
-                    aria-label={`Actions for ${product.name}`}
-                  >
-                    <MoreHorizontal size={20} />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onSelect={() => open('product-detail', product)}
-                  >
-                    View details
-                  </DropdownMenuItem>
-                  {product.workflow !== 'kit' && (
-                    <DropdownMenuItem
-                      onSelect={() => open('label-preview', product)}
-                    >
-                      Preview Label
-                    </DropdownMenuItem>
-                  )}
-                  {product.workflow !== 'kit' && (
-                    <DropdownMenuItem
-                      onSelect={() => open('label-print', product)}
-                    >
-                      Print Label
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={() => open('product', product)}>
-                    {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <ProductRecordActions product={product} open={open} />
             </div>
             {(product.workflow !== 'kit' || product.imageAssetId) && (
               <button
@@ -331,6 +306,140 @@ export function ProductCards({
           <p>Try another search or create a product.</p>
         </div>
       )}
+    </div>
+  )
+}
+
+function ProductRecordActions({
+  product,
+  open,
+}: {
+  product: Item
+  open: (kind: string, product: Item) => void
+}) {
+  return (
+    <DropdownMenu>
+      <ActionTip label={`Actions for ${product.name}`}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="icon-button"
+            aria-label={`Actions for ${product.name}`}
+          >
+            <MoreHorizontal size={20} />
+          </button>
+        </DropdownMenuTrigger>
+      </ActionTip>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={() => open('product-detail', product)}>
+          View details
+        </DropdownMenuItem>
+        {product.workflow !== 'kit' && (
+          <DropdownMenuItem onSelect={() => open('label-preview', product)}>
+            Preview Label
+          </DropdownMenuItem>
+        )}
+        {product.workflow !== 'kit' && (
+          <DropdownMenuItem onSelect={() => open('label-print', product)}>
+            Print Label
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={() => open('product', product)}>
+          {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function ProductTable({
+  products,
+  workspace,
+  open,
+}: {
+  products: Item[]
+  workspace: Workspace
+  open: (kind: string, product: Item) => void
+}) {
+  return (
+    <div
+      className="catalog-table-region"
+      role="region"
+      aria-label="Products table"
+      tabIndex={0}
+    >
+      <table>
+        <thead>
+          <tr>
+            {[
+              'Product name',
+              'Product type',
+              'Category',
+              'Price',
+              'Cost',
+              'Profit excluding tax / margin',
+              'Actions',
+            ].map((label) => (
+              <th scope="col" key={label}>
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((product) => {
+            const { cost } = cardCost(product, workspace)
+            const price =
+              product.price == null || String(product.price).trim() === ''
+                ? NaN
+                : Number(product.price)
+            let pricing: ReturnType<typeof profitability> | undefined
+            if (cost !== undefined && Number.isFinite(price) && price >= 0) {
+              try {
+                pricing = profitability(product, cost, workspace.settings[0])
+              } catch {
+                /* Same incomplete pricing state as cards. */
+              }
+            }
+            return (
+              <tr key={product.id}>
+                <td>
+                  <button
+                    className="text-button"
+                    onClick={() => open('product-detail', product)}
+                  >
+                    {product.name}
+                  </button>
+                </td>
+                <td>{workflowOf(product)}</td>
+                <td>
+                  {productCategoryName(product, workspace.settings[0]) ||
+                    'Uncategorized'}
+                </td>
+                <td>{Number.isFinite(price) ? money(price) : 'Unavailable'}</td>
+                <td>{cost === undefined ? 'Incomplete' : money(cost)}</td>
+                <td>
+                  {pricing ? (
+                    <>
+                      {money(pricing.profit)}
+                      <small>{pricing.margin.toFixed(1)}%</small>
+                    </>
+                  ) : (
+                    'Unavailable'
+                  )}
+                </td>
+                <td>
+                  <ProductRecordActions product={product} open={open} />
+                </td>
+              </tr>
+            )
+          })}
+          {!products.length && (
+            <tr>
+              <td colSpan={7}>No products match this view.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }

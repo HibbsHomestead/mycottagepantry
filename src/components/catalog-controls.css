@@ -1,0 +1,182 @@
+.catalog-page {
+  min-width: 0;
+  max-width: 100%;
+  padding-bottom: 80px;
+}
+.catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.catalog-toolbar .inventory-primary-actions {
+  margin: 0 0 0 auto;
+  gap: 6px;
+}
+.catalog-toolbar .search-field {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.catalog-toolbar .section-category-tools {
+  margin: 0;
+  align-items: center;
+  gap: 6px;
+}
+.catalog-toolbar label {
+  min-width: 0;
+}
+.catalog-toolbar select {
+  max-width: 100%;
+}
+.catalog-toolbar .inventory-primary-actions > .catalog-primary {
+  background: var(--primary);
+  color: var(--primary-foreground, white);
+}
+.catalog-table-region {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+.catalog-table-region:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.catalog-table-region table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+.catalog-table-region th,
+.catalog-table-region td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.catalog-table-region td small {
+  display: block;
+}
+.catalog-table-region .text-button {
+  text-align: left;
+}
+.catalog-toolbar .pantry-view-toggle button {
+  min-height: 44px;
+}
+@media (max-width: 700px) {
+  .catalog-toolbar .inventory-primary-actions {
+    display: flex;
+    flex-wrap: wrap;
+    width: auto;
+  }
+  .workspace-standard .catalog-toolbar .inventory-primary-actions > .btn {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+    min-height: 44px;
+    padding: 8px;
+  }
+  .catalog-toolbar .search-field {
+    flex-basis: 100%;
+    order: 2;
+  }
+  .catalog-toolbar > label,
+  .catalog-toolbar > .section-category-tools {
+    order: 3;
+    flex: 1 1 180px;
+  }
+  .catalog-toolbar > .badge {
+    order: 4;
+  }
+}
+.catalog-toolbar .section-category-tools > button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--primary);
+  border: 1px solid transparent;
+}
+.catalog-toolbar .section-category-tools > button:hover {
+  border-color: var(--primary);
+}
+.catalog-toolbar .section-category-tools > button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .catalog-toolbar .section-category-tools > button {
+    min-height: 44px;
+  }
+}
+/* Preserve an explicitly selected table on mobile despite workspace card-table rules. */
+.catalog-page .catalog-table-region table {
+  display: table;
+  min-width: 760px !important;
+}
+.catalog-page .catalog-table-region thead {
+  display: table-header-group;
+}
+.catalog-page .catalog-table-region tbody {
+  display: table-row-group;
+}
+.catalog-page .catalog-table-region tr {
+  display: table-row;
+  background: transparent;
+}
+.catalog-page .catalog-table-region th,
+.catalog-page .catalog-table-region td {
+  display: table-cell;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+.catalog-page .catalog-table-region td::before {
+  display: none;
+}
+.catalog-toolbar .section-category-tools {
+  display: contents;
+}
+.catalog-toolbar > .status {
+  order: 4;
+}
+.catalog-toolbar .section-category-tools label {
+  flex: 0 1 220px;
+}
+@media (max-width: 700px) {
+  .catalog-toolbar .section-category-tools label {
+    order: 3;
+    flex: 1 1 100%;
+  }
+  .catalog-page .catalog-toolbar .section-category-tools > button {
+    flex: 0 0 40px;
+    width: 40px;
+    min-width: 40px;
+  }
+}
+.catalog-table-region th:first-child,
+.catalog-table-region td:first-child {
+  min-width: 220px;
+}
+.catalog-table-region td:nth-child(n + 2) {
+  white-space: nowrap !important;
+}
+.catalog-table-region :is(.text-button, .icon-button) {
+  min-height: 44px;
+}
+.catalog-table-region .icon-button {
+  min-width: 44px;
+}
+.catalog-toolbar .recipe-search {
+  flex: 1 1 200px;
+}
+.catalog-toolbar .recipe-search .search-field {
+  flex: none;
+  max-width: none;
+}
+.catalog-table-region .text-button {
+  margin: 0;
+}

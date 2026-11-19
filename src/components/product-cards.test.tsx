@@ -1,9 +1,31 @@
-import { render, screen, within, fireEvent } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { TooltipProvider } from './ui/tooltip'
+import {
+  render as renderUI,
+  screen,
+  within,
+  fireEvent,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it, vi } from 'vitest'
+import { beforeAll, afterAll, expect, it, vi } from 'vitest'
 import { demoData } from '@/lib/demo'
 import { money, productCosting, profitability } from '@/lib/domain'
 import { ProductCards } from './product-cards'
+const render = (ui: ReactElement) =>
+  renderUI(ui, {
+    wrapper: ({ children }) => <TooltipProvider>{children}</TooltipProvider>,
+  })
+beforeAll(() =>
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  ),
+)
+afterAll(() => vi.unstubAllGlobals())
 
 it('uses saved product photos and selling units with the existing cost and tax calculations', () => {
   const workspace = demoData()
