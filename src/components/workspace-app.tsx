@@ -1,3 +1,10 @@
+import { ActionTip } from './action-tip'
+import {
+  CatalogAction,
+  CatalogViewToggle,
+  useCatalogView,
+} from './catalog-controls'
+import { Gift, Scissors, Store } from 'lucide-react'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { CalendarDays } from 'lucide-react'
 import { EventsWorkspace } from './events-workspace'
@@ -343,6 +350,23 @@ export function WorkspaceApp() {
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
+  const saveCatalogView = (
+    page: 'recipes' | 'products',
+    view: 'cards' | 'table',
+  ) => {
+    if (ready)
+      void mutate('pantryView', 'settings', { page, view }).catch((e) =>
+        toast.error(customerMessage(e)),
+      )
+  }
+  const [recipesView, setRecipesView] = useCatalogView(
+    state.settings[0]?.currentRecipesView,
+    (view) => saveCatalogView('recipes', view),
+  )
+  const [productsView, setProductsView] = useCatalogView(
+    state.settings[0]?.currentProductsView,
+    (view) => saveCatalogView('products', view),
+  )
   const categorySettings = (patch: Partial<Item>) =>
     setState((w) => workspaceCategorySettings(w, patch))
   const [draft, setDraft] = useState<Record<string, any>>({}),
@@ -1416,6 +1440,30 @@ export function WorkspaceApp() {
   }
   const filtered = (rows: Item[]) =>
     rows.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+  const visibleRecipes = filtered(recipes)
+    .filter((r) => r.workflow !== 'handmade')
+    .filter(
+      (r) =>
+        recipeCategoryFilter === 'all' ||
+        (recipeCategoryFilter === 'uncategorized'
+          ? !recipeCategory(r, recipeCategoryOptions)
+          : recipeCategory(r, recipeCategoryOptions)?.id ===
+            recipeCategoryFilter),
+    )
+  const visibleProducts = filtered(products)
+    .filter(
+      (p) =>
+        productCategoryFilter === 'all' ||
+        (productCategoryFilter === 'uncategorized'
+          ? !p.productCategoryId
+          : p.productCategoryId === productCategoryFilter),
+    )
+    .filter((p) =>
+      sub === 'Kits'
+        ? workflowOf(p) === 'kit'
+        : !['Food', 'Handmade', 'Resale'].includes(sub) ||
+          workflowOf(p) === sub.toLowerCase(),
+    )
   const pageAction = (
     {
       Pantry: ['Receive stock', 'receive-picker'],
@@ -1975,83 +2023,170 @@ export function WorkspaceApp() {
                 </>
               )}
               {page === 'Recipes' && (
-                <>
-                  <div className="recipe-toolbar">
-                    <div className="recipe-toolbar-actions">
-                      <div className="button-row">
-                        <Btn onClick={() => open('recipe')}>
-                          <Plus size={18} />
-                          Create recipe
-                        </Btn>
-                        <Btn secondary onClick={() => open('recipe-import')}>
-                          <Upload size={16} />
-                          Import recipe
-                        </Btn>
-                        <Btn secondary onClick={() => exportData('recipes')}>
-                          <Download size={16} />
-                          Export
-                        </Btn>
+                <div className="catalog-page">
+                  <div className="catalog-toolbar">
+                    <CatalogViewToggle
+                      label="Recipes display"
+                      view={recipesView}
+                      onView={setRecipesView}
+                    />
+                    <div
+                      className="inventory-tool-actions inventory-primary-actions"
+                      role="group"
+                      aria-label="Recipe actions"
+                    >
+                      <CatalogAction
+                        label="Create recipe"
+                        primary
+                        onClick={() => open('recipe')}
+                      >
+                        <Plus size={21} />
+                      </CatalogAction>
+                      <CatalogAction
+                        label="Import recipe"
+                        onClick={() => open('recipe-import')}
+                      >
+                        <Upload size={21} />
+                      </CatalogAction>
+                      <CatalogAction
+                        label="Export recipes"
+                        onClick={() => exportData('recipes')}
+                      >
+                        <Download size={21} />
+                      </CatalogAction>
+                    </div>
+                    <SectionCategoryTools
+                      workspace={state}
+                      scope="recipes"
+                      canManage={ready && ['Owner', 'Manager'].includes(role)}
+                      onSettings={categorySettings}
+                      compact
+                    />
+                    <label className="field recipe-search">
+                      <span>Search recipes</span>
+                      <div className="search-field">
+                        <Search size={17} />
+                        <input
+                          aria-label="Search recipes"
+                          placeholder="Find a recipe or prep…"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                        />
                       </div>
-                      <SectionCategoryTools
-                        workspace={state}
-                        scope="recipes"
-                        canManage={ready && ['Owner', 'Manager'].includes(role)}
-                        onSettings={categorySettings}
-                      />
-                    </div>
-                    <div className="recipe-toolbar-find">
-                      <label className="field recipe-search">
-                        <span>Search recipes</span>
-                        <div className="search-field">
-                          <Search size={17} />
-                          <input
-                            aria-label="Search recipes"
-                            placeholder="Find a recipe or prep…"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                          />
-                        </div>
-                      </label>
-                      <label className="field">
-                        <span>Filter by recipe category</span>
-                        <select
-                          aria-label="Filter by recipe category"
-                          value={recipeCategoryFilter}
-                          onChange={(e) =>
-                            setRecipeCategoryFilter(e.target.value)
-                          }
-                        >
-                          <option value="all">All categories</option>
-                          <option value="uncategorized">Uncategorized</option>
-                          {recipeCategoryOptions.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                              {c.active ? '' : ' (archived)'}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <Badge>
-                        {
-                          recipes.filter((r) => r.workflow !== 'handmade')
-                            .length
-                        }{' '}
-                        recipes & preps
-                      </Badge>
-                    </div>
+                    </label>
+                    <label className="field">
+                      <span>Filter by recipe category</span>
+                      <select
+                        aria-label="Filter by recipe category"
+                        value={recipeCategoryFilter}
+                        onChange={(e) =>
+                          setRecipeCategoryFilter(e.target.value)
+                        }
+                      >
+                        <option value="all">All categories</option>
+                        <option value="uncategorized">Uncategorized</option>
+                        {recipeCategoryOptions.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                            {c.active ? '' : ' (archived)'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <Badge>{visibleRecipes.length} recipes &amp; preps</Badge>
                   </div>
-                  <div className="recipe-grid">
-                    {filtered(recipes)
-                      .filter((r) => r.workflow !== 'handmade')
-                      .filter(
-                        (r) =>
-                          recipeCategoryFilter === 'all' ||
-                          (recipeCategoryFilter === 'uncategorized'
-                            ? !recipeCategory(r, recipeCategoryOptions)
-                            : recipeCategory(r, recipeCategoryOptions)?.id ===
-                              recipeCategoryFilter),
-                      )
-                      .map((r) => {
+                  {recipesView === 'table' ? (
+                    <div
+                      className="catalog-table-region"
+                      role="region"
+                      aria-label="Recipes table"
+                      tabIndex={0}
+                    >
+                      <table>
+                        <thead>
+                          <tr>
+                            {[
+                              'Recipe / prep name',
+                              'Category',
+                              'Yield',
+                              'Time',
+                              'Batch cost',
+                              'Cost per unit',
+                              'Actions',
+                            ].map((label) => (
+                              <th scope="col" key={label}>
+                                {label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleRecipes.map((r) => {
+                            let cost: number | undefined
+                            let warning = ''
+                            try {
+                              cost = recipeCost(r, ingredients)
+                            } catch (e) {
+                              warning = (e as Error).message
+                            }
+                            return (
+                              <tr key={r.id}>
+                                <td>
+                                  <button
+                                    className="text-button"
+                                    onClick={() => open('recipe-detail', r)}
+                                  >
+                                    {r.name}
+                                  </button>
+                                </td>
+                                <td>
+                                  {recipeCategoryLabel(
+                                    r,
+                                    recipeCategoryOptions,
+                                  )}
+                                </td>
+                                <td>
+                                  {r.yield} {r.yieldUnit}
+                                </td>
+                                <td>
+                                  {r.laborMinutes == null
+                                    ? '—'
+                                    : `${r.laborMinutes} min`}
+                                </td>
+                                <td>
+                                  {cost === undefined
+                                    ? warning.startsWith('Cost incomplete')
+                                      ? warning
+                                      : 'Review units'
+                                    : money(cost)}
+                                </td>
+                                <td>
+                                  {cost === undefined
+                                    ? '—'
+                                    : money(cost / r.yield)}
+                                </td>
+                                <td>
+                                  <button
+                                    className="text-button"
+                                    onClick={() => open('recipe-detail', r)}
+                                  >
+                                    View details
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                          {!visibleRecipes.length && (
+                            <tr>
+                              <td colSpan={7}>No recipes match this view.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="recipe-grid">
+                      {visibleRecipes.map((r) => {
                         let cost = 0,
                           warning = ''
                         try {
@@ -2122,11 +2257,16 @@ export function WorkspaceApp() {
                           </button>
                         )
                       })}
-                  </div>
-                </>
+                    </div>
+                  )}
+                </div>
               )}
               {page === 'Products & Pricing' && (
-                <>
+                <div
+                  className={
+                    sub === 'All Products' ? 'catalog-page' : undefined
+                  }
+                >
                   {sub === 'Categories' ? (
                     <ProductCategoryManager
                       canManage={ready && ['Owner', 'Manager'].includes(role)}
@@ -2139,6 +2279,102 @@ export function WorkspaceApp() {
                         }))
                       }
                     />
+                  ) : sub === 'All Products' ? (
+                    <>
+                      <div className="catalog-toolbar">
+                        <CatalogViewToggle
+                          label="Products display"
+                          view={productsView}
+                          onView={setProductsView}
+                        />
+                        <div
+                          className="inventory-tool-actions inventory-primary-actions"
+                          role="group"
+                          aria-label="Product actions"
+                        >
+                          <CatalogAction
+                            label="Export products"
+                            onClick={() => exportData('products')}
+                          >
+                            <Download size={21} />
+                          </CatalogAction>
+                          {['Owner', 'Manager'].includes(role) && (
+                            <DropdownMenu>
+                              <ActionTip label="Create product">
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="btn secondary catalog-primary"
+                                    aria-label="Create product"
+                                  >
+                                    <Plus size={21} />
+                                  </button>
+                                </DropdownMenuTrigger>
+                              </ActionTip>
+                              <DropdownMenuContent
+                                align="end"
+                                className="workspace-menu"
+                              >
+                                <DropdownMenuItem onSelect={() => open('kit')}>
+                                  <Gift size={16} />
+                                  Create kit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={() => open('product')}
+                                >
+                                  <CookingPot size={16} />
+                                  Create food product
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={() => open('trade-product')}
+                                >
+                                  <Scissors size={16} />
+                                  Create handmade product
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onSelect={() => open('trade-product-resale')}
+                                >
+                                  <Store size={16} />
+                                  Create resale product
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                        <label className="search-field">
+                          <Search size={17} />
+                          <input
+                            aria-label="Search products"
+                            placeholder="Find a product…"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                          />
+                        </label>
+                        <SectionCategoryTools
+                          compact
+                          filterScopes={[
+                            'food-products',
+                            'handmade-products',
+                            'resale-products',
+                            'kits',
+                          ]}
+                          workspace={state}
+                          scope="food-products"
+                          canManage={
+                            ready && ['Owner', 'Manager'].includes(role)
+                          }
+                          onSettings={categorySettings}
+                          value={productCategoryFilter}
+                          onFilter={setProductCategoryFilter}
+                        />
+                        <Badge>{visibleProducts.length} products</Badge>
+                      </div>
+                      <ProductCards
+                        view={productsView}
+                        products={visibleProducts}
+                        workspace={state}
+                        open={open}
+                      />
+                    </>
                   ) : (
                     <>
                       <div className="info-banner">
@@ -2238,7 +2474,7 @@ export function WorkspaceApp() {
                       />
                     </>
                   )}
-                </>
+                </div>
               )}
               {page === 'Handmade' && (
                 <HandmadeWorkspace

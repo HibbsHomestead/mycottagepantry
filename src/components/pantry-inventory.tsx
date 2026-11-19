@@ -1,3 +1,4 @@
+import { CatalogViewToggle } from './catalog-controls'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { SectionCategoryTools } from './section-categories'
 import { assignedCategoryId } from '@/lib/section-categories'
@@ -254,24 +255,14 @@ export function PantryInventory({
         {actions}
       </div>
       <div className="toolbar">
-        <div
-          className="pantry-view-toggle"
-          role="group"
-          aria-label="Pantry display"
-        >
-          {(['cards', 'table'] as const).map((v) => (
-            <button
-              key={v}
-              aria-pressed={view === v}
-              onClick={() => {
-                setView(v)
-                onView?.(v)
-              }}
-            >
-              {v === 'cards' ? 'Cards' : 'Table'}
-            </button>
-          ))}
-        </div>
+        <CatalogViewToggle
+          label="Pantry display"
+          view={view}
+          onView={(next) => {
+            setView(next)
+            onView?.(next)
+          }}
+        />
         <label className="search-field">
           <Search size={18} />
           <span className="sr-only">Search pantry</span>

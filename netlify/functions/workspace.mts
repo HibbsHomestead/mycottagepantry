@@ -705,6 +705,13 @@ export default async (req: Request, context: Context) => {
               ? 'table'
               : 'cards'
           delete view.pantryViewPreferences
+          for (const page of ['recipes', 'products']) {
+            view[`current${page === 'recipes' ? 'Recipes' : 'Products'}View`] =
+              s[`${page}ViewPreferences`]?.[user?.id || 'demo'] === 'table'
+                ? 'table'
+                : 'cards'
+            delete view[`${page}ViewPreferences`]
+          }
           view.currentPantryNavigationExpanded =
             s.pantryNavigationPreferences?.[user?.id || 'demo'] !== false
           delete view.pantryNavigationPreferences
@@ -4433,6 +4440,8 @@ export default async (req: Request, context: Context) => {
             state.settings[0]?.labelFontPreferences || {}
           for (const key of [
             'pantryViewPreferences',
+            'recipesViewPreferences',
+            'productsViewPreferences',
             'pantryNavigationPreferences',
             'priceSearchCaches',
             'priceSearchRequests',
@@ -4452,6 +4461,8 @@ export default async (req: Request, context: Context) => {
           item.pantrySortPreferences =
             state.settings[0]?.pantrySortPreferences || {}
           delete item.currentShelfMediaProfiles
+          delete item.currentRecipesView
+          delete item.currentProductsView
           delete item.currentPantryView
           delete item.currentPantryNavigationExpanded
           delete item.currentPantrySort
@@ -4695,8 +4706,14 @@ export default async (req: Request, context: Context) => {
         if (!['cards', 'table'].includes(data.view))
           throw new Error('Choose Cards or Table.')
         const settings = state.settings[0]
-        settings.pantryViewPreferences = {
-          ...(settings.pantryViewPreferences || {}),
+        if (
+          data.page !== undefined &&
+          !['recipes', 'products'].includes(data.page)
+        )
+          throw new Error('Choose a supported display preference.')
+        const preferenceKey = `${data.page || 'pantry'}ViewPreferences`
+        settings[preferenceKey] = {
+          ...(settings[preferenceKey] || {}),
           [user?.id || 'demo']: data.view,
         }
         await save('settings', settings)
@@ -5584,7 +5601,9 @@ export default async (req: Request, context: Context) => {
     }
     return Response.json(
       {
-        ...(error instanceof DropboxPreviewError ? { diagnostics: error.diagnostics } : {}),
+        ...(error instanceof DropboxPreviewError
+          ? { diagnostics: error.diagnostics }
+          : {}),
         ...(saveTrace ? { traceId: saveTrace } : {}),
         ...(importTrace ? { traceId: importTrace, stage: importStage } : {}),
         ...(importValidation ? { fields: importValidation } : {}),

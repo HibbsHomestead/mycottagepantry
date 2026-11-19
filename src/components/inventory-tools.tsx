@@ -1,5 +1,5 @@
 import { inventoryQuantity } from '@/lib/inventory-quantity'
-import { useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import {
   Plus,
   PackageOpen,
@@ -27,7 +27,7 @@ import {
   DialogDescription,
 } from './ui/dialog'
 import { countQuantity } from '@/lib/inventory-count'
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
+import { ActionTip } from './action-tip'
 import './inventory-tools.css'
 import { PantryPhoto } from './pantry-photo'
 import {
@@ -44,23 +44,6 @@ export type InventoryLabelSelection = {
   onClear: () => void
   onDone: () => void
   onPrint: () => void
-}
-
-function ActionTip({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactElement
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 export function InventoryTools({

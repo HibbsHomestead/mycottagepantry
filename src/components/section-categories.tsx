@@ -1,3 +1,4 @@
+import { ActionTip } from './action-tip'
 import { MoreHorizontal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -286,13 +287,21 @@ export function SectionCategoryManager({
                     </select>
                   </label>
                   <p className="form-hint">
-                    Classification uses classification-scoped rules and existing category tax mappings.
-                    Section does not determine tax treatment. Manage rate
-                    mappings in Products → Categories → Tax Settings.
+                    Classification uses classification-scoped rules and existing
+                    category tax mappings. Section does not determine tax
+                    treatment. Manage rate mappings in Products → Categories →
+                    Tax Settings.
                   </p>
                   <p className="form-hint">
                     Inherited tax treatment:{' '}
-                    {categoryTaxDescription({ ...editing, id: editing.id || '', name: editing.name || '' }, w.settings[0])}
+                    {categoryTaxDescription(
+                      {
+                        ...editing,
+                        id: editing.id || '',
+                        name: editing.name || '',
+                      },
+                      w.settings[0],
+                    )}
                   </p>
                   {changesTax && (
                     <label className="check-label">
@@ -418,8 +427,10 @@ export function SectionCategoryTools({
   value,
   onFilter,
   compact = false,
+  filterScopes,
 }: Common & {
   compact?: boolean
+  filterScopes?: CategoryScope[]
   value?: string
   onFilter?: (id: string) => void
 }) {
@@ -436,7 +447,13 @@ export function SectionCategoryTools({
           >
             <option value="all">All categories</option>
             <option value="uncategorized">Uncategorized</option>
-            {sectionCategories(workspace, scope).map((c) => (
+            {[
+              ...new Map(
+                (filterScopes || [scope])
+                  .flatMap((s) => sectionCategories(workspace, s))
+                  .map((c) => [c.id, c]),
+              ).values(),
+            ].map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
                 {c.active === false ? ' (archived)' : ''}
@@ -448,15 +465,17 @@ export function SectionCategoryTools({
       {canManage &&
         (compact ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="btn secondary"
-                aria-label="Category actions"
-              >
-                <MoreHorizontal size={18} />
-              </button>
-            </DropdownMenuTrigger>
+            <ActionTip label="Category actions">
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  aria-label="Category actions"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+              </DropdownMenuTrigger>
+            </ActionTip>
             <DropdownMenuContent className="workspace-menu">
               <DropdownMenuItem onSelect={() => setMode('add')}>
                 Add category
