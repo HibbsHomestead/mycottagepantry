@@ -304,3 +304,52 @@
     padding: 12px;
   }
 }
+
+/* Shared toolbar alignment: labels sit above equal-height control bodies. */
+.catalog-toolbar {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+.catalog-toolbar .inventory-primary-actions {
+  margin-left: 0;
+}
+.catalog-toolbar > label {
+  display: grid;
+  gap: 6px;
+}
+.catalog-toolbar input,
+.catalog-toolbar select {
+  min-height: 44px;
+}
+.catalog-toolbar .section-category-tools {
+  align-items: flex-end;
+}
+.module-sort-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.module-sort-controls label {
+  display: grid;
+  gap: 6px;
+}
+.pantry-v2 .catalog-toolbar .inventory-primary-actions {
+  flex-wrap: wrap;
+  margin-left: 0;
+}
+.pantry-v2 .inventory-order-controls {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.pantry-v2 .catalog-toolbar .pantry-sort {
+  display: grid;
+  gap: 6px;
+}
+.pantry-v2 .catalog-toolbar .section-category-tools {
+  margin: 0;
+}

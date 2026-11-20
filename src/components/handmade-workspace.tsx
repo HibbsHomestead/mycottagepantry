@@ -1,3 +1,6 @@
+import { workspaceCategorySettings } from '@/lib/section-categories'
+import { ModuleProductList, ModuleStockSummary } from './module-product-list'
+import { PantryInventory } from './pantry-inventory'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductMockups } from './product-mockup'
@@ -6,11 +9,9 @@ import {
   ScopedCategorySelect,
   SectionCategoryTools,
 } from './section-categories'
-import { assignedCategoryId } from '@/lib/section-categories'
 import * as Tabs from '@radix-ui/react-tabs'
 import { isFabric } from '../lib/fabric'
 import { useEffect, useRef, useState } from 'react'
-import { ProductCards } from './product-cards'
 import { ItemDetailHeader } from './item-detail-layout'
 import { PantryPhoto } from './pantry-photo'
 import { CostCard, costMoney } from './cost-cards'
@@ -22,7 +23,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from './ui/dropdown-menu'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Plus } from 'lucide-react'
+import { CatalogAction } from './catalog-controls'
 import { money, type Item, type Workspace } from '../lib/domain'
 import { handmadeBom, handmadeEstimate, handmadeUnits } from '../lib/handmade'
 import {
@@ -95,13 +97,10 @@ export function HandmadeWorkspace({
         ? '?product=' + encodeURIComponent(p.id) + (edit ? '&edit=' + edit : '')
         : '')
   }
-  const [categoryFilter, setCategoryFilter] = useState('all')
-  useEffect(() => setCategoryFilter('all'), [tab])
+  const [materialSearch, setMaterialSearch] = useState('')
+  const [materialFilter, setMaterialFilter] = useState('All items')
   const categorySettings = (patch: Partial<Item>) =>
-    onWorkspace({
-      ...w,
-      settings: w.settings.map((b, i) => (i === 0 ? { ...b, ...patch } : b)),
-    })
+    onWorkspace(workspaceCategorySettings(w, patch))
   const [editing, setEditing] = useState<Item | null>(null)
   const [mode, setMode] = useState('')
   const products = w.products.filter((p) => p.workflow === 'handmade')
@@ -116,13 +115,6 @@ export function HandmadeWorkspace({
       w.recipes.some((r) => r.id === b.recipeId && r.workflow === 'handmade'),
   )
   const manage = ['Owner', 'Manager'].includes(role)
-  const estimate = (p: Item) => {
-    try {
-      return handmadeEstimate(p, w)
-    } catch {
-      return null
-    }
-  }
   const editMaterial = (i?: Item, receipt = false) => {
     if (isFabric(i)) {
       open(receipt ? 'fabric-receive' : 'fabric-edit', i)
@@ -200,6 +192,9 @@ export function HandmadeWorkspace({
           </DialogContent>
         </Dialog>
       )}
+      <PageOverview>
+        <ModuleStockSummary workspace={w} workflow="handmade" />
+      </PageOverview>
       <section className="handmade-intro">
         <div>
           <h2>{tab}</h2>
@@ -207,66 +202,19 @@ export function HandmadeWorkspace({
         <PageActions>
           {' '}
           <div className="button-row">
-            {manage && (
-              <>
-                <button
-                  className="btn secondary"
-                  onClick={() => editMaterial()}
-                >
-                  Add material
-                </button>
-                <button className="btn" onClick={() => open('trade-product')}>
-                  Create handmade product
-                </button>
-              </>
+            {manage && tab === 'Materials & Supplies' && (
+              <CatalogAction
+                label="Add material"
+                onClick={() => editMaterial()}
+              >
+                <Plus size={18} />
+              </CatalogAction>
             )}
           </div>
         </PageActions>
       </section>
-      {[
-        'Products & Bills of Materials',
-        'Finished Inventory',
-        'Materials & Supplies',
-      ].includes(tab) && (
-        <SectionCategoryTools
-          workspace={w}
-          scope={
-            tab === 'Materials & Supplies'
-              ? 'handmade-materials'
-              : 'handmade-products'
-          }
-          canManage={manage}
-          onSettings={categorySettings}
-          value={categoryFilter}
-          onFilter={setCategoryFilter}
-        />
-      )}
       {tab === 'Overview' && (
         <>
-          <PageOverview>
-            <div className="handmade-summary">
-              <div>
-                <strong>{products.length}</strong>
-                <span>Handmade products & variants</span>
-              </div>
-              <div>
-                <strong>
-                  {
-                    materials.filter(
-                      (i) => Number(i.quantity) <= Number(i.threshold || 0),
-                    ).length
-                  }
-                </strong>
-                <span>Materials at reorder level</span>
-              </div>
-              <div>
-                <strong>
-                  {products.filter((p) => !p.bom || !estimate(p)).length}
-                </strong>
-                <span>Products needing cost review</span>
-              </div>
-            </div>
-          </PageOverview>
           <section className="panel">
             <h3>Ready for your attention</h3>
             {materials
@@ -302,76 +250,38 @@ export function HandmadeWorkspace({
           </section>
         </>
       )}
+      {tab === 'Categories' && (
+        <>
+          <h3>Materials categories</h3>
+          <SectionCategoryTools
+            workspace={w}
+            scope="handmade-materials"
+            canManage={manage}
+            onSettings={categorySettings}
+          />
+          <h3>Product categories</h3>
+          <SectionCategoryTools
+            workspace={w}
+            scope="handmade-products"
+            canManage={manage}
+            onSettings={categorySettings}
+          />
+        </>
+      )}
       {tab === 'Materials & Supplies' && (
-        <section className="panel">
-          <h3>Production materials</h3>
-          <p>
-            Separate from food ingredients. Shared packaging is selected
-            directly on a BOM; its balance is never copied.
-          </p>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Material / category</th>
-                  <th>Available</th>
-                  <th>Stock unit cost</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {materials
-                  .filter(
-                    (i) =>
-                      categoryFilter === 'all' ||
-                      (categoryFilter === 'uncategorized'
-                        ? !assignedCategoryId(i, w, 'handmade-materials')
-                        : assignedCategoryId(i, w, 'handmade-materials') ===
-                          categoryFilter),
-                  )
-                  .map((i) => (
-                    <tr key={i.id}>
-                      <td>
-                        <strong>{i.name}</strong>
-                        <small>
-                          {i.materialCategory} · {i.sku}
-                        </small>
-                      </td>
-                      <td>
-                        {inventoryQuantity(i.quantity)} {i.unit}
-                        {Number(i.quantity) <= Number(i.threshold || 0) &&
-                          ' · Reorder'}
-                      </td>
-                      <td>
-                        {i.needsCostSetup || i.cost == null
-                          ? 'Cost missing'
-                          : money(i.cost)}
-                      </td>
-                      <td>
-                        {manage && (
-                          <div className="button-row">
-                            <button
-                              className="btn secondary"
-                              onClick={() => editMaterial(i)}
-                            >
-                              Details & history
-                            </button>
-                            <button
-                              className="btn secondary"
-                              onClick={() => editMaterial(i, true)}
-                            >
-                              Receive purchase
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          {!materials.length && <p>No handmade materials yet.</p>}
-        </section>
+        <PantryInventory
+          ingredients={materials}
+          workspace={w}
+          assets={w.graphic_assets}
+          typeFilter="material"
+          filter={materialFilter}
+          setFilter={setMaterialFilter}
+          search={materialSearch}
+          setSearch={setMaterialSearch}
+          open={open}
+          canManageCategories={manage}
+          onCategorySettings={categorySettings}
+        />
       )}
       {[
         'Overview',
@@ -386,18 +296,14 @@ export function HandmadeWorkspace({
                 : 'Products & bills of materials'}
             </h3>
           )}
-          <ProductCards
-            products={products.filter(
-              (p) =>
-                categoryFilter === 'all' ||
-                (categoryFilter === 'uncategorized'
-                  ? !p.productCategoryId
-                  : p.productCategoryId === categoryFilter),
-            )}
+          <ModuleProductList
             workspace={w}
+            workflow="handmade"
+            manage={manage}
+            onSettings={categorySettings}
             open={(kind, p) => {
               if (kind === 'product-detail') go(p)
-              else if (kind === 'product' || kind === 'trade-product')
+              else if (p && (kind === 'product' || kind === 'trade-product'))
                 go(p, 'product')
               else open(kind, p)
             }}
@@ -1180,7 +1086,10 @@ export function HandmadeProductEditor({
           )}
         </section>
         {error && <p role="alert">{error}</p>}
-        <footer className="product-editor-actions">{item && <ItemDeleteButton table="products" item={item} draft={dirty} />}
+        <footer className="product-editor-actions">
+          {item && (
+            <ItemDeleteButton table="products" item={item} draft={dirty} />
+          )}
           <div className="product-editor-buttons">
             <button
               type="button"

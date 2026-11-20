@@ -1,3 +1,4 @@
+import { workspaceCategorySettings } from '@/lib/section-categories'
 import { IngredientLookupTools } from './ingredient-lookup-tools'
 import {
   useEffect,
@@ -31,7 +32,7 @@ import {
   itemUnitOptions,
 } from '@/lib/add-item'
 import { ovenToday } from '@/lib/oven-dates'
-import { pantryCategories } from '@/lib/pantry-category'
+import { ScopedCategorySelect } from './section-categories'
 import { allergens, units, type Item, type Workspace } from '@/lib/domain'
 import './add-item-dialog.css'
 import * as Tabs from '@radix-ui/react-tabs'
@@ -96,7 +97,8 @@ export function AddItemDialog({
   const [shared, setShared] = useState<Record<string, Item[string]>>(() => ({
     id: crypto.randomUUID(),
     creationRequestId: crypto.randomUUID(),
-    name: initialName,
+    name: initialName || initialValues?.name || '',
+    imageAssetId: initialValues?.imageAssetId || '',
     barcode: initialValues?.barcode || '',
     barcodeFormat: initialValues?.barcodeFormat || '',
     threshold: 0,
@@ -108,7 +110,29 @@ export function AddItemDialog({
   }))
   const [drafts, setDrafts] = useState<
     Record<string, Record<string, Item[string]>>
-  >({})
+  >(() => {
+    const initial = defaultItemType(initialType) || initialType
+    const key =
+      initial === 'material'
+        ? `material:${initialValues?.materialType || 'other'}`
+        : initial
+    return {
+      ...(initial === 'material'
+        ? { material: { materialType: initialValues?.materialType || 'other' } }
+        : {}),
+      [key]: Object.fromEntries(
+        [
+          'sectionCategoryId',
+          'categoryId',
+          'category',
+          'productCategoryId',
+          'materialCategory',
+        ]
+          .filter((field) => initialValues?.[field] !== undefined)
+          .map((field) => [field, initialValues![field]]),
+      ),
+    }
+  })
   const [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
     [importBusy, setImportBusy] = useState(false),
@@ -161,7 +185,7 @@ export function AddItemDialog({
         : subtype === 'fabric' && type === 'material'
           ? 'yd'
           : 'each',
-    categoryId: type === 'ingredient' ? 'flour-grains' : '',
+    categoryId: '',
     fabricTracking: 'length',
     pieceMode: 'aggregate',
     widthUnit: 'in',
@@ -330,7 +354,22 @@ export function AddItemDialog({
     />
   )
   const applyImport = (patch: Record<string, Item[string]>) => {
-    for (const [key, v] of Object.entries(patch)) change(key, v)
+    for (const [key, v] of Object.entries(patch)) {
+      if (
+        [
+          'category',
+          'categoryId',
+          'sectionCategoryId',
+          'productCategoryId',
+          'materialCategory',
+        ].includes(key)
+      ) {
+        if (v) change('externalCategorySuggestion', String(v))
+      } else if (
+        !['usedAs', 'workflow', 'materialType', 'fabricTracking'].includes(key)
+      )
+        change(key, v)
+    }
   }
   const barcodeLookup = (
     <InventoryBarcodeReview
@@ -627,19 +666,7 @@ export function AddItemDialog({
                             draft={value}
                             onWorkspace={onWorkspace}
                             onBusyChange={setImportBusy}
-                            apply={(patch) => {
-                              for (const [key, v] of Object.entries(patch))
-                                if (
-                                  ![
-                                    'usedAs',
-                                    'workflow',
-                                    'materialType',
-                                    'categoryId',
-                                    'fabricTracking',
-                                  ].includes(key)
-                                )
-                                  change(key, v)
-                            }}
+                            apply={applyImport}
                           />
                         </div>
                         {type === 'resale' && (
@@ -701,63 +728,55 @@ export function AddItemDialog({
                                   </Field>
                                 )}
                                 <div className="form-grid">
-                                  {type === 'ingredient' && (
-                                    <Field label="Category">
-                                      <select
-                                        value={value.categoryId}
-                                        onChange={(e) =>
-                                          change('categoryId', e.target.value)
-                                        }
-                                      >
-                                        {pantryCategories
-                                          .filter(
-                                            (c) =>
-                                              ![
-                                                'packaging',
-                                                'supplies',
-                                                'craft-materials',
-                                              ].includes(c.value),
-                                          )
-                                          .map((c) => (
-                                            <option
-                                              key={c.value}
-                                              value={c.value}
-                                            >
-                                              {c.label}
-                                            </option>
-                                          ))}
-                                      </select>
-                                    </Field>
+                                  {type !== 'resale' && (
+                                    <ScopedCategorySelect
+                                      key={type}
+                                      workspace={workspace}
+                                      scope={
+                                        type === 'material'
+                                          ? 'handmade-materials'
+                                          : type === 'packaging'
+                                            ? 'packaging'
+                                            : 'food-ingredients'
+                                      }
+                                      item={value}
+                                      canManage={false}
+                                      onSettings={(patch) =>
+                                        onWorkspace(
+                                          workspaceCategorySettings(
+                                            workspace,
+                                            patch,
+                                          ),
+                                        )
+                                      }
+                                      onChange={change}
+                                    />
+                                  )}
+                                  {value.externalCategorySuggestion && (
+                                    <p role="status">
+                                      External category suggestion:{' '}
+                                      {value.externalCategorySuggestion}. Choose
+                                      a managed category after review.
+                                    </p>
                                   )}
                                   {type === 'resale' && (
                                     <>
-                                      <Field label="Product category">
-                                        <select
-                                          value={value.productCategoryId || ''}
-                                          onChange={(e) =>
-                                            change(
-                                              'productCategoryId',
-                                              e.target.value,
-                                            )
-                                          }
-                                        >
-                                          <option value="">
-                                            Uncategorized
-                                          </option>
-                                          {(
-                                            workspace.settings[0]
-                                              ?.productCategories || []
+                                      <ScopedCategorySelect
+                                        key={type}
+                                        workspace={workspace}
+                                        scope="resale-products"
+                                        item={value}
+                                        canManage={false}
+                                        onSettings={(patch) =>
+                                          onWorkspace(
+                                            workspaceCategorySettings(
+                                              workspace,
+                                              patch,
+                                            ),
                                           )
-                                            .filter(
-                                              (c: Item) => c.active !== false,
-                                            )
-                                            .map((c: Item) => (
-                                              <option key={c.id} value={c.id}>
-                                                {c.name}
-                                              </option>
-                                            ))}
-                                        </select>
-                                      </Field>
+                                        }
+                                        onChange={change}
+                                      />
                                       <Field label="Food classification">
                                         <select
                                           value={value.foodClass || ''}

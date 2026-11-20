@@ -84,3 +84,60 @@ export function authorizeMockupProduct(
     )
   return product
 }
+
+/** Refuse deletion of a render referenced elsewhere. Source assets are never deleted. */
+export function prepareMockupDeletion(
+  input: Record<string, unknown>,
+  state: Workspace,
+  role: string,
+  url: URL,
+  access?: AccessResult,
+) {
+  const product = authorizeMockupProduct(
+    input.productId,
+    state,
+    role,
+    url,
+    access,
+  )
+  const asset = state.graphic_assets.find(
+    (a) =>
+      a.id === input.assetId &&
+      a.productId === product.id &&
+      a.category === 'product-mockup' &&
+      a.mockup,
+  )
+  if (!asset)
+    throw new Error(
+      'Saved mockup is unavailable in this business. Refresh the gallery.',
+    )
+  const primary = product.imageAssetId === asset.id
+  if (primary && input.confirmPrimaryRemoval !== true)
+    throw new Error(
+      'Confirm removal of the primary product image. No replacement is selected automatically.',
+    )
+  const references = (value: unknown): boolean => {
+    if (value === asset.id) return true
+    if (Array.isArray(value)) return value.some(references)
+    return (
+      !!value &&
+      typeof value === 'object' &&
+      Object.values(value).some(references)
+    )
+  }
+  for (const [table, rows] of Object.entries(state)) {
+    if (!Array.isArray(rows)) continue
+    for (const row of rows) {
+      if (table === 'graphic_assets' && row.id === asset.id) continue
+      const candidate =
+        table === 'products' && row.id === product.id
+          ? { ...row, imageAssetId: undefined }
+          : row
+      if (references(candidate))
+        throw new Error(
+          'This saved mockup is used by another record. Remove that reference before deleting it.',
+        )
+    }
+  }
+  return { product, asset, primary }
+}

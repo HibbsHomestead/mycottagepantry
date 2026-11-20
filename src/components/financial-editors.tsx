@@ -1,3 +1,4 @@
+import './item-deletion.css'
 import { Trash2 } from 'lucide-react'
 import { ActionTip } from './action-tip'
 import { businessClassifications, classificationLabel } from '@/lib/product-categories'
@@ -334,7 +335,7 @@ export function PackagingEditor({
           <ActionTip label="Remove packaging item">
             <button
               type="button"
-              className="icon-button packaging-remove"
+              className="icon-button packaging-remove item-delete-action"
               aria-label="Remove packaging item"
               onClick={() =>
                 onChange(lines.filter((_: any, i: number) => i !== index))

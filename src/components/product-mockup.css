@@ -234,3 +234,18 @@
 .dropbox-import .btn {
   white-space: normal;
 }
+
+.mockup-delete-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+}
+@media (max-width: 1024px) {
+  .mockup-delete-action > span {
+    display: none;
+  }
+}
+.mockup-saved .mockup-delete-action { margin: 0; }

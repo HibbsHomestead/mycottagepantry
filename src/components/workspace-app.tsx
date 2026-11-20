@@ -1,3 +1,6 @@
+import { RecipeYieldFields } from './recipe-yield-fields'
+import { ResaleWorkspace } from './resale-workspace'
+import { ItemRecordActions } from './item-record-actions'
 import { ItemDeletionProvider, ItemDeleteButton } from './item-deletion'
 import { sortProducts, type ProductSort } from '@/lib/product-list'
 import { ProductSummaries, ProductSortControl } from './product-list-controls'
@@ -237,6 +240,7 @@ const navigation = [
   { name: 'Recipes', icon: BookOpen },
   { name: 'Products', icon: Tag },
   { name: 'Handmade', icon: Package },
+  { name: 'Resale', icon: Tag },
   { name: 'Production', icon: CookingPot },
   { name: 'Sales', icon: TrendingUp },
   { name: 'Events', icon: CalendarDays },
@@ -1703,6 +1707,8 @@ export function WorkspaceApp() {
                   ? 'Review receipts, record purchases, and track incoming stock.'
                   : page === 'Dashboard'
                     ? 'Here’s what needs your attention today.'
+                    : page === 'Resale'
+                      ? 'Manage purchased merchandise, receiving, and recorded stock.'
                     : page === 'Handmade'
                       ? 'Purchase materials, cost your bills of materials, and track finished work.'
                       : page === 'Pantry'
@@ -1743,13 +1749,14 @@ export function WorkspaceApp() {
             />
           )}
           <PageOverviewOutlet />
+          {route.section === 'Inventory' && route.tab === 'Overview' && <p className="form-hint">Business-wide pantry stock: ingredients, materials, packaging, and supplies. Finished sellable stock is shown in its own workspace.</p>}
           {route.section === 'Inventory' && (
             <PantrySummary
               ingredients={ingredients.filter((i) =>
                 route.tab === 'Craft Materials'
                   ? i.usedAs === 'material'
                   : route.tab === 'Ingredients'
-                    ? !['material', 'packaging', 'supply'].includes(i.usedAs)
+                    ? i.usedAs === 'ingredient'
                     : route.tab === 'Packaging'
                       ? i.usedAs === 'packaging'
                       : route.tab === 'Supplies'
@@ -1880,6 +1887,7 @@ export function WorkspaceApp() {
                 )}
               {page === 'Pantry' && (
                 <>
+                  {route.tab === 'Overview' && ingredients.some((i) => !['ingredient', 'material', 'packaging', 'supply'].includes(i.usedAs)) && <p className="info-banner" role="status">Some pantry records have no supported item type. They remain available in this business-wide view for review; no module has been assigned automatically.</p>}
                   {sub === 'Counts' ? (
                     <InventoryCounts
                       workspace={state}
@@ -1936,11 +1944,7 @@ export function WorkspaceApp() {
                                 : route.tab === 'Ingredients'
                                   ? ingredients.filter(
                                       (i) =>
-                                        ![
-                                          'material',
-                                          'packaging',
-                                          'supply',
-                                        ].includes(i.usedAs),
+                                        i.usedAs === 'ingredient',
                                     )
                                   : route.tab === 'Packaging'
                                     ? ingredients.filter(
@@ -2056,20 +2060,9 @@ export function WorkspaceApp() {
                       >
                         <Upload size={21} />
                       </CatalogAction>
-                      <CatalogAction
-                        label="Export recipes"
-                        onClick={() => exportData('recipes')}
-                      >
-                        <Download size={21} />
-                      </CatalogAction>
+
                     </div>
-                    <SectionCategoryTools
-                      workspace={state}
-                      scope="recipes"
-                      canManage={ready && ['Owner', 'Manager'].includes(role)}
-                      onSettings={categorySettings}
-                      compact
-                    />
+
                     <label className="field recipe-search">
                       <span>Search recipes</span>
                       <div className="search-field">
@@ -2101,6 +2094,20 @@ export function WorkspaceApp() {
                         ))}
                       </select>
                     </label>
+
+                      <CatalogAction
+                        label="Export recipes"
+                        onClick={() => exportData('recipes')}
+                      >
+                        <Download size={21} />
+                      </CatalogAction>
+                    <SectionCategoryTools
+                      workspace={state}
+                      scope="recipes"
+                      canManage={ready && ['Owner', 'Manager'].includes(role)}
+                      onSettings={categorySettings}
+                      compact
+                    />
                     <Badge>{visibleRecipes.length} recipes &amp; preps</Badge>
                   </div>
                   {recipesView === 'table' ? (
@@ -2174,13 +2181,7 @@ export function WorkspaceApp() {
                                     : money(cost / r.yield)}
                                 </td>
                                 <td>
-                                  <button
-                                    className="text-button"
-                                    onClick={() => open('recipe-detail', r)}
-                                  >
-                                    View details
-                                  </button>
-                                  <ItemDeleteButton table="recipes" item={r} />
+                                  <ItemRecordActions table="recipes" item={r} view={() => open('recipe-detail', r)} edit={() => open('recipe', r)} />
                                 </td>
                               </tr>
                             )
@@ -2261,7 +2262,7 @@ export function WorkspaceApp() {
                               </div>
                             </div>
                             </button>
-                            <ItemDeleteButton table="recipes" item={r} />
+                            <ItemRecordActions table="recipes" item={r} view={() => open('recipe-detail', r)} edit={() => open('recipe', r)} />
                           </article>
                         )
                       })}
@@ -2301,12 +2302,7 @@ export function WorkspaceApp() {
                           role="group"
                           aria-label="Product actions"
                         >
-                          <CatalogAction
-                            label="Export products"
-                            onClick={() => exportData('products')}
-                          >
-                            <Download size={21} />
-                          </CatalogAction>
+
                           {['Owner', 'Manager'].includes(role) && (
                             <DropdownMenu>
                               <ActionTip label="Create product">
@@ -2376,6 +2372,13 @@ export function WorkspaceApp() {
                           onFilter={setProductCategoryFilter}
                         />
                         <ProductSortControl value={productSort} onChange={setProductSort} />
+                          <CatalogAction
+                            label="Export products"
+                            onClick={() => exportData('products')}
+                          >
+                            <Download size={21} />
+                          </CatalogAction>
+
                         <Badge>{visibleProducts.length === products.length ? `${products.length} products` : `${visibleProducts.length} of ${products.length} products`}</Badge>
                       </div>
                       <ProductCards
@@ -2486,6 +2489,7 @@ export function WorkspaceApp() {
                   )}
                 </div>
               )}
+              {page === 'Resale' && <ResaleWorkspace workspace={state} role={role} tab={route.tab} open={open} onSettings={categorySettings} />}
               {page === 'Handmade' && (
                 <HandmadeWorkspace
                   workspace={state}
@@ -4377,12 +4381,11 @@ export function WorkspaceApp() {
                       onChange={change}
                     />
                     <Field label="Description">{input('description')}</Field>
-                    <Field label="Batch yield">
-                      {input('yield', 'number')}
-                    </Field>
-                    <Field label="Yield unit">
-                      {input('yieldUnit', 'text', 'loaves')}
-                    </Field>
+                    <RecipeYieldFields
+                      recipe={draft}
+                      onChange={change}
+                      linkedOutputUnit={state.ingredients.find(i => i.compoundRecipeId === draft.id)?.unit}
+                    />
                   </div>
                   <div className="form-section-title">
                     <h3>
@@ -4518,7 +4521,7 @@ export function WorkspaceApp() {
                         />
                         <button
                           type="button"
-                          className="icon-button"
+                          className="icon-button item-delete-action"
                           aria-label="Remove ingredient"
                           onClick={() => {
                             setFormDirty(true)
@@ -4605,15 +4608,6 @@ export function WorkspaceApp() {
                       mutate('conversion', 'ingredients', data)
                     }
                   />
-                  <label className="check-label">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.compound}
-                      onChange={(e) => change('compound', e.target.checked)}
-                    />
-                    This recipe is a compound prep (yield unit must be a pantry
-                    unit, e.g. g).
-                  </label>
                   <Field label="Instructions">
                     <textarea
                       rows={4}
@@ -5834,6 +5828,7 @@ export function WorkspaceApp() {
             >
               <ProductMockups
                 productId={selected.id}
+                primaryImageAssetId={state.products.find(p => p.id === selected.id)?.imageAssetId}
                 assets={state.graphic_assets || []}
                 canEdit={ready && ['Owner', 'Manager'].includes(role)}
                 onWorkspace={setState}

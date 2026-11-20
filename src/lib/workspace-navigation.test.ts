@@ -18,7 +18,7 @@ it('gives every implemented tab a distinct round-trippable route', () => {
       expect(parseWorkspaceHash(hash)).toMatchObject(route)
     }
   }
-  expect(Object.keys(sectionTabs)).toHaveLength(11)
+  expect(Object.keys(sectionTabs)).toHaveLength(12)
 })
 it('maps old shared destinations without losing existing functionality', () => {
   for (const [old, section, tab] of [
@@ -26,6 +26,8 @@ it('maps old shared destinations without losing existing functionality', () => {
     ['#Pantry/Inventory%20ledger', 'Inventory', 'Movements'],
     ['#Pantry/Vendors', 'Purchasing', 'Suppliers'],
     ['#Pantry/Purchase%20orders', 'Purchasing', 'Purchase Orders'],
+    ['#Products/Resale', 'Products', 'Resale'],
+    ['#Products/Handmade', 'Products', 'Handmade'],
     ['#Recipes', 'Production', 'Recipes & Designs'],
     ['#Production/Batch%20runs', 'Production', 'Production Runs'],
     ['#Finances/Sales', 'Sales', 'Sales'],

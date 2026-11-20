@@ -1,3 +1,4 @@
+import { supportedPrepYieldUnit } from '../../src/lib/prep-yield'
 import { handleItemDeletion } from '../lib/item-deletion-handler'
 import { deliverGraphic } from '../lib/graphic-delivery'
 import { handleEvent } from '../lib/events-handler'
@@ -11,7 +12,7 @@ import {
   validateDropboxCopy,
   dropboxAssetIdentity,
 } from '../lib/dropbox-artwork'
-import { prepareMockup, authorizeMockupProduct } from '../lib/mockup-handler'
+import { prepareMockup, prepareMockupDeletion, authorizeMockupProduct } from '../lib/mockup-handler'
 import {
   consolidateCategories,
   canonicalCategoryName,
@@ -1119,6 +1120,7 @@ export default async (req: Request, context: Context) => {
     ) {
       const body = await req.clone().json()
       metadataOnly =
+        requestUrl.searchParams.has('deleteMockup') ||
         requestUrl.searchParams.has('labelPdf') ||
         requestUrl.searchParams.has('productImport') ||
         ([
@@ -1134,6 +1136,9 @@ export default async (req: Request, context: Context) => {
           'templateAssignments',
           'productLabelAssignment',
           'labelPrint',
+          'itemDeleteCheck',
+          'itemDelete',
+          'itemArchive',
         ].includes(body?.action) &&
           !(
             body?.action === 'rapidInventoryCount' && body?.data?.op === 'apply'
@@ -1970,6 +1975,20 @@ export default async (req: Request, context: Context) => {
       return Response.json(preview, {
         headers: { 'Cache-Control': 'private, no-store' },
       })
+    }
+    if (req.method === 'POST' && requestUrl.searchParams.has('deleteMockup')) {
+      const input = await req.json()
+      const { product, asset, primary } = prepareMockupDeletion(input, state, role, requestUrl, moduleAccess)
+      if (primary) {
+        await client.query("UPDATE products SET data=data || '{\"imageAssetId\":\"\"}'::jsonb,updated_at=now() WHERE business_id=$1 AND id=$2", [org, product.id])
+        product.imageAssetId = ''
+      }
+      await client.query('DELETE FROM graphic_assets WHERE business_id=$1 AND id=$2', [org, asset.id])
+      state.graphic_assets = state.graphic_assets.filter(a => a.id !== asset.id)
+      await client.query('COMMIT')
+      // Only the private rendered file belongs to this saved mockup. Never remove its sources.
+      await getStore('label-graphics').delete(`${org}/${asset.id}`).catch(() => {})
+      return Response.json({ workspace: workspaceForDevice(state) }, { headers: { 'Cache-Control': 'no-store' } })
     }
     if (req.method === 'GET' && requestUrl.searchParams.has('asset')) {
       const asset = state.graphic_assets.find(
@@ -4252,10 +4271,11 @@ export default async (req: Request, context: Context) => {
           if (
             item.compound &&
             (!Object.hasOwn(units, item.yieldUnit) ||
-              units[item.yieldUnit].factor <= 0)
+              units[item.yieldUnit].factor <= 0 ||
+              (item.workflow !== 'handmade' && !supportedPrepYieldUnit(item.yieldUnit)))
           )
             throw new Error(
-              'Compound prep yields must use a normalized pantry unit.',
+              'Choose a supported compound-prep yield unit: weight (g, kg, oz, lb), volume (mL, L, tsp, tbsp, cup, fl oz), or count (each or dozen). Weight ounces and fluid ounces are different units.',
             )
           item.yield = number(item.yield, 'Yield', 0.000001)
           item.laborMinutes = number(item.laborMinutes || 0, 'Labor')

@@ -171,3 +171,36 @@ it('retains manual prep declarations and statements while refreshing derived sou
     subingredients: 'Retained declaration',
   })
 })
+
+it('costs declared ounce, volume and count yields without relabeling or consuming raw inputs', () => {
+  for (const [yieldQuantity, yieldUnit, quantity, unit, expected] of [
+    [8, 'oz', 1, 'oz', 0.375],
+    [1, 'cup', 1, 'tbsp', 0.1875],
+    [12, 'each', 2, 'each', 0.5],
+    [100, 'g', 25, 'g', 0.75],
+  ] as const) {
+    const w = state()
+    const prepRecipe = {
+      ...source,
+      yield: yieldQuantity,
+      yieldUnit,
+      laborMinutes: 0,
+      overhead: 0,
+    }
+    w.recipes = [prepRecipe]
+    const output = componentStock(prepRecipe, w.ingredients)
+    w.ingredients.push(output)
+    const consumer = parent()
+    consumer.lines[0] = {
+      ingredientId: output.id,
+      componentRecipeId: prepRecipe.id,
+      quantity,
+      unit,
+    }
+    validateRecipeComponents(consumer, w)
+    expect(output.unit).toBe(yieldUnit)
+    expect(recipeCost(consumer, w.ingredients)).toBeCloseTo(expected, 10)
+    expect(raw.quantity).toBe(500)
+    expect(output.quantity).toBe(0)
+  }
+})

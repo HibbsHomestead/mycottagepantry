@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { prepareMockup } from '../../netlify/lib/mockup-handler'
+import {
+  prepareMockup,
+  prepareMockupDeletion,
+} from '../../netlify/lib/mockup-handler'
 import type { Workspace } from './domain'
 const state: Workspace = {
   products: [
@@ -94,5 +97,76 @@ describe('mockup save boundary', () => {
     )
     expect(result.metadata.mockup.artworkId).toBe('')
     expect(result.metadata.category).toBe('mockup-template')
+  })
+})
+
+describe('saved mockup deletion boundary', () => {
+  const fixture = () => ({
+    ...structuredClone(state),
+    products: [{ ...state.products[0], imageAssetId: 'render' }],
+    graphic_assets: [
+      ...state.graphic_assets,
+      {
+        id: 'render',
+        name: 'Disposable tote',
+        productId: 'tote',
+        category: 'product-mockup',
+        mockup: input.composition,
+      },
+    ],
+  })
+  const deletion = {
+    productId: 'tote',
+    assetId: 'render',
+    confirmPrimaryRemoval: true,
+  }
+  it('identifies only the saved render and requires explicit primary removal', () => {
+    expect(() =>
+      prepareMockupDeletion(
+        { ...deletion, confirmPrimaryRemoval: false },
+        fixture(),
+        'Owner',
+        url,
+      ),
+    ).toThrow('primary')
+    const result = prepareMockupDeletion(deletion, fixture(), 'Owner', url)
+    expect(result.asset.id).toBe('render')
+    expect(result.primary).toBe(true)
+    expect(result.asset.mockup.artworkId).toBe('art')
+  })
+  it('rejects other businesses, products and insufficient roles', () => {
+    expect(() =>
+      prepareMockupDeletion(
+        { ...deletion, productId: 'foreign' },
+        fixture(),
+        'Owner',
+        url,
+      ),
+    ).toThrow('this business')
+    expect(() =>
+      prepareMockupDeletion(
+        { ...deletion, assetId: 'foreign' },
+        fixture(),
+        'Owner',
+        url,
+      ),
+    ).toThrow('this business')
+    expect(() =>
+      prepareMockupDeletion(deletion, fixture(), 'Member', url),
+    ).toThrow('Owner or Manager')
+  })
+  it('protects shared renders but permits shared source artwork', () => {
+    const w = fixture()
+    expect(prepareMockupDeletion(deletion, w, 'Owner', url).asset.id).toBe(
+      'render',
+    )
+    w.products.push({
+      id: 'other',
+      name: 'Other',
+      imageAssetId: 'render',
+    } as (typeof w.products)[number])
+    expect(() => prepareMockupDeletion(deletion, w, 'Owner', url)).toThrow(
+      'another record',
+    )
   })
 })

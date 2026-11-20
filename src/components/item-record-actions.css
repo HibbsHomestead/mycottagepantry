@@ -1,0 +1,44 @@
+.item-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.item-record-actions .btn {
+  min-height: 44px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  gap: 0.35rem;
+}
+.pantry-card > footer {
+  margin-top: auto;
+}
+.pantry-card > footer .item-record-actions {
+  width: 100%;
+}
+.recipe-card > .item-record-actions {
+  padding: 1rem;
+  margin-top: auto;
+}
+@media (max-width: 1023px) {
+  .item-record-actions .btn {
+    width: 44px;
+    padding: 0.5rem;
+    justify-content: center;
+  }
+  .item-record-actions .responsive-action-label {
+    display: none;
+  }
+}
+.recipe-card:has(> .item-record-actions) {
+  display: flex;
+  flex-direction: column;
+}
+.recipe-card > .recipe-card-open {
+  flex: 1;
+}
+td .item-record-actions {
+  width: max-content;
+  max-width: 20rem;
+}

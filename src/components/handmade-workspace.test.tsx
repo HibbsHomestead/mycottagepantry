@@ -1,3 +1,4 @@
+import { TooltipProvider } from './ui/tooltip'
 import userEvent from '@testing-library/user-event'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
@@ -16,7 +17,9 @@ it('keeps handmade products independent of food recipes and store-page imports',
       onDirty={vi.fn()}
     />,
   )
-  await userEvent.click(screen.getByRole('tab', { name: /^Bill of Materials$/ }))
+  await userEvent.click(
+    screen.getByRole('tab', { name: /^Bill of Materials$/ }),
+  )
   expect(
     screen.getByRole('heading', { name: 'Bill of materials' }),
   ).toBeVisible()
@@ -34,14 +37,16 @@ it('keeps handmade products independent of food recipes and store-page imports',
 it('saves dedicated material details without food fields or changing stock', async () => {
   const mutate = vi.fn().mockResolvedValue(undefined)
   render(
-    <HandmadeWorkspace
-      workspace={demoData()}
-      role="Owner"
-      mutate={mutate}
-      open={vi.fn()}
-      tab="Materials & Supplies"
-      onWorkspace={vi.fn()}
-    />,
+    <TooltipProvider>
+      <HandmadeWorkspace
+        workspace={demoData()}
+        role="Owner"
+        mutate={mutate}
+        open={vi.fn()}
+        tab="Materials & Supplies"
+        onWorkspace={vi.fn()}
+      />
+    </TooltipProvider>,
   )
   fireEvent.click(screen.getByRole('button', { name: 'Add material' }))
   fireEvent.change(screen.getByLabelText('Material name'), {

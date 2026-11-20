@@ -103,6 +103,7 @@ export function assignedCategoryId(
   if (scope.endsWith('products') || scope === 'kits')
     return item.productCategoryId || ''
   if (item.sectionCategoryId) return item.sectionCategoryId
+  if (item.categoryId) return item.categoryId
   const label = String(
     scope === 'handmade-materials'
       ? item.materialCategory || ''
@@ -239,11 +240,13 @@ export function assertSectionCategoryAssignment(
           : pantryCategoryScope(previous)))
   )
     return
-  const category = table === 'products'
-    ? (w.settings[0]?.productCategories || []).find(
-        (c: SectionCategory) => c.id === item[key] && productCategoryEligible(c, scope),
-      )
-    : sectionCategories(w, scope).find((c) => c.id === item[key])
+  const category =
+    table === 'products'
+      ? (w.settings[0]?.productCategories || []).find(
+          (c: SectionCategory) =>
+            c.id === item[key] && productCategoryEligible(c, scope),
+        )
+      : sectionCategories(w, scope).find((c) => c.id === item[key])
   if (!category || category.active === false)
     throw new Error('Choose an active category from this section and business.')
   if (table === 'ingredients') syncPantryCategory(item, category)

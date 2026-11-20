@@ -1,5 +1,6 @@
+import { TooltipProvider } from './ui/tooltip'
 import { ActionTip } from './action-tip'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Plus, Settings, RefreshCw } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -158,12 +159,16 @@ export function SectionCategoryManager({
       <DialogContent className="app-dialog wide-dialog section-category-dialog">
         <DialogHeader>
           <DialogTitle>
-            {create ? 'Add category' : 'Manage categories'} ·{' '}
-            {categoryScopes[scope]}
+            {scope === 'recipes'
+              ? create
+                ? 'Add recipe category'
+                : 'Manage recipe categories'
+              : `${create ? 'Add category' : 'Manage categories'} · ${categoryScopes[scope]}`}
           </DialogTitle>
           <DialogDescription>
             Categories belong to this business and section. Archiving keeps
-            assigned records and history.
+            assigned records and history. Category changes save separately;
+            cancelling the item editor does not undo them.
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -472,7 +477,10 @@ export function SectionCategoryTools({
                   className="btn secondary"
                   aria-label="Category actions"
                 >
-                  <MoreHorizontal size={18} /><span className="catalog-category-label">Category actions</span>
+                  <MoreHorizontal size={18} />
+                  <span className="catalog-category-label">
+                    Category actions
+                  </span>
                 </button>
               </DropdownMenuTrigger>
             </ActionTip>
@@ -524,6 +532,45 @@ export function ScopedCategorySelect({
   onChange,
 }: Common & { item: Item; onChange: (key: string, value: any) => void }) {
   const [mode, setMode] = useState('')
+  const [retry, setRetry] = useState(0)
+  const businessId = workspace.settings[0]?.id
+  const requestKey = `${businessId}:${scope}:${retry}`
+  const [requestState, setRequestState] = useState<{
+    key: string
+    status: 'ready' | 'error'
+  } | null>(null)
+  const loadState =
+    requestState?.key === requestKey ? requestState.status : 'loading'
+  const settingsCallback = useRef(onSettings)
+  useEffect(() => {
+    settingsCallback.current = onSettings
+  }, [onSettings])
+  useEffect(() => {
+    let cancelled = false
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        const response = await fetch(categoryEndpointFor(scope), {
+          credentials: 'same-origin',
+          cache: 'no-store',
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Categories unavailable')
+        const data = await response.json()
+        if (!Array.isArray(data.categories) || !Number.isInteger(data.revision))
+          throw new Error('Invalid categories')
+        if (cancelled) return
+        settingsCallback.current(categorySettingsPatch(scope, data))
+        setRequestState({ key: requestKey, status: 'ready' })
+      } catch {
+        if (!cancelled) setRequestState({ key: requestKey, status: 'error' })
+      }
+    })()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [requestKey, scope])
   const categories = sectionCategories(workspace, scope)
   const id = assignedCategoryId(item, workspace, scope)
   const current = categories.find((c) => c.id === id)
@@ -543,55 +590,102 @@ export function ScopedCategorySelect({
   }
   return (
     <div className="scoped-category-select">
-      <div className="category-field-head">
-        <span>Category</span>
-        {canManage && (
-          <span className="category-actions">
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setMode('add')}
+      <span className="category-field-label">Category</span>
+      <TooltipProvider>
+        <div className="category-input-row">
+          <label>
+            <span className="sr-only">Category</span>
+            <select
+              aria-label="Category"
+              disabled={loadState !== 'ready'}
+              aria-busy={loadState === 'loading'}
+              value={id}
+              onChange={(e) =>
+                select(categories.find((c) => c.id === e.target.value))
+              }
             >
-              Add category
-            </button>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setMode('manage')}
-            >
-              Manage categories
-            </button>
-          </span>
-        )}
-      </div>
-      <label>
-        <span className="sr-only">Category</span>
-        <select
-          aria-label="Category"
-          value={id}
-          onChange={(e) =>
-            select(categories.find((c) => c.id === e.target.value))
-          }
-        >
-          <option value="">Uncategorized</option>
-          {id && !current && (
-            <option value={id} disabled>
-              Saved category · review section assignment
-            </option>
+              <option value="">Uncategorized</option>
+              {id && !current && (
+                <option value={id} disabled>
+                  Saved category · review section assignment
+                </option>
+              )}
+              {(loadState === 'ready' ? categories : current ? [current] : [])
+                .filter((c) => c.active !== false || c.id === id)
+                .map((c) => (
+                  <option key={c.id} value={c.id} disabled={c.active === false}>
+                    {c.parentId
+                      ? `${categories.find((p) => p.id === c.parentId)?.name || 'Parent'} / `
+                      : ''}
+                    {c.name}
+                    {c.active === false ? ' (archived)' : ''}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {canManage && (
+            <>
+              <ActionTip label="Add category">
+                <button
+                  type="button"
+                  className="text-button category-compact-action"
+                  aria-label="Add category"
+                  onClick={() => setMode('add')}
+                >
+                  <Plus size={18} />
+                  <span>Add</span>
+                </button>
+              </ActionTip>
+              <ActionTip label="Manage categories">
+                <button
+                  type="button"
+                  className="text-button category-compact-action"
+                  aria-label="Manage categories"
+                  onClick={() => setMode('manage')}
+                >
+                  <Settings size={18} />
+                  <span>Manage</span>
+                </button>
+              </ActionTip>
+            </>
           )}
-          {categories
-            .filter((c) => c.active !== false || c.id === id)
-            .map((c) => (
-              <option key={c.id} value={c.id} disabled={c.active === false}>
-                {c.parentId
-                  ? `${categories.find((p) => p.id === c.parentId)?.name || 'Parent'} / `
-                  : ''}
-                {c.name}
-                {c.active === false ? ' (archived)' : ''}
-              </option>
-            ))}
-        </select>
-      </label>
+          <ActionTip label="Refresh categories">
+            <button
+              type="button"
+              className="text-button category-compact-action"
+              aria-label="Refresh categories"
+              disabled={loadState === 'loading'}
+              onClick={() => setRetry((n) => n + 1)}
+            >
+              <RefreshCw size={16} />
+            </button>
+          </ActionTip>
+        </div>
+      </TooltipProvider>
+      {loadState === 'loading' && (
+        <p role="status">Loading current categories…</p>
+      )}
+      {loadState === 'error' && (
+        <p role="alert">
+          Could not load current categories. Your selection is preserved.{' '}
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setRetry((n) => n + 1)}
+          >
+            Retry categories
+          </button>
+        </p>
+      )}
+      {loadState === 'ready' && !categories.some((c) => c.active !== false) && (
+        <p role="status">No active categories configured in this section.</p>
+      )}
+      {id && !current && (
+        <p role="status">
+          Saved category “{item.category || id}” needs review. Choose a current
+          category to replace it.
+        </p>
+      )}
       {pantryCategoryConflict(item, workspace) &&
         !scope.endsWith('products') &&
         scope !== 'recipes' && (

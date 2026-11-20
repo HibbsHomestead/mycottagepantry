@@ -106,12 +106,19 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
     // The ingredient FK remains authoritative; metadata cannot redirect another ingredient.
     if (line.ingredientId !== stock.id)
       throw new Error('Choose the prepared stock linked to this source recipe.')
-    convert(
-      parseQuantity(line.quantity),
-      line.unit,
-      source.yieldUnit,
-      stock.conversions,
-    )
+    try {
+      convert(
+        parseQuantity(line.quantity),
+        line.unit,
+        source.yieldUnit,
+        stock.conversions,
+      )
+    } catch (cause) {
+      throw new Error(
+        `${cause instanceof Error ? cause.message : 'Conversion unavailable.'} Add a verified prep-specific equivalence on the inventory ingredient “${stock.name}” before consuming ${line.unit} against its ${source.yieldUnit} output. No weight/volume density or count equivalence is assumed.`,
+        { cause },
+      )
+    }
     Object.assign(line, {
       componentRecipeId: id,
       productionMode: 'prepared_stock',
