@@ -995,24 +995,52 @@
   max-width: 100%;
   grid-column: 1 / -1;
 }
-.ingredient-details-tab-scroll {
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-}
-.ingredient-details-tab-scroll [role='tablist'] {
-  width: max-content;
+.ingredient-details-tabs [role='tablist'] {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
   height: auto;
-  min-height: 44px;
-  justify-content: flex-start;
+  min-width: 0;
+  gap: 3px;
 }
-.ingredient-details-tab-scroll [role='tab'] {
+.ingredient-details-tabs [role='tab'] {
+  min-width: 0;
   min-height: 44px;
-  padding: 10px 14px;
-  flex: 0 0 auto;
+  height: auto;
+  padding: 8px;
+  white-space: normal;
+  overflow-wrap: normal;
 }
 .ingredient-details-tabs [role='tabpanel'] {
   min-width: 0;
+  min-height: 0;
+  overflow: visible;
+  flex: none;
+}
+@media (max-width: 900px) {
+  .ingredient-details-tabs [role='tablist'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ingredient-calculation-link {
+  display: block;
+  text-align: left;
+  font: inherit;
+  text-decoration: underline;
+  padding-block: 6px;
+}
+.ingredient-calculation-dialog {
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden !important;
+}
+.ingredient-calculation-body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  display: grid;
+  gap: 16px;
 }
 .ingredient-detail-header .ingredient-setup-tabs {
   display: flex;

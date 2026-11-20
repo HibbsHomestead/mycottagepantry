@@ -180,7 +180,7 @@ it('groups ingredient details into Product Details cards in a portal modal and r
     screen.getByRole('region', { name: 'Purchase & costing' }),
   ).toBeVisible()
   expect(screen.getByRole('region', { name: 'Vendor quotes' })).toBeVisible()
-  await user.click(screen.getByRole('tab', { name: 'Identification & notes' }))
+  await user.click(screen.getByRole('tab', { name: 'Identification & Notes' }))
   expect(screen.getByRole('region', { name: 'Identification' })).toBeVisible()
   const content = modal.querySelector('.ingredient-detail-body')!
   content.scrollTop = 400
@@ -222,7 +222,7 @@ it('keeps missing purchase data blank, shows friendly inline validation, and sav
     screen.getAllByText('Purchase package details not set.')[0],
   ).toBeVisible()
   expect(screen.queryByText(/Package quantity must/)).not.toBeInTheDocument()
-  await user.click(screen.getByRole('tab', { name: 'Identification & notes' }))
+  await user.click(screen.getByRole('tab', { name: 'Identification & Notes' }))
   expect(screen.getByText('Barcode: 0012345')).toBeVisible()
   await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
 

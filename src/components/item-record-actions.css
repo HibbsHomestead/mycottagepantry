@@ -1,6 +1,6 @@
 .item-record-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
@@ -42,21 +42,141 @@ td .item-record-actions {
   width: max-content;
   max-width: 20rem;
 }
-.item-action-destructive { display: inline-flex; }
+.item-action-destructive {
+  display: inline-flex;
+}
 .pantry-card > footer .item-action-destructive,
-.recipe-card > .item-record-actions .item-action-destructive { margin-inline-start: auto; }
+.recipe-card > .item-record-actions .item-action-destructive {
+  margin-inline-start: auto;
+}
 .pantry-card > footer,
-.recipe-card > .item-record-actions { border-top: 1px solid var(--border); padding: 1rem; }
-:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) > :has(> .item-delete-action),
-:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) > .item-delete-action { margin-inline-end: auto; }
-:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) { flex-wrap: wrap; align-items: center; gap: 10px; }
-.item-delete-action:active { transform: translateY(1px); }
+.recipe-card > .item-record-actions {
+  border-top: 1px solid var(--border);
+  padding: 1rem;
+}
+:is(
+    .form-footer,
+    .recipe-detail-footer,
+    .product-detail-toolbar,
+    .product-editor-actions
+  )
+  > :has(> .item-delete-action),
+:is(
+    .form-footer,
+    .recipe-detail-footer,
+    .product-detail-toolbar,
+    .product-editor-actions
+  )
+  > .item-delete-action {
+  margin-inline-end: auto;
+}
+:is(
+  .form-footer,
+  .recipe-detail-footer,
+  .product-detail-toolbar,
+  .product-editor-actions
+) {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.item-delete-action:active {
+  transform: translateY(1px);
+}
 .item-delete-action:disabled,
-.btn.secondary.item-delete-action:disabled { color: var(--muted) !important; background: var(--surface); border-color: var(--border); cursor: not-allowed; opacity: 1; }
-.ingredient-detail-footer > .item-delete-action { margin-inline-end: auto; }
-.item-remove-button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
-.item-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--border); }
-.item-dialog-actions > .item-delete-action { margin-inline-end: auto; }
-.item-dialog-actions .recipe-footer-close { margin-inline-end: 0; }
-.item-dialog-actions .product-editor-buttons { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 10px; }
-@media (max-width: 480px) { .item-dialog-actions { padding-inline: 16px; } }
+.btn.secondary.item-delete-action:disabled {
+  color: var(--muted) !important;
+  background: var(--surface);
+  border-color: var(--border);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.ingredient-detail-footer > .item-delete-action {
+  margin-inline-end: auto;
+}
+.item-remove-button {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+.item-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+}
+.item-dialog-actions > .item-delete-action {
+  margin-inline-end: auto;
+}
+.item-dialog-actions .recipe-footer-close {
+  margin-inline-end: 0;
+}
+.item-dialog-actions .product-editor-buttons {
+  margin-inline-start: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .item-dialog-actions {
+    padding-inline: 16px;
+  }
+}
+
+/* Compact record actions are icon-only at every viewport. Dialog/toolbars retain labels. */
+.item-record-actions .btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  max-width: 40px;
+  padding: 8px;
+  justify-content: center;
+  flex: 0 0 40px;
+}
+.item-record-actions .responsive-action-label {
+  display: none;
+}
+.item-record-actions .item-action-destructive {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+td:has(> .item-record-actions) {
+  white-space: nowrap !important;
+  min-width: 192px;
+  vertical-align: middle;
+}
+td > .item-record-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  width: max-content;
+  max-width: none;
+  vertical-align: middle;
+}
+td > .item-record-actions .item-action-destructive {
+  margin-inline-start: 8px;
+}
+.table-extra-actions {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: 8px;
+}
+.pantry-card-grid,
+.product-photo-grid,
+.recipe-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 265px), 1fr));
+}
+@media (pointer: coarse) {
+  .item-record-actions .btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 44px;
+    flex-basis: 44px;
+  }
+}
+
+td:has(> .item-record-actions) { text-align: right !important; }

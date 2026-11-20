@@ -1,3 +1,4 @@
+import { descriptionSourceSchema } from '../../src/lib/product-description'
 import { supportMeter } from './support-ai-meter'
 import { supportImage } from './support-ai-image'
 import {
@@ -9,7 +10,7 @@ import { assistantTools } from './support-ai-tools'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { selectedWorkspace } from './verified-session'
-import { supportAnswer } from './support-ai-provider'
+import { supportAnswer, productDescriptionAnswer } from './support-ai-provider'
 import {
   supportAiDefaults,
   supportAiPolicySchema,
@@ -209,6 +210,7 @@ export async function handleSupportAi(
   const input = z
     .object({
       action: z.enum([
+        'product-description',
         'chat',
         'delete',
         'escalate',
@@ -217,6 +219,7 @@ export async function handleSupportAi(
         'confirm',
         'undo',
       ]),
+      productSource: descriptionSourceSchema.optional(),
       conversationId: z.uuid().optional(),
       requestId: z.uuid().optional(),
       message: z.string().trim().min(1).max(2000).optional(),
@@ -238,6 +241,61 @@ export async function handleSupportAi(
     })
     .strict()
     .parse(JSON.parse((await limitedBody(req, 30000)).toString()))
+  if (input.action === 'product-description') {
+    if (staff || !input.productSource)
+      throw new SupportError(400, 'Select a product draft.')
+    const requestId = randomUUID()
+    const reserved = await supportTransaction(actor, async (c) => {
+      const business = await businessScope(c, actor, req)
+      if (!business)
+        throw new SupportError(403, 'Choose an oven before generating.')
+      const membership = (
+        await c.query(
+          'SELECT role FROM users WHERE identity_id=$1 AND business_id=$2 AND active=true',
+          [actor.id, business],
+        )
+      ).rows[0]
+      if (!membership || !['Owner', 'Manager'].includes(membership.role))
+        throw new SupportError(
+          403,
+          'Only an Owner or Manager can generate product descriptions.',
+        )
+      const policy = await reserve(c, actor, business, requestId)
+      return { business, policy }
+    })
+    try {
+      const result = await productDescriptionAnswer(
+        input.productSource,
+        reserved.policy,
+        supportMeter(
+          actor,
+          reserved.business,
+          requestId,
+          reserved.policy.model,
+        ),
+      )
+      await supportTransaction(actor, async (c) => {
+        await c.query(
+          "UPDATE support_ai_usage SET status='success',input_tokens=$3,output_tokens=$4 WHERE id=$1 AND requester_id=$2",
+          [requestId, actor.id, result.inputTokens, result.outputTokens],
+        )
+      })
+      return response({ description: result.description })
+    } catch (error) {
+      await supportTransaction(actor, async (c) => {
+        await c.query(
+          "UPDATE support_ai_usage SET status='failed' WHERE id=$1 AND requester_id=$2",
+          [requestId, actor.id],
+        )
+      }).catch(() => {})
+      if (error instanceof SupportError) throw error
+      throw new SupportError(
+        503,
+        'Description generation did not complete. Your text is unchanged. Try again when ready; requests are never retried automatically.',
+      )
+    }
+  }
+
   if (input.screenshotAttachmentId && !input.screenshotConsent)
     throw new SupportError(
       400,

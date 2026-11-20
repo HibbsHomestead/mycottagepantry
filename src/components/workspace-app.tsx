@@ -1,3 +1,4 @@
+import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemCopyProvider, ItemCopyButton } from './item-copy'
 import { copyDefinition } from '@/lib/item-copy'
@@ -2129,6 +2130,7 @@ export function WorkspaceApp() {
                         <thead>
                           <tr>
                             {[
+                              'Photo',
                               'Recipe / prep name',
                               'Category',
                               'Yield',
@@ -2155,8 +2157,18 @@ export function WorkspaceApp() {
                             return (
                               <tr key={r.id}>
                                 <td>
+                                  <PantryPhoto
+                                    item={r}
+                                    assets={state.graphic_assets || []}
+                                    kind="recipe"
+                                    className="table-thumbnail"
+                                    recipeCategories={recipeCategoryOptions}
+                                  />
+                                </td>
+                                <td>
                                   <button
                                     className="text-button"
+                                    title={r.name}
                                     onClick={() => open('recipe-detail', r)}
                                   >
                                     {r.name}
@@ -2196,7 +2208,7 @@ export function WorkspaceApp() {
                           })}
                           {!visibleRecipes.length && (
                             <tr>
-                              <td colSpan={7}>No recipes match this view.</td>
+                              <td colSpan={8}>No recipes match this view.</td>
                             </tr>
                           )}
                         </tbody>
@@ -4656,6 +4668,13 @@ export function WorkspaceApp() {
                     <Field label="Product name">
                       {input('name', 'text', 'e.g. Homestyle White Bread Loaf')}
                     </Field>
+                    <ProductDescriptionField
+                      key={selected?.id || 'new-product'}
+                      product={{ id: selected?.id || 'new-product', name: '', ...draft, workflow: 'food' }}
+                      workspace={state}
+                      change={change}
+                      disabled={!['Owner', 'Manager'].includes(role)}
+                    />
                     <Field label="Connected recipe">
                       {select(
                         'recipeId',

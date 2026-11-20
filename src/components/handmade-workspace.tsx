@@ -1,3 +1,4 @@
+import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { ModuleProductList, ModuleStockSummary } from './module-product-list'
@@ -859,13 +860,7 @@ export function HandmadeProductEditor({
                   </select>
                 </label>
               </div>
-              <label>
-                Description
-                <textarea
-                  value={d.description || ''}
-                  onChange={(e) => change('description', e.target.value)}
-                />
-              </label>
+              <ProductDescriptionField product={{ ...d, bom }} workspace={w} change={change} disabled={!manage} />
               <ProductCategorySelector
                 business={w.settings[0]}
                 product={d}

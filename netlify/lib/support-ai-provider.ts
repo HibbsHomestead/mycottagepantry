@@ -1,3 +1,7 @@
+import {
+  descriptionInstructions,
+  descriptionSourceSchema,
+} from '../../src/lib/product-description'
 import { SupportError } from './support-core'
 import type { SupportMeter } from './support-ai-meter'
 import {
@@ -234,5 +238,50 @@ export async function supportAnswer(
       outputTokens,
       cutoff: error instanceof SupportError && error.status === 429,
     })
+  }
+}
+
+/** Same gateway client, policy model, timeout and mandatory spending reservation as support. */
+export async function productDescriptionAnswer(
+  source: z.infer<typeof descriptionSourceSchema>,
+  policy: z.infer<typeof supportAiPolicySchema>,
+  meter: SupportMeter,
+) {
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: 'system', content: descriptionInstructions },
+    {
+      role: 'user',
+      content: JSON.stringify(descriptionSourceSchema.parse(source)),
+    },
+  ]
+  const record = await meter(
+    Buffer.byteLength(JSON.stringify(messages)) + 4000,
+    1000,
+  )
+  const result = await new OpenAI({
+    timeout: 20000,
+    maxRetries: 0,
+  }).chat.completions.create({
+    model: policy.model,
+    store: false,
+    max_completion_tokens: 1000,
+    reasoning_effort: 'none',
+    response_format: { type: 'json_object' },
+    messages,
+  })
+  await record(result)
+  if (
+    result.model &&
+    ![policy.model, supportAiModel, `${supportAiModel}-2026-03-17`].includes(result.model)
+  )
+    throw new Error('Unexpected description model')
+  const parsed = z
+    .object({ description: z.string().trim().min(1).max(3000) })
+    .strict()
+    .parse(JSON.parse(result.choices[0]?.message.content || ''))
+  return {
+    ...parsed,
+    inputTokens: result.usage?.prompt_tokens || 0,
+    outputTokens: result.usage?.completion_tokens || 0,
   }
 }

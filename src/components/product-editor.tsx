@@ -1,3 +1,4 @@
+import { ProductDescriptionField } from './product-description-field'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductLabelsInfo } from './product-labels'
@@ -321,6 +322,7 @@ export function ProductEditor({
           </Field>
         )}
       </div>
+      <ProductDescriptionField product={draft} workspace={workspace} change={change} disabled={!canManage} />
       <ProductCategorySelector
         product={draft as Item}
         business={workspace.settings[0]}

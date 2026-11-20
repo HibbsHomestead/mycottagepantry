@@ -552,6 +552,7 @@ export function PantryInventory({
             <table>
               <thead>
                 <tr>
+                  <th scope="col">Photo</th>
                   {columns.map(([key, label]) => (
                     <th
                       key={key}
@@ -611,14 +612,17 @@ export function PantryInventory({
                     tone = stockTone(status)
                   return (
                     <tr key={i.id}>
+                      <td>
+                        <PantryPhoto item={i} assets={assets} className="table-thumbnail" />
+                      </td>
                       <td data-label="Item">
                         <div className="inventory-item-heading">
                           {selectionCheckbox(i)}
                           <button
                             className="item-name"
+                            title={i.name}
                             onClick={() => open('ingredient-detail', i)}
                           >
-                            <PantryPhoto item={i} assets={assets} />
                             <span>
                               <strong>{i.name}</strong>
                             </span>

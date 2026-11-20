@@ -294,6 +294,7 @@ function ProductTable({
         <thead>
           <tr>
             {[
+              'Photo',
               'Product name',
               'Product type',
               'Category',
@@ -319,8 +320,12 @@ function ProductTable({
             return (
               <tr key={product.id}>
                 <td>
+                  <PantryPhoto item={product} assets={workspace.graphic_assets || []} kind="product" className="table-thumbnail" />
+                </td>
+                <td>
                   <button
                     className="text-button"
+                    title={product.name}
                     onClick={() => open('product-detail', product)}
                   >
                     {product.name}
@@ -350,14 +355,16 @@ function ProductTable({
                     view={() => open('product-detail', product)}
                     edit={() => open('product', product)}
                   />
-                  <ProductRecordActions product={product} open={open} />
+                  <span className="table-extra-actions">
+                    <ProductRecordActions product={product} open={open} />
+                  </span>
                 </td>
               </tr>
             )
           })}
           {!products.length && (
             <tr>
-              <td colSpan={7}>No products match this view.</td>
+              <td colSpan={8}>No products match this view.</td>
             </tr>
           )}
         </tbody>

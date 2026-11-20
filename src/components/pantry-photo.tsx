@@ -29,11 +29,13 @@ export function PantryPhoto({
   const [opaque, setOpaque] = useState('')
   const asset = assets.find((a) => a.id === item.imageAssetId)
   const originalSrc = asset?.fileUrl
-  const previewWidth = className.includes('detail-photo')
-    ? 800
-    : presentation || kind !== 'pantry' || className.includes('card')
-      ? 480
-      : 128
+  const previewWidth = className.includes('table-thumbnail')
+    ? 128
+    : className.includes('detail-photo')
+      ? 800
+      : presentation || kind !== 'pantry' || className.includes('card')
+        ? 480
+        : 128
   const src = originalSrc?.startsWith('/api/workspace?asset=')
     ? `${originalSrc}&imageWidth=${previewWidth}`
     : originalSrc
