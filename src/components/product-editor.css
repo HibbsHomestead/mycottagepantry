@@ -566,7 +566,7 @@
   flex: none;
   padding: 20px 56px 12px 24px;
 }
-.food-product-dialog .editor-form.editor-product {
+.food-product-dialog .editor-form:is(.editor-product, .editor-recipe) {
   align-items: stretch;
   display: flex !important;
   flex-direction: column;
@@ -728,3 +728,5 @@
 @media (min-width: 1100px) {
   .food-product-scroll > .pricing-summary { grid-row: 1 / span 2; }
 }
+/* Recipes use their own inner grid, spanning the complete shared scroll body. */
+.food-product-dialog .editor-recipe > .food-product-scroll { display: block; }

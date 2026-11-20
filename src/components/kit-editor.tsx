@@ -1,3 +1,4 @@
+import { ItemRemoveButton } from './item-remove-button'
 import { ItemDeleteButton } from './item-deletion'
 import { useState } from 'react'
 import { ItemEditorShell } from './item-editor-shell'
@@ -238,19 +239,15 @@ export function KitEditor({
                   {contribution}
                 </output>
               </div>
-              <button
-                type="button"
-                className="btn secondary kit-component-remove"
-                aria-label={`Remove ${p?.name || line.productId}`}
+              <ItemRemoveButton
+                label={`Remove ${p?.name || line.productId}`}
                 onClick={() =>
                   change(
                     'kitComponents',
                     components.filter((_, i) => i !== index),
                   )
                 }
-              >
-                Remove
-              </button>
+              />
             </div>
             {(costIssue || sourceData.issue) && (
               <p className="kit-component-warning warning-text" role="status">
@@ -371,18 +368,15 @@ export function KitEditor({
               }
             />
           </label>
-          <button
-            type="button"
-            className="btn secondary"
+          <ItemRemoveButton
+            label="Remove packaging"
             onClick={() =>
               change(
                 'packagingLines',
                 packaging.filter((_, i) => i !== index),
               )
             }
-          >
-            Remove packaging
-          </button>
+          />
         </div>
       ))}
       <label className="field">
@@ -435,7 +429,7 @@ export function KitEditor({
   )
   return (
     <ItemEditorShell
-      notice={item && <ItemDeleteButton table="products" item={item} draft />}
+      notice={item && workspace.products.some(p => p.id === item.id) && <ItemDeleteButton table="products" item={item} draft />}
       title={item ? `Kit · ${item.name}` : 'Create kit'}
       description="Fixed contents, one selling price. Current estimates follow current component costs."
       tabs={[

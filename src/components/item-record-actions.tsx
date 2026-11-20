@@ -1,3 +1,4 @@
+import { ItemCopyButton } from './item-copy'
 import { Eye, Pencil } from 'lucide-react'
 import type { Item } from '@/lib/domain'
 import type { DeletableTable } from '@/lib/item-deletion'
@@ -49,7 +50,10 @@ export function ItemRecordActions({
           </button>
         </ActionTip>
       )}
-      <ItemDeleteButton table={table} item={item} />
+      <ItemCopyButton table={table} item={item} />
+      <span className="item-action-destructive">
+        <ItemDeleteButton table={table} item={item} />
+      </span>
     </div>
   )
 }

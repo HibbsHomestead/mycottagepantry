@@ -123,3 +123,15 @@
 .category-input-row > .category-combobox { flex: 1; min-width: 110px; }
 .category-input-row .category-compact-action { margin: 0; flex: 0 0 auto; padding: 6px; }
 .category-input-row .category-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+
+/* Reserve a complete row for category selection and its separate popups. */
+.recipe-identity-fields .category-input-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+.recipe-identity-fields .category-input-row > label {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.recipe-identity-fields .category-input-row select { min-width: 0; }
+.recipe-identity-fields .category-compact-action > span { display: inline; }

@@ -1,6 +1,7 @@
+import { DestructiveConfirmationContent } from './destructive-confirmation'
 import './item-deletion.css'
 import { TooltipProvider } from './ui/tooltip'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Pencil, Copy } from 'lucide-react'
 import { ActionTip } from './action-tip'
 import { DropboxArtworkImport } from './dropbox-artwork-import'
 import { useEffect, useRef, useState } from 'react'
@@ -128,12 +129,12 @@ function DeleteMockup({
         <ActionTip label="Delete mockup">
           <button
             type="button"
-            className="text-button mockup-delete-action item-delete-action"
+            className="btn secondary responsive-action mockup-delete-action item-delete-action"
             aria-label="Delete mockup"
             onClick={() => setOpen(true)}
           >
             <Trash2 size={18} />
-            <span>Delete mockup</span>
+            <span className="responsive-action-label">Delete</span>
           </button>
         </ActionTip>
       </TooltipProvider>
@@ -144,35 +145,41 @@ function DeleteMockup({
             if (!value && !pending.current) setOpen(false)
           }}
         >
-          <DialogContent className="app-dialog" showCloseButton={!busy}>
-            <DialogTitle>Delete “{asset.name}”?</DialogTitle>
-            <DialogDescription>
-              Only this saved mockup is deleted. The product, original Dropbox
-              file, source image and artwork remain available.{' '}
-              {primary
-                ? 'This is the primary product image. It is removed without selecting a replacement.'
-                : 'Other product images remain unchanged.'}
-            </DialogDescription>
-            {error && <p role="alert">{error}</p>}
-            <div className="button-row">
-              <button
-                type="button"
-                className="btn secondary"
-                disabled={busy}
-                onClick={() => setOpen(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn destructive-confirm"
-                disabled={busy}
-                onClick={() => void remove()}
-              >
-                {busy ? 'Deleting…' : 'Delete mockup'}
-              </button>
-            </div>
-          </DialogContent>
+          <DestructiveConfirmationContent
+              busy={busy}
+              title={<> Delete “{asset.name}”? </>}
+              description={
+                <>
+                  Only this saved mockup is deleted. The product, original Dropbox file,
+                  source image and artwork remain available.{' '}
+                  {primary
+                    ? 'This is the primary product image. It is removed without selecting a replacement.'
+                    : 'Other product images remain unchanged.'}
+                </>
+              }
+              actions={
+                <>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={busy}
+                    onClick={() => setOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn destructive-confirm"
+                    disabled={busy}
+                    onClick={() => void remove()}
+                  >
+                    {busy ? 'Deleting…' : 'Delete mockup'}
+                  </button>
+                </>
+              }
+            >
+              {error && <p role="alert">{error}</p>}
+            </DestructiveConfirmationContent>
         </Dialog>
       )}
     </>
@@ -206,7 +213,27 @@ export function ProductMockups(props: Props) {
             )}
             <span>{a.name}</span>
             {props.canEdit && (
-              <>
+              <footer className="item-record-actions mockup-card-actions">
+                <button
+                  type="button"
+                  className="btn secondary responsive-action"
+                  aria-label="Edit mockup"
+                  title="Edit mockup"
+                  onClick={() => setEditing(a)}
+                >
+                  <Pencil size={18} aria-hidden="true" />
+                  <span className="responsive-action-label">Edit</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary responsive-action"
+                  aria-label="Duplicate mockup"
+                  title="Duplicate mockup"
+                  onClick={() => setEditing({ ...a, id: '', name: `${a.name} copy` })}
+                >
+                  <Copy size={18} aria-hidden="true" />
+                  <span className="responsive-action-label">Copy</span>
+                </button>
                 <DeleteMockup
                   asset={a}
                   primary={a.id === props.primaryImageAssetId}
@@ -214,27 +241,10 @@ export function ProductMockups(props: Props) {
                   onWorkspace={props.onWorkspace}
                   onDeleted={() => {
                     if (editing?.id === a.id) setEditing(undefined)
-                    if (a.id === props.primaryImageAssetId)
-                      props.onPrimaryImage?.('')
+                    if (a.id === props.primaryImageAssetId) props.onPrimaryImage?.('')
                   }}
                 />
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => setEditing(a)}
-                >
-                  Edit mockup
-                </button>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() =>
-                    setEditing({ ...a, id: '', name: `${a.name} copy` })
-                  }
-                >
-                  Duplicate mockup
-                </button>
-              </>
+              </footer>
             )}
             <a href={a.fileUrl} download={`${a.name}.png`}>
               Download PNG
@@ -1122,27 +1132,8 @@ function MockupEditor({
                 </label>
               )}
               <div className="button-row">
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={!base || !art}
-                  onClick={() => void save()}
-                >
-                  Save mockup
-                </button>
-                {initial?.id && (
-                  <DeleteMockup
-                    asset={initial}
-                    primary={initial.id === primaryImageAssetId}
-                    productId={productId}
-                    onWorkspace={onWorkspace}
-                    onDeleted={() => {
-                      if (initial.id === primaryImageAssetId)
-                        onPrimaryImage?.('')
-                      close()
-                    }}
-                  />
-                )}
+
+
                 <button
                   type="button"
                   className="btn secondary"
@@ -1167,13 +1158,7 @@ function MockupEditor({
                 >
                   Download JPG
                 </button>
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={requestClose}
-                >
-                  Cancel
-                </button>
+
               </div>
             </fieldset>
             <p className="form-hint">
@@ -1206,6 +1191,33 @@ function MockupEditor({
             )}
           </div>
         </div>
+        <footer className="item-dialog-actions mockup-editor-actions">
+          {initial?.id && (
+            <DeleteMockup
+              asset={initial}
+              primary={initial.id === primaryImageAssetId}
+              productId={productId}
+              onWorkspace={onWorkspace}
+              onDeleted={() => {
+                if (initial.id === primaryImageAssetId) onPrimaryImage?.('')
+                close()
+              }}
+            />
+          )}
+          <div className="product-editor-buttons">
+            <button type="button" className="btn secondary" onClick={requestClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={!base || !art}
+              onClick={() => void save()}
+            >
+              Save mockup
+            </button>
+          </div>
+        </footer>
       </DialogContent>
     </Dialog>
   )

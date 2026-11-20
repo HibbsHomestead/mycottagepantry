@@ -1,3 +1,4 @@
+import { ItemRemoveButton } from './item-remove-button'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { ModuleProductList, ModuleStockSummary } from './module-product-list'
 import { PantryInventory } from './pantry-inventory'
@@ -772,7 +773,7 @@ export function HandmadeProductEditor({
   const content = (
     <div className="handmade-editor">
       <h2>
-        {item ? 'Edit handmade product & BOM' : 'Create handmade product & BOM'}
+        {item && w.products.some(p => p.id === item.id) ? 'Edit handmade product & BOM' : 'Create handmade product & BOM'}
       </h2>
       <p className="muted">
         Save updates the product and BOM together. Inventory and completed runs
@@ -1001,19 +1002,15 @@ export function HandmadeProductEditor({
                       ? money(c.lines[index].cost)
                       : 'Needs review'}
                   </span>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    aria-label={`Remove BOM line ${index + 1}`}
+                  <ItemRemoveButton
+                    label={`Remove BOM line ${index + 1}`}
                     onClick={() =>
                       changeBom(
                         'lines',
                         lines.filter((_, i) => i !== index),
                       )
                     }
-                  >
-                    Remove
-                  </button>
+                  />
                 </div>
               ))}
               <button
@@ -1086,8 +1083,8 @@ export function HandmadeProductEditor({
           )}
         </section>
         {error && <p role="alert">{error}</p>}
-        <footer className="product-editor-actions">
-          {item && (
+        <footer className="product-editor-actions item-dialog-actions">
+          {item && w.products.some(p => p.id === item.id) && (
             <ItemDeleteButton table="products" item={item} draft={dirty} />
           )}
           <div className="product-editor-buttons">

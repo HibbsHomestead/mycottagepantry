@@ -182,7 +182,7 @@ export function ItemEditorShell({
               </Tabs.Root>
             </fieldset>
           </div>
-          <footer className="product-editor-actions">
+          <footer className="product-editor-actions item-dialog-actions">
             {error && (
               <p role="alert" className="form-error">
                 {error}

@@ -68,3 +68,17 @@
     padding: 10px;
   }
 }
+[data-mode='dark'] .item-delete-action,
+[data-mode='dark'] .btn.secondary.item-delete-action {
+  color: var(--danger) !important;
+  background: var(--card);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+[data-mode='dark'] .item-delete-action:hover,
+[data-mode='dark'] .btn.secondary.item-delete-action:hover { background: var(--danger-bg); }
+[data-mode='dark'] .item-delete-action:disabled,
+[data-mode='dark'] .btn.secondary.item-delete-action:disabled {
+  color: var(--muted) !important;
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
