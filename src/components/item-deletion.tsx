@@ -58,6 +58,10 @@ export function ItemDeletionProvider({
   const [target, setTarget] = useState<Target | null>(null)
   const [blockers, setBlockers] = useState<string[]>([])
   const [checking, setChecking] = useState(false)
+  const [ownedOutput, setOwnedOutput] = useState<{
+    id: string
+    name: string
+  } | null>(null)
   const [canArchive, setCanArchive] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -73,6 +77,8 @@ export function ItemDeletionProvider({
           id: current.item.id,
           confirmed: action === 'itemDelete' || action === 'itemArchive',
           expectedName: current.item.name,
+          confirmedOutputId: ownedOutput?.id,
+          expectedOutputName: ownedOutput?.name,
         },
       }),
     })
@@ -99,6 +105,7 @@ export function ItemDeletionProvider({
           )
         if (!cancelled) {
           setBlockers(data.blockers)
+          setOwnedOutput(data.ownedOutput || null)
           setCanArchive(data.canArchive === true)
         }
       })
@@ -117,6 +124,7 @@ export function ItemDeletionProvider({
       value={
         canDelete
           ? (next) => {
+              setOwnedOutput(null)
               setCanArchive(false)
               setChecking(true)
               setError('')
@@ -134,12 +142,24 @@ export function ItemDeletionProvider({
         }}
       >
         <DialogContent className="app-dialog item-delete-dialog">
-          <DialogTitle>Delete {target?.item.name}?</DialogTitle>
+          <DialogTitle>
+            {blockers.length
+              ? `Cannot delete ${target?.item.name}`
+              : `Delete ${target?.item.name}?`}
+          </DialogTitle>
           <DialogDescription>
-            Permanently remove this{' '}
-            {target ? itemType(target.table, target.item) : 'item'} definition
-            from this business. Related records, shared images, artwork and
-            original Dropbox files are never deleted.
+            {blockers.length ? (
+              'Stock, linked records or history prevent permanent deletion. Review the dependencies below; nothing has been removed.'
+            ) : (
+              <>
+                Permanently remove this{' '}
+                {target ? itemType(target.table, target.item) : 'item'}{' '}
+                definition from this business. Only the definition and any
+                explicitly named generated output are removed. Shared images,
+                artwork, original Dropbox files and unrelated records are
+                retained.
+              </>
+            )}
           </DialogDescription>
           <div className="item-delete-body">
             <p>
@@ -150,6 +170,21 @@ export function ItemDeletionProvider({
                   : 'This removes the product and its packaging and tax-assignment setup. Packaging inventory items are retained.'}
             </p>
 
+            {ownedOutput && (
+              <p>
+                This also permanently removes its generated output ingredient “
+                {ownedOutput.name}” (ID: {ownedOutput.id}). Both records are
+                removed together only after stock and dependency checks pass.
+              </p>
+            )}
+            {target?.table === 'recipes' && !!blockers.length && (
+              <p>
+                “No products linked” only describes product links. Prepared
+                inventory, other recipes and history are checked separately.
+                Review the named records in Ingredients or Recipes. Recipe
+                archive is not currently supported; retain historical records.
+              </p>
+            )}
             {target?.draft && (
               <p className="warning-text">
                 Deleting discards the unsaved draft in this editor. It does not
@@ -238,7 +273,7 @@ export function ItemDeletionProvider({
             )}
             <button
               type="button"
-              className="btn item-delete-action"
+              className="btn destructive-confirm"
               disabled={checking || busy || !!blockers.length || !!error}
               onClick={async () => {
                 if (!target || pending.current) return

@@ -2,7 +2,7 @@ import { ActionTip } from './action-tip'
 import { workflowOf } from '@/lib/product-workflows'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { productListMetrics } from '@/lib/product-list'
-import { ItemDeleteButton } from './item-deletion'
+import { ItemRecordActions } from './item-record-actions'
 import { stockUnitLabel } from '@/lib/resale-stock'
 import { productCategoryName } from '@/lib/product-categories'
 import { stockStatus } from '@/lib/ingredients'
@@ -90,7 +90,6 @@ export function ProductCards({
                   {stock}
                 </span>
               )}
-              <ItemDeleteButton table="products" item={product} />
               <ProductRecordActions product={product} open={open} />
             </div>
             {(product.workflow !== 'kit' || product.imageAssetId) && (
@@ -219,18 +218,12 @@ export function ProductCards({
               )}
             </div>
             <footer>
-              <button
-                className="btn secondary"
-                onClick={() => open('product-detail', product)}
-              >
-                View details
-              </button>
-              <button
-                className="btn secondary"
-                onClick={() => open('product', product)}
-              >
-                {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
-              </button>
+              <ItemRecordActions
+                table="products"
+                item={product}
+                view={() => open('product-detail', product)}
+                edit={() => open('product', product)}
+              />
             </footer>
           </article>
         )
@@ -252,6 +245,7 @@ function ProductRecordActions({
   product: Item
   open: (kind: string, product: Item) => void
 }) {
+  if (product.workflow === 'kit') return null
   return (
     <DropdownMenu>
       <ActionTip label={`Actions for ${product.name}`}>
@@ -265,9 +259,6 @@ function ProductRecordActions({
         </DropdownMenuTrigger>
       </ActionTip>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => open('product-detail', product)}>
-          View details
-        </DropdownMenuItem>
         {product.workflow !== 'kit' && (
           <DropdownMenuItem onSelect={() => open('label-preview', product)}>
             Preview Label
@@ -278,9 +269,6 @@ function ProductRecordActions({
             Print Label
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => open('product', product)}>
-          {product.workflow === 'kit' ? 'Edit kit' : 'Edit Product'}
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -356,7 +344,12 @@ function ProductTable({
                   )}
                 </td>
                 <td>
-                  <ItemDeleteButton table="products" item={product} />
+                  <ItemRecordActions
+                    table="products"
+                    item={product}
+                    view={() => open('product-detail', product)}
+                    edit={() => open('product', product)}
+                  />
                   <ProductRecordActions product={product} open={open} />
                 </td>
               </tr>

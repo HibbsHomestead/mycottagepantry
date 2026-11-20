@@ -56,11 +56,90 @@ export function itemDeletionBlockers(
     if (source === 'activity') continue
     for (const record of records) {
       if (source === table && record.id === item.id) continue
-      if (referencesItem({ ...record, id: undefined }, item.id))
-        blockers.push(
-          `${source.replaceAll('_', ' ')}: ${record.name || record.id}`,
-        )
+      if (referencesItem({ ...record, id: undefined }, item.id)) {
+        const name = `${record.name || record.id} (ID: ${record.id})`
+        const relationship =
+          source === 'ingredients' && record.compoundRecipeId === item.id
+            ? `This prep is linked to inventory ingredient ${name}. The ingredient’s compoundRecipeId points to this recipe; review its stock and uses before removal.`
+            : source === 'recipes' && table === 'ingredients'
+              ? `Recipe ${name} uses this inventory ingredient. Review its ingredient/component lines; historical records must be retained.`
+              : `${source.replaceAll('_', ' ')}: ${name} references this ${table === 'recipes' ? 'recipe/prep' : 'item'}. Review the current link; historical records must be retained.`
+        blockers.push(relationship)
+      }
     }
   }
   return [...new Set(blockers)]
+}
+
+/** Only the deterministic output created by the compound-prep save path is owned.
+ * A same-named ingredient or a legacy link with another ID is never inferred to be owned. */
+export function recipeDeletionPlan(workspace: Workspace, recipe: Item) {
+  const visiting = new Set<string>(),
+    visited = new Set<string>()
+  function cyclic(id: string): boolean {
+    if (visiting.has(id)) return true
+    if (visited.has(id)) return false
+    const current = workspace.recipes.find((r) => r.id === id)
+    if (!current) return false
+    visiting.add(id)
+    const children = [
+      current.baseRecipeId,
+      ...(current.lines || []).map(
+        (line: { componentRecipeId?: string; ingredientId: string }) =>
+          line.componentRecipeId ||
+          workspace.ingredients.find((i) => i.id === line.ingredientId)
+            ?.compoundRecipeId,
+      ),
+    ].filter(Boolean) as string[]
+    if (children.some(cyclic)) return true
+    visiting.delete(id)
+    visited.add(id)
+    return false
+  }
+  const cycleBlockers = cyclic(recipe.id)
+    ? [
+        'Circular reference detected in this prep’s recipe/component links. Review the linked recipes with support; no automatic repair is performed.',
+      ]
+    : []
+  const linked = workspace.ingredients.filter(
+    (i) => i.compoundRecipeId === recipe.id,
+  )
+  const output =
+    recipe.compound === true &&
+    linked.length === 1 &&
+    linked[0].id === `prep-${recipe.id}`
+      ? linked[0]
+      : undefined
+  if (!output)
+    return {
+      output: undefined,
+      blockers: [
+        ...cycleBlockers,
+        ...itemDeletionBlockers(workspace, 'recipes', recipe),
+      ],
+    }
+  const reduced = {
+    ...workspace,
+    ingredients: workspace.ingredients.filter((i) => i.id !== output.id),
+  }
+  const blockers = [
+    ...cycleBlockers,
+    ...itemDeletionBlockers(reduced, 'recipes', recipe),
+  ]
+  // Keep the recipe in this check: consuming its own output is a cycle, not ownership.
+  blockers.push(
+    ...itemDeletionBlockers(workspace, 'ingredients', output).map(
+      (message) =>
+        `Output ingredient ${output.name} (ID: ${output.id}): ${message}`,
+    ),
+  )
+  if (
+    referencesItem(recipe.lines || [], output.id) ||
+    referencesItem(recipe.lines || [], recipe.id) ||
+    recipe.baseRecipeId === recipe.id
+  )
+    blockers.push(
+      'Circular reference detected: this prep consumes itself or its own output. Review the recipe component links with support; no automatic repair is performed.',
+    )
+  return { output, blockers: [...new Set(blockers)] }
 }

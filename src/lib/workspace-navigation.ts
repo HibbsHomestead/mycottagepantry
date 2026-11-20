@@ -8,7 +8,9 @@ export const sectionTabs: Record<string, string[]> = {
     'Products & Bills of Materials',
     'Production',
     'Finished Inventory',
+    'Categories',
   ],
+  Resale: ['Overview', 'Items & Stock', 'Receiving', 'Categories'],
   Products: [
     'All Products',
     'Food',

@@ -1,5 +1,5 @@
 import { SummaryCards } from './summary-cards'
-import { ItemDeleteButton } from './item-deletion'
+import { ItemRecordActions } from './item-record-actions'
 import { CatalogViewToggle } from './catalog-controls'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { SectionCategoryTools } from './section-categories'
@@ -38,7 +38,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from './ui/dropdown-menu'
-import { editActionLabel } from '@/lib/item-actions'
 const stockTone = (status: string) =>
   ['Expired', 'Out of stock'].includes(status)
     ? 'pink'
@@ -254,9 +253,8 @@ export function PantryInventory({
             </button>
           ))}
         </div>
-        {actions}
       </div>
-      <div className="toolbar">
+      <div className="toolbar catalog-toolbar">
         <CatalogViewToggle
           label="Pantry display"
           view={view}
@@ -265,6 +263,7 @@ export function PantryInventory({
             onView?.(next)
           }}
         />
+        {actions}
         <label className="search-field">
           <Search size={18} />
           <span className="sr-only">Search pantry</span>
@@ -508,19 +507,12 @@ export function PantryInventory({
                   )}
                 </div>
                 <footer>
-                  <ItemDeleteButton table="ingredients" item={i} />
-                  <button
-                    className="btn secondary"
-                    onClick={() => open('ingredient-detail', i)}
-                  >
-                    View details
-                  </button>
-                  <button
-                    className="btn secondary"
-                    onClick={() => open('ingredient-edit', i)}
-                  >
-                    {editActionLabel(i, 'ingredients')}
-                  </button>
+                  <ItemRecordActions
+                    table="ingredients"
+                    item={i}
+                    view={() => open('ingredient-detail', i)}
+                    edit={() => open('ingredient-edit', i)}
+                  />
                 </footer>
               </article>
             )
@@ -667,7 +659,12 @@ export function PantryInventory({
                       </td>
                       <td data-label="Preferred vendor">{i.vendor || '—'}</td>
                       <td data-label="Actions">
-                        <ItemDeleteButton table="ingredients" item={i} />
+                        <ItemRecordActions
+                          table="ingredients"
+                          item={i}
+                          view={() => open('ingredient-detail', i)}
+                          edit={() => open('ingredient-edit', i)}
+                        />
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -686,11 +683,7 @@ export function PantryInventory({
                             >
                               Print shelf/bin label
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={() => open('ingredient-detail', i)}
-                            >
-                              View item
-                            </DropdownMenuItem>
+
                             <DropdownMenuItem
                               onSelect={() =>
                                 open('receive', {
@@ -775,10 +768,26 @@ export function PantrySummary({ ingredients }: { ingredients: Item[] }) {
       supportsExpiry(i) && i.expires && i.expires >= today && i.expires <= next,
   )
   return (
-    <SummaryCards cards={[
-      { label: 'Pantry value', value: money(ingredients.reduce((s, i) => s + i.quantity * i.cost, 0)), icon: <Package size={21} /> },
-      { label: 'Low stock', value: `${low.length} items`, icon: <TriangleAlert size={21} /> },
-      { label: 'Expiring soon', value: `${expiring.length} items`, icon: <Clock3 size={21} /> },
-    ]} />
+    <SummaryCards
+      cards={[
+        {
+          label: 'Pantry value',
+          value: money(
+            ingredients.reduce((s, i) => s + i.quantity * i.cost, 0),
+          ),
+          icon: <Package size={21} />,
+        },
+        {
+          label: 'Low stock',
+          value: `${low.length} items`,
+          icon: <TriangleAlert size={21} />,
+        },
+        {
+          label: 'Expiring soon',
+          value: `${expiring.length} items`,
+          icon: <Clock3 size={21} />,
+        },
+      ]}
+    />
   )
 }

@@ -1,3 +1,10 @@
+import { Plus, Settings } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from './ui/dialog'
 import {
   categoryScopes,
   productCategoryScope,
@@ -7,7 +14,12 @@ import {
 } from '@/lib/category-details'
 import { SectionCategoryManager } from './section-categories'
 import { useEffect, useId, useRef, useState } from 'react'
-import { applicableTaxes, categoryTaxDescription, type Item, type TaxRate } from '@/lib/domain'
+import {
+  applicableTaxes,
+  categoryTaxDescription,
+  type Item,
+  type TaxRate,
+} from '@/lib/domain'
 import {
   categoryTaxState,
   productCategoryName,
@@ -403,7 +415,8 @@ export function ProductCategoryManager({
   const treatment = (category: ProductCategory) => {
     if (!api.taxReady) return 'Tax settings unavailable — retry required'
     return categoryTaxDescription(category, {
-      id: 'category-tax-preview', name: 'Category tax preview',
+      id: 'category-tax-preview',
+      name: 'Category tax preview',
       productCategories: categories,
       categoryTaxMappings: api.data?.tax?.mappings || {},
       taxRates: api.data?.tax?.rates || [],
@@ -658,9 +671,7 @@ export function ProductCategorySelector({
   const scope = productCategoryScope(product)
   const categories = categoryOrder<ProductCategory>(
     api.data?.categories || business.productCategories || [],
-  ).filter(
-    (c) => productCategoryEligible(c, scope) || c.id === product.productCategoryId,
-  )
+  ).filter((c) => c.scope === scope || c.id === product.productCategoryId)
   const selectedCategory = categories.find(
     (c) => c.id === product.productCategoryId,
   )
@@ -668,8 +679,8 @@ export function ProductCategorySelector({
     ? 'unavailable'
     : selectedCategory.active === false
       ? 'inactive'
-      : !productCategoryEligible(selectedCategory, scope)
-        ? 'in another section'
+      : selectedCategory.scope !== scope
+        ? 'unscoped or in another section · review needed'
         : ''
   const begin = (category?: ProductCategory, name = '') => {
     setId(category?.id || '')
@@ -698,44 +709,52 @@ export function ProductCategorySelector({
           }}
         />
       )}
-      <LoadState api={api} />
-      <div className="category-field-head">
-        <span id={labelId}>Product category</span>
+      {!managing && <LoadState api={api} />}
+      <div className="category-field-label" id={labelId}>
+        Product category
+      </div>
+      <div className="category-input-row">
+        <CategoryCombobox
+          labelledBy={labelId}
+          categories={categories}
+          scope={scope}
+          value={product.productCategoryId || ''}
+          legacyCategory={product.category}
+          disabled={!api.ready || api.loading || api.saving}
+          canAdd={canManage}
+          onSelect={(value) => onChange('productCategoryId', value)}
+          onAdd={(name) => begin(undefined, name)}
+        />
         {canManage && (
           <span className="category-actions">
             <button
               type="button"
-              className="text-button"
+              className="text-button category-compact-action"
               disabled={!api.ready || api.loading || api.saving}
+              aria-label="Add category"
+              title="Add category"
               onClick={() => begin()}
             >
-              Add category
+              <Plus size={18} />
+              <span>Add</span>
             </button>
             <button
               type="button"
-              className="text-button"
-              aria-expanded={managing}
+              className="text-button category-compact-action"
+              aria-label="Manage categories"
+              title="Manage categories"
+              aria-expanded={manageDialog}
               disabled={!api.ready || api.loading}
               onClick={() => {
                 setManageDialog(true)
               }}
             >
-              Manage categories
+              <Settings size={18} />
+              <span>Manage</span>
             </button>
           </span>
-        )}
+        )}{' '}
       </div>
-      <CategoryCombobox
-        labelledBy={labelId}
-        categories={categories}
-        scope={scope}
-        value={product.productCategoryId || ''}
-        legacyCategory={product.category}
-        disabled={!api.ready || api.loading || api.saving}
-        canAdd={canManage}
-        onSelect={(value) => onChange('productCategoryId', value)}
-        onAdd={(name) => begin(undefined, name)}
-      />
       {categories.find((c) => c.id === product.productCategoryId)
         ?.description && (
         <p className="form-hint">
@@ -751,11 +770,14 @@ export function ProductCategorySelector({
           available.
         </p>
       )}
-      {api.ready && !categories.some((c) => c.active !== false && productCategoryEligible(c, scope)) && (
-        <p className="form-hint">
-          No active product categories configured for this section.
-        </p>
-      )}
+      {api.ready &&
+        !categories.some(
+          (c) => c.active !== false && productCategoryEligible(c, scope),
+        ) && (
+          <p className="form-hint">
+            No active product categories configured for this section.
+          </p>
+        )}
       {api.ready && product.productCategoryId && selectedIssue && (
         <p role="status" className="form-hint">
           Your saved category is {selectedIssue}. Its assignment is preserved
@@ -786,66 +808,44 @@ export function ProductCategorySelector({
         )}
       </details>
       {managing && (
-        <div className="category-management">
-          <h4>Manage product categories</h4>
-          <p>
-            Product categories are separate from pantry categories. Renames
-            retain the category ID.
-          </p>
-          {categories.map((c) => (
-            <div className="category-management-row" key={c.id}>
-              <span>
-                {c.name} · {classificationLabel(c.classification)}
-                {c.active === false ? ' · Inactive' : ''}
-              </span>
-              <button
-                type="button"
-                className="text-button"
-                disabled={!api.ready || api.loading || api.saving}
-                onClick={() => begin(c)}
-              >
-                Edit {c.name}
-              </button>
-            </div>
-          ))}
-          <LegacyCategoryReview products={api.data?.products || []} />
-          {api.taxReady &&
-            api.data?.products.some((p) => p.taxSource !== 'category') && (
-              <details>
-                <summary>Review existing product tax assignments</summary>
-                <p>
-                  These products retain their saved taxes. Review each existing
-                  assignment and proposed inheritance before approving a
-                  separate migration. Matching treatments also remain unchanged
-                  until that review.
-                </p>
-                {api.data.products
-                  .filter((p) => p.taxSource !== 'category')
-                  .map((p) => (
-                    <div className="category-management-row" key={p.id}>
-                      <strong>{p.name}</strong>
-                      <ProductTaxSummary product={p} business={business} />
-                    </div>
-                  ))}
-              </details>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !api.saving) {
+              setManaging(false)
+              setEditing(false)
+            }
+          }}
+        >
+          <DialogContent className="app-dialog">
+            <DialogTitle>Add product category</DialogTitle>
+            <LoadState api={api} />
+            <DialogDescription>
+              Category changes save separately. Cancelling the product does not
+              undo a saved category.
+            </DialogDescription>
+            {editing && (
+              <CategoryForm
+                key={id || 'new:' + newName}
+                api={api}
+                category={categories.find((c) => c.id === id)}
+                initialName={newName}
+                scope={scope}
+                onCancel={() => {
+                  setEditing(false)
+                  setManaging(false)
+                }}
+                onSaved={(result) => {
+                  if (!id && result.selectedId)
+                    onChange('productCategoryId', result.selectedId)
+                  setEditing(false)
+                  setManaging(false)
+                  setNewName('')
+                }}
+              />
             )}
-          {editing && (
-            <CategoryForm
-              key={id || 'new:' + newName}
-              api={api}
-              category={categories.find((c) => c.id === id)}
-              initialName={newName}
-              scope={scope}
-              onCancel={() => setEditing(false)}
-              onSaved={(result) => {
-                if (!id && result.selectedId)
-                  onChange('productCategoryId', result.selectedId)
-                setEditing(false)
-                setNewName('')
-              }}
-            />
-          )}
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </section>
   )
@@ -892,12 +892,19 @@ function CategoryCombobox({
   const q = query.trim().toLowerCase()
   const options: { id: string; text: string; add?: boolean }[] = [
     ...(!q ? [{ id: '', text: empty }] : []),
-    ...(value && (!saved || saved.active === false || !productCategoryEligible(saved, scope)) && !q
+    ...(value &&
+    (!saved ||
+      saved.active === false ||
+      !productCategoryEligible(saved, scope)) &&
+    !q
       ? [{ id: value, text: current }]
       : []),
     ...categories
       .filter(
-        (c) => c.active !== false && productCategoryEligible(c, scope) && (!q || c.name.toLowerCase().includes(q)),
+        (c) =>
+          c.active !== false &&
+          productCategoryEligible(c, scope) &&
+          (!q || c.name.toLowerCase().includes(q)),
       )
       .map((c) => ({ id: c.id, text: label(c) })),
   ]
@@ -1236,9 +1243,14 @@ function CategoryTaxSettingsFields({
           {!mappings[key]?.length && (
             <p>
               {api.taxReady
-                ? (api.data?.tax?.rates.some((r) => r.appliesTo === 'classification' && r.classification === key && r.active !== false)
+                ? api.data?.tax?.rates.some(
+                    (r) =>
+                      r.appliesTo === 'classification' &&
+                      r.classification === key &&
+                      r.active !== false,
+                  )
                   ? 'Classification-scoped rules apply automatically, subject to scope and effective dates. No additional mapping selected.'
-                  : 'Not configured — not tax exempt.')
+                  : 'Not configured — not tax exempt.'
                 : 'Tax settings unavailable — retry required.'}
             </p>
           )}

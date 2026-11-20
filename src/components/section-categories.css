@@ -88,3 +88,38 @@
     width: 100%;
   }
 }
+
+.scoped-category-select {
+  align-content: start;
+  gap: 6px;
+}
+.category-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.category-input-row > label {
+  flex: 1;
+  min-width: 110px;
+}
+.category-input-row select {
+  width: 100%;
+}
+.category-compact-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 40px;
+  min-height: 40px;
+  white-space: nowrap;
+}
+@media (max-width: 1024px) {
+  .category-compact-action > span {
+    display: none;
+  }
+}
+.category-input-row > .category-combobox { flex: 1; min-width: 110px; }
+.category-input-row .category-compact-action { margin: 0; flex: 0 0 auto; padding: 6px; }
+.category-input-row .category-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }

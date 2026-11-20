@@ -212,6 +212,7 @@ export function ItemImagesPanel({
       {mockupProductId && (
         <ProductMockups
           productId={mockupProductId}
+          primaryImageAssetId={value.imageAssetId}
           assets={assets}
           canEdit={canUpload && !disabled}
           onWorkspace={onWorkspace}

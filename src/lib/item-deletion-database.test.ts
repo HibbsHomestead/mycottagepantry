@@ -201,6 +201,86 @@ async function insert(table: string, item: Item, org = orgA) {
     )
   await db.exec('SET ROLE category_app')
 }
+it('saves and reopens declared prep units, consumes compatible components and reuses the same output', async () => {
+  for (const [yieldQuantity, yieldUnit, quantity, unit] of [
+    [8, 'oz', 1, 'oz'],
+    [1, 'cup', 1, 'tbsp'],
+    [12, 'each', 2, 'each'],
+    [100, 'g', 25, 'g'],
+  ] as const) {
+    const recipe = {
+      id: `yield-fixture-${yieldUnit}`,
+      name: `Disposable ${yieldUnit} prep`,
+      compound: true,
+      yield: yieldQuantity,
+      yieldUnit,
+      laborMinutes: 0,
+      overhead: 0,
+      lines: [{ ingredientId: 'flour', quantity: 80, unit: 'g' }],
+    }
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const saved = await call(
+        { action: 'save', table: 'recipes', data: recipe },
+        '',
+      )
+      expect(saved.status, saved.error).toBe(200)
+      const outputs = saved.workspace.ingredients.filter(
+        (i: Item) => i.compoundRecipeId === recipe.id,
+      )
+      expect(outputs).toHaveLength(1)
+      expect(outputs[0].unit).toBe(yieldUnit)
+    }
+    const reopened = await call(undefined, '')
+    const persisted = reopened.workspace.recipes.find(
+      (r: Item) => r.id === recipe.id,
+    )
+    expect([persisted.yield, persisted.yieldUnit]).toEqual([
+      yieldQuantity,
+      yieldUnit,
+    ])
+    const consumer = {
+      id: `consumer-${yieldUnit}`,
+      name: `Disposable ${unit} consumer`,
+      yield: 1,
+      yieldUnit: 'loaves',
+      lines: [
+        {
+          ingredientId: `prep-${recipe.id}`,
+          componentRecipeId: recipe.id,
+          quantity,
+          unit,
+        },
+      ],
+    }
+    const savedConsumer = await call(
+      { action: 'save', table: 'recipes', data: consumer },
+      '',
+    )
+    expect(savedConsumer.status, savedConsumer.error).toBe(200)
+    const changed = await call(
+      {
+        action: 'save',
+        table: 'recipes',
+        data: { ...recipe, yieldUnit: yieldUnit === 'g' ? 'kg' : 'g' },
+      },
+      '',
+    )
+    expect(changed.error).toContain('retain its yield unit')
+    if (yieldUnit === 'oz') {
+      const invalid = await call(
+        {
+          action: 'save',
+          table: 'recipes',
+          data: { ...consumer, lines: [{ ...consumer.lines[0], unit: 'cup' }] },
+        },
+        '',
+      )
+      expect(invalid.status).toBeGreaterThanOrEqual(400)
+      expect(invalid.error).toContain('conversion')
+    }
+  }
+})
+
 it('deletes unused items of all types and retains shared assets and immutable deletion audit', async () => {
   for (const [table, workflow] of [
     ['ingredients', 'ingredient'],
@@ -218,6 +298,7 @@ it('deletes unused items of all types and retains shared assets and immutable de
     }
     await insert(table, item)
     const check = await command('itemDeleteCheck', table, item)
+    expect(check.status, check.error).toBe(200)
     expect(check.status, check.error).toBe(200)
     expect(check.blockers).toEqual([])
     const result = await command('itemDelete', table, item)
@@ -419,6 +500,174 @@ it('preserves stock history at zero quantity and rolls back child cleanup if del
         orgA,
         recipe.id,
       ])
+    ).rows,
+  ).toHaveLength(1)
+  await db.exec('SET ROLE category_app')
+})
+
+it('coordinates only a verified unused generated output, with explicit confirmation and persisted deletion', async () => {
+  const recipe = {
+    id: 'unused-compound',
+    name: 'Disposable prep',
+    compound: true,
+    yield: 1,
+    yieldUnit: 'g',
+  }
+  const output = {
+    id: `prep-${recipe.id}`,
+    name: 'Disposable output',
+    compoundRecipeId: recipe.id,
+    quantity: 0,
+  }
+  await insert('recipes', recipe)
+  await insert('ingredients', output)
+  const check = await command('itemDeleteCheck', 'recipes', recipe)
+  expect(check.status, check.error).toBe(200)
+  expect(check.blockers).toEqual([])
+  expect(check.ownedOutput).toEqual({ id: output.id, name: output.name })
+  expect(
+    (await command('itemDelete', 'recipes', recipe)).status,
+  ).toBeGreaterThanOrEqual(400)
+  const result = await call(
+    {
+      action: 'itemDelete',
+      table: 'recipes',
+      data: {
+        id: recipe.id,
+        expectedName: recipe.name,
+        confirmed: true,
+        confirmedOutputId: output.id,
+        expectedOutputName: output.name,
+      },
+    },
+    '',
+  )
+  expect(result.status, result.error).toBe(200)
+  const reload = await call(undefined, '')
+  expect(reload.workspace.recipes.some((r: Item) => r.id === recipe.id)).toBe(
+    false,
+  )
+  expect(
+    reload.workspace.ingredients.some((i: Item) => i.id === output.id),
+  ).toBe(false)
+})
+
+it('retains same-named independent ingredients and blocks used, stocked, historical and circular outputs', async () => {
+  const independent = { id: 'independent-same-name', name: 'Same name' }
+  const standalone = { id: 'standalone-same-name', name: 'Same name' }
+  await insert('ingredients', independent)
+  await insert('recipes', standalone)
+  const deletedStandalone = await command('itemDelete', 'recipes', standalone)
+  expect(deletedStandalone.status, deletedStandalone.error).toBe(200)
+  expect(
+    (await call(undefined, '')).workspace.ingredients.some(
+      (i: Item) => i.id === independent.id,
+    ),
+  ).toBe(true)
+  for (const kind of [
+    'stock',
+    'recipe',
+    'purchase',
+    'production',
+    'sales',
+    'cycle',
+    'ambiguous',
+  ]) {
+    const recipe: Item = {
+      id: `prep-case-${kind}`,
+      name: `Fixture ${kind}`,
+      compound: true,
+      yield: 1,
+      yieldUnit: 'g',
+    }
+    const output = {
+      id: kind === 'ambiguous' ? 'legacy-linked-output' : `prep-${recipe.id}`,
+      name: `Output ${kind}`,
+      compoundRecipeId: recipe.id,
+      quantity: kind === 'stock' ? 1 : 0,
+    }
+    if (kind === 'cycle')
+      recipe.lines = [{ ingredientId: output.id, quantity: 1, unit: 'g' }]
+    await insert('recipes', recipe)
+    await insert('ingredients', output)
+    if (kind === 'recipe')
+      await insert('recipes', {
+        id: 'consumer-prep',
+        name: 'Other recipe uses output',
+        lines: [{ ingredientId: output.id, quantity: 1, unit: 'g' }],
+      })
+    if (['purchase', 'production', 'sales'].includes(kind))
+      await insert(
+        kind === 'purchase'
+          ? 'expenses'
+          : kind === 'production'
+            ? 'batches'
+            : 'sales',
+        {
+          id: `history-${kind}`,
+          name: `Historical ${kind}`,
+          ingredientId: output.id,
+        },
+      )
+    const check = await command('itemDeleteCheck', 'recipes', recipe)
+    expect(check.blockers.length, kind).toBeGreaterThan(0)
+    if (kind === 'cycle')
+      expect(check.blockers.join(' ')).toContain('Circular reference')
+    expect(
+      (await command('itemDelete', 'recipes', recipe)).status,
+    ).toBeGreaterThanOrEqual(400)
+  }
+})
+
+it('rolls back both the owned output and recipe when coordinated deletion fails', async () => {
+  const recipe = {
+    id: 'atomic-prep-failure',
+    name: 'Atomic disposable prep',
+    compound: true,
+    yield: 1,
+    yieldUnit: 'g',
+  }
+  const output = {
+    id: `prep-${recipe.id}`,
+    name: 'Atomic disposable output',
+    compoundRecipeId: recipe.id,
+    quantity: 0,
+  }
+  await insert('recipes', recipe)
+  await insert('ingredients', output)
+  await db.exec(
+    "RESET ROLE; CREATE FUNCTION atomic_prep_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.id='atomic-prep-failure' THEN RAISE EXCEPTION 'Fixture atomic failure'; END IF; RETURN OLD; END $$; CREATE TRIGGER atomic_prep_failure BEFORE DELETE ON recipes FOR EACH ROW EXECUTE FUNCTION atomic_prep_failure(); SET ROLE category_app;",
+  )
+  const result = await call(
+    {
+      action: 'itemDelete',
+      table: 'recipes',
+      data: {
+        id: recipe.id,
+        expectedName: recipe.name,
+        confirmed: true,
+        confirmedOutputId: output.id,
+        expectedOutputName: output.name,
+      },
+    },
+    '',
+  )
+  expect(result.status).toBeGreaterThanOrEqual(400)
+  await db.exec('RESET ROLE')
+  expect(
+    (
+      await db.query('SELECT id FROM recipes WHERE business_id=$1 AND id=$2', [
+        orgA,
+        recipe.id,
+      ])
+    ).rows,
+  ).toHaveLength(1)
+  expect(
+    (
+      await db.query(
+        'SELECT id FROM ingredients WHERE business_id=$1 AND id=$2',
+        [orgA, output.id],
+      )
     ).rows,
   ).toHaveLength(1)
   await db.exec('SET ROLE category_app')

@@ -1,3 +1,7 @@
+import './item-deletion.css'
+import { TooltipProvider } from './ui/tooltip'
+import { Trash2 } from 'lucide-react'
+import { ActionTip } from './action-tip'
 import { DropboxArtworkImport } from './dropbox-artwork-import'
 import { useEffect, useRef, useState } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
@@ -67,6 +71,113 @@ async function upload(file: File, extra?: unknown) {
     )
   return result as { asset: Item; workspace: Workspace }
 }
+function DeleteMockup({
+  asset,
+  primary,
+  productId,
+  onWorkspace,
+  onDeleted,
+}: {
+  asset: Item
+  primary: boolean
+  productId: string
+  onWorkspace: (w: Workspace) => void
+  onDeleted: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const pending = useRef(false)
+  async function remove() {
+    if (pending.current) return
+    pending.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const response = await fetch('/api/workspace?deleteMockup=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId,
+          assetId: asset.id,
+          confirmPrimaryRemoval: primary,
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.workspace)
+        throw new Error(
+          result.error || 'Could not delete this mockup. Try again.',
+        )
+      onWorkspace(result.workspace)
+      setOpen(false)
+      onDeleted()
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Could not connect. Try again; your mockup is preserved.',
+      )
+    } finally {
+      pending.current = false
+      setBusy(false)
+    }
+  }
+  return (
+    <>
+      <TooltipProvider>
+        <ActionTip label="Delete mockup">
+          <button
+            type="button"
+            className="text-button mockup-delete-action item-delete-action"
+            aria-label="Delete mockup"
+            onClick={() => setOpen(true)}
+          >
+            <Trash2 size={18} />
+            <span>Delete mockup</span>
+          </button>
+        </ActionTip>
+      </TooltipProvider>
+      {open && (
+        <Dialog
+          open
+          onOpenChange={(value) => {
+            if (!value && !pending.current) setOpen(false)
+          }}
+        >
+          <DialogContent className="app-dialog" showCloseButton={!busy}>
+            <DialogTitle>Delete “{asset.name}”?</DialogTitle>
+            <DialogDescription>
+              Only this saved mockup is deleted. The product, original Dropbox
+              file, source image and artwork remain available.{' '}
+              {primary
+                ? 'This is the primary product image. It is removed without selecting a replacement.'
+                : 'Other product images remain unchanged.'}
+            </DialogDescription>
+            {error && <p role="alert">{error}</p>}
+            <div className="button-row">
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn destructive-confirm"
+                disabled={busy}
+                onClick={() => void remove()}
+              >
+                {busy ? 'Deleting…' : 'Delete mockup'}
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  )
+}
 export function ProductMockups(props: Props) {
   const [editing, setEditing] = useState<Item | null | undefined>(undefined)
   const saved = props.assets.filter(
@@ -96,6 +207,17 @@ export function ProductMockups(props: Props) {
             <span>{a.name}</span>
             {props.canEdit && (
               <>
+                <DeleteMockup
+                  asset={a}
+                  primary={a.id === props.primaryImageAssetId}
+                  productId={props.productId}
+                  onWorkspace={props.onWorkspace}
+                  onDeleted={() => {
+                    if (editing?.id === a.id) setEditing(undefined)
+                    if (a.id === props.primaryImageAssetId)
+                      props.onPrimaryImage?.('')
+                  }}
+                />
                 <button
                   type="button"
                   className="text-button"
@@ -156,6 +278,7 @@ function MockupEditor({
   productId,
   onWorkspace,
   onPrimaryImage,
+  primaryImageAssetId,
   initial,
   close,
 }: Props & { initial: Item | null; close: () => void }) {
@@ -1007,6 +1130,19 @@ function MockupEditor({
                 >
                   Save mockup
                 </button>
+                {initial?.id && (
+                  <DeleteMockup
+                    asset={initial}
+                    primary={initial.id === primaryImageAssetId}
+                    productId={productId}
+                    onWorkspace={onWorkspace}
+                    onDeleted={() => {
+                      if (initial.id === primaryImageAssetId)
+                        onPrimaryImage?.('')
+                      close()
+                    }}
+                  />
+                )}
                 <button
                   type="button"
                   className="btn secondary"

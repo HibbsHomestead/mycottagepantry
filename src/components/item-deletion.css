@@ -10,8 +10,39 @@
 .responsive-action svg {
   flex-shrink: 0;
 }
-.item-delete-action {
-  color: var(--destructive, #a13935) !important;
+.item-delete-action,
+.btn.secondary.item-delete-action {
+  color: #a12622 !important;
+  background: #fff8f7;
+  border-color: #e5b5b2;
+}
+.item-delete-action:hover,
+.btn.secondary.item-delete-action:hover {
+  color: #811b18 !important;
+  background: #fce7e5;
+  border-color: #bb3c35;
+}
+.item-delete-action:focus-visible,
+.destructive-confirm:focus-visible {
+  outline: 3px solid #b42318;
+  outline-offset: 3px;
+}
+.btn.destructive-confirm {
+  color: #fff !important;
+  background: #b42318;
+  border-color: #b42318;
+}
+.btn.destructive-confirm:hover {
+  color: #fff !important;
+  background: #8f1c13;
+  border-color: #8f1c13;
+}
+.btn.destructive-confirm:disabled {
+  color: #fff !important;
+  background: #746663;
+  border-color: #746663;
+  opacity: 1;
+  cursor: not-allowed;
 }
 .item-delete-dialog {
   display: flex;

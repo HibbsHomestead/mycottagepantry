@@ -103,14 +103,14 @@ it('keeps the saved selection visible during search and selects a newly created 
   expect(screen.getByLabelText('Draft')).toHaveTextContent(
     '"productCategoryId":"bread"',
   )
+  await userEvent.clear(screen.getByLabelText('Product name'))
+  await userEvent.type(screen.getByLabelText('Product name'), 'Edited loaf')
   await userEvent.clear(combo)
   await userEvent.type(combo, 'Gift boxes')
   await userEvent.click(
     screen.getByRole('option', { name: 'Add “Gift boxes” as a category' }),
   )
   expect(screen.getByLabelText('Category name')).toHaveValue('Gift boxes')
-  await userEvent.clear(screen.getByLabelText('Product name'))
-  await userEvent.type(screen.getByLabelText('Product name'), 'Edited loaf')
   await userEvent.selectOptions(
     screen.getByLabelText('Classification', { exact: true }),
     'non_food',
@@ -121,6 +121,7 @@ it('keeps the saved selection visible during search and selects a newly created 
       '"productCategoryId":"gifts"',
     ),
   )
+  await userEvent.click(screen.getByLabelText('Product name'))
   expect(combo).toHaveValue('Gift boxes · Non-food')
   expect(screen.getByLabelText('Product name')).toHaveValue('Edited loaf')
   expect(screen.getByLabelText('Draft')).toHaveTextContent('"price":19')
@@ -165,6 +166,7 @@ it('retains the selected ID and draft after retryable loading or save failures, 
     'Duplicate category',
   )
   expect(screen.getByLabelText('Category name')).toHaveValue('Bread')
+  await userEvent.keyboard('{Escape}')
   expect(
     screen.getByRole('combobox', { name: 'Product category' }),
   ).toHaveValue('Bread · Food')
@@ -300,7 +302,9 @@ it('shows the real category list first, searches records and names products affe
   )!
   expect(within(bread).getByText('Food')).toBeVisible()
   expect(within(bread).getByText('1')).toBeVisible()
-  expect(within(bread).getByText('State treatment · Test · 5% · exclusive')).toBeVisible()
+  expect(
+    within(bread).getByText('State treatment · Test · 5% · exclusive'),
+  ).toBeVisible()
   expect(
     within(bread).getByRole('button', { name: 'Archive Bread' }),
   ).toBeEnabled()
@@ -328,7 +332,9 @@ it('shows the real category list first, searches records and names products affe
   await screen.findByText('Category updated. Product associations preserved.')
   await userEvent.clear(screen.getByLabelText('Search categories'))
   expect(await screen.findByRole('heading', { name: 'Loaves' })).toBeVisible()
-  expect(screen.getAllByText(/Tax treatment not configured/).length).toBeGreaterThan(0)
+  expect(
+    screen.getAllByText(/Tax treatment not configured/).length,
+  ).toBeGreaterThan(0)
 })
 
 it('uses honest loading and permission-error states, then offers first-category creation after a successful empty load', async () => {
