@@ -174,12 +174,12 @@ it('opens existing detail and product editing flows from the photo, title, foote
   for (const name of [
     `View photo and details for ${product.name}`,
     product.name,
-    'View details',
+    `View details for ${product.name}`,
   ]) {
     await user.click(screen.getByRole('button', { name }))
     expect(open).toHaveBeenLastCalledWith('product-detail', product)
   }
-  await user.click(screen.getByRole('button', { name: 'Edit Product' }))
+  await user.click(screen.getByRole('button', { name: `Edit ${product.name}` }))
   expect(open).toHaveBeenLastCalledWith('product', product)
   open.mockClear()
   await user.click(
@@ -187,7 +187,7 @@ it('opens existing detail and product editing flows from the photo, title, foote
   )
   await user.keyboard('{ArrowDown}{End}{Enter}')
   expect(open).toHaveBeenCalledOnce()
-  expect(open).toHaveBeenLastCalledWith('product', product)
+  expect(open).toHaveBeenLastCalledWith('label-print', product)
 })
 
 it('preserves the supplied filtered record order and offers a readable empty state', () => {

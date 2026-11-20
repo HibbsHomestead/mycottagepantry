@@ -2047,7 +2047,9 @@ export function IngredientDetail({
           )}
         </div>
         {!editing && !offerEdit && (
-          <footer className="ingredient-detail-footer ingredient-detail-actions">
+          <footer className="item-dialog-actions ingredient-detail-footer ingredient-detail-actions">
+            <ItemDeleteButton table="ingredients" item={i} />
+            <button type="button" className="btn secondary" onClick={close}>Close</button>
             <CatalogAction
               label={editActionLabel(i, 'ingredients')}
               disabled={!canEdit}
@@ -2055,7 +2057,6 @@ export function IngredientDetail({
             >
               <Pencil size={18} />
             </CatalogAction>
-            <ItemDeleteButton table="ingredients" item={i} />
             <CatalogAction
               label="Print shelf/bin label"
               onClick={() => open('shelf-label', i)}
@@ -2065,7 +2066,7 @@ export function IngredientDetail({
           </footer>
         )}
         {(editing || offerEdit) && (
-          <footer className="ingredient-detail-footer">
+          <footer className="item-dialog-actions ingredient-detail-footer">
             <ItemDeleteButton table="ingredients" item={i} draft={dirty} />
             <Fragment key="edit-actions">
               <button

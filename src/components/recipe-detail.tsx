@@ -1,3 +1,4 @@
+import { ItemCopyButton } from './item-copy'
 import { ItemDeleteButton } from './item-deletion'
 import { useRef, useState } from 'react'
 import { recipeCategories, recipeCategoryLabel } from '@/lib/recipe-categories'
@@ -636,7 +637,7 @@ export function RecipeDetail({
           </p>
         )}
       </div>
-      <footer className="recipe-detail-footer">
+      <footer className="recipe-detail-footer item-dialog-actions">
         <ItemDeleteButton table="recipes" item={r} />
         {stage === 'details' ? (
           <>
@@ -668,6 +669,7 @@ export function RecipeDetail({
             >
               Edit Recipe
             </button>
+            {canEdit && <ItemCopyButton table="recipes" item={r} />}
           </>
         ) : (
           <>

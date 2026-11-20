@@ -4,7 +4,7 @@
   white-space: normal;
 }
 .product-card footer .btn {
-  white-space: normal;
+  white-space: nowrap;
 }
 
 /* Product-overview styles leave inventory cards, detail dialogs and editors alone. */
@@ -108,26 +108,9 @@
 }
 
 .product-card-photo-first footer {
-  padding: 16px 20px;
+  padding: 16px;
   gap: 10px;
   display: block;
-}
-
-.product-card-photo-first footer .btn {
-  min-height: 42px;
-  padding: 10px;
-  font-size: max(var(--interface-text-min, 0px), 12px);
-  border-radius: 8px;
-}
-
-.product-card-photo-first footer .btn:first-child {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
-.product-card-photo-first footer .btn:first-child:hover {
-  background: var(--primary-hover);
 }
 
 .product-card-photo-first button:focus-visible {

@@ -1,3 +1,6 @@
+import { ItemRemoveButton } from './item-remove-button'
+import { ItemCopyProvider, ItemCopyButton } from './item-copy'
+import { copyDefinition } from '@/lib/item-copy'
 import { RecipeYieldFields } from './recipe-yield-fields'
 import { ResaleWorkspace } from './resale-workspace'
 import { ItemRecordActions } from './item-record-actions'
@@ -877,7 +880,7 @@ export function WorkspaceApp() {
     go('Products', 'All Products')
     open('product-detail', product)
   }
-  function open(kind: string, item?: Item) {
+  function open(kind: string, item?: Item, newDraft = false) {
     if (
       modal === 'product-detail' &&
       selected &&
@@ -928,7 +931,7 @@ export function WorkspaceApp() {
         method: 'POST',
         url: new URL('/api/workspace', window.location.origin),
         body: { action, table, data: record },
-        existing: item,
+        existing: newDraft ? undefined : item,
       })
       if (!decision.allowed) {
         toast.error(
@@ -1109,7 +1112,7 @@ export function WorkspaceApp() {
     setSelected(
       original && ['receive', 'adjust'].includes(kind)
         ? original
-        : item || null,
+        : newDraft ? null : item || null,
     )
     setFormError('')
     setIngredientErrors({})
@@ -1497,7 +1500,12 @@ export function WorkspaceApp() {
   const activeNavigation = page === 'Recipes' ? 'Recipes' : route.section
   if (!ready) return <OvenLoading error={error} retry={() => void load()} />
   return (
-    <ItemDeletionProvider canDelete={ready && ['Owner', 'Manager'].includes(role)} onWorkspace={setState} onDeleted={() => {
+    <ItemCopyProvider enabled={ready && ['Owner', 'Manager'].includes(role)} onCopy={(table, item) => {
+      if (!['Owner', 'Manager'].includes(role)) return
+      const copied = copyDefinition(item, table, state)
+      open(table === 'recipes' ? 'recipe' : 'product', copied, true)
+    }}>
+    <ItemDeletionProvider workspace={state} canDelete={ready && ['Owner', 'Manager'].includes(role)} onWorkspace={setState} onDeleted={() => {
       setModal(null); setFormDirty(false); workflowDirty.current = false; setSelected(null)
     }}>
     <div className="app-shell stage-one-shell">
@@ -3616,7 +3624,7 @@ export function WorkspaceApp() {
           showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
-          className={`app-dialog ${modal === 'product' ? 'food-product-dialog' : ''} ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production', 'event-source'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
+          className={`app-dialog ${['product', 'recipe'].includes(modal || '') ? 'food-product-dialog' : ''} ${['recipe', 'recipe-detail', 'product', 'product-detail', 'report', 'production', 'event-source'].includes(modal || '') ? 'wide-dialog' : ''} ${modal === 'recipe-detail' ? 'recipe-detail-shell' : modal === 'product-detail' ? 'item-detail-dialog' : modal === 'settings' ? 'business-details-dialog' : ''}`}
         >
           {modal === 'product-detail' && selected ? (
             <ItemDetailHeader name={selected.name} close>
@@ -3745,7 +3753,7 @@ export function WorkspaceApp() {
               noValidate={modal === 'ingredient'}
               className={`editor-form editor-${modal}`}
             >
-              <ProductFormBody enabled={modal === 'product'}>
+              <ProductFormBody enabled={['product', 'recipe'].includes(modal || '')}>
               {modal === 'import' && (
                 <>
                   <Field label="Record type">
@@ -4328,7 +4336,7 @@ export function WorkspaceApp() {
                 />
               )}
               {modal === 'recipe' && (
-                <>
+                <div className="recipe-editor-layout">
                   {componentPicker && (
                     <RecipeComponentPicker
                       recipes={recipes}
@@ -4357,266 +4365,268 @@ export function WorkspaceApp() {
                       }}
                     />
                   )}
-                  <Field label="Recipe name">
-                    {input('name', 'text', 'e.g. Homestyle White Bread')}
-                  </Field>
-                  <RecipeBaseFields
-                    recipe={{
-                      ...draft,
-                      id: draft.id || 'preview',
-                      name: draft.name || 'Recipe',
-                      lines,
-                    }}
-                    recipes={recipes}
-                    ingredients={ingredients}
-                    change={change}
-                  />
-                  <div className="form-grid">
-                    <ScopedCategorySelect
-                      workspace={state}
-                      scope="recipes"
-                      item={draft as Item}
-                      canManage={ready && ['Owner', 'Manager'].includes(role)}
-                      onSettings={categorySettings}
-                      onChange={change}
-                    />
-                    <Field label="Description">{input('description')}</Field>
-                    <RecipeYieldFields
-                      recipe={draft}
-                      onChange={change}
-                      linkedOutputUnit={state.ingredients.find(i => i.compoundRecipeId === draft.id)?.unit}
-                    />
-                  </div>
-                  <div className="form-section-title">
-                    <h3>
-                      1 · {draft.baseRecipeId ? 'Inclusions' : 'Ingredients'}
-                    </h3>
-                    <div className="recipe-add-actions">
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => {
-                          setFormDirty(true)
-                          setLines((l) => [
-                            ...l,
-                            {
-                              ingredientId: ingredients[0].id,
-                              quantity: 100,
-                              unit: 'g',
-                            },
-                          ])
+                  <section className="recipe-editor-identity">
+                    <Field label="Recipe name">
+                      {input('name', 'text', 'e.g. Homestyle White Bread')}
+                    </Field>
+                    <div className="recipe-identity-fields">
+                      <ScopedCategorySelect
+                        workspace={state}
+                        scope="recipes"
+                        item={draft as Item}
+                        canManage={ready && ['Owner', 'Manager'].includes(role)}
+                        onSettings={categorySettings}
+                        onChange={change}
+                      />
+                      <Field label="Description">{input('description')}</Field>
+                      <RecipeBaseFields
+                        recipe={{
+                          ...draft,
+                          id: draft.id || 'preview',
+                          name: draft.name || 'Recipe',
+                          lines,
                         }}
-                      >
-                        <Plus size={15} />
-                        Add ingredient
-                      </button>
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => setComponentPicker(true)}
-                      >
-                        <Plus size={15} />
-                        Add recipe component
-                      </button>
+                        recipes={recipes}
+                        ingredients={ingredients}
+                        change={change}
+                      />
+                      <RecipeYieldFields
+                        recipe={draft}
+                        onChange={change}
+                        linkedOutputUnit={
+                          state.ingredients.find((i) => i.compoundRecipeId === draft.id)
+                            ?.unit
+                        }
+                      />
                     </div>
-                  </div>
-                  {lines.map((line, index) => {
-                    const prep = recipeIngredients.find(
-                      (i) => i.id === line.ingredientId,
-                    )
-                    const source = recipes.find(
-                      (r) =>
-                        r.id ===
-                        (line.componentRecipeId || prep?.compoundRecipeId),
-                    )
-                    return (
-                      <div className="recipe-line-editor" key={index}>
-                        {source ? (
-                          <div className="recipe-component-source">
-                            <strong>{source.name}</strong>
-                            <small>
-                              Finished yield: {source.yield}{' '}
-                              {unitLabel(source.yieldUnit)}
-                            </small>
-                            <small>
-                              Use prepared stock · estimate follows source
-                              recipe
-                            </small>
-                            <a
-                              className="text-button"
-                              href={`/oven?recipe=${encodeURIComponent(source.id)}#Recipes`}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                  </section>
+                  <section className="recipe-editor-components">
+                    <div className="form-section-title">
+                      <h3>1 · {draft.baseRecipeId ? 'Inclusions' : 'Ingredients'}</h3>
+                      <div className="recipe-add-actions">
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => {
+                            setFormDirty(true)
+                            setLines((l) => [
+                              ...l,
+                              {
+                                ingredientId: ingredients[0].id,
+                                quantity: 100,
+                                unit: 'g',
+                              },
+                            ])
+                          }}
+                        >
+                          <Plus size={15} />
+                          Add ingredient
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() => setComponentPicker(true)}
+                        >
+                          <Plus size={15} />
+                          Add recipe component
+                        </button>
+                      </div>
+                    </div>
+                    {lines.map((line, index) => {
+                      const prep = recipeIngredients.find(
+                        (i) => i.id === line.ingredientId,
+                      )
+                      const source = recipes.find(
+                        (r) =>
+                          r.id === (line.componentRecipeId || prep?.compoundRecipeId),
+                      )
+                      return (
+                        <div className="recipe-line-editor" key={index}>
+                          {source ? (
+                            <div className="recipe-component-source">
+                              <strong>{source.name}</strong>
+                              <small>
+                                Finished yield: {source.yield}{' '}
+                                {unitLabel(source.yieldUnit)}
+                              </small>
+                              <small>
+                                Use prepared stock · estimate follows source recipe
+                              </small>
+                              <a
+                                className="text-button"
+                                href={`/oven?recipe=${encodeURIComponent(source.id)}#Recipes`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Open recipe
+                              </a>
+                            </div>
+                          ) : (
+                            <select
+                              aria-label={`Ingredient ${index + 1}`}
+                              value={line.ingredientId}
+                              onChange={(e) =>
+                                setLines((ls) =>
+                                  ls.map((l, i) =>
+                                    i === index
+                                      ? { ...l, ingredientId: e.target.value }
+                                      : l,
+                                  ),
+                                )
+                              }
                             >
-                              Open recipe
-                            </a>
-                          </div>
-                        ) : (
-                          <select
-                            aria-label={`Ingredient ${index + 1}`}
-                            value={line.ingredientId}
+                              {ingredients
+                                .filter((i) => i.usedAs === 'ingredient')
+                                .map((i) => (
+                                  <option key={i.id} value={i.id}>
+                                    {i.name}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                          <input
+                            type="text"
+                            aria-label="Ingredient quantity"
+                            min="0.000001"
+                            step="any"
+                            value={line.quantity}
                             onChange={(e) =>
                               setLines((ls) =>
                                 ls.map((l, i) =>
-                                  i === index
-                                    ? { ...l, ingredientId: e.target.value }
-                                    : l,
+                                  i === index ? { ...l, quantity: e.target.value } : l,
+                                ),
+                              )
+                            }
+                          />
+                          <select
+                            aria-label="Recipe unit"
+                            value={line.unit}
+                            onChange={(e) =>
+                              setLines((ls) =>
+                                ls.map((l, i) =>
+                                  i === index ? { ...l, unit: e.target.value } : l,
                                 ),
                               )
                             }
                           >
-                            {ingredients
-                              .filter((i) => i.usedAs === 'ingredient')
-                              .map((i) => (
-                                <option key={i.id} value={i.id}>
-                                  {i.name}
-                                </option>
-                              ))}
+                            {Object.keys(
+                              ingredientUnits(
+                                recipeIngredients.find((i) => i.id === line.ingredientId)
+                                  ?.conversions,
+                              ),
+                            ).map((u) => (
+                              <option key={u} value={u}>
+                                {unitLabel(u)}
+                              </option>
+                            ))}
                           </select>
-                        )}
-                        <input
-                          type="text"
-                          aria-label="Ingredient quantity"
-                          min="0.000001"
-                          step="any"
-                          value={line.quantity}
-                          onChange={(e) =>
-                            setLines((ls) =>
-                              ls.map((l, i) =>
-                                i === index
-                                  ? { ...l, quantity: e.target.value }
-                                  : l,
-                              ),
-                            )
-                          }
-                        />
-                        <select
-                          aria-label="Recipe unit"
-                          value={line.unit}
-                          onChange={(e) =>
-                            setLines((ls) =>
-                              ls.map((l, i) =>
-                                i === index
-                                  ? { ...l, unit: e.target.value }
-                                  : l,
-                              ),
-                            )
-                          }
-                        >
-                          {Object.keys(
-                            ingredientUnits(
-                              recipeIngredients.find(
-                                (i) => i.id === line.ingredientId,
-                              )?.conversions,
-                            ),
-                          ).map((u) => (
-                            <option key={u} value={u}>
-                              {unitLabel(u)}
-                            </option>
-                          ))}
-                        </select>
-                        <RecipeLineCost
-                          line={line}
-                          ingredients={recipeIngredients}
-                        />
-                        <button
-                          type="button"
-                          className="icon-button item-delete-action"
-                          aria-label="Remove ingredient"
-                          onClick={() => {
-                            setFormDirty(true)
-                            setLines((ls) => ls.filter((_, i) => i !== index))
-                          }}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )
-                  })}
-                  <h3>2 · Yield & labor</h3>
-                  <div className="form-grid three">
-                    <Field
-                      label="Labor (minutes)"
-                      hint={
-                        draft.baseRecipeId
-                          ? 'Total time for this entire recipe batch, including the base.'
-                          : undefined
-                      }
-                    >
-                      {input('laborMinutes', 'number')}
-                    </Field>
-                    <Field label="Labor rate ($ / h)">
-                      {input('laborRate', 'number')}
-                    </Field>
-                    <Field label="Overhead amount ($ or %)">
-                      {input('overhead', 'number')}
-                    </Field>
-                  </div>
-                  <details className="form-step">
-                    <summary>Overhead & waste settings</summary>
+                          <RecipeLineCost line={line} ingredients={recipeIngredients} />
+                          <ItemRemoveButton
+                            label="Remove ingredient"
+                            onClick={() => {
+                              setFormDirty(true)
+                              setLines((ls) => ls.filter((_, i) => i !== index))
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </section>
+                  <section className="recipe-editor-labor">
+                    <h3>2 · Labor</h3>
                     <div className="form-grid">
-                      <Field label="Overhead calculation">
-                        {select('overheadMode', [
-                          { value: 'batch', label: 'Flat amount per batch' },
-                          {
-                            value: 'unit',
-                            label: 'Flat amount per finished item',
-                          },
-                          {
-                            value: 'percent',
-                            label:
-                              'Percent of ingredients, packaging and labor',
-                          },
-                        ])}
-                      </Field>
-                      <Field label="Waste method">
-                        {select('wasteMode', [
-                          { value: 'percent', label: 'Percentage allowance' },
-                          {
-                            value: 'actual',
-                            label: 'Actual additional waste cost',
-                          },
-                        ])}
-                      </Field>
-                      <Field label="Waste allowance (%)">
-                        {input('wastePercent', 'number')}
-                      </Field>
                       <Field
-                        label="Additional actual waste cost ($)"
-                        hint="Use only for costs outside recorded ingredient usage, to avoid counting waste twice."
+                        label="Labor (minutes)"
+                        hint={
+                          draft.baseRecipeId
+                            ? 'Total time for this entire recipe batch, including the base.'
+                            : undefined
+                        }
                       >
-                        {input('wasteCost', 'number')}
+                        {input('laborMinutes', 'number')}
+                      </Field>
+                      <Field label="Labor rate ($ / h)">
+                        {input('laborRate', 'number')}
                       </Field>
                     </div>
-                  </details>
-                  <p className="muted recipe-packaging-note">
-                    3 · Packaging is assigned to sellable products, so each
-                    package uses its own bags, boxes, and labels.
-                  </p>
-                  <RecipeCalculation
-                    recipe={{
-                      ...draft,
-                      baseRecipe: recipes.find(
-                        (r) => r.id === draft.baseRecipeId,
-                      ),
-                      id: draft.id || 'preview',
-                      name: draft.name || 'Recipe',
-                      lines,
-                    }}
-                    ingredients={recipeIngredients}
-                    onConversion={(data) =>
-                      mutate('conversion', 'ingredients', data)
-                    }
-                  />
-                  <Field label="Instructions">
-                    <textarea
-                      rows={4}
-                      value={draft.instructions || ''}
-                      onChange={(e) => change('instructions', e.target.value)}
-                      placeholder="Mix, rest, shape, bake…"
+                  </section>
+                  <aside className="recipe-editor-summary" aria-label="Live recipe cost">
+                    {' '}
+                    <RecipeCalculation
+                      recipe={{
+                        ...draft,
+                        baseRecipe: recipes.find((r) => r.id === draft.baseRecipeId),
+                        id: draft.id || 'preview',
+                        name: draft.name || 'Recipe',
+                        lines,
+                      }}
+                      ingredients={recipeIngredients}
+                      onConversion={(data) => mutate('conversion', 'ingredients', data)}
                     />
-                  </Field>
-                </>
+                    <section
+                      className="recipe-editor-overhead panel"
+                      aria-label="Overhead & waste"
+                    >
+                      <h3>Overhead &amp; waste</h3>
+                      <Field label="Overhead amount ($ or %)">
+                        {input('overhead', 'number')}
+                      </Field>
+                      <div className="form-grid">
+                        <Field label="Overhead calculation" hint={
+                        draft.overheadMode === 'percent'
+                          ? 'Percent of ingredients, packaging and labor.'
+                          : draft.overheadMode === 'unit'
+                            ? 'Flat amount per finished item.'
+                            : 'Flat amount per batch.'
+                      }>
+                          {select('overheadMode', [
+                            { value: 'batch', label: 'Flat amount per batch' },
+                            {
+                              value: 'unit',
+                              label: 'Flat amount per finished item',
+                            },
+                            {
+                              value: 'percent',
+                              label: 'Percent of ingredients, packaging and labor',
+                            },
+                          ])}
+                        </Field>
+                        <Field label="Waste method">
+                          {select('wasteMode', [
+                            { value: 'percent', label: 'Percentage allowance' },
+                            {
+                              value: 'actual',
+                              label: 'Actual additional waste cost',
+                            },
+                          ])}
+                        </Field>
+                        <Field label="Waste allowance (%)">
+                          {input('wastePercent', 'number')}
+                        </Field>
+                        <Field
+                          label="Additional actual waste cost ($)"
+                          hint="Use only for costs outside recorded ingredient usage, to avoid counting waste twice."
+                        >
+                          {input('wasteCost', 'number')}
+                        </Field>
+                      </div>
+                    </section>
+                  </aside>
+                  <section className="recipe-editor-notes">
+                    <p className="muted recipe-packaging-note">
+                      3 · Packaging is assigned to sellable products, so each package uses
+                      its own bags, boxes, and labels.
+                    </p>
+                    <Field label="Instructions">
+                      <textarea
+                        rows={4}
+                        value={draft.instructions || ''}
+                        onChange={(e) => change('instructions', e.target.value)}
+                        placeholder="Mix, rest, shape, bake…"
+                      />
+                    </Field>
+                  </section>
+                </div>
               )}
               {modal === 'product' && (
                 <Tabs.Root
@@ -5429,7 +5439,7 @@ export function WorkspaceApp() {
                 </div>
               )}
               </ProductFormBody>
-              <div className="form-footer">
+              <div className="form-footer item-dialog-actions">
                 {modal === 'recipe' && selected && <ItemDeleteButton table="recipes" item={selected} draft={formDirty} />}
                 {modal === 'product' && selected && <ItemDeleteButton table="products" item={selected} draft={formDirty} />}
                 {modal === 'ingredient' && formError && (
@@ -5683,7 +5693,7 @@ export function WorkspaceApp() {
                       )}
                     </p>
                   )}
-                  <div className="button-row product-detail-toolbar">
+                  <div className="button-row product-detail-toolbar item-dialog-actions">
                     <ItemDeleteButton table="products" item={selected} />
                     <Btn secondary onClick={() => setModal(null)}>
                       Close
@@ -5701,6 +5711,7 @@ export function WorkspaceApp() {
                         Edit Product
                       </Btn>
                     )}
+                    <ItemCopyButton table="products" item={selected} />
                     {selected.workflow !== 'resale' && (
                       <Btn
                         disabled={!ready}
@@ -6208,7 +6219,7 @@ export function WorkspaceApp() {
         </article>
       )}
     </div>
-    </ItemDeletionProvider>
+    </ItemDeletionProvider></ItemCopyProvider>
   )
 }
 function Stat({

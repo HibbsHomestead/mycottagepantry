@@ -1,3 +1,4 @@
+import { DestructiveConfirmationContent } from './destructive-confirmation'
 import {
   createContext,
   useContext,
@@ -13,19 +14,18 @@ import {
   fetchWorkspaceWithDiagnostics,
   readWorkspaceJsonWithDiagnostics,
 } from '@/lib/inventory-error-details'
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from './ui/dialog'
+import { Dialog } from './ui/dialog'
 import { ActionTip } from './action-tip'
 import './item-deletion.css'
 
 type Target = { table: DeletableTable; item: Item; draft?: boolean }
+const SavedRecordContext = createContext<Workspace | null>(null)
 const DeletionContext = createContext<((target: Target) => void) | null>(null)
 export function ItemDeleteButton({ table, item, draft = false }: Target) {
   const request = useContext(DeletionContext)
+  const workspace = useContext(SavedRecordContext)
+  if (workspace && !workspace[table]?.some((row) => row.id === item.id))
+    return null
   if (!request) return null
   return (
     <ActionTip label={`Delete ${item.name}`}>
@@ -47,11 +47,13 @@ export function ItemDeleteButton({ table, item, draft = false }: Target) {
 export function ItemDeletionProvider({
   children,
   canDelete,
+  workspace,
   onWorkspace,
   onDeleted,
 }: {
   children: ReactNode
   canDelete: boolean
+  workspace?: Workspace
   onWorkspace: (workspace: Workspace) => void
   onDeleted: () => void
 }) {
@@ -120,48 +122,133 @@ export function ItemDeletionProvider({
     }
   }, [target])
   return (
-    <DeletionContext.Provider
-      value={
-        canDelete
-          ? (next) => {
-              setOwnedOutput(null)
-              setCanArchive(false)
-              setChecking(true)
-              setError('')
-              setBlockers([])
-              setTarget(next)
-            }
-          : null
-      }
-    >
-      {children}
-      <Dialog
-        open={!!target}
-        onOpenChange={(open) => {
-          if (!open && !pending.current) setTarget(null)
-        }}
+    <SavedRecordContext.Provider value={workspace || null}>
+      <DeletionContext.Provider
+        value={
+          canDelete
+            ? (next) => {
+                setOwnedOutput(null)
+                setCanArchive(false)
+                setChecking(true)
+                setError('')
+                setBlockers([])
+                setTarget(next)
+              }
+            : null
+        }
       >
-        <DialogContent className="app-dialog item-delete-dialog">
-          <DialogTitle>
-            {blockers.length
-              ? `Cannot delete ${target?.item.name}`
-              : `Delete ${target?.item.name}?`}
-          </DialogTitle>
-          <DialogDescription>
-            {blockers.length ? (
-              'Stock, linked records or history prevent permanent deletion. Review the dependencies below; nothing has been removed.'
-            ) : (
+        {children}
+        <Dialog
+          open={!!target}
+          onOpenChange={(open) => {
+            if (!open && !pending.current) setTarget(null)
+          }}
+        >
+          <DestructiveConfirmationContent
+            busy={busy}
+            title={
               <>
-                Permanently remove this{' '}
-                {target ? itemType(target.table, target.item) : 'item'}{' '}
-                definition from this business. Only the definition and any
-                explicitly named generated output are removed. Shared images,
-                artwork, original Dropbox files and unrelated records are
-                retained.
+                {blockers.length
+                  ? `Cannot delete ${target?.item.name}`
+                  : `Delete ${target?.item.name}?`}
               </>
-            )}
-          </DialogDescription>
-          <div className="item-delete-body">
+            }
+            description={
+              <>
+                {blockers.length ? (
+                  'Stock, linked records or history prevent permanent deletion. Review the dependencies below; nothing has been removed.'
+                ) : (
+                  <>
+                    Permanently remove this{' '}
+                    {target ? itemType(target.table, target.item) : 'item'}{' '}
+                    definition from this business. Only the definition and any
+                    explicitly named generated output are removed. Shared
+                    images, artwork, original Dropbox files and unrelated
+                    records are retained.
+                  </>
+                )}
+              </>
+            }
+            actions={
+              <>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  disabled={busy}
+                  onClick={() => setTarget(null)}
+                >
+                  Cancel
+                </button>
+                {canArchive && !!blockers.length && (
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={busy || checking || !!error}
+                    onClick={async () => {
+                      if (!target || pending.current) return
+                      pending.current = true
+                      setBusy(true)
+                      try {
+                        const data = await request('itemArchive', target)
+                        if (
+                          !data.workspace?.products?.some(
+                            (row: Item) =>
+                              row.id === target.item.id &&
+                              row.archived === true,
+                          )
+                        )
+                          throw new Error(
+                            'Archive was not confirmed. Refresh before retrying.',
+                          )
+                        onWorkspace(data.workspace)
+                        setTarget(null)
+                        onDeleted()
+                      } catch (e) {
+                        setError((e as Error).message)
+                      } finally {
+                        pending.current = false
+                        setBusy(false)
+                      }
+                    }}
+                  >
+                    Archive kit instead
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn destructive-confirm"
+                  disabled={checking || busy || !!blockers.length || !!error}
+                  onClick={async () => {
+                    if (!target || pending.current) return
+                    pending.current = true
+                    setBusy(true)
+                    try {
+                      const data = await request('itemDelete', target)
+                      if (
+                        !data.workspace ||
+                        data.workspace[target.table]?.some(
+                          (row: Item) => row.id === target.item.id,
+                        )
+                      )
+                        throw new Error(
+                          'The response did not confirm deletion. Refresh before retrying.',
+                        )
+                      onWorkspace(data.workspace)
+                      setTarget(null)
+                      onDeleted()
+                    } catch (e) {
+                      setError((e as Error).message)
+                    } finally {
+                      pending.current = false
+                      setBusy(false)
+                    }
+                  }}
+                >
+                  {busy ? 'Deleting…' : 'Delete'}
+                </button>
+              </>
+            }
+          >
             <p>
               {target?.table === 'ingredients'
                 ? 'This removes the saved item and its unit-conversion setup.'
@@ -227,85 +314,9 @@ export function ItemDeletionProvider({
                 operation. Your item remains visible.
               </p>
             )}
-          </div>
-          <div className="button-row">
-            <button
-              type="button"
-              className="btn secondary"
-              disabled={busy}
-              onClick={() => setTarget(null)}
-            >
-              Cancel
-            </button>
-            {canArchive && !!blockers.length && (
-              <button
-                type="button"
-                className="btn secondary"
-                disabled={busy || checking || !!error}
-                onClick={async () => {
-                  if (!target || pending.current) return
-                  pending.current = true
-                  setBusy(true)
-                  try {
-                    const data = await request('itemArchive', target)
-                    if (
-                      !data.workspace?.products?.some(
-                        (row: Item) =>
-                          row.id === target.item.id && row.archived === true,
-                      )
-                    )
-                      throw new Error(
-                        'Archive was not confirmed. Refresh before retrying.',
-                      )
-                    onWorkspace(data.workspace)
-                    setTarget(null)
-                    onDeleted()
-                  } catch (e) {
-                    setError((e as Error).message)
-                  } finally {
-                    pending.current = false
-                    setBusy(false)
-                  }
-                }}
-              >
-                Archive kit instead
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn destructive-confirm"
-              disabled={checking || busy || !!blockers.length || !!error}
-              onClick={async () => {
-                if (!target || pending.current) return
-                pending.current = true
-                setBusy(true)
-                try {
-                  const data = await request('itemDelete', target)
-                  if (
-                    !data.workspace ||
-                    data.workspace[target.table]?.some(
-                      (row: Item) => row.id === target.item.id,
-                    )
-                  )
-                    throw new Error(
-                      'The response did not confirm deletion. Refresh before retrying.',
-                    )
-                  onWorkspace(data.workspace)
-                  setTarget(null)
-                  onDeleted()
-                } catch (e) {
-                  setError((e as Error).message)
-                } finally {
-                  pending.current = false
-                  setBusy(false)
-                }
-              }}
-            >
-              {busy ? 'Deleting…' : 'Delete'}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </DeletionContext.Provider>
+          </DestructiveConfirmationContent>
+        </Dialog>
+      </DeletionContext.Provider>
+    </SavedRecordContext.Provider>
   )
 }

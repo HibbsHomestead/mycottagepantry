@@ -249,3 +249,9 @@
   }
 }
 .mockup-saved .mockup-delete-action { margin: 0; }
+.mockup-saved > div { display: flex; flex-direction: column; width: min(100%, 320px); }
+.mockup-card-actions { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+.mockup-card-actions .mockup-delete-action { margin-inline-start: auto; }
+.mockup-editor[data-slot='dialog-content'] { display: flex; flex-direction: column; overflow: hidden; }
+.mockup-editor > header, .mockup-editor-actions { flex-shrink: 0; }
+.mockup-editor > .mockup-layout { min-height: 0; overflow-y: auto; padding-bottom: 16px; }

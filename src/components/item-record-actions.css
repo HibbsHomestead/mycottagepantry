@@ -42,3 +42,21 @@ td .item-record-actions {
   width: max-content;
   max-width: 20rem;
 }
+.item-action-destructive { display: inline-flex; }
+.pantry-card > footer .item-action-destructive,
+.recipe-card > .item-record-actions .item-action-destructive { margin-inline-start: auto; }
+.pantry-card > footer,
+.recipe-card > .item-record-actions { border-top: 1px solid var(--border); padding: 1rem; }
+:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) > :has(> .item-delete-action),
+:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) > .item-delete-action { margin-inline-end: auto; }
+:is(.form-footer, .recipe-detail-footer, .product-detail-toolbar, .product-editor-actions) { flex-wrap: wrap; align-items: center; gap: 10px; }
+.item-delete-action:active { transform: translateY(1px); }
+.item-delete-action:disabled,
+.btn.secondary.item-delete-action:disabled { color: var(--muted) !important; background: var(--surface); border-color: var(--border); cursor: not-allowed; opacity: 1; }
+.ingredient-detail-footer > .item-delete-action { margin-inline-end: auto; }
+.item-remove-button { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+.item-dialog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--border); }
+.item-dialog-actions > .item-delete-action { margin-inline-end: auto; }
+.item-dialog-actions .recipe-footer-close { margin-inline-end: 0; }
+.item-dialog-actions .product-editor-buttons { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 480px) { .item-dialog-actions { padding-inline: 16px; } }

@@ -1,0 +1,103 @@
+{
+  "controls": [
+    {
+      "tag": "DIV",
+      "text": "CategoryUncategorizedBeveragesBreads & RollsBrownies & BarsCakes & CupcakesCandy & ConfectionsCheesecakesCookiesFrostings, Icings & GlazesJams & PreservesMuffins & Quick BreadsOtherPastriesPies & TartsPreps, Fillings & ToppingsSauces & SpreadsSeasonings & Dry MixesSnacks & SavoryAddManage",
+      "x": 169,
+      "y": 438.296875,
+      "width": 298,
+      "height": 44,
+      "minWidth": "0px",
+      "flexShrink": "1",
+      "position": "static"
+    },
+    {
+      "tag": "LABEL",
+      "text": "CategoryUncategorizedBeveragesBreads & RollsBrownies & BarsCakes & CupcakesCandy & ConfectionsCheesecakesCookiesFrostings, Icings & GlazesJams & PreservesMuffins & Quick BreadsOtherPastriesPies & TartsPreps, Fillings & ToppingsSauces & SpreadsSeasonings & Dry MixesSnacks & Savory",
+      "x": 169,
+      "y": 438.296875,
+      "width": 110,
+      "height": 44,
+      "minWidth": "110px",
+      "flexShrink": "1",
+      "position": "static"
+    },
+    {
+      "tag": "SPAN",
+      "text": "Category",
+      "x": 168,
+      "y": 437.296875,
+      "width": 1,
+      "height": 1,
+      "minWidth": "0px",
+      "flexShrink": "1",
+      "position": "absolute"
+    },
+    {
+      "tag": "SELECT",
+      "text": "Category",
+      "x": 169,
+      "y": 438.296875,
+      "width": 110,
+      "height": 44,
+      "minWidth": "0px",
+      "flexShrink": "1",
+      "position": "static"
+    },
+    {
+      "tag": "BUTTON",
+      "text": "Add category",
+      "x": 285,
+      "y": 440.296875,
+      "width": 69.296875,
+      "height": 40,
+      "minWidth": "40px",
+      "flexShrink": "0",
+      "position": "static"
+    },
+    {
+      "tag": "SPAN",
+      "text": "Add",
+      "x": 313,
+      "y": 448.296875,
+      "width": 35.296875,
+      "height": 24,
+      "minWidth": "auto",
+      "flexShrink": "1",
+      "position": "static"
+    },
+    {
+      "tag": "BUTTON",
+      "text": "Manage categories",
+      "x": 360.296875,
+      "y": 440.296875,
+      "width": 105.21875,
+      "height": 40,
+      "minWidth": "40px",
+      "flexShrink": "0",
+      "position": "static"
+    },
+    {
+      "tag": "SPAN",
+      "text": "Manage",
+      "x": 388.296875,
+      "y": 448.296875,
+      "width": 71.21875,
+      "height": 24,
+      "minWidth": "auto",
+      "flexShrink": "1",
+      "position": "static"
+    },
+    {
+      "tag": "BUTTON",
+      "text": "Refresh categories",
+      "x": 471.515625,
+      "y": 440.296875,
+      "width": 40,
+      "height": 40,
+      "minWidth": "40px",
+      "flexShrink": "0",
+      "position": "static"
+    }
+  ]
+}

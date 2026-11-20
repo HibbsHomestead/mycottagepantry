@@ -3663,3 +3663,47 @@ main > .recipe-grid {
   justify-content: flex-start;
   font-size: var(--text-body);
 }
+
+/* A single recipe form body owns scrolling; grid placement never clones fields. */
+.recipe-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+.recipe-editor-layout > * { min-width: 0; }
+.recipe-editor-identity { grid-area: identity; }
+.recipe-editor-components { grid-area: components; }
+.recipe-editor-labor { grid-area: labor; }
+.recipe-editor-overhead { grid-area: overhead; padding: 18px; align-self: start; }
+.recipe-editor-notes { grid-area: notes; }
+.recipe-editor-summary { display: contents; align-self: start; }
+.recipe-editor-layout { grid-template-areas: 'identity' 'components' 'labor' 'overhead' 'summary' 'notes'; }
+.recipe-identity-fields { display: grid; gap: 16px; min-width: 0; }
+.recipe-editor-overhead .form-grid { grid-template-columns: minmax(0, 1fr); }
+.recipe-editor-overhead select { width: 100%; min-width: 0; }
+.recipe-editor-overhead h3 { margin-top: 0; }
+.recipe-editor-layout .recipe-calculation { margin: 0; }
+@media (min-width: 1100px) {
+  .recipe-editor-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    grid-template-areas: 'identity sidebar' 'components sidebar' 'labor sidebar' 'notes sidebar';
+    align-items: start;
+  }
+}
+.recipe-editor-summary > .recipe-calculation { grid-area: summary; min-width: 0; }
+@media (min-width: 1100px) {
+  .recipe-editor-summary { grid-area: sidebar; display: flex; flex-direction: column; gap: 20px; }
+}
+.recipe-editor-identity { display: grid; gap: 16px; }
+.recipe-editor-overhead { display: grid; gap: 16px; }
+.recipe-editor-overhead > h3 { margin: 0; }
+.recipe-editor-components > .form-section-title { flex-wrap: wrap; }
+.recipe-editor-components .recipe-add-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.recipe-editor-components .recipe-line-editor {
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) 44px;
+}
+@media (max-width: 1023px) {
+  .recipe-editor-components .recipe-line-editor { grid-template-columns: minmax(0, 1fr) 75px 65px 44px; }
+  .recipe-editor-components .recipe-line-cost { grid-column: 1 / -1; grid-row: 2; }
+  .recipe-editor-components .item-remove-button { grid-column: 4; grid-row: 1; }
+}
