@@ -34,3 +34,10 @@ it('falls back after an image error and displays a newly saved replacement', () 
     '/private/replacement.png',
   )
 })
+
+it('uses existing thumbnail delivery for product and recipe table images', () => {
+  const { rerender } = render(<PantryPhoto item={{id:'isolated', name:'Example', imageAssetId:'image'}} kind="product" className="table-thumbnail" assets={[{id:'image', name:'Image', fileUrl:'/api/workspace?asset=image'}]} />)
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/api/workspace?asset=image&imageWidth=128')
+  rerender(<PantryPhoto item={{id:'isolated', name:'Example', imageAssetId:'image'}} kind="recipe" className="table-thumbnail" assets={[{id:'image', name:'Image', fileUrl:'/api/workspace?asset=image'}]} />)
+  expect(screen.getByRole('img')).toHaveAttribute('src', '/api/workspace?asset=image&imageWidth=128')
+})

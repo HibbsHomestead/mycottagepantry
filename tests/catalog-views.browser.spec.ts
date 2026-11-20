@@ -11,6 +11,7 @@ test.use({ hasTouch: true })
 for (const width of [390, 1440]) {
   for (const kind of ['Recipes', 'Products'] as const) {
     test(`${kind} card/table toolbar at ${width}px`, async ({ page }) => {
+      page.on('dialog', (dialog) => dialog.accept())
       await page.setViewportSize({ width, height: 1000 })
       await installWorkspaceFixture(page)
       const workspace = demoData()
@@ -98,7 +99,7 @@ for (const width of [390, 1440]) {
       await expect(region.locator('tbody tr')).toHaveCount(count)
       expect(
         await region
-          .locator('tbody tr td:first-child button')
+          .locator('tbody tr td:nth-child(2) button')
           .allTextContents(),
       ).toEqual(cardNames)
       expect(
@@ -231,12 +232,13 @@ for (const width of [390, 1440]) {
             .getByRole('button', { name: action, exact: true })
             .click()
           await expect(page.getByRole('dialog')).toBeVisible()
-          await page.keyboard.press('Escape')
+          await page.getByRole('dialog').getByRole('button', { name: /^(Cancel|Close)$/ }).last().click()
+          await expect(page.getByRole('dialog')).toHaveCount(0)
         }
       }
       await search.fill('')
       await toggle.getByRole('button', { name: 'Table', exact: true }).click()
-      const lastName = region.locator('tbody tr td:first-child button').last()
+      const lastName = region.locator('tbody tr td:nth-child(2) button').last()
       await lastName.scrollIntoViewIfNeeded()
       await lastName.click()
       await expect(page.getByRole('dialog')).toBeVisible()

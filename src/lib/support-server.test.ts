@@ -56,6 +56,12 @@ vi.mock('../../netlify/lib/support-core', async (original) => {
   }
 })
 vi.mock('../../netlify/lib/support-ai-provider', () => ({
+  productDescriptionAnswer: vi.fn(async (_source, _policy, meter) => {
+    const record = await meter(2000, 1000)
+    if (runtime.providerFails) throw new Error('private provider error')
+    await record({ usage: { prompt_tokens: 200, completion_tokens: 60 } })
+    return { description: 'A factual product description.', inputTokens: 200, outputTokens: 60 }
+  }),
   supportAnswer: vi.fn(async () => {
     if (runtime.providerHook) await runtime.providerHook()
     if (runtime.providerFails) throw new Error('private provider error')
@@ -76,7 +82,7 @@ vi.mock('@netlify/blobs', () => ({
   }),
 }))
 import handler from '../../netlify/lib/support-handler'
-import { supportAnswer } from '../../netlify/lib/support-ai-provider'
+import { supportAnswer, productDescriptionAnswer } from '../../netlify/lib/support-ai-provider'
 import cleanupAi from '../../netlify/functions/support-ai-retention.mts'
 import {
   dispatchSupportMail,
@@ -1710,4 +1716,40 @@ it('attributes private staff ticket assistance to that business for usage and sp
     )
   ).rows[0]
   expect(row.business_id).toBe(business)
+})
+
+
+const descriptionInput = () => ({ action: 'product-description', productSource: { name: 'Test loaf', type: 'food', category: '', packageQuantity: '1', packageUnit: 'loaf', netWeight: '', ingredients: ['Flour'], contents: [] } })
+it('generates a business-scoped description with request and spending metering, no record writes', async () => {
+  vi.mocked(productDescriptionAnswer).mockClear()
+  const response = await ai(descriptionInput())
+  expect(response.status, runtime.errors.join(';')).toBe(200)
+  expect(await response.json()).toEqual({ description: 'A factual product description.' })
+  const usage = (await db.query('SELECT business_id,status FROM support_ai_usage')).rows
+  expect(usage).toEqual([{ business_id: business, status: 'success' }])
+  expect((await db.query<{status:string}>('SELECT status FROM support_ai_meter')).rows[0].status).toBe('metered')
+  expect((await ai(descriptionInput())).status).toBe(429)
+  expect(vi.mocked(productDescriptionAnswer).mock.calls).toHaveLength(1)
+})
+it('denies description requests for unverified sessions, inactive membership, read-only roles and evaluation exclusions', async () => {
+  runtime.session = null
+  expect((await ai(descriptionInput())).status).toBe(401)
+  runtime.session = 'maker-a'
+  await db.query("UPDATE users SET role='Staff' WHERE identity_id='maker-a'")
+  expect((await ai(descriptionInput())).status).toBe(403)
+  await db.query("UPDATE users SET role='Owner',active=false WHERE identity_id='maker-a'")
+  expect((await ai(descriptionInput())).status).toBe(403)
+  await db.query("UPDATE users SET active=true WHERE identity_id='maker-a'")
+  await db.query("UPDATE support_ai_policy SET data=data || '{\"evaluationBusinessIds\":[]}'::jsonb WHERE id='platform'")
+  expect((await ai(descriptionInput())).status).toBe(503)
+})
+it('rejects private context fields and holds failed provider reservations against spending', async () => {
+  const input = descriptionInput()
+  expect((await ai({ ...input, productSource: { ...input.productSource, notes: 'private', cost: 20 } })).status).toBe(400)
+  runtime.providerFails = true
+  const result = await ai(input)
+  expect(result.status).toBe(503)
+  expect(JSON.stringify(await result.json())).not.toContain('private provider error')
+  expect((await db.query<{status:string}>('SELECT status FROM support_ai_usage')).rows[0].status).toBe('failed')
+  expect((await db.query<{status:string}>('SELECT status FROM support_ai_meter')).rows[0].status).toBe('reserved')
 })

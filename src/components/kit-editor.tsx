@@ -1,3 +1,4 @@
+import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemDeleteButton } from './item-deletion'
 import { useState } from 'react'
@@ -120,13 +121,7 @@ export function KitEditor({
           onChange={(e) => change('name', e.target.value)}
         />
       </label>
-      <label className="field">
-        <span>Description</span>
-        <textarea
-          value={draft.description || ''}
-          onChange={(e) => change('description', e.target.value)}
-        />
-      </label>
+      <ProductDescriptionField product={draft} workspace={workspace} change={change} field="description" disabled={!['Owner', 'Manager'].includes(role)} />
       <div className="form-grid">
         <label className="field">
           <span>Category</span>

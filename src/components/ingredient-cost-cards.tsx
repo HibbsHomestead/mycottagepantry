@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import {
   convert,
@@ -22,7 +23,13 @@ type SavedConversion = {
   unitDefinition?: unknown
 }
 
-export function IngredientCostCards({ ingredient: i }: { ingredient: Item }) {
+export function IngredientCostCards({
+  ingredient: i,
+  calculationAction,
+}: {
+  ingredient: Item
+  calculationAction?: ReactNode
+}) {
   const display = pantryDisplayUnit(i)
   const storage = i.storageUnit || i.unit
   const recipe = i.recipeUnit || storage
@@ -99,7 +106,7 @@ export function IngredientCostCards({ ingredient: i }: { ingredient: Item }) {
         <CostCard
           label={`Cost per ${display.unit}`}
           value={unitCost(display.unit)}
-          note="Current inventory cost reference"
+          note={<>Current inventory cost reference{calculationAction}</>}
           tone="blue"
         />
         <CostCard

@@ -165,6 +165,8 @@ export function IngredientDetail({
 }) {
   const [editTab, setEditTab] = useState('details')
   const [detailTab, setDetailTab] = useState('inventory')
+  const [calculationOpen, setCalculationOpen] = useState(false)
+  const calculationTrigger = useRef<HTMLButtonElement>(null)
   const [reorderUnit, setReorderUnit] = useState(i.unit)
   const [scanning, setScanning] = useState(false)
   const [editing, setEditing] = useState(false),
@@ -204,6 +206,7 @@ export function IngredientDetail({
       if (initialReviewSection === 'conversion') setEditTab('conversions')
     } else setEditing(false)
     setDetailTab('inventory')
+    setCalculationOpen(false)
     setOfferEdit(null)
     setDirty(false)
     setDiscard(null)
@@ -1609,27 +1612,103 @@ export function IngredientDetail({
                   </>
                 }
               >
-                <IngredientCostCards ingredient={i} />
+                <IngredientCostCards
+                  ingredient={i}
+                  calculationAction={
+                    <button
+                      ref={calculationTrigger}
+                      type="button"
+                      className="text-button ingredient-calculation-link"
+                      onClick={() => setCalculationOpen(true)}
+                    >
+                      How this is calculated
+                    </button>
+                  }
+                />
+                <Dialog
+                  open={calculationOpen}
+                  onOpenChange={setCalculationOpen}
+                >
+                  <DialogContent
+                    className="app-dialog ingredient-calculation-dialog"
+                    onCloseAutoFocus={(event) => {
+                      event.preventDefault()
+                      calculationTrigger.current?.focus({ preventScroll: true })
+                    }}
+                  >
+                    <DialogTitle>How this is calculated</DialogTitle>
+                    <DialogDescription>
+                      Cost per {display.unit} for {i.name}
+                    </DialogDescription>
+                    <div className="ingredient-calculation-body">
+                      <Measure>
+                        {() => {
+                          const factor = convert(
+                            1,
+                            display.unit,
+                            i.unit,
+                            i.conversions,
+                          )
+                          const reference = i.currentCost ?? i.cost
+                          return i.needsCostSetup || !Number.isFinite(reference)
+                            ? 'Cost needs setup: a saved inventory cost reference is required.'
+                            : `1 ${display.unit} = ${precise(factor)} ${i.unit}. ${precise(factor)} × ${precise(reference)} ${i.currency || 'USD'} per ${i.unit} = ${precise(factor * reference)} ${i.currency || 'USD'} per ${display.unit}.`
+                        }}
+                      </Measure>
+                      <p>
+                        Package price ÷ package amount = package unit cost.
+                        Inventory value is shown in Inventory.
+                      </p>
+                      {hasPurchasePackage(i) && (
+                        <PackageSummary ingredient={i} />
+                      )}
+                      <p>
+                        Storage unit: {storage} · Default recipe unit:{' '}
+                        {i.recipeUnit || storage}. Current unit costs use the
+                        saved inventory cost reference. Package unit cost uses
+                        the configured purchase price and package amount.
+                      </p>
+                      <div className="ingredient-conversion-details">
+                        <h4>Units & verified conversions</h4>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => {
+                              setCalculationOpen(false)
+                              edit()
+                              setEditTab('conversions')
+                            }}
+                          >
+                            Open Unit Conversions
+                          </button>
+                        )}
+                        {(i.conversions || []).map((c: any, index: number) => (
+                          <p key={index}>
+                            {c.amountFrom} {c.from} = {c.amountTo} {c.to} ·{' '}
+                            {c.verified ? 'Reviewed' : 'Needs review'} ·{' '}
+                            {c.notes}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 <Tabs
                   value={detailTab}
                   onValueChange={setDetailTab}
                   className="ingredient-details-tabs"
                 >
-                  <div className="ingredient-details-tab-scroll">
-                    <TabsList aria-label="Ingredient detail sections">
-                      <TabsTrigger value="inventory">Inventory</TabsTrigger>
-                      <TabsTrigger value="purchasing">Purchasing</TabsTrigger>
-                      <TabsTrigger value="calculation">
-                        How this is calculated
-                      </TabsTrigger>
-                      <TabsTrigger value="allergens">
-                        Ingredients &amp; Allergens
-                      </TabsTrigger>
-                      <TabsTrigger value="labels">
-                        Identification & notes
-                      </TabsTrigger>
-                    </TabsList>
-                  </div>
+                  <TabsList aria-label="Ingredient detail sections">
+                    <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                    <TabsTrigger value="purchasing">Purchasing</TabsTrigger>
+                    <TabsTrigger value="allergens">
+                      Ingredients &amp; Allergens
+                    </TabsTrigger>
+                    <TabsTrigger value="labels">
+                      Identification & Notes
+                    </TabsTrigger>
+                  </TabsList>
                   <TabsContent
                     value="inventory"
                     className="calculation-box ingredient-detail-card"
@@ -1934,44 +2013,6 @@ export function IngredientDetail({
                         </section>
                       )}
                     </section>
-                  </TabsContent>
-                  <TabsContent
-                    value="calculation"
-                    className="calculation-box ingredient-detail-card"
-                    id="ingredient-conversions"
-                  >
-                    <p>
-                      Package price ÷ package amount = package unit cost.
-                      Inventory value is shown in Inventory.
-                    </p>
-                    {hasPurchasePackage(i) && <PackageSummary ingredient={i} />}
-                    <p>
-                      Storage unit: {storage} · Default recipe unit:{' '}
-                      {i.recipeUnit || storage}. Current unit costs use the
-                      saved inventory cost reference. Package unit cost uses the
-                      configured purchase price and package amount.
-                    </p>
-                    <div className="ingredient-conversion-details">
-                      <h4>Units & verified conversions</h4>
-                      {canEdit && (
-                        <button
-                          type="button"
-                          className="text-button"
-                          onClick={() => {
-                            edit()
-                            setEditTab('conversions')
-                          }}
-                        >
-                          Open Unit Conversions
-                        </button>
-                      )}
-                      {(i.conversions || []).map((c: any, index: number) => (
-                        <p key={index}>
-                          {c.amountFrom} {c.from} = {c.amountTo} {c.to} ·{' '}
-                          {c.verified ? 'Reviewed' : 'Needs review'} · {c.notes}
-                        </p>
-                      ))}
-                    </div>
                   </TabsContent>
                   <TabsContent
                     value="labels"
