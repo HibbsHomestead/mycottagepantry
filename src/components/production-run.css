@@ -87,3 +87,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Keep the wider cost trace inside the dialog's own table scroller. */
+.multi-production-run > *,
+.multi-production-run section {
+  min-width: 0;
+}
+.multi-production-run .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.multi-production-run .table-scroll table {
+  min-width: 760px;
+}
+@media (max-width: 700px) {
+  .multi-production-run .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.multi-production-run table {
+  white-space: normal;
+}
+.multi-production-run td:nth-child(2),
+.multi-production-run td:nth-child(3),
+.multi-production-run td:last-child {
+  white-space: nowrap;
+}

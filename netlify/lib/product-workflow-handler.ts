@@ -1,3 +1,4 @@
+import { validatePurchaseDefaults } from '../../src/lib/resale-cost'
 import { validateHandmadeBom } from '../../src/lib/handmade'
 import { applyProductTemplateDraft } from '../../src/lib/label-preview'
 import { libraryArtwork } from '../../src/lib/artwork-library'
@@ -349,6 +350,7 @@ export async function handleProductWorkflow(
       throw new Error('Choose a supplier from this oven.')
     // One supplier reference: keep the Add Item vendor fields in step.
     if (item.workflow === 'resale') {
+      item.purchaseDefaults = validatePurchaseDefaults(data.purchaseDefaults)
       item.supplierId = item.supplierId || ''
       item.vendorId = item.supplierId
       item.vendor =

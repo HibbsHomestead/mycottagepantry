@@ -141,8 +141,9 @@ function WorkflowDialog({
               ? String(item.proposedAdjustment)
               : '',
           price: '',
-          unit: item?.purchaseUnit || 'each',
-          itemsPerUnit: item?.itemsPerUnit || 1,
+          unit: item?.purchaseDefaults?.unit || item?.purchaseUnit || 'each',
+          itemsPerUnit:
+            item?.purchaseDefaults?.itemsPerPack || item?.itemsPerUnit || 1,
         }
       : {}),
     ...(kind === 'trade-complete'
@@ -282,7 +283,13 @@ function WorkflowDialog({
                 : 'Save to your oven.'}
           </DialogDescription>
         </DialogHeader>
-        {item && ['trade-design', 'trade-material'].includes(kind) && <ItemDeleteButton table={isDesign ? 'recipes' : 'ingredients'} item={item} draft />}
+        {item && ['trade-design', 'trade-material'].includes(kind) && (
+          <ItemDeleteButton
+            table={isDesign ? 'recipes' : 'ingredients'}
+            item={item}
+            draft
+          />
+        )}
         <form
           className="app-form"
           onSubmit={async (event) => {
@@ -528,6 +535,14 @@ function WorkflowDialog({
                     <FabricFields value={draft} change={change} />
                     <FabricPurchaseFields value={draft} change={change} />
                     <FabricReceiptEstimate draft={draft} />
+                    {item?.purchaseDefaults && (
+                      <p className="form-hint">
+                        Expected pack price:{' '}
+                        {money(item.purchaseDefaults.packPrice)}. Confirm the
+                        actual total acquisition cost above; defaults never post
+                        a receipt.
+                      </p>
+                    )}
                     <Field label="Supplier">
                       {select(
                         'vendorId',
@@ -845,6 +860,14 @@ function WorkflowDialog({
                         {input('price', 'number', true)}
                       </Field>
                     </div>
+                    {item?.purchaseDefaults && (
+                      <p className="form-hint">
+                        Expected pack price:{' '}
+                        {money(item.purchaseDefaults.packPrice)}. Confirm the
+                        actual total acquisition cost above; defaults never post
+                        a receipt.
+                      </p>
+                    )}
                     <Field label="Supplier">
                       {select(
                         'supplierId',
@@ -855,7 +878,9 @@ function WorkflowDialog({
                       )}
                     </Field>
                     <p className="calculation-box">
-                      Receipt:{' '}
+                      Receipt: {draft.quantity || '—'}{' '}
+                      {draft.unit || 'purchase units'} ×{' '}
+                      {draft.itemsPerUnit || '—'} sellable items ={' '}
                       {Number(draft.quantity) * Number(draft.itemsPerUnit) || 0}{' '}
                       sellable items ·{' '}
                       {Number(draft.quantity) * Number(draft.itemsPerUnit) >
@@ -957,8 +982,8 @@ function MaterialPlan({
       {rows.map((row) => (
         <p key={row.id}>
           <strong>{row.name}</strong>: {row.planned} {row.enteredUnit} planned ·{' '}
-          {inventoryQuantity(row.available)}{' '}
-          {row.unit} available · {money(row.cost)} estimated
+          {inventoryQuantity(row.available)} {row.unit} available ·{' '}
+          {money(row.cost)} estimated
           {row.shortage > 1e-9
             ? ` · Shortage: ${row.shortage.toLocaleString('en-US', { maximumFractionDigits: 8 })} ${row.unit}`
             : ' · Stock available'}

@@ -1,3 +1,4 @@
+import { resaleCostBasis } from './resale-cost'
 import { handmadeEstimate } from './handmade'
 import { configuredTaxRates } from './tax-configuration'
 import { categoryTaxState, businessClassifications, classificationIds, productClassification } from './product-categories'
@@ -721,7 +722,7 @@ export function kitCosting(
     perPackage: total,
   }
 }
-export function productCosting(product: Item, workspace: Workspace) {
+export function productCosting(product: Item, workspace: Workspace, options: { allowResaleEstimate?: boolean } = {}) {
   if (product.workflow === 'handmade' && product.bom) {
     const c = handmadeEstimate(product, workspace)
     const bom = product.bom
@@ -760,15 +761,16 @@ export function productCosting(product: Item, workspace: Workspace) {
   }
   if (product.workflow === 'kit') return kitCosting(product, workspace)
   if (product.workflow === 'resale') {
-    if (product.stockCostKnown !== true)
-      throw new Error('Receive resale stock to establish its cost.')
+    const basis = resaleCostBasis(options.allowResaleEstimate ? product : { ...product, purchaseDefaults: undefined })
+    if (basis.cost === undefined)
+      throw new Error('Purchase cost not recorded. Receive resale stock or configure an estimate.')
     return costBreakdown(
       {
         id: 'resale-basis',
         name: 'Received stock basis',
         yield: 1,
         lines: [],
-        overhead: number(product.cost, 'Stock cost'),
+        overhead: basis.cost,
         laborRate: 0,
       },
       [],

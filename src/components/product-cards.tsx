@@ -1,3 +1,4 @@
+import { resaleCostBasis } from '@/lib/resale-cost'
 import { ActionTip } from './action-tip'
 import { workflowOf } from '@/lib/product-workflows'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
@@ -143,7 +144,7 @@ export function ProductCards({
                   {product.workflow === 'handmade'
                     ? 'Estimated cost'
                     : product.workflow === 'resale'
-                      ? 'Average stock cost'
+                      ? resaleCostBasis(product).label
                       : 'Cost'}{' '}
                   per {sellingUnit}
                 </dt>
@@ -210,7 +211,11 @@ export function ProductCards({
                     : 'items'}{' '}
                   on hand ·{' '}
                   {product.stockCostKnown
-                    ? money(product.cost) + ' average stock cost'
+                    ? money(product.cost) +
+                      ' ' +
+                      (product.workflow === 'resale'
+                        ? resaleCostBasis(product).label.toLowerCase()
+                        : 'average stock cost')
                     : product.workflow === 'handmade'
                       ? 'Inventory valuation needs review'
                       : 'Awaiting receipt / production'}
@@ -290,7 +295,21 @@ function ProductTable({
       aria-label="Products table"
       tabIndex={0}
     >
-      <table>
+      <table className="product-layout-table">
+        <colgroup>
+          {[
+            'photo',
+            'name',
+            'type',
+            'category',
+            'price',
+            'cost',
+            'profit',
+            'actions',
+          ].map((column) => (
+            <col key={column} className={`product-column-${column}`} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {[
@@ -320,7 +339,12 @@ function ProductTable({
             return (
               <tr key={product.id}>
                 <td>
-                  <PantryPhoto item={product} assets={workspace.graphic_assets || []} kind="product" className="table-thumbnail" />
+                  <PantryPhoto
+                    item={product}
+                    assets={workspace.graphic_assets || []}
+                    kind="product"
+                    className="table-thumbnail"
+                  />
                 </td>
                 <td>
                   <button
@@ -337,7 +361,12 @@ function ProductTable({
                     'Uncategorized'}
                 </td>
                 <td>{Number.isFinite(price) ? money(price) : 'Unavailable'}</td>
-                <td>{cost === undefined ? 'Incomplete' : money(cost)}</td>
+                <td>
+                  {cost === undefined ? 'Incomplete' : money(cost)}
+                  {product.workflow === 'resale' && (
+                    <small>{resaleCostBasis(product).label}</small>
+                  )}
+                </td>
                 <td>
                   {pricing ? (
                     <>

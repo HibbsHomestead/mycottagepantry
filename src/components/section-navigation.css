@@ -127,3 +127,45 @@ main.finance-page {
 .finance-page .book-nav button[aria-current='page'] {
   font-weight: 600;
 }
+
+/* Shared emphasis identifies trade destinations without implying selection. */
+.app-shell
+  :is(.sidebar .nav-item, .internal-section-links > a).trade-nav-emphasis {
+  background: #f3eef9;
+  color: #52366e;
+  border: 1px solid #c8b8d9;
+  font-weight: 500;
+}
+.app-shell
+  :is(
+    .sidebar .nav-item,
+    .internal-section-links > a
+  ).trade-nav-emphasis:hover {
+  background: #e9def4;
+  border-color: #a88cbe;
+  color: #52366e;
+}
+.app-shell
+  :is(
+    .sidebar .nav-item,
+    .internal-section-links > a
+  ).trade-nav-emphasis[aria-current='page'] {
+  background: #5d3a82;
+  color: #fff;
+  border-color: #5d3a82;
+}
+.app-shell
+  :is(
+    .sidebar .nav-item,
+    .internal-section-links > a
+  ).trade-nav-emphasis:focus-visible {
+  outline: 3px solid #a17bbf;
+  outline-offset: 3px;
+}
+
+.app-shell .sidebar .nav-item.trade-nav-emphasis {
+  padding: 11px;
+}
+.app-shell .internal-section-links > a.trade-nav-emphasis {
+  padding: 9px;
+}
