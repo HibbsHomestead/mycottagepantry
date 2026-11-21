@@ -51,6 +51,7 @@ export function ItemDetailLayout({
   kind = 'pantry',
   children,
   photoDetails,
+  lowerDetails,
   footer,
 }: {
   item: Item
@@ -59,6 +60,7 @@ export function ItemDetailLayout({
   children: ReactNode
   footer?: ReactNode
   photoDetails?: ReactNode
+  lowerDetails?: ReactNode
 }) {
   const photo = (
     <PantryPhoto
@@ -84,6 +86,9 @@ export function ItemDetailLayout({
         </div>
       ) : (
         photo
+      )}
+      {lowerDetails && (
+        <div className="product-detail-lower">{lowerDetails}</div>
       )}
       {footer && <div className="product-detail-footer">{footer}</div>}
     </div>

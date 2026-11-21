@@ -11,7 +11,7 @@ import {
 export function cardCost(product: Item, workspace: Workspace) {
   if (['resale', 'kit'].includes(product.workflow)) {
     try {
-      return { cost: productCosting(product, workspace).perPackage }
+      return { cost: productCosting(product, workspace, { allowResaleEstimate: true }).perPackage }
     } catch (error) {
       return {
         reason:
@@ -48,7 +48,7 @@ export function cardCost(product: Item, workspace: Workspace) {
   )
     return { reason: 'Review ingredient and packaging cost details.' }
   try {
-    const cost = productCosting(product, workspace).perPackage
+    const cost = productCosting(product, workspace, { allowResaleEstimate: true }).perPackage
     return Number.isFinite(cost)
       ? { cost }
       : { reason: 'Review recipe quantities and cost details.' }

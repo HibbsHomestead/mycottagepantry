@@ -315,7 +315,8 @@ function RunEditor({
               <p>
                 Recipe: {recipe.name} · {recipe.yield} {recipe.yieldUnit} per
                 batch.{' '}
-                {result && `${result.multiplier.toFixed(4)} batches planned.`}
+                {result?.multiplier != null &&
+                  `${result.multiplier.toFixed(4)} batches planned.`}
               </p>
             )}
             {product?.workflow === 'kit' && (
@@ -327,7 +328,7 @@ function RunEditor({
             {definition?.bom && (
               <p>
                 BOM: {definition.bom.name || product?.name} ·{' '}
-                {result?.multiplier.toFixed(4)} BOM runs
+                {result?.multiplier?.toFixed(4)} BOM runs
               </p>
             )}
             {needsMapping && !terminal && (
@@ -496,7 +497,7 @@ function RunEditor({
                     type="number"
                     min="0"
                     step="any"
-                    placeholder={String(result?.cost.laborMinutes || 0)}
+                    placeholder={String(result?.cost?.laborMinutes || 0)}
                     disabled={!canRecordActuals}
                     value={
                       terminal
@@ -547,15 +548,16 @@ function RunEditor({
                 <p>
                   Estimated cost:{' '}
                   {result
-                    ? calculation?.costKnown
+                    ? result.costKnown
                       ? money(result.estimate)
-                      : 'Cost setup needs review'
+                      : `Incomplete · known estimated subtotal ${money(result.estimate)}`
                     : 'Complete setup'}
-                  {result &&
+                  {result?.cost &&
                     ` · labor ${money(result.cost.labor)} · overhead ${money(result.cost.overhead)}`}
-                  . Actual costs lock at finalization.
+                  {result?.error && <span role="status">{result.error}</span>}.
+                  Actual costs lock at finalization.
                 </p>
-                {result && (
+                {result?.requirements && (
                   <details>
                     <summary>
                       Product requirements and actual material usage
@@ -698,6 +700,7 @@ function RunEditor({
                       <th>Total required</th>
                       <th>Available</th>
                       <th>Status</th>
+                      <th>Cost per matching unit / basis</th>
                       <th>Estimated cost</th>
                     </tr>
                   </thead>
@@ -719,18 +722,52 @@ function RunEditor({
                             : 'Available'}
                         </td>
                         <td>
-                          {r.costKnown ? money(r.cost) : 'Needs cost setup'}
+                          {r.costKnown
+                            ? `${money(r.unitCost)} / ${r.unit}`
+                            : r.costReason}
+                          <div>
+                            <small>{r.costBasis}</small>
+                          </div>
+                          {r.costKnown && !r.inventoryCostKnown && (
+                            <div>
+                              <small>
+                                Finalization requires recorded inventory
+                                valuation.
+                              </small>
+                            </div>
+                          )}
+                          <details>
+                            <summary>Cost source</summary>
+                            <p>
+                              Reference: {r.itemId}
+                              {r.recipeId
+                                ? ` · Recipe/design: ${r.recipeId}`
+                                : ''}
+                            </p>
+                          </details>
+                          {!r.costKnown && (
+                            <a href="#Products/All%20Products">
+                              Review product and material costs
+                            </a>
+                          )}
                         </td>
+                        <td>{r.costKnown ? money(r.cost) : 'Unavailable'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p>
-                Run estimated cost:{' '}
                 {calculation.costKnown
-                  ? money(calculation.total)
-                  : 'Cost setup needs review'}
+                  ? 'Run estimated cost: '
+                  : 'Incomplete · Known estimated subtotal: '}
+                {money(calculation.total)}
+              </p>
+              <p>
+                Finished components use recorded inventory valuation when
+                available; otherwise the current All Products estimate is
+                labeled above. These bases can differ. Kit assembly consumes
+                finished packages, without charging their ingredients again.
               </p>
             </>
           )}
@@ -876,6 +913,7 @@ function RunEditor({
                 !state.batches.some((b) => b.id === id) ||
                 !!setupError ||
                 !calculation?.costKnown ||
+                calculation.requirements.some((r) => !r.inventoryCostKnown) ||
                 !!calculation.shortages.length ||
                 lines.some((l) => l.output == null || l.output === '')
               }

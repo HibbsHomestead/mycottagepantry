@@ -1,5 +1,7 @@
 import { convert, type Item, type Workspace } from './domain'
 import { productionRequirements } from './production'
+import { cardCost } from './product-list'
+import { resaleCostBasis } from './resale-cost'
 
 /** Read-through migration: old product-run IDs, snapshots and movements remain
  * untouched, including immutable finalized records. Repeated reads are stable. */
@@ -26,30 +28,122 @@ export function combinedProductionRequirements(
   const merged = new Map<string, Item>()
   let total = 0
   const products = lines.map((line) => {
-    if (!line.definition)
-      throw new Error(`${line.name}: recipe/BOM setup needs review.`)
-    const result = productionRequirements(
-      line.definition,
-      Number(line.quantity),
-      { ...line, output: line.output === '' ? undefined : line.output },
-    )
+    let result: ReturnType<typeof productionRequirements>
+    try {
+      if (!line.definition)
+        throw new Error(`${line.name}: recipe/BOM relationship is unavailable.`)
+      result = productionRequirements(line.definition, Number(line.quantity), {
+        ...line,
+        laborMinutes: line.laborMinutes === '' ? undefined : line.laborMinutes,
+        output: line.output === '' ? undefined : line.output,
+      })
+    } catch (error) {
+      if (validateStock) throw error
+      return {
+        line,
+        cost: undefined,
+        multiplier: undefined,
+        requirements: undefined,
+        estimate: 0,
+        costKnown: false,
+        error: (error as Error).message,
+      }
+    }
     let materialCost = 0
+    let lineCostKnown = true
     for (const r of result.requirements) {
       const item = (
         r.kind === 'product' ? state.products : state.ingredients
       ).find((i) => i.id === r.itemId)
-      if (!item) throw new Error(`${r.name}: stock item unavailable.`)
-      const quantity =
-        r.kind === 'product'
-          ? r.quantity
-          : convert(r.quantity, r.unit, item.unit, item.conversions)
-      const costKnown =
+      if (!item) {
+        if (validateStock) throw new Error(`${r.name}: stock item unavailable.`)
+        lineCostKnown = false
+        const key = r.kind + ':' + r.itemId
+        const previous = merged.get(key)
+        merged.set(key, {
+          ...r,
+          quantity: Number(previous?.quantity || 0) + r.quantity,
+          cost: 0,
+          costKnown: false,
+          inventoryCostKnown: false,
+          costReason: `Referenced ${r.kind} ${r.itemId} is unavailable in this workspace.`,
+          costBasis: 'Unresolved relationship',
+          available: 0,
+        })
+        continue
+      }
+      let quantity: number
+      try {
+        quantity =
+          r.kind === 'product'
+            ? r.quantity
+            : convert(r.quantity, r.unit, item.unit, item.conversions)
+      } catch (error) {
+        if (validateStock) throw error
+        lineCostKnown = false
+        const key = r.kind + ':' + item.id + ':' + r.unit
+        const previous = merged.get(key)
+        merged.set(key, {
+          ...r,
+          id: key,
+          quantity: Number(previous?.quantity || 0) + r.quantity,
+          cost: 0,
+          costKnown: false,
+          inventoryCostKnown: false,
+          available: 0,
+          costBasis: 'Unit conversion unavailable',
+          costReason: (error as Error).message,
+        })
+        continue
+      }
+      // Planned estimates may use the same current product basis as All Products.
+      // Finalization continues to require recorded inventory valuation.
+      const recorded =
         !item.needsCostSetup &&
         item.cost != null &&
         item.cost !== '' &&
         Number.isFinite(Number(item.cost)) &&
+        Number(item.cost) >= 0 &&
         (r.kind !== 'product' || item.stockCostKnown === true)
-      const cost = costKnown ? quantity * Number(item.cost) : 0
+      let unitCost: number | undefined = recorded
+        ? Number(item.cost)
+        : undefined
+      let costBasis =
+        r.kind === 'product'
+          ? item.stockEntry?.costEstimated
+            ? 'Estimated inventory cost'
+            : 'Average inventory cost'
+          : 'Inventory cost'
+      let costReason = 'Inventory valuation is not recorded.'
+      if (!validateStock) {
+        if (r.kind === 'product' && !recorded) {
+          const planned = cardCost(item, state)
+          unitCost = planned.cost
+          costReason = planned.reason || costReason
+          costBasis =
+            item.workflow === 'resale'
+              ? resaleCostBasis(item).label
+              : 'Current product estimate'
+        } else if (r.kind !== 'product') {
+          const price = item.currentCost ?? item.cost
+          unitCost =
+            !item.needsCostSetup &&
+            price != null &&
+            price !== '' &&
+            Number.isFinite(Number(price)) &&
+            Number(price) >= 0
+              ? Number(price)
+              : undefined
+          costBasis =
+            item.currentCost != null
+              ? 'Current material cost'
+              : 'Inventory cost'
+          costReason = 'Material cost is missing or marked incomplete.'
+        }
+      }
+      const costKnown = unitCost !== undefined
+      lineCostKnown &&= costKnown
+      const cost = costKnown ? quantity * unitCost! : 0
       materialCost += cost
       const key = r.kind + ':' + item.id
       const previous = merged.get(key)
@@ -57,6 +151,7 @@ export function combinedProductionRequirements(
         previous.quantity += quantity
         previous.cost += cost
         previous.costKnown &&= costKnown
+        previous.inventoryCostKnown &&= recorded
       } else
         merged.set(key, {
           ...r,
@@ -66,6 +161,12 @@ export function combinedProductionRequirements(
           available: Number(item.quantity || 0),
           cost,
           costKnown,
+          unitCost,
+          costBasis,
+          costReason: costKnown ? undefined : costReason,
+          inventoryCostKnown: recorded,
+          productId: r.kind === 'product' ? item.id : undefined,
+          recipeId: item.recipeId,
         })
     }
     const flatPackaging =
@@ -77,7 +178,7 @@ export function combinedProductionRequirements(
       result.cost.overhead +
       result.cost.waste
     total += estimate
-    return { line, ...result, estimate }
+    return { line, ...result, estimate, costKnown: lineCostKnown }
   })
   const requirements = [...merged.values()]
   if (validateStock)
@@ -92,7 +193,9 @@ export function combinedProductionRequirements(
     products,
     requirements,
     total,
-    costKnown: requirements.every((r) => r.costKnown),
+    costKnown:
+      products.every((p) => p.costKnown) &&
+      requirements.every((r) => r.costKnown),
     shortages: requirements.filter(
       (r) => r.tracked && r.quantity > r.available + 1e-8,
     ),

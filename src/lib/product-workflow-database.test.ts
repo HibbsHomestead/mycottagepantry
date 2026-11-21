@@ -189,6 +189,28 @@ const receipt = {
   receivedDate: '2026-11-03',
   purchaseDate: '2026-07-30',
 }
+it('saves purchase defaults without movements, receives weighted costs, and rejects cross-business access', async () => {
+  session.user = 'trade-owner-a'
+  const product = { ...resale, id: 'purchase-defaults-test', name: 'Isolated purchase defaults', purchaseDefaults: { packPrice: 24, itemsPerPack: 12, unit: 'case' } }
+  let w = await ok('save', 'products', product)
+  const ledgerBefore = w.ledger.length
+  expect(find(w.products, product.id)).toMatchObject({ quantity: 0, cost: 0, stockCostKnown: false, purchaseDefaults: product.purchaseDefaults })
+  w = await ok('save', 'products', { ...product, purchaseDefaults: { ...product.purchaseDefaults, packPrice: 36 } })
+  expect(w.ledger).toHaveLength(ledgerBefore)
+  w = await ok('receive', 'products', { ...receipt, id: product.id, operationId: 'defaults-case-one', quantity: 1, price: 24 })
+  expect(find(w.products, product.id)).toMatchObject({ quantity: 12, cost: 2 })
+  w = await ok('receive', 'products', { ...receipt, id: product.id, operationId: 'defaults-case-two', quantity: 1, price: 48 })
+  expect(find(w.products, product.id)).toMatchObject({ quantity: 24, cost: 3 })
+  const receipts = JSON.stringify(w.ledger.filter((r: Item) => r.productId === product.id))
+  w = await ok('save', 'products', { ...find(w.products, product.id), cost: 0, quantity: 999, purchaseDefaults: { packPrice: 60, itemsPerPack: 12, unit: 'case' } })
+  expect(find(w.products, product.id)).toMatchObject({ quantity: 24, cost: 3, purchaseCost: 48 })
+  expect(JSON.stringify(w.ledger.filter((r: Item) => r.productId === product.id))).toBe(receipts)
+  expect((await call('save', 'products', { ...product, purchaseDefaults: { packPrice: -1, itemsPerPack: 12, unit: 'case' } })).status).toBe(400)
+  session.user = 'trade-owner-b'
+  expect((await ok()).products.some((p: Item) => p.id === product.id)).toBe(false)
+  expect((await call('receive', 'products', { ...receipt, id: product.id, operationId: 'cross-business-defaults' })).status).toBe(400)
+  session.user = 'trade-owner-a'
+})
 it('receives craft material, saves/reopens a design and product, completes actual production with waste and sells finished goods', async () => {
   let w = await ok('save', 'ingredients', material)
   expect(find(w.ingredients, 'fabric')).toMatchObject({

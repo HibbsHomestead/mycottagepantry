@@ -34,23 +34,27 @@ export function ItemRecordActions({
           <span className="responsive-action-label">View details</span>
         </button>
       </ActionTip>
-      {edit && (
-        <ActionTip label={`Edit ${item.name}`}>
-          <button
-            type="button"
-            className="btn secondary responsive-action"
-            aria-label={`Edit ${item.name}`}
-            onClick={(e) => {
-              e.stopPropagation()
-              edit()
-            }}
-          >
-            <Pencil size={18} aria-hidden="true" />
-            <span className="responsive-action-label">Edit</span>
-          </button>
-        </ActionTip>
-      )}
-      <ItemCopyButton table={table} item={item} />
+      <span className="item-action-edit">
+        {edit && (
+          <ActionTip label={`Edit ${item.name}`}>
+            <button
+              type="button"
+              className="btn secondary responsive-action"
+              aria-label={`Edit ${item.name}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                edit()
+              }}
+            >
+              <Pencil size={18} aria-hidden="true" />
+              <span className="responsive-action-label">Edit</span>
+            </button>
+          </ActionTip>
+        )}
+      </span>
+      <span className="item-action-copy">
+        <ItemCopyButton table={table} item={item} />
+      </span>
       <span className="item-action-destructive">
         <ItemDeleteButton table={table} item={item} />
       </span>

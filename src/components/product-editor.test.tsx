@@ -217,3 +217,33 @@ it('shows rounded stock while opening and saving preserve stored precision', asy
   expect(payload.quantity).toBe(12.345678)
   expect(Number(payload.threshold)).toBe(1.234567)
 })
+
+it('saves explicit purchase estimates without receiving or changing recorded stock', async () => {
+  const mutate = vi.fn(async () => {})
+  setup(mutate)
+  tab('Pricing & Stock')
+  fireEvent.change(
+    screen.getByLabelText('Default purchase price per pack/case'),
+    { target: { value: '48' } },
+  )
+  fireEvent.change(
+    screen.getByLabelText('Purchase pack contains this many sellable items'),
+    { target: { value: '12' } },
+  )
+  expect(screen.getByText('Average inventory cost')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1))
+  const [action, tableName, data] = mutate.mock.calls[0] as unknown as [
+    string,
+    string,
+    Item,
+  ]
+  expect(action).toBe('save')
+  expect(tableName).toBe('products')
+  expect(data.purchaseDefaults).toMatchObject({
+    packPrice: '48',
+    itemsPerPack: '12',
+  })
+  expect(data.quantity).toBe(12)
+  expect(data.cost).toBe(4)
+})

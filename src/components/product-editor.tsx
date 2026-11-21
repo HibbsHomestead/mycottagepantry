@@ -1,3 +1,8 @@
+import {
+  ResalePurchaseSetup,
+  ResaleCostBreakdown,
+} from './resale-purchase-cost'
+import { resaleCostBasis } from '@/lib/resale-cost'
 import { ProductDescriptionField } from './product-description-field'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
@@ -157,7 +162,9 @@ export function ProductEditor({
 
   let costLine: ReactNode
   try {
-    const cost = productCosting(draft as Item, workspace).perPackage
+    const cost = productCosting(draft as Item, workspace, {
+      allowResaleEstimate: true,
+    }).perPackage
     let result: ReturnType<typeof profitability> | undefined
     try {
       result = profitability(draft as Item, cost, workspace.settings[0])
@@ -167,7 +174,7 @@ export function ProductEditor({
     costLine = (
       <>
         <p>
-          {resale ? 'Average received cost' : 'Estimated unit cost'}:{' '}
+          {resale ? resaleCostBasis(draft).label : 'Estimated unit cost'}:{' '}
           <strong>{money(cost)}</strong>
         </p>
         <p>
@@ -322,7 +329,12 @@ export function ProductEditor({
           </Field>
         )}
       </div>
-      <ProductDescriptionField product={draft} workspace={workspace} change={change} disabled={!canManage} />
+      <ProductDescriptionField
+        product={draft}
+        workspace={workspace}
+        change={change}
+        disabled={!canManage}
+      />
       <ProductCategorySelector
         product={draft as Item}
         business={workspace.settings[0]}
@@ -419,6 +431,12 @@ export function ProductEditor({
           {input('threshold', 'number')}
         </Field>
       </div>
+      {resale && (
+        <>
+          <ResalePurchaseSetup product={draft} change={change} />
+          <ResaleCostBreakdown product={draft} workspace={workspace} />
+        </>
+      )}
       {stockShown && (
         <section className="product-editor-summary" aria-label="Stock on hand">
           <h3>Stock</h3>

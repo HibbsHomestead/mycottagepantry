@@ -1,3 +1,4 @@
+import { ProductLabelFlow } from './product-label-flow'
 import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemCopyProvider, ItemCopyButton } from './item-copy'
@@ -390,6 +391,7 @@ export function WorkspaceApp() {
   const deliberateUnits = useRef(new Set<string>())
   const labelUnsaved = useRef(false)
   const workflowDirty = useRef(false)
+  const [detailLabelFlow, setDetailLabelFlow] = useState<{ productId: string; labelId: string } | null>(null)
   const [productDetailReturn, setProductDetailReturn] = useState<string | null>(
     null,
   )
@@ -560,9 +562,9 @@ export function WorkspaceApp() {
     )
   const totalSales = state.sales.reduce((s, i) => s + i.amount, 0),
     totalExpense = state.expenses.reduce((s, i) => s + i.amount, 0)
-  function productCost(p: Item) {
+  function productCost(p: Item, allowResaleEstimate = false) {
     try {
-      return productCosting(p, state).perPackage
+      return productCosting(p, state, { allowResaleEstimate }).perPackage
     } catch {
       return NaN
     }
@@ -1552,7 +1554,7 @@ export function WorkspaceApp() {
             <a
               key={name}
               href={destinationHash(destination(name))}
-              className={`nav-item ${activeNavigation === name ? 'active' : ''}`}
+              className={`nav-item ${['Handmade', 'Resale'].includes(name) ? 'trade-nav-emphasis' : ''} ${activeNavigation === name ? 'active' : ''}`}
               aria-current={activeNavigation === name ? 'page' : undefined}
               onClick={(event) => {
                 if (!event.metaKey && !event.ctrlKey && !event.shiftKey) {
@@ -1807,7 +1809,7 @@ export function WorkspaceApp() {
                     <a
                       key={tab}
                       href={destinationHash(destination(route.section, tab))}
-                      className={route.tab === tab ? 'active' : ''}
+                      className={`${route.section === 'Products' && ['Handmade', 'Resale'].includes(tab) ? 'trade-nav-emphasis' : ''} ${route.tab === tab ? 'active' : ''}`}
                       aria-current={route.tab === tab ? 'page' : undefined}
                       onClick={(event) => {
                         if (
@@ -5743,6 +5745,15 @@ export function WorkspaceApp() {
                 </>
               }
               photoDetails={
+                <ProductMockups
+                productId={selected.id}
+                primaryImageAssetId={state.products.find(p => p.id === selected.id)?.imageAssetId}
+                assets={state.graphic_assets || []}
+                canEdit={ready && ['Owner', 'Manager'].includes(role)}
+                onWorkspace={setState}
+              />
+              }
+              lowerDetails={
                 selected.workflow === 'kit' ? (
                   <>
                     <KitIncludedProducts
@@ -5768,7 +5779,7 @@ export function WorkspaceApp() {
                   <>
                     <ProductMarginCard
                       product={selected}
-                      cost={productCost(selected)}
+                      cost={productCost(selected, true)}
                       workspace={state}
                     />
                     <section
@@ -5799,11 +5810,7 @@ export function WorkspaceApp() {
                               secondary
                               small
                               onClick={() => {
-                                setProductDetailReturn(selected.id)
-                                setLabelProduct(selected.id)
-                                setLabelDesign(label.id)
-                                setModal(null)
-                                go('Labels', 'Editor')
+                                setDetailLabelFlow({ productId: selected.id, labelId: label.id })
                               }}
                             >
                               Edit
@@ -5815,7 +5822,6 @@ export function WorkspaceApp() {
                           No linked labels. Create one in Labels when needed.
                         </p>
                       )}
-                    </section>
                     <div className="button-row product-detail-actions">
                       {kitContext &&
                         state.products.some((p) => p.id === kitContext) && (
@@ -5841,28 +5847,17 @@ export function WorkspaceApp() {
                       <Btn
                         secondary
                         onClick={() => {
-                          setProductDetailReturn(selected.id)
-                          setLabelProduct(selected.id)
-                          setLabelDesign('')
-                          setLabelCreateRequest((n) => n + 1)
-                          setModal(null)
-                          go('Labels', 'Labels')
+                          setDetailLabelFlow({ productId: selected.id, labelId: '' })
                         }}
                       >
                         Create label
                       </Btn>
                     </div>
+                    </section>
                   </>
                 )
               }
             >
-              <ProductMockups
-                productId={selected.id}
-                primaryImageAssetId={state.products.find(p => p.id === selected.id)?.imageAssetId}
-                assets={state.graphic_assets || []}
-                canEdit={ready && ['Owner', 'Manager'].includes(role)}
-                onWorkspace={setState}
-              />
               {selected.workflow === 'kit' ? (
                 <KitCostCards
                   product={selected}
@@ -5880,7 +5875,7 @@ export function WorkspaceApp() {
               ) : (
                 <ProductCostCards
                   product={selected}
-                  cost={productCost(selected)}
+                  cost={productCost(selected, true)}
                   workspace={state}
                   onReviewTax={
                     ready && ['Owner', 'Manager'].includes(role)
@@ -6170,6 +6165,8 @@ export function WorkspaceApp() {
           {modal === 'help' && <SupportHelper />}
         </DialogContent>
       </Dialog>
+      {detailLabelFlow && <ProductLabelFlow productId={detailLabelFlow.productId} labelId={detailLabelFlow.labelId} workspace={state} onWorkspace={setState} ready={ready} role={role} close={() => setDetailLabelFlow(null)} />}
+
       {previewProduct && (
         <LabelPreviewDialog
           key={`${previewProduct.id}:${previewLabelId}`}
@@ -6187,6 +6184,11 @@ export function WorkspaceApp() {
             if (!next) setPreviewProduct(null)
           }}
           onEditLabel={(id) => {
+            if (modal === 'product-detail') {
+              setDetailLabelFlow({ productId: previewProduct.id, labelId: id })
+              setPreviewProduct(null)
+              return
+            }
             setLabelProduct(previewProduct.id)
             setLabelDesign(id)
             setPreviewProduct(null)
@@ -6194,6 +6196,11 @@ export function WorkspaceApp() {
             go('Labels', 'Editor')
           }}
           onCreateLabel={() => {
+            if (modal === 'product-detail') {
+              setDetailLabelFlow({ productId: previewProduct.id, labelId: '' })
+              setPreviewProduct(null)
+              return
+            }
             setLabelProduct(previewProduct.id)
             setLabelDesign('')
             setLabelCreateRequest((n) => n + 1)

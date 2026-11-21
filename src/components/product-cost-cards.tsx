@@ -1,3 +1,5 @@
+import { resaleCostBasis } from '@/lib/resale-cost'
+import { ResaleCostBreakdown } from './resale-purchase-cost'
 import {
   applicableTaxes,
   money,
@@ -19,7 +21,7 @@ function productCostCardData({
   workspace: Workspace
 }) {
   try {
-    const c = productCosting(product, workspace)
+    const c = productCosting(product, workspace, { allowResaleEstimate: true })
     const business = workspace.settings[0]
     const p = profitability(product, cost, business)
     const wholesale = profitability(
@@ -36,7 +38,7 @@ function productCostCardData({
       product.workflow === 'resale'
         ? [
             {
-              label: 'Purchased stock',
+              label: resaleCostBasis(product).label,
               value: c.overhead,
               tone: 'lavender' as const,
             },
@@ -88,7 +90,7 @@ export function ProductCostCards({
       taxIssue = true
     }
     try {
-      costs = productCosting(product, workspace)
+      costs = productCosting(product, workspace, { allowResaleEstimate: true })
     } catch (error) {
       costIssue = (error as Error).message
     }
@@ -121,7 +123,11 @@ export function ProductCostCards({
         <div className="detail-stats cost-card-grid">
           {costs && (
             <CostCard
-              label="Cost to make"
+              label={
+                product.workflow === 'resale'
+                  ? resaleCostBasis(product).label
+                  : 'Cost to make'
+              }
               value={money(costs.perPackage)}
               note="Per sellable package"
             />
@@ -148,16 +154,21 @@ export function ProductCostCards({
           >
             <h3>Where your money goes</h3>
             <dl>
-              {[
-                [
-                  product.workflow === 'handmade' ? 'Materials' : 'Ingredients',
-                  costs.ingredient,
-                ],
-                ['Packaging', costs.packagingCost],
-                ['Labor', costs.labor],
-                ['Overhead', costs.overhead],
-                ['Waste', costs.waste],
-              ].map(([label, value]) => (
+              {(product.workflow === 'resale'
+                ? [[resaleCostBasis(product).label, costs.overhead]]
+                : [
+                    [
+                      product.workflow === 'handmade'
+                        ? 'Materials'
+                        : 'Ingredients',
+                      costs.ingredient,
+                    ],
+                    ['Packaging', costs.packagingCost],
+                    ['Labor', costs.labor],
+                    ['Overhead', costs.overhead],
+                    ['Waste', costs.waste],
+                  ]
+              ).map(([label, value]) => (
                 <div key={String(label)}>
                   <dt>{label}</dt>
                   <dd>{costMoney(Number(value) / costs!.packages)}</dd>
@@ -165,7 +176,11 @@ export function ProductCostCards({
               ))}
             </dl>
             <div className="product-cost-total">
-              <strong>Total cost per package</strong>
+              <strong>
+                {product.workflow === 'resale'
+                  ? 'Total cost per sellable item'
+                  : 'Total cost per package'}
+              </strong>
               <strong>{money(costs.perPackage)}</strong>
             </div>
             <p className="table-note">
@@ -173,6 +188,9 @@ export function ProductCostCards({
               until pricing setup is resolved.
             </p>
           </section>
+        )}
+        {product.workflow === 'resale' && (
+          <ResaleCostBreakdown product={product} workspace={workspace} />
         )}
       </div>
     )
@@ -183,7 +201,11 @@ export function ProductCostCards({
     <div className="pricing-summary cost-summary">
       <div className="detail-stats cost-card-grid">
         <CostCard
-          label="Cost to make"
+          label={
+            product.workflow === 'resale'
+              ? resaleCostBasis(product).label
+              : 'Cost to make'
+          }
           value={money(cost)}
           note={`${c.unitsPerPackage} ${c.unitsPerPackage === 1 ? 'item' : 'items'} per package`}
         />
@@ -213,7 +235,11 @@ export function ProductCostCards({
         aria-label="Cost breakdown per package"
       >
         <h3>Where your money goes</h3>
-        <p className="table-note">For each package sold</p>
+        <p className="table-note">
+          {product.workflow === 'resale'
+            ? 'For each sellable item sold'
+            : 'For each package sold'}
+        </p>
         <div className="product-cost-bar" aria-hidden="true">
           {breakdown.map((row) => (
             <span
@@ -239,7 +265,11 @@ export function ProductCostCards({
           ))}
         </dl>
         <div className="product-cost-total">
-          <strong>Total cost per package</strong>
+          <strong>
+            {product.workflow === 'resale'
+              ? 'Total cost per sellable item'
+              : 'Total cost per package'}
+          </strong>
           <strong>{money(cost)}</strong>
         </div>
         <p className="table-note">
@@ -255,6 +285,9 @@ export function ProductCostCards({
           per package to cover other business expenses and profit.
         </p>
       </section>
+      {product.workflow === 'resale' && (
+        <ResaleCostBreakdown product={product} workspace={workspace} />
+      )}
       <details className="calculation-box">
         <summary>How this is calculated</summary>
         <div className="cost-card-grid">
@@ -306,17 +339,29 @@ export function ProductCostCards({
             )}
         </div>
 
-        <p>
-          Each cost above is the batch amount divided by {c.packages} sellable
-          packages. Batch cost: {money(c.total)}; yield: {c.actualYield} items;{' '}
-          {c.unitsPerPackage} items per package.
-        </p>
-        {breakdown.map((row) => (
-          <p key={row.label}>
-            {row.label}: {money(row.value)} per batch ÷ {c.packages} packages ={' '}
-            {costMoney(row.value / c.packages)} per package.
+        {product.workflow === 'resale' ? (
+          <p>
+            The per-item basis above is the recorded inventory average, or an
+            explicitly labeled purchase estimate when no stock cost is recorded.
+            Actual receipts divide their combined acquisition total by the
+            explicit sellable item count, then update the inventory average. No
+            additional charges are allocated here.
           </p>
-        ))}
+        ) : (
+          <>
+            <p>
+              Each cost above is the batch amount divided by {c.packages}{' '}
+              sellable packages. Batch cost: {money(c.total)}; yield:{' '}
+              {c.actualYield} items; {c.unitsPerPackage} items per package.
+            </p>
+            {breakdown.map((row) => (
+              <p key={row.label}>
+                {row.label}: {money(row.value)} per batch ÷ {c.packages}{' '}
+                packages = {costMoney(row.value / c.packages)} per package.
+              </p>
+            ))}
+          </>
+        )}
         {c.packaging.map((line, index) => (
           <p key={index}>
             {line.name}: {line.inventoryQuantity} {line.storageUnit} at{' '}
@@ -379,17 +424,22 @@ export function ProductMarginCard({
   workspace: Workspace
 }) {
   const data = productCostCardData({ product, cost, workspace })
-  if ('error' in data) return null
+  if ('error' in data)
+    return (
+      <section className="product-margin-card">
+        <h3>Gross margin</h3>
+        <p>Unavailable until cost and pricing setup are complete.</p>
+      </section>
+    )
   const { p, target, c } = data
   return (
     <section className="product-margin-card">
-      <h3>{product.name}</h3>
+      <h3>Gross margin</h3>
       <p>
         {product.category || 'Product'} · {c.unitsPerPackage}{' '}
         {c.unitsPerPackage === 1 ? 'item' : 'items'} per package
       </p>
       <div>
-        <h4>Gross margin</h4>
         <strong>{p.margin.toFixed(2)}%</strong>
         <p>
           {p.margin >= target ? 'Meets' : 'Below'} your {target}% target
