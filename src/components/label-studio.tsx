@@ -1,3 +1,4 @@
+import { checkLabelSet } from '@/lib/label-check'
 import { FormErrorNotice } from './form-error-notice'
 import { SectionNavigation } from './section-navigation'
 import {
@@ -49,8 +50,6 @@ import {
   Save,
   Printer,
   Download,
-  Check,
-  TriangleAlert,
   Type,
   ImagePlus,
   Shapes,
@@ -89,7 +88,6 @@ import {
   imageBindingNames,
   validateLabelDocument,
   labelTextLines,
-  checkLabel,
   type LabelDocument,
   type LabelElement,
   type LabelSource,
@@ -119,7 +117,6 @@ import {
   duplicateSavedLabel,
   labelSource,
   manualLabelFields,
-  preservedManualTextWarnings,
   sourceKey,
   sourceProductId,
   validateSavedLabelContext,
@@ -173,6 +170,7 @@ export function LabelStudio({
   initialSection,
   onSectionChange,
   onDirtyChange,
+  onOpenSource,
 }: {
   workspace: Workspace
   onWorkspace: (w: Workspace) => void
@@ -185,6 +183,7 @@ export function LabelStudio({
   onCreateRequestHandled?: () => void
   initialSection?: string
   onSectionChange?: (section: string) => void
+  onOpenSource?: (kind: string, item?: Item) => void
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const backgroundPress = useRef<{
@@ -370,23 +369,8 @@ export function LabelStudio({
   const assets = withLibraryArtwork(w.graphic_assets),
     brand = (w.brand_kits || []).find((b) => b.id === brandId),
     data = resolveLabelData(w, source, brand),
-    issues = doc
-      ? labelSides(doc)
-          .flatMap((side) =>
-            checkLabel(
-              labelSide(doc, side),
-              data,
-              assets,
-              customFonts,
-              labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
-            ).map((issue) =>
-              doc.format === 'front-back'
-                ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
-                : issue,
-            ),
-          )
-          .concat(preservedManualTextWarnings(doc))
-      : [],
+    checkItems = doc ? checkLabelSet(doc, data, assets, customFonts) : [],
+    issues = checkItems.map((i) => i.message),
     element = editorDoc?.elements.find((e) => e.id === selected),
     canEdit = ready && ['Owner', 'Manager'].includes(role)
   function setSelected(id: string) {
@@ -1495,28 +1479,71 @@ export function LabelStudio({
   )
   const labelCheck = (
     <div className="studio-check">
-      <div className="studio-panel-title">
+      <details>
+        <summary>Label check · {issues.length} items need attention</summary>
         <h3>Label Check</h3>
-        <span className={`status ${issues.length ? 'amber' : 'green'}`}>
-          {issues.length ? <TriangleAlert size={14} /> : <Check size={14} />}
-          {issues.length ? `${issues.length} to review` : 'Checks complete'}
-        </span>
-      </div>
-      <p>Recordkeeping guidance. Confirm your local requirements.</p>
-      {issues.length ? (
-        <ul>
-          {issues.map((i) => (
-            <li key={i}>
-              <TriangleAlert size={14} />
-              <span>{i}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
         <p>
-          Review the final label and your local requirements before printing.
+          Checks use current saved source data and both sides of this draft.
+          Review local requirements; these checks do not certify legal
+          compliance.
         </p>
-      )}
+        {!issues.length && <p>No issues found by these checks.</p>}
+        {(['Source data', 'Label content', 'Layout'] as const).map((group) => {
+          const items = checkItems.filter((i) => i.group === group)
+          return items.length ? (
+            <section key={group}>
+              <h4>{group}</h4>
+              <ul>
+                {items.map((i) => (
+                  <li key={i.id}>
+                    <span>
+                      {i.side
+                        ? `${i.side === 'front' ? 'Front' : 'Back'}: `
+                        : ''}
+                      {i.message}
+                    </span>
+                    {i.elementId && (
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                          setEditorSide(i.side || 'front')
+                          setSelected(i.elementId!)
+                          setSection('Editor')
+                        }}
+                      >
+                        Select element
+                      </button>
+                    )}
+                    {i.record && onOpenSource && (
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                          const record = i.record!
+                          const item = (
+                            record.kind === 'ingredient'
+                              ? w.ingredients
+                              : w.recipes
+                          ).find((item) => item.id === record.id)
+                          if (item) onOpenSource(`${record.kind}-detail`, item)
+                        }}
+                      >
+                        Open {i.record.kind}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null
+        })}
+        <p>
+          Fields with a data binding update live. Plain text is manual and stays
+          as entered. Ingredient order uses recorded recipe weights; processing
+          may change final order.
+        </p>
+      </details>
       {issues.length > 0 && (
         <label className="studio-review">
           <input

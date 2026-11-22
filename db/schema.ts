@@ -248,6 +248,8 @@ export const journalLines = orgTable('journal_lines')
 export const activity = orgTable('activity')
 export const settings = orgTable('settings')
 export const integrations = orgTable('integrations')
+export const salesImports = orgTable('sales_imports')
+export const salesProductMappings = orgTable('sales_product_mappings')
 
 // Tax configuration is editable; completed sales retain independent JSON snapshots.
 export const taxRates = orgTable('tax_rates')

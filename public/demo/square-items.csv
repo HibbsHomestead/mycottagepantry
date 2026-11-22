@@ -1,0 +1,6 @@
+Transaction ID,Order ID,Line Item ID,Date,Time,Location,Item,Variation,SKU,Quantity,Gross Sales,Discounts,Refunds,Net Sales,Tax,Tip,Fees,Currency
+SIM-T1,SIM-O1,SIM-L1,11/01/2026,09:15,Simulated Mill Market,Simulated Cookies,3-pack,SIM-COOKIE-3,2,12.00,2.00,0.00,10.00,0.96,2.00,0.62,USD
+SIM-T1,SIM-O1,SIM-L2,11/01/2026,09:15,Simulated Mill Market,Simulated loaf,Small,SIM-LOAF,1,6.00,0.00,0.00,6.00,0.96,2.00,0.62,USD
+SIM-T2,SIM-O2,SIM-L3,11/01/2026,10:30,Simulated Hill Stand,Simulated surprise item,,SIM-UNKNOWN,1,8.00,0.00,2.00,6.00,0.36,0.00,0.32,USD
+SIM-T3,SIM-O3,SIM-L4,11/02/2026,11:00,Simulated Hill Stand,Simulated Cookies,3-pack,SIM-COOKIE-3,1,6.00,0.00,0.00,6.00,0.36,0.00,0.32,USD
+SIM-T4,SIM-O4,SIM-L5,11/02/2026,11:00,Simulated Hill Stand,Simulated Cookies,3-pack,SIM-COOKIE-3,1,6.00,0.00,0.00,6.00,0.36,0.00,0.32,USD

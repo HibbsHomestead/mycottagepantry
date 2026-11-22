@@ -348,26 +348,20 @@ it('uses submenu thumbnails to switch sides without discarding edits or undo his
     .join('')
   await user.click(front)
   expect(
-    Array.from(
-      document.querySelectorAll('.studio-scroll-stage svg text'),
-    )
+    Array.from(document.querySelectorAll('.studio-scroll-stage svg text'))
       .map((node) => node.textContent)
       .join(''),
   ).toBe(frontArtwork)
   await user.click(back)
   expect(
-    Array.from(
-      document.querySelectorAll('.studio-scroll-stage svg text'),
-    )
+    Array.from(document.querySelectorAll('.studio-scroll-stage svg text'))
       .map((node) => node.textContent)
       .join(''),
   ).toBe(backArtwork)
   expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
   await user.click(screen.getByRole('button', { name: 'Undo' }))
   expect(
-    Array.from(
-      document.querySelectorAll('.studio-scroll-stage svg text'),
-    )
+    Array.from(document.querySelectorAll('.studio-scroll-stage svg text'))
       .map((node) => node.textContent)
       .join(''),
   ).not.toBe(backArtwork)
@@ -397,4 +391,49 @@ it('moves the single side switcher above the canvas when the submenu collapses',
   expect(
     screen.getByRole('button', { name: 'Back', pressed: true }),
   ).toBeInTheDocument()
+})
+
+it('keeps source checks collapsed, deduplicated and independent of side selection, with record actions preserving draft text', async () => {
+  const user = userEvent.setup()
+  const workspace = demoData()
+  const openSource = vi.fn()
+  // Exactly the connected ingredient is unreviewed; other saved records stay intact.
+  const product = workspace.products.find((p) =>
+    workspace.recipes.some((r) => r.id === p.recipeId && r.lines?.length),
+  )!
+  const recipe = workspace.recipes.find((r) => r.id === product.recipeId)!
+  const ingredient = workspace.ingredients.find(
+    (i) => i.id === recipe.lines[0].ingredientId,
+  )!
+  ingredient.reviewed = false
+  render(
+    <LabelStudio
+      workspace={workspace}
+      onWorkspace={vi.fn()}
+      ready={false}
+      role="Owner"
+      initialProductId={product.id}
+      onOpenSource={openSource}
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.selectOptions(screen.getByLabelText('Label format'), 'front-back')
+  await user.clear(screen.getByLabelText('Label name'))
+  await user.type(screen.getByLabelText('Label name'), 'Unsaved check draft')
+  const summary = screen.getAllByText(/Label check · \d+ items need attention/)[0]
+  const panel = summary.closest('details')!
+  expect(panel.open).toBe(false)
+  await user.click(summary)
+  const count = panel.querySelectorAll('li').length
+  await user.click(screen.getByRole('button', { name: 'Back' }))
+  expect(panel.querySelectorAll('li')).toHaveLength(count)
+  await user.click(screen.getByRole('button', { name: 'Front' }))
+  expect(panel.querySelectorAll('li')).toHaveLength(count)
+  const actions = screen.getAllByRole('button', { name: 'Open ingredient' })
+  await user.click(actions[0])
+  expect(openSource).toHaveBeenCalledWith(
+    'ingredient-detail',
+    expect.objectContaining({ id: expect.any(String) }),
+  )
+  expect(screen.getByLabelText('Label name')).toHaveValue('Unsaved check draft')
 })

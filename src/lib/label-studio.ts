@@ -435,6 +435,7 @@ export type LabelSource = {
 }
 export type LabelData = {
   nonFood?: boolean
+  sourceRecords?: Record<string, { kind: 'ingredient' | 'recipe'; id: string }>
   values: Record<string, string>
   warnings: string[]
   allergens: string[]
@@ -546,7 +547,9 @@ export function resolveLabelData(
     product?.disclaimer || brand?.defaultDisclaimer || business.disclaimer || ''
   // Explicit business text is independent of the legacy product/brand fallback.
   // Keep that existing binding unchanged so saved designs retain their behavior.
-  values['business.cottageFoodDisclaimer'] = String(w.settings[0]?.disclaimer ?? '')
+  values['business.cottageFoodDisclaimer'] = String(
+    w.settings[0]?.disclaimer ?? '',
+  )
   values['business.footer'] = brand?.defaultFooter || ''
   values['product.storage'] = product?.storage || brand?.defaultStorage || ''
   values['recipe.name'] = recipe?.name || ''
@@ -558,21 +561,58 @@ export function resolveLabelData(
   values['batch.quantity'] = String(batch?.actualYield ?? batch?.yield ?? '')
   values.date = new Date().toISOString().slice(0, 10)
   if (batch?.netQuantity) values['product.netQuantity'] = batch.netQuantity
+  const sourceRecords: NonNullable<LabelData['sourceRecords']> = {}
+  function ingredientWarning(i: Item, message: string) {
+    const text = `${message} [${i.id}]`
+    warnings.push(text)
+    sourceRecords[text] = { kind: 'ingredient', id: i.id }
+  }
+  if (
+    !recipe &&
+    product &&
+    product.workflow !== 'resale' &&
+    product.workflow !== 'handmade'
+  )
+    warnings.push('The product’s connected recipe is unavailable.')
   let weightsVerified = true
   function visit(i: Item, q: number, u: string, path: string[]) {
-    if (!i.reviewed)
-      warnings.push(`Needs review: verify allergens for ${i.name}.`)
-    if (!i.statement)
-      warnings.push(
-        `Missing information: ingredient statement name for ${i.name}.`,
-      )
-    if (i.requiresSubingredients && !i.subingredients)
-      warnings.push(`Missing information: subingredients for ${i.name}.`)
+    // These are the same saved fields used by IngredientDetail. An explicit
+    // statement overrides the saved name; an empty override uses that name.
+    const statementName =
+      String(i.statement || '').trim() || String(i.name || '').trim()
     for (const a of i.allergens || []) known.add(a)
+    const hasOwnDeclaration = !!(
+      i.statement ||
+      i.subingredients ||
+      i.sourceContains ||
+      i.sourceMayContain ||
+      i.allergens?.length ||
+      i.requiresSubingredients
+    )
+    if (!i.compoundRecipeId || hasOwnDeclaration) {
+      if (!i.reviewed)
+        ingredientWarning(
+          i,
+          `Needs review: verify allergens for ${i.name}; ${i.labelReviewReason || 'supplier ingredient/allergen review is not saved.'}`,
+        )
+      if (!statementName)
+        ingredientWarning(
+          i,
+          `Missing information: ingredient statement name for ${i.id}.`,
+        )
+      if (i.requiresSubingredients && !String(i.subingredients || '').trim())
+        ingredientWarning(
+          i,
+          `Missing information: subingredients for ${i.name}; saved review does not supply the required wording.`,
+        )
+    }
     if (i.compoundRecipeId) {
       const prep = w.recipes.find((r) => r.id === i.compoundRecipeId)
       if (!prep || path.includes(prep.id)) {
-        warnings.push('Needs review: compound recipe is missing or cyclic.')
+        ingredientWarning(
+          i,
+          `Needs review: compound recipe ${i.compoundRecipeId} is missing or cyclic.`,
+        )
         weightsVerified = false
         return
       }
@@ -589,7 +629,8 @@ export function resolveLabelData(
         }
       } catch {
         weightsVerified = false
-        warnings.push(
+        ingredientWarning(
+          i,
           `Needs review: verified weight conversion for ${i.name} is missing.`,
         )
       }
@@ -600,13 +641,14 @@ export function resolveLabelData(
       weight = convert(q, u, 'g', i.conversions)
     } catch {
       weightsVerified = false
-      warnings.push(
+      ingredientWarning(
+        i,
         `Needs review: verified weight conversion for ${i.name} is missing.`,
       )
     }
     const existing = parts.find(
       (p) =>
-        p.name === (i.statement || i.name) &&
+        p.name === statementName &&
         p.subingredients === (i.subingredients || ''),
     )
     if (existing && weight !== null && existing.weight !== null) {
@@ -617,7 +659,7 @@ export function resolveLabelData(
         ]
     } else
       parts.push({
-        name: i.statement || i.name,
+        name: statementName,
         subingredients: i.subingredients || '',
         ...(recipe?.baseRecipeId && path.length
           ? { sourceRecipeIds: [...path] }
@@ -664,14 +706,10 @@ export function resolveLabelData(
           l.sourceRecipePath || (recipe ? [recipe.id] : []),
         )
       else
-        warnings.push('Missing information: recipe ingredient is unavailable.')
+        warnings.push(
+          `Missing information: recipe ingredient ${l.ingredientId} is unavailable in ${recipe?.name || 'the selected recipe'}.`,
+        )
     }
-  // Recipe input weights are not assumed to be final weights after baking or dehydration.
-  if (!nonFood && recipe && parts.length) {
-    warnings.push(
-      'Confirm local requirements: ingredient order uses recorded recipe weights; verify finished-product order after processing.',
-    )
-  }
   if (weightsVerified) parts.sort((a, b) => (b.weight || 0) - (a.weight || 0))
   else
     warnings.push(
@@ -695,6 +733,14 @@ export function resolveLabelData(
     warnings: [...new Set(warnings)],
     allergens: [...known],
     weightsVerified,
+    sourceRecords: {
+      ...Object.fromEntries(
+        warnings
+          .filter((text) => !sourceRecords[text] && recipe)
+          .map((text) => [text, { kind: 'recipe' as const, id: recipe!.id }]),
+      ),
+      ...sourceRecords,
+    },
     ingredientParts: parts,
   }
 }

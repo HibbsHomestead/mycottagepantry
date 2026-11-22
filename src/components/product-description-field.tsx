@@ -123,6 +123,17 @@ function DescriptionDraft({
         <label htmlFor={id}>
           Product description <small>(customer-facing)</small>
         </label>
+
+      </div>
+      <textarea
+        id={id}
+        rows={4}
+        maxLength={3000}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => change(field, e.target.value)}
+      />
+      <div className="description-generate-row">
         <TooltipProvider>
           <ActionTip label="Generate description">
             <button
@@ -140,14 +151,6 @@ function DescriptionDraft({
           </ActionTip>
         </TooltipProvider>
       </div>
-      <textarea
-        id={id}
-        rows={4}
-        maxLength={3000}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => change(field, e.target.value)}
-      />
       <p className="form-hint">
         For future customer use. Saving does not publish this text. Keep
         required ingredient and allergen labeling separate.

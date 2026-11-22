@@ -33,7 +33,7 @@ export function reportRows(name: string, state: Workspace): Item[] {
     cogs = sales.reduce(
       (s, i) =>
         s +
-        (i.historicalCogs ??
+        (i.externalSource === 'square' ? 0 : i.historicalCogs ??
           productCost(
             products.find((p) => p.id === i.productId) || products[0],
           ) * i.quantity),
@@ -47,12 +47,12 @@ export function reportRows(name: string, state: Workspace): Item[] {
     return [
       ['Net product sales', revenue],
       ['Consignment commission income', commission],
-      ['Estimated COGS', -cogs],
-      ['Gross profit', revenue + commission - cogs],
+      ['Estimated COGS' + (sales.some(s => s.externalSource === 'square') ? ' (Square historical costs unavailable)' : ''), -cogs],
+      ['Gross profit' + (sales.some(s => s.externalSource === 'square') ? ' (incomplete: imported costs unavailable)' : ''), revenue + commission - cogs],
       ['Operating expenses', -operating],
       ['Processing fees', -fees - consignmentFees],
       [
-        'Estimated net profit',
+        'Estimated net profit' + (sales.some(s => s.externalSource === 'square') ? ' (incomplete: imported costs unavailable)' : ''),
         revenue + commission - cogs - operating - fees - consignmentFees,
       ],
     ].map(([name, amount], i) => ({
@@ -97,6 +97,7 @@ export function reportRows(name: string, state: Workspace): Item[] {
         name: p.name,
         packages: transactions.reduce((s, i) => s + i.quantity, 0),
         revenue: transactions.reduce((s, i) => s + i.amount, 0),
+        costBasis: 'Current-cost estimate; not confirmed historical profitability',
         unitCost: cost === null ? 'Unavailable — incomplete estimate' : cost,
         retail: p.price,
         marginPercent,

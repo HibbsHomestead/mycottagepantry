@@ -695,7 +695,7 @@ export function ProductCategorySelector({
     ? 'unavailable'
     : selectedCategory.active === false
       ? 'inactive'
-      : selectedCategory.scope !== scope
+      : !productCategoryEligible(selectedCategory, scope)
         ? 'unscoped or in another section · review needed'
         : ''
   const begin = (category?: ProductCategory, name = '') => {
@@ -780,12 +780,6 @@ export function ProductCategorySelector({
           }
         </p>
       )}
-      {api.ready && selectedCategory && !selectedCategory.scope && (
-        <p className="form-hint">
-          Saved category predates section-specific categories and remains
-          available.
-        </p>
-      )}
       {api.ready &&
         !categories.some(
           (c) => c.active !== false && productCategoryEligible(c, scope),
@@ -795,10 +789,7 @@ export function ProductCategorySelector({
           </p>
         )}
       {api.ready && product.productCategoryId && selectedIssue && (
-        <p role="status" className="form-hint">
-          Your saved category is {selectedIssue}. Its assignment is preserved
-          until you choose a replacement.
-        </p>
+        <details className="form-hint"><summary>This category needs review.</summary><p>Your saved category is {selectedIssue}. Choose a replacement above. Its assignment stays unchanged until you save.</p></details>
       )}
       {api.taxReady ? (
         <ProductTaxSummary product={product} business={business} concise />

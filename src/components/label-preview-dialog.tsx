@@ -1,3 +1,4 @@
+import { checkLabelSet } from '@/lib/label-check'
 import {
   labelSide,
   labelSides,
@@ -33,7 +34,6 @@ import {
 } from './label-print-workflow'
 import { workspaceFonts, type LabelFont } from '@/lib/label-font-catalog'
 import {
-  checkLabel,
   resolveLabelData,
   type LabelData,
   type LabelDocument,
@@ -41,10 +41,7 @@ import {
 } from '@/lib/label-studio'
 import { defaultSheet, type SheetLayout } from '@/lib/label-print-layout'
 import { mergeLabelWorkspace } from '@/lib/label-persistence'
-import {
-  labelsForProduct,
-  preservedManualTextWarnings,
-} from '@/lib/saved-labels'
+import { labelsForProduct } from '@/lib/saved-labels'
 import { assignedLabel, missingLabelFields } from '@/lib/label-preview'
 import type { Item, Workspace } from '@/lib/domain'
 import './label-preview.css'
@@ -158,21 +155,10 @@ export function LabelPreviewDialog({
     try {
       return {
         issues: doc
-          ? labelSides(doc)
-              .flatMap((side) =>
-                checkLabel(
-                  labelSide(doc, side),
-                  data,
-                  assets,
-                  customFonts,
-                  labelSides(doc).flatMap((s) => labelSide(doc, s).elements),
-                ).map((issue) =>
-                  doc.format === 'front-back'
-                    ? `${side === 'front' ? 'Front' : 'Back'}: ${issue}`
-                    : issue,
-                ),
-              )
-              .concat(preservedManualTextWarnings(doc))
+          ? checkLabelSet(doc, data, assets, customFonts).map(
+              (i) =>
+                `${i.group}${i.side ? ` · ${i.side === 'front' ? 'Front' : 'Back'}` : ''}: ${i.message}`,
+            )
           : [],
         missing: doc
           ? labelSides(doc).flatMap((side) =>
@@ -597,18 +583,33 @@ export function LabelPreviewDialog({
               </ul>
             </div>
           )}
+          {!issues.length && <p>No issues found by these checks.</p>}
           {issues.length > 0 && (
-            <div className="label-preview-issues">
-              <strong>Label Check · {issues.length} to review</strong>
-              <ul>
-                {issues.map((i) => (
-                  <li key={i}>
-                    <TriangleAlert size={14} />
-                    <span>{i}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <details className="label-preview-issues">
+              <summary>
+                Label check · {issues.length} items need attention
+              </summary>
+              {['Source data', 'Label content', 'Layout'].map((group) => {
+                const items = issues.filter(
+                  (issue) =>
+                    issue.startsWith(group + ':') ||
+                    issue.startsWith(group + ' ·'),
+                )
+                return items.length ? (
+                  <section key={group}>
+                    <h4>{group}</h4>
+                    <ul>
+                      {items.map((issue) => (
+                        <li key={issue}>
+                          <TriangleAlert size={14} />
+                          <span>{issue}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null
+              })}
+            </details>
           )}
           {doc && (
             <section className="label-preview-print" aria-label="Print setup">

@@ -1,0 +1,5 @@
+Transaction ID,Order ID,Date,Time,Location,Gross Sales,Discounts,Refunds,Net Sales,Tax,Tip,Fees,Total Collected,Currency
+SIM-T1,SIM-O1,11/01/2026,09:15,Simulated Mill Market,18.00,2.00,0.00,16.00,0.96,2.00,0.62,18.96,USD
+SIM-T2,SIM-O2,11/01/2026,10:30,Simulated Hill Stand,8.00,0.00,2.00,6.00,0.36,0.00,0.32,6.36,USD
+SIM-T3,SIM-O3,11/02/2026,11:00,Simulated Hill Stand,6.00,0.00,0.00,6.00,0.36,0.00,0.32,6.36,USD
+SIM-T4,SIM-O4,11/02/2026,11:00,Simulated Hill Stand,6.00,0.00,0.00,6.00,0.36,0.00,0.32,6.36,USD
