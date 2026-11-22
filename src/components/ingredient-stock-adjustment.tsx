@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { Package } from 'lucide-react'
 import { convert, type Item } from '@/lib/domain'
@@ -101,11 +102,7 @@ export function IngredientStockAdjustment({
           {preview}
         </p>
       )}
-      {error && (
-        <p className="warning-text" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
       <Field label="Adjustment type">
         <select
           value={draft.type || 'adjustment'}

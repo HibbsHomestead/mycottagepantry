@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { SectionNavigation } from './section-navigation'
 import {
   labelLayout,
@@ -1656,19 +1657,8 @@ export function LabelStudio({
               ))}
             </details>
           )}
-          {error && (
-            <p role="alert" className="form-error">
-              {error}
-              {saveFailed && (
-                <button
-                  className="btn secondary"
-                  disabled={saveBusy}
-                  onClick={() => void saveDocument()}
-                >
-                  Retry save
-                </button>
-              )}
-            </p>
+          {section !== 'Editor' && section !== 'Print & Export' && (
+            <FormErrorNotice message={error} />
           )}
           {!canEdit && (
             <p className="studio-notice">
@@ -3162,6 +3152,31 @@ export function LabelStudio({
                   )}
                 </aside>
               </div>
+              <footer className="studio-submission-footer">
+                <FormErrorNotice message={error}>
+                  {saveFailed && <button type="button" className="btn secondary" disabled={saveBusy} onClick={() => void saveDocument()}>Retry save</button>}
+                </FormErrorNotice>
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    disabled={saveBusy}
+                    onClick={cancelEditor}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={
+                      busy || saveBusy || !canEdit || doc.workflowVersion !== 1
+                    }
+                    onClick={() => void saveDocument()}
+                  >
+                    {saveBusy ? 'Saving…' : 'Save label'}
+                  </button>
+                </div>
+              </footer>
             </>
           )}
           {section === 'Graphics Library' && (
@@ -3613,6 +3628,7 @@ export function LabelStudio({
               <div className="studio-print-layout">
                 <section className="panel studio-print-controls">
                   <h2>Preview and print</h2>
+                  <FormErrorNotice message={error} />
                   {doc.workflowVersion === 1 && (
                     <div className="button-row">
                       <button

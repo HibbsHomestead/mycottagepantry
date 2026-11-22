@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import {
   useEffect,
   useLayoutEffect,
@@ -233,13 +235,9 @@ export function BarcodeScanner({
               {error ? 'Retry camera' : 'Start rear camera'}
             </button>
           )}
-          {error && (
-            <p role="alert" className="warning-text">
-              {error}
-            </p>
-          )}
+          {error && <FormErrorNotice message={error} />}
           {continuous && children}
-          <form
+          <SubmissionForm
             onSubmit={(e) => {
               e.preventDefault()
               if (!manual.trim()) return
@@ -259,10 +257,12 @@ export function BarcodeScanner({
                 onChange={(e) => setManual(e.target.value)}
               />
             </label>
+
+            <FormErrorNotice />
             <button className="btn secondary" disabled={!manual.trim()}>
               Use entered code
             </button>
-          </form>
+          </SubmissionForm>
           {continuous && (
             <>
               <button

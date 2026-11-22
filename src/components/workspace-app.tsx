@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { ProductLabelFlow } from './product-label-flow'
 import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
@@ -339,7 +341,7 @@ export function WorkspaceApp() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState(''),
-    [modal, setModal] = useState<string | null>(null),
+    [modal, setModalState] = useState<string | null>(null),
     [productTab, setProductTab] = useState('details'),
     [selectedRecord, setSelected] = useState<Item | null>(null),
     [filter, setFilter] = useState('All items'),
@@ -354,6 +356,19 @@ export function WorkspaceApp() {
     [receiptRevision, setReceiptRevision] = useState(0),
     [financeReceiptEntry, setFinanceReceiptEntry] = useState(''),
     [formError, setFormError] = useState('')
+  const inventoryDetailReturn = useRef<{ item: Item; kind: 'ingredient-detail' | 'fabric-detail' } | null>(null)
+  function setModal(next: string | null) {
+    if (next === null && inventoryDetailReturn.current) {
+      setSelected(inventoryDetailReturn.current.item)
+      const returnKind = inventoryDetailReturn.current.kind
+      inventoryDetailReturn.current = null
+      setModalState(returnKind)
+      setFormError('')
+      return
+    }
+    if (!['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(next || '')) inventoryDetailReturn.current = null
+    setModalState(next)
+  }
   const selected =
     modal === 'product-detail' && selectedRecord
       ? state.products.find((p) => p.id === selectedRecord.id) || selectedRecord
@@ -454,7 +469,6 @@ export function WorkspaceApp() {
             ? error.message
             : 'Appearance could not sync. Retry Save appearance.'
         setFormError(message)
-        toast.error(message)
         return false
       }
     })
@@ -884,6 +898,8 @@ export function WorkspaceApp() {
     open('product-detail', product)
   }
   function open(kind: string, item?: Item, newDraft = false) {
+    if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
+
     if (
       modal === 'product-detail' &&
       selected &&
@@ -1331,6 +1347,8 @@ export function WorkspaceApp() {
   }
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
+    setFormError('')
     if (
       modal === 'ingredient' &&
       (ingredientSaving.current || ingredientImportBusy || busy)
@@ -3447,7 +3465,10 @@ export function WorkspaceApp() {
           save={(table, data) => mutate('save', table, data)}
         />
       )}
-      {modal?.startsWith('fabric-') && selected && (
+      {(modal === 'fabric-detail' || inventoryDetailReturn.current?.kind === 'fabric-detail') && selected && (
+        <FabricDialog key={`fabric-detail-${selected.id}`} kind="fabric-detail" item={state.ingredients.find(i => i.id === selected.id) || selected} workspace={state} role={role} mutate={mutate} onEdit={() => open('fabric-edit', selected)} onStock={kind => open(kind, selected)} onWorkspace={setState} close={() => setModal(null)} onDirty={() => {}} />
+      )}
+      {modal?.startsWith('fabric-') && modal !== 'fabric-detail' && selected && (
         <FabricDialog
           key={`${modal}-${selected.id}`}
           kind={modal}
@@ -3551,7 +3572,7 @@ export function WorkspaceApp() {
           onClose={() => setBarcodeEntryOpen(false)}
         />
       )}
-      {modal === 'ingredient-detail' && selected && (
+      {(modal === 'ingredient-detail' || (inventoryDetailReturn.current?.kind === 'ingredient-detail' && ['receive', 'adjust'].includes(modal || ''))) && selected && (
         <IngredientDetail
           key={selected.id}
           initialEditing={selected.startEditing === true}
@@ -3578,7 +3599,7 @@ export function WorkspaceApp() {
             Sign out on this device. You can sign in again with your saved
             password.
           </DialogDescription>
-          {logoutError && <p role="alert">{logoutError}</p>}
+          <FormErrorNotice message={logoutError} />
           <div className="button-row">
             <Btn secondary disabled={logoutBusy} onClick={() => setModal(null)}>
               Cancel
@@ -3734,7 +3755,7 @@ export function WorkspaceApp() {
             'journal',
             'import',
           ].includes(modal || '') ? (
-            <form
+            <SubmissionForm
               onSubmit={submit}
               onChangeCapture={() => setFormDirty(true)}
               onInvalidCapture={(e) => {
@@ -4240,12 +4261,7 @@ export function WorkspaceApp() {
                       />
                     </details>
                   </div>
-                  {formError && (
-                    <div className="form-error" role="alert">
-                      <TriangleAlert size={16} />
-                      {formError}
-                    </div>
-                  )}
+
                 </IngredientFormBody>
               )}
               {modal === 'receive' && (
@@ -5453,21 +5469,13 @@ export function WorkspaceApp() {
                   </p>
                 </>
               )}
-              {formError && modal !== 'ingredient' && (
-                <div className="form-error" role="alert">
-                  <TriangleAlert size={16} />
-                  {formError}
-                </div>
-              )}
+
               </ProductFormBody>
               <div className="form-footer item-dialog-actions">
+                <FormErrorNotice message={formError} />
                 {modal === 'recipe' && selected && <ItemDeleteButton table="recipes" item={selected} draft={formDirty} />}
                 {modal === 'product' && selected && <ItemDeleteButton table="products" item={selected} draft={formDirty} />}
-                {modal === 'ingredient' && formError && (
-                  <p role="alert" className="ingredient-save-error">
-                    {formError}
-                  </p>
-                )}
+
                 <Btn secondary onClick={() => setModal(null)}>
                   Cancel
                 </Btn>
@@ -5515,7 +5523,7 @@ export function WorkspaceApp() {
                               )[modal || '']}
                 </Btn>
               </div>
-            </form>
+            </SubmissionForm>
           ) : null}
           {modal === 'event-source' && selected && (
             <div className="calculation-box">

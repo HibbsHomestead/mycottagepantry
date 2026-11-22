@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { ProductMockups } from './product-mockup'
 import { ArtworkPicker } from './artwork-picker'
 import { libraryArtwork } from '@/lib/artwork-library'
@@ -225,11 +226,7 @@ export function ItemImagesPanel({
           {status}
         </p>
       )}
-      {error && (
-        <p role="alert" className="form-error">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
     </div>
   )
 }

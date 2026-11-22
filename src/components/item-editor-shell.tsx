@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import * as Tabs from '@radix-ui/react-tabs'
 import { useSyncExternalStore, type ReactNode } from 'react'
 import {
@@ -130,7 +132,7 @@ export function ItemEditorShell({
             <DialogDescription>{description}</DialogDescription>
           </div>
         </DialogHeader>
-        <form
+        <SubmissionForm
           noValidate
           className="product-editor-form"
           onSubmit={(event) => {
@@ -183,12 +185,8 @@ export function ItemEditorShell({
             </fieldset>
           </div>
           <footer className="product-editor-actions item-dialog-actions">
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
             {notice}
+            <FormErrorNotice message={error} />
             <div className="product-editor-buttons">
               <button
                 type="button"
@@ -203,7 +201,7 @@ export function ItemEditorShell({
               </button>
             </div>
           </footer>
-        </form>
+        </SubmissionForm>
       </DialogContent>
     </Dialog>
   )

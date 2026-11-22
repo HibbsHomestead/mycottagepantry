@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import {
   ProductImportFailure,
   retryDeadline,
@@ -928,7 +929,7 @@ export function ProductLinkImport({
       {busy && <p role="status">Reading product details…</p>}
       {!lookupPanel && error && (
         <div>
-          <p role="alert">{error}</p>
+          <FormErrorNotice message={error} />
           {!verificationUrl && (
             <button
               type="button"

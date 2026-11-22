@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { inventoryQuantity } from "@/lib/inventory-quantity";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -346,7 +348,7 @@ export function InventoryCounts({
           ? `${pending} pending save${pending === 1 ? "" : "s"} — keep this screen open`
           : "All changes saved to your business"}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
     </div>
   );
   return (
@@ -539,6 +541,7 @@ export function InventoryCounts({
           <p>
             {scope.length} scoped items. You can add newly created items later.
           </p>
+          <FormErrorNotice message={error} />
           <div className="count-actions">
             <button
               className="btn"
@@ -653,7 +656,7 @@ export function InventoryCounts({
               </button>
             )}
             {editable && (
-              <form
+              <SubmissionForm
                 className="count-manual-barcode"
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -671,6 +674,7 @@ export function InventoryCounts({
                     onChange={(e) => setManualCode(e.target.value)}
                   />
                 </label>
+                <FormErrorNotice />
                 <button
                   className="btn secondary"
                   disabled={
@@ -679,7 +683,7 @@ export function InventoryCounts({
                 >
                   Count barcode
                 </button>
-              </form>
+              </SubmissionForm>
             )}
           </header>
           {editable && (
@@ -1497,7 +1501,7 @@ export function InventoryCounts({
           )}
         </section>
       )}
-      {error && !scanner && !saved && <p role="alert">{error}</p>}
+      {error && !scanner && !saved && !setup && <FormErrorNotice message={error} />}
       {scanner && saved && (
         <BarcodeScanner
           continuous

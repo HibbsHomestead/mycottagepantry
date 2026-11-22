@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useCallback, useEffect, useState } from 'react'
 import {
   assistantStatus,
@@ -65,11 +66,7 @@ export function AssistantConnectionStatus({
           >
             Refresh AI status
           </button>
-          {error && (
-            <p role="alert" className="warning-text">
-              {error}
-            </p>
-          )}
+          {error && <FormErrorNotice message={error} />}
         </>
       ) : (
         <p>

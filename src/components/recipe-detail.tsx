@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { ItemCopyButton } from './item-copy'
 import { ItemDeleteButton } from './item-deletion'
 import { useRef, useState } from 'react'
@@ -121,11 +122,7 @@ export function RecipeDetail({
   return (
     <>
       <div className="recipe-detail-body">
-        {error && (
-          <p className="warning-text" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <FormErrorNotice message={error} />}
         {stage === 'details' ? (
           <>
             <div className="recipe-category-detail">

@@ -96,7 +96,7 @@ it('requires a confirmed package net weight and explicit new basis for a zero-st
   await user.selectOptions(screen.getByLabelText('Stock shelf unit'), 'oz')
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   expect(p.save).not.toHaveBeenCalled()
-  expect(screen.getByRole('alert')).toHaveTextContent(
+  expect(document.querySelector('.ingredient-detail-footer .form-error-notice')).toHaveTextContent(
     'Confirm the new stock basis',
   )
   fireEvent.change(
@@ -143,7 +143,7 @@ it('explains the historical-stock restriction and opens explicit conversion revi
     }),
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
-  expect(screen.getByRole('alert')).toHaveTextContent(
+  expect(document.querySelector('.ingredient-detail-footer .form-error-notice')).toHaveTextContent(
     'Add a measured, verified conversion',
   )
   await user.click(
@@ -174,7 +174,7 @@ it('groups ingredient details into Product Details cards in a portal modal and r
     screen.queryByRole('navigation', { name: 'Ingredient sections' }),
   ).not.toBeInTheDocument()
   await user.click(screen.getByRole('tab', { name: 'Inventory' }))
-  expect(screen.getByRole('region', { name: 'Inventory' })).toBeVisible()
+  expect(screen.getByRole('region', { name: 'Current stock' })).toBeVisible()
   await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
   expect(
     screen.getByRole('region', { name: 'Purchase & costing' }),
@@ -324,6 +324,7 @@ it('keeps saved store comparisons and linked inventory/recipe actions in the sam
   const recipe = p.workspace.recipes.find((r) =>
     r.lines.some((l: any) => l.ingredientId === base.id),
   )!
+  await user.click(screen.getByRole('tab', { name: 'Identification & Notes' }))
   await user.click(screen.getByRole('button', { name: recipe.name }))
   expect(p.open).toHaveBeenLastCalledWith('recipe-detail', recipe)
   await user.click(screen.getByRole('tab', { name: 'Purchasing' }))
@@ -403,7 +404,7 @@ it.each([false, true])(
       }
       expect(
         fetcher.mock.calls.every(([url]) =>
-          String(url).includes('assistant=1'),
+          String(url).includes('assistant=1') || String(url).includes('pantryCategories=1'),
         ),
       ).toBe(true)
       expect(p.save).not.toHaveBeenCalled()
@@ -492,7 +493,7 @@ it('opens Edit Item with incomplete units, preserves saved fields and cancels wi
   expect(screen.getByText(/Current balance: 7 each/)).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   expect(p.save).not.toHaveBeenCalled()
-  expect(screen.getByRole('alert')).toHaveTextContent(/verified conversion/)
+  expect(document.querySelector('.ingredient-detail-footer .form-error-notice')).toHaveTextContent(/verified conversion/)
   await user.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(p.save).not.toHaveBeenCalled()
   expect(JSON.stringify(ingredient)).toBe(original)

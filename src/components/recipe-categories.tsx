@@ -1,3 +1,5 @@
+import { FormErrorNotice } from './form-error-notice'
+import { SubmissionForm } from './submission-form'
 import { useRef, useState } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import {
@@ -155,20 +157,8 @@ export function RecipeCategoryManager({
           recipes keep archived categories.
         </DialogDescription>
         <div className="recipe-category-manager">
-          {error && (
-            <div role="alert">
-              <p>{error}</p>
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={() => void request()}
-              >
-                Reload categories
-              </button>
-            </div>
-          )}
           {notice && <p role="status">{notice}</p>}
-          <form
+          <SubmissionForm
             onSubmit={(e) => {
               e.preventDefault()
               void request({
@@ -187,6 +177,19 @@ export function RecipeCategoryManager({
                 onChange={(e) => setName(e.target.value)}
               />
             </label>
+
+            {error && (
+              <FormErrorNotice>
+                {error}
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => void request()}
+                >
+                  Reload categories
+                </button>
+              </FormErrorNotice>
+            )}
             <div className="button-row">
               <button
                 type="button"
@@ -231,7 +234,7 @@ export function RecipeCategoryManager({
                 ))}
               </fieldset>
             )}
-          </form>
+          </SubmissionForm>
           <div className="recipe-category-list">
             {categories.map((c) => (
               <div className="recipe-category-row" key={c.id}>

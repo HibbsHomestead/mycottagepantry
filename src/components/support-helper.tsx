@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { supportAiRequest } from '@/lib/support-client'
 import {
@@ -350,11 +352,7 @@ export function SupportHelper({
           applies. Failed attempts count toward limits.
         </p>
       </details>
-      {error && (
-        <p role="alert" className="ai-notice">
-          {error}
-        </p>
-      )}
+      {!ready && error && <FormErrorNotice message={error} />}
       {notice && (
         <p role="status" className="ai-notice">
           {notice}
@@ -436,7 +434,7 @@ export function SupportHelper({
         </p>
       )}
       {ready && (
-        <form onSubmit={send} aria-label="Ask AI support">
+        <SubmissionForm onSubmit={send} aria-label="Ask AI support">
           <label>
             Your app question
             <textarea
@@ -541,6 +539,8 @@ export function SupportHelper({
               )}
             </>
           )}
+
+          <FormErrorNotice message={!review ? error : ''} />
           <button
             className="btn primary"
             disabled={
@@ -554,7 +554,7 @@ export function SupportHelper({
           >
             {busy ? 'Preparing reply…' : 'Send to AI'}
           </button>
-        </form>
+        </SubmissionForm>
       )}
       {chat ? (
         <div className="ai-toolbar">
@@ -598,7 +598,7 @@ export function SupportHelper({
         <a href="/support">Contact support without AI</a>
       ) : null}
       {review && (
-        <form onSubmit={escalate} aria-label="Review support request">
+        <SubmissionForm onSubmit={escalate} aria-label="Review support request">
           <label>
             Issue summary for support
             <textarea
@@ -634,6 +634,7 @@ export function SupportHelper({
             requests.
           </p>
           <div className="ai-toolbar">
+            <FormErrorNotice message={error} />
             <button className="btn primary" disabled={busy}>
               Create support request
             </button>
@@ -645,7 +646,7 @@ export function SupportHelper({
               Cancel
             </button>
           </div>
-        </form>
+        </SubmissionForm>
       )}
       {deleting && (
         <div className="ai-notice">

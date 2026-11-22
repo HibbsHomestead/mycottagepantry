@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { customerMessage } from '@/lib/customer-message'
 import { useEffect, useRef, useState } from 'react'
 import { RecipeCategorySelect } from './recipe-categories'
@@ -1022,11 +1023,7 @@ export function RecipeImport({
         <footer>
           {(error || notice) && (
             <div className="recipe-import-feedback">
-              {error && (
-                <p role="alert" className="warning-text">
-                  {error}
-                </p>
-              )}
+              {error && <FormErrorNotice message={error} />}
               {notice && <p role="status">{notice}</p>}
               {recovery && (
                 <a href={recovery} target="_blank" rel="noopener noreferrer">

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { ovenToday } from '../lib/oven-dates'
 import './production-run.css'
 import { useRef, useState } from 'react'
@@ -250,7 +251,7 @@ export function LegacyProductionRun({
               </div>
             )
           ))}
-        {error && <p role="alert">{error}</p>}
+        {error && <FormErrorNotice message={error} />}
       </section>
     )
   return (
@@ -473,7 +474,7 @@ export function LegacyProductionRun({
           <p>{definition.bom.instructions}</p>
         </section>
       )}
-      {setupError && <p role="alert">{setupError}</p>}
+      {setupError && <FormErrorNotice message={setupError} />}
       {p && !scheduled && (
         <div className="button-row">
           <button
@@ -688,7 +689,7 @@ export function LegacyProductionRun({
         Drafts and plans move no stock. Completion consumes requirements and
         receives usable output atomically.
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       <div className="button-row">
         {!scheduled && (
           <>

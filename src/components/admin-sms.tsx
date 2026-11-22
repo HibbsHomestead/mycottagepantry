@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useState, type FormEvent } from 'react'
 type Request = (query: string, body?: unknown) => Promise<any> // eslint-disable-line @typescript-eslint/no-explicit-any
 type Sent = { expiresAt: string; resendAt: string; resendsRemaining?: number }
@@ -88,17 +90,14 @@ export function AdminSmsSignIn({
         <strong>{masked}</strong>. Codes are sent only when requested.
       </p>
       {status && <p role="status">{status}</p>}
-      {error && (
-        <p role="alert" className="admin-error">
-          {error}
-        </p>
-      )}
+
+      {!sent && <FormErrorNotice message={error} />}
       {!sent ? (
         <button className="admin-primary" disabled={busy} onClick={send}>
           {busy ? 'Requesting text…' : 'Text me a code'}
         </button>
       ) : (
-        <form onSubmit={verify}>
+        <SubmissionForm onSubmit={verify}>
           <label>
             Verification code
             <input
@@ -122,6 +121,8 @@ export function AdminSmsSignIn({
               ? 'This code is no longer valid. Request a new text.'
               : `Code expires at ${time(sent.expiresAt)} (within 5 minutes) or when a newer text is sent.`}
           </small>
+
+          <FormErrorNotice message={error} />
           <button className="admin-primary" disabled={busy || expired || !code}>
             {busy ? 'Checking code…' : 'Verify code'}
           </button>
@@ -137,7 +138,7 @@ export function AdminSmsSignIn({
                 ? `Resend code in ${wait}s`
                 : 'Resend code'}
           </button>
-        </form>
+        </SubmissionForm>
       )}
       <button
         type="button"
@@ -177,6 +178,7 @@ export function AdminSmsSettings({
 }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [setup, setSetup] = useState(false)
   const [phone, setPhone] = useState('')
   const [sent, setSent] = useState<(Sent & { masked: string }) | null>(null)
@@ -187,6 +189,7 @@ export function AdminSmsSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
+    setError('')
     try {
       const result = await request('action=' + purpose, {})
       if (result.stage === 'sms_setup') setSetup(true)
@@ -197,7 +200,7 @@ export function AdminSmsSettings({
         onChange()
       }
     } catch (e) {
-      setMessage((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -207,6 +210,7 @@ export function AdminSmsSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
+    setError('')
     try {
       const result = await request('action=sms-enroll-send', { phone })
       setSent(result)
@@ -215,7 +219,7 @@ export function AdminSmsSettings({
         `Text requested to ${result.masked}. Enter the code to activate it. Nothing changes until the code is confirmed.`,
       )
     } catch (e) {
-      setMessage((e as Error).message)
+      setError((e as Error).message)
       if (codeError(e) === 'RECENT_AUTH_REQUIRED') reset()
     } finally {
       setBusy(false)
@@ -226,6 +230,7 @@ export function AdminSmsSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
+    setError('')
     try {
       const result = await request('action=sms-enroll-confirm', { code })
       reset()
@@ -238,8 +243,7 @@ export function AdminSmsSettings({
       )
       onChange()
     } catch (e) {
-      setMessage((e as Error).message)
-      setCode('')
+      setError((e as Error).message)
       if (codeError(e) === 'RECENT_AUTH_REQUIRED') reset()
     } finally {
       setBusy(false)
@@ -259,7 +263,7 @@ export function AdminSmsSettings({
       reset()
       setMessage('Phone setup canceled. Existing methods are unchanged.')
     } catch (e) {
-      setMessage((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -273,8 +277,9 @@ export function AdminSmsSettings({
         Only US and Canadian (+1) mobile numbers are supported.
       </p>
       {message && <p role="status">{message}</p>}
+      {!sent && !setup && <FormErrorNotice message={error} />}
       {sent ? (
-        <form onSubmit={confirm}>
+        <SubmissionForm onSubmit={confirm}>
           <label>
             Code sent to {sent.masked}
             <input
@@ -287,6 +292,8 @@ export function AdminSmsSettings({
             />
           </label>
           <small>Setup expires at {time(sent.expiresAt)}.</small>
+
+          <FormErrorNotice message={error} />
           <button disabled={busy || !code}>Confirm and activate</button>
           <button
             type="button"
@@ -301,9 +308,9 @@ export function AdminSmsSettings({
           <button type="button" disabled={busy} onClick={cancel}>
             Cancel setup
           </button>
-        </form>
+        </SubmissionForm>
       ) : setup ? (
-        <form onSubmit={sendCode}>
+        <SubmissionForm onSubmit={sendCode}>
           <label>
             Mobile number (US/Canada)
             <input
@@ -321,11 +328,13 @@ export function AdminSmsSettings({
             after you enter that code here. Setup expires 10 minutes after your
             administrator verification.
           </small>
+
+          <FormErrorNotice message={error} />
           <button disabled={busy}>Send verification text</button>
           <button type="button" disabled={busy} onClick={cancel}>
             Cancel setup
           </button>
-        </form>
+        </SubmissionForm>
       ) : (
         <div>
           {!available && (

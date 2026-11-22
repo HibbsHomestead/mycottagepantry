@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import { Search, ScanLine } from 'lucide-react'
 import {
@@ -177,7 +178,7 @@ export function InventoryBarcodeReview({
           )}
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       {searched && (
         <div aria-live="polite">
           <h3>

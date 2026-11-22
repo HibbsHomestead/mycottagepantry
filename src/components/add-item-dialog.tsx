@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { workspaceCategorySettings } from '@/lib/section-categories'
 import { IngredientLookupTools } from './ingredient-lookup-tools'
 import {
@@ -439,7 +441,7 @@ export function AddItemDialog({
                 : 'Item details, package cost, and an optional count of stock you already own.'}
             </DialogDescription>
           </DialogHeader>
-          <form
+          <SubmissionForm
             ref={formRef}
             noValidate
             onSubmit={async (event) => {
@@ -1161,13 +1163,10 @@ export function AddItemDialog({
                     )}
                 </Tabs.Root>
               )}
-              {error && (
-                <p role="alert" className="form-error">
-                  {error}
-                </p>
-              )}
             </div>
             <footer className="add-item-actions">
+              <FormErrorNotice message={error} />
+
               <button
                 type="button"
                 className="btn secondary"
@@ -1184,7 +1183,7 @@ export function AddItemDialog({
                     : 'Save item'}
               </button>
             </footer>
-          </form>
+          </SubmissionForm>
         </div>
       </DialogContent>
     </Dialog>

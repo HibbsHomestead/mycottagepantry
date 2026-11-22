@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { useRef, useState, type ReactNode } from 'react'
 import {
@@ -350,9 +351,7 @@ export function InventoryTools({
         },
       })}
       {error && !countOpen && !resultOpen && (
-        <p role="alert" className="warning-text">
-          {error}
-        </p>
+        <FormErrorNotice message={error} />
       )}
       {scanner && (
         <BarcodeScanner onCode={found} onClose={() => setScanner(false)} />
@@ -482,11 +481,7 @@ export function InventoryTools({
               </button>
             </>
           )}
-          {error && (
-            <p role="alert" className="warning-text">
-              {error}
-            </p>
-          )}
+          {error && <FormErrorNotice message={error} />}
           <button
             className="btn secondary"
             onClick={() => setResultOpen(false)}

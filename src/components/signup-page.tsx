@@ -1,3 +1,5 @@
+import { FormErrorNotice } from './form-error-notice'
+import { SubmissionForm } from './submission-form'
 import { useAccountAccess } from '@/lib/account-access-client'
 import { AccountAccessStatus } from './account-access-status'
 import { PublicSite } from './public-site'
@@ -95,9 +97,6 @@ export function SignupPage() {
           <p className="registration-lead">
             Choose a plan for your food, handmade, or homestead business.
           </p>
-          {(error || invalidSelection) && (
-            <p role="alert">{error || invalidSelection}</p>
-          )}
           {submitted ? (
             <div role="status">
               <h2>Check your email</h2>
@@ -112,7 +111,7 @@ export function SignupPage() {
               <a href={loginHref}>Continue to login</a>
             </div>
           ) : (
-            <form className="registration-form" onSubmit={submit}>
+            <SubmissionForm className="registration-form" onSubmit={submit}>
               <fieldset className="signup-plan-choice">
                 <legend>Choose your plan</legend>
                 {launchPricing.plans
@@ -200,6 +199,8 @@ export function SignupPage() {
                     ? 'Payment details are entered securely at checkout.'
                     : null}
               </p>
+
+              <FormErrorNotice message={error || invalidSelection} />
               <button
                 className="public-button"
                 type="submit"
@@ -207,7 +208,7 @@ export function SignupPage() {
               >
                 {busy ? 'Creating account…' : 'Continue'}
               </button>
-            </form>
+            </SubmissionForm>
           )}
           <div className="registration-actions">
             <a className="public-text-link" href={loginHref}>

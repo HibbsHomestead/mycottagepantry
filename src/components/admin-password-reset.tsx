@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 export function AdminPasswordReset({
@@ -79,13 +81,10 @@ export function AdminPasswordReset({
   return (
     <div>
       <h2>Choose a new password</h2>
-      {error && (
-        <p role="alert" className="admin-error">
-          {error}
-        </p>
-      )}
+
+      {stage !== 'ready' && <FormErrorNotice message={error} />}
       {stage === 'ready' && (
-        <form className="admin-login" onSubmit={submit}>
+        <SubmissionForm className="admin-login" onSubmit={submit}>
           <label>
             New password
             <input
@@ -110,10 +109,12 @@ export function AdminPasswordReset({
               onChange={(event) => setConfirmation(event.target.value)}
             />
           </label>
+
+          <FormErrorNotice message={error} />
           <button className="admin-primary" disabled={busy}>
             {busy ? 'Saving password…' : 'Save new password'}
           </button>
-        </form>
+        </SubmissionForm>
       )}
       <button
         type="button"

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useState } from 'react'
 import { adminRequest } from './admin-portal'
 import type { AdminMetadata } from '@/lib/platform-admin-types'
@@ -91,7 +92,7 @@ export function AdminCatalog() {
         Publication does not certify allergens or update private records.
         Uploaded images are not accepted in this phase.
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       {!data ? (
         <button type="button" onClick={() => void load()}>
           Retry catalog administration

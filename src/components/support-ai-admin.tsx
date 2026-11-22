@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useState, type FormEvent } from 'react'
 import { supportAiRequest } from '@/lib/support-client'
 import {
@@ -79,7 +81,7 @@ export function SupportAiSuggestion({
       >
         {busy ? 'Preparing suggestion…' : 'Generate AI suggestion'}
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       {suggestion && (
         <div className="ai-notice">
           <strong>AI suggestion · review required · not sent</strong>
@@ -185,10 +187,10 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
         automatic retries. Customer AI access is restricted to explicitly listed
         evaluation businesses; general subscriber access is closed.
       </p>
-      {error && <p role="alert">{error}</p>}
+
       {notice && <p role="status">{notice}</p>}
       {policy && (
-        <form onSubmit={save}>
+        <SubmissionForm onSubmit={save}>
           <label>
             Support model
             <select
@@ -288,6 +290,8 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
                 />
                 I reviewed the usage, spending limits and retention change.
               </label>
+
+              <FormErrorNotice message={error} />
               <button
                 className="support-button"
                 disabled={busy || !policyConfirmed}
@@ -296,7 +300,7 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
               </button>
             </>
           )}
-        </form>
+        </SubmissionForm>
       )}
       <ul>
         {usage.map((row) => (

@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { type Item, type Workspace, csv } from '../lib/domain'
 import { ovenToday, ovenTimezone } from '../lib/oven-dates'
@@ -643,13 +645,9 @@ export function EventsWorkspace({
               ? 'Plan your day without changing production, inventory or financial records.'
               : `${event?.type} · ${event?.status} · ${event && timing(event)} · ${event?.timezone}`}
           </ItemDetailHeader>
-          {error && (
-            <p role="alert" className="connection-note">
-              {error}
-            </p>
-          )}
+
           {draft ? (
-            <form
+            <SubmissionForm
               onSubmit={(e) => {
                 e.preventDefault()
                 void save()
@@ -770,6 +768,8 @@ export function EventsWorkspace({
                   onChange={(e) => change('notes', e.target.value)}
                 />
               </Label>
+
+              <FormErrorNotice message={error} />
               <div className="button-row">
                 <button className="btn" disabled={busy} type="submit">
                   Save event
@@ -778,7 +778,7 @@ export function EventsWorkspace({
                   Discard changes
                 </button>
               </div>
-            </form>
+            </SubmissionForm>
           ) : (
             event &&
             report && (
@@ -1373,7 +1373,7 @@ export function EventsWorkspace({
                     'Sales & financials',
                     'Expenses',
                   ].includes(tab) && (
-                    <form
+                    <SubmissionForm
                       className="event-card event-assignment"
                       onSubmit={async (e) => {
                         e.preventDefault()
@@ -1496,10 +1496,12 @@ export function EventsWorkspace({
                         expense can belong to one event; batch runs can support
                         several events.
                       </p>
+
+                      <FormErrorNotice message={error} />
                       <button className="btn" disabled={busy || !recordId}>
                         Save association
                       </button>
-                    </form>
+                    </SubmissionForm>
                   )}
               </>
             )

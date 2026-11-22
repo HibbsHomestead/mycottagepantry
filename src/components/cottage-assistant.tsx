@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronDown, Sparkles } from 'lucide-react'
 import {
@@ -248,7 +249,7 @@ export function CottageAssistant({
                 : 'Waiting for a web research response…'}
             </p>
           )}
-          {error && <p role="alert">{error}</p>}
+          {error && <FormErrorNotice message={error} />}
           {notice && <p role="status">{notice}</p>}
           {result && (
             <section

@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { useState } from 'react'
@@ -485,7 +487,7 @@ export function PurchaseStockReceipts({
               </p>
             )}
             {correctDate && ['Owner', 'Manager'].includes(role) && (
-              <form
+              <SubmissionForm
                 onSubmit={async (e) => {
                   e.preventDefault()
                   if (busy) return
@@ -537,11 +539,12 @@ export function PurchaseStockReceipts({
                   />{' '}
                   I approve this received date correction.
                 </label>
-                {error && <p role="alert">{error}</p>}
+
+                <FormErrorNotice message={error} />
                 <button className="btn" disabled={busy || !approved}>
                   {busy ? 'Saving…' : 'Approve date correction'}
                 </button>
-              </form>
+              </SubmissionForm>
             )}
           </DialogContent>
         </Dialog>

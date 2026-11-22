@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import { adminRequest } from './admin-portal'
 import type { AdminMetadata } from '@/lib/platform-admin-types'
@@ -57,7 +59,7 @@ export function AdminBusinessAccess({ data }: { data: AdminMetadata }) {
           additions are blocked.
         </p>
       )}
-      <form
+      <SubmissionForm
         onSubmit={async (e) => {
           e.preventDefault()
           if (busy) return
@@ -192,7 +194,8 @@ export function AdminBusinessAccess({ data }: { data: AdminMetadata }) {
             </button>
           </div>
         )}
-        {error && <p role="alert">{error}</p>}
+
+        <FormErrorNotice message={error} />
         <button className="btn" type="submit" disabled={busy}>
           {busy
             ? 'Checking…'
@@ -200,7 +203,7 @@ export function AdminBusinessAccess({ data }: { data: AdminMetadata }) {
               ? 'Confirm access change'
               : 'Preview access change'}
         </button>
-      </form>
+      </SubmissionForm>
       <h3>Access history</h3>
       {!data.manualHistory.length && <p>No explicit manual overrides.</p>}
       {data.manualHistory.map((g: AdminMetadata) => (

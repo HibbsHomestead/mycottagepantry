@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { adminRequest } from '@/lib/admin-client'
 export { adminRequest } from '@/lib/admin-client'
 import { AdminBusinessAccess } from './admin-business-access'
@@ -412,11 +414,7 @@ export function AdminPortal() {
                 <br />
                 Your Oven account does not grant administrator access.
               </p>
-              {error && (
-                <p role="alert" className="admin-error">
-                  {error}
-                </p>
-              )}
+
               {recoveryCallback ? (
                 <AdminPasswordReset
                   onComplete={() => {
@@ -438,7 +436,7 @@ export function AdminPortal() {
                   }}
                 />
               ) : (
-                <form
+                <SubmissionForm
                   onSubmit={recovering ? recoverPassword : signIn}
                   className="admin-login"
                 >
@@ -466,6 +464,8 @@ export function AdminPortal() {
                       />
                     </label>
                   )}
+
+                  <FormErrorNotice message={error} />
                   <button className="admin-primary" disabled={busy}>
                     {busy
                       ? 'Please wait…'
@@ -490,7 +490,7 @@ export function AdminPortal() {
                   <small>
                     Sign in with your administrator email and password.
                   </small>
-                </form>
+                </SubmissionForm>
               )}
               <a className="admin-back" href="https://mycottagepantry.com/oven">
                 <ArrowLeft size={15} />
@@ -540,11 +540,8 @@ export function AdminPortal() {
                       Refresh records
                     </button>
                   </div>
-                  {error && (
-                    <p className="admin-error" role="alert">
-                      {error}
-                    </p>
-                  )}
+
+                  <FormErrorNotice message={error} />
                   {(!data || loadedQuery !== queryString) && !error ? (
                     <div className="admin-loading" role="status">
                       <span />
@@ -693,7 +690,7 @@ function AdminView({
             Accounts
           </a>
         </div>
-        <form className="admin-search" action="/admin" method="get">
+        <SubmissionForm className="admin-search" action="/admin" method="get">
           <input type="hidden" name="section" value="customers" />
           <input type="hidden" name="kind" value={kind} />
           <label htmlFor="admin-search">
@@ -712,9 +709,11 @@ function AdminView({
               }
               maxLength={120}
             />
+
+            <FormErrorNotice />
             <button className="admin-primary">Search</button>
           </div>
-        </form>
+        </SubmissionForm>
         {data.note && <p>{data.note}</p>}
         <DataTable
           rows={data.rows}

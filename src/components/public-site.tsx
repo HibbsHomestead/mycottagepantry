@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import { useWorkspaceViewport } from '@/lib/use-workspace-viewport'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -452,7 +453,7 @@ export function LegalPage({ kind }: { kind: 'Privacy' | 'Terms' }) {
             <p role="status">Loading published policy…</p>
           ) : (
             <>
-              <p role="alert">{error}</p>
+              <FormErrorNotice message={error} />
               <button type="button" className="public-button" onClick={retry}>
                 Retry policy check
               </button>

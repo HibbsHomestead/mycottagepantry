@@ -1,6 +1,7 @@
+import { FormErrorNotice } from './form-error-notice'
 import { ItemDeleteButton } from './item-deletion'
 import { CatalogAction } from './catalog-controls'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs'
+import { InventoryDetailTabs } from './inventory-detail-tabs'
 import { Pencil, Printer, PackagePlus, SlidersHorizontal } from 'lucide-react'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { workspaceCategorySettings } from '@/lib/section-categories'
@@ -205,8 +206,8 @@ export function IngredientDetail({
       edit()
       if (initialReviewSection === 'conversion') setEditTab('conversions')
     } else setEditing(false)
-    setDetailTab('inventory')
     setCalculationOpen(false)
+    setDetailTab('inventory')
     setOfferEdit(null)
     setDirty(false)
     setDiscard(null)
@@ -686,11 +687,6 @@ export function IngredientDetail({
           </header>
         )}
         <div className="ingredient-detail-body" ref={contentRef}>
-          {error && (
-            <p role="alert" className="warning-text">
-              {error}
-            </p>
-          )}
           {display.warning && (
             <p className="form-hint warning-text" role="status">
               Conversion required. {display.warning} Reorder amounts remain in
@@ -752,6 +748,8 @@ export function IngredientDetail({
               }}
               onSubmit={(e) => {
                 e.preventDefault()
+                if (busy || importBusy) return
+                setError('')
                 if (
                   !editing &&
                   (quantityError ||
@@ -1562,27 +1560,84 @@ export function IngredientDetail({
                 photoDetails={
                   <>
                     <section
-                      aria-label="Recipe usage"
-                      className="ingredient-section ingredient-section-wide"
+                      aria-label="Current stock"
+                      className="ingredient-section"
                     >
-                      <h3>Recipe usage</h3>
-                      {usage.length ? (
-                        usage.map((r) => (
-                          <button
-                            key={r.id}
-                            className="text-button"
-                            onClick={() => open('recipe-detail', r)}
-                          >
-                            {r.name}
-                          </button>
-                        ))
-                      ) : (
-                        <p>
-                          No recipes use this{' '}
-                          {packaging ? 'packaging' : 'ingredient'} yet.
-                        </p>
-                      )}
+                      <h3>Current stock</h3>
+                      <div className="ingredient-metrics">
+                        <div>
+                          <small>On hand</small>
+                          <strong>
+                            <Measure>
+                              {() =>
+                                `${inventoryQuantity(convert(i.quantity || 0, i.unit, display.unit, i.conversions))}`
+                              }
+                            </Measure>{' '}
+                            {display.unit}
+                          </strong>
+                        </div>
+                        <div>
+                          <small>Inventory value</small>
+                          <strong>
+                            {i.quantity != null && i.cost != null
+                              ? money(i.quantity * i.cost)
+                              : 'Not set'}
+                          </strong>
+                        </div>
+                        <div>
+                          <small>Reorder threshold</small>
+                          <strong>
+                            <Measure>
+                              {() =>
+                                i.threshold == null
+                                  ? 'Not set'
+                                  : `${inventoryQuantity(convert(i.threshold, i.unit, display.unit, i.conversions))} ${display.unit}`
+                              }
+                            </Measure>
+                          </strong>
+                        </div>
+                        <div>
+                          <small>Reorder quantity</small>
+                          <strong>
+                            <Measure>
+                              {() =>
+                                i.reorderQuantity == null
+                                  ? 'Not set'
+                                  : `${inventoryQuantity(convert(i.reorderQuantity, i.unit, display.unit, i.conversions))} ${display.unit}`
+                              }
+                            </Measure>
+                          </strong>
+                        </div>
+                        <div>
+                          <small>Storage location</small>
+                          <strong>{i.storageLocation || 'Not set'}</strong>
+                        </div>
+                      </div>
+                      <div className="button-row">
+                        <CatalogAction
+                          label="Receive stock"
+                          disabled={!canEdit}
+                          onClick={() =>
+                            open('receive', {
+                              ...i,
+                              quantity: i.purchaseQuantity || 1,
+                              unit: i.purchaseUnit || i.unit,
+                              price: i.packagePrice || 0,
+                            })
+                          }
+                        >
+                          <PackagePlus size={18} />
+                        </CatalogAction>
+                        <CatalogAction
+                          label="Adjust stock"
+                          disabled={!canEdit}
+                          onClick={() => open('adjust', { ...i, quantity: -1 })}
+                        >
+                          <SlidersHorizontal size={18} />
+                        </CatalogAction>
+                      </div>
                     </section>
+
                     {inventoryReviewReasons(i, w).length > 0 && (
                       <div className="ingredient-purchase-notice">
                         {!i.compoundRecipeId && !hasPurchasePackage(i) && (
@@ -1633,7 +1688,9 @@ export function IngredientDetail({
                     className="app-dialog ingredient-calculation-dialog"
                     onCloseAutoFocus={(event) => {
                       event.preventDefault()
-                      calculationTrigger.current?.focus({ preventScroll: true })
+                      calculationTrigger.current?.focus({
+                        preventScroll: true,
+                      })
                     }}
                   >
                     <DialogTitle>How this is calculated</DialogTitle>
@@ -1694,403 +1751,387 @@ export function IngredientDetail({
                     </div>
                   </DialogContent>
                 </Dialog>
-                <Tabs
+                <InventoryDetailTabs
+                  key={i.id}
+                  label="Ingredient detail sections"
                   value={detailTab}
                   onValueChange={setDetailTab}
-                  className="ingredient-details-tabs"
-                >
-                  <TabsList aria-label="Ingredient detail sections">
-                    <TabsTrigger value="inventory">Inventory</TabsTrigger>
-                    <TabsTrigger value="purchasing">Purchasing</TabsTrigger>
-                    <TabsTrigger value="allergens">
-                      Ingredients &amp; Allergens
-                    </TabsTrigger>
-                    <TabsTrigger value="labels">
-                      Identification & Notes
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent
-                    value="inventory"
-                    className="calculation-box ingredient-detail-card"
-                  >
-                    <section
-                      aria-label="Inventory"
-                      className="ingredient-section"
-                    >
-                      <h3>Inventory</h3>
-                      <div className="ingredient-metrics">
-                        <div>
-                          <small>Inventory value</small>
-                          <strong>
-                            {i.quantity != null && i.cost != null
-                              ? money(i.quantity * i.cost)
-                              : 'Not set'}
-                          </strong>
-                        </div>
-                        <div>
-                          <small>Reorder threshold</small>
-                          <strong>
-                            <Measure>
-                              {() =>
-                                i.threshold == null
-                                  ? 'Not set'
-                                  : `${inventoryQuantity(convert(i.threshold, i.unit, display.unit, i.conversions))} ${display.unit}`
-                              }
-                            </Measure>
-                          </strong>
-                        </div>
-                        <div>
-                          <small>Reorder quantity</small>
-                          <strong>
-                            <Measure>
-                              {() =>
-                                i.reorderQuantity == null
-                                  ? 'Not set'
-                                  : `${inventoryQuantity(convert(i.reorderQuantity, i.unit, display.unit, i.conversions))} ${display.unit}`
-                              }
-                            </Measure>
-                          </strong>
-                        </div>
-                      </div>
-                      <p>Storage location: {i.storageLocation || 'Not set'}</p>
-                      <div className="button-row">
-                        <CatalogAction
-                          label="Receive stock"
-                          disabled={!canEdit}
-                          onClick={() =>
-                            open('receive', {
-                              ...i,
-                              quantity: i.purchaseQuantity || 1,
-                              unit: i.purchaseUnit || i.unit,
-                              price: i.packagePrice || 0,
-                            })
-                          }
-                        >
-                          <PackagePlus size={18} />
-                        </CatalogAction>
-                        <CatalogAction
-                          label="Adjust stock"
-                          disabled={!canEdit}
-                          onClick={() => open('adjust', { ...i, quantity: -1 })}
-                        >
-                          <SlidersHorizontal size={18} />
-                        </CatalogAction>
-                      </div>
-                    </section>
-                    <details>
-                      <summary>Inventory ledger & purchase history</summary>
-                      <div className="table-wrap">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Date</th>
-                              <th>Activity</th>
-                              <th>Quantity</th>
-                              <th>Amount</th>
-                              <th>Reason / vendor</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {history.map(inventoryMovementView).map((l) => (
-                              <tr key={l.id}>
-                                <td>{l.date}</td>
-                                <td>{l.type}</td>
-                                <td>
-                                  {inventoryQuantity(l.quantity)} {l.unit}
-                                  {l.resultingInventoryQuantity != null &&
-                                    l.inventoryUnit && (
-                                      <small>
-                                        {' '}
-                                        · Balance:{' '}
-                                        {inventoryQuantity(
-                                          l.resultingInventoryQuantity,
-                                        )}{' '}
-                                        {l.inventoryUnit}
-                                      </small>
-                                    )}
-                                </td>
-                                <td>{money(l.amount)}</td>
-                                <td>
-                                  {l.reason} {l.vendor}
-                                </td>
+                  inventory={
+                    <>
+                      <details>
+                        <summary>Inventory ledger & purchase history</summary>
+                        <div className="table-wrap">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Activity</th>
+                                <th>Quantity</th>
+                                <th>Amount</th>
+                                <th>Reason / vendor</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {!history.length && <p>No stock activity recorded.</p>}
-                    </details>
-                    <details>
-                      <summary>Cost history</summary>
-                      {history
-                        .filter(
-                          (l) =>
-                            l.type === 'purchase_receipt' && l.quantity > 0,
-                        )
-                        .map((l) => (
-                          <p key={l.id}>
-                            {l.date} ·{' '}
-                            {precise(
-                              (l.amount ?? l.packagePrice ?? l.purchasePrice) /
-                                l.quantity,
-                            )}{' '}
-                            / {l.unit} actual receipt cost
-                          </p>
-                        ))}
-                      {(i.costReferenceHistory || []).map(
-                        (h: any, index: number) => (
-                          <p key={index}>
-                            {h.date} · reference {h.purchaseQuantity}{' '}
-                            {h.purchaseUnit} for {money(h.packagePrice)} ·{' '}
-                            {h.reason}
-                          </p>
-                        ),
-                      )}
-                      <p>
-                        Completed production keeps historical cost snapshots.
-                      </p>
-                    </details>
-                  </TabsContent>
-                  <TabsContent
-                    value="purchasing"
-                    className="calculation-box ingredient-detail-card"
-                  >
-                    <section
-                      aria-label="Purchase & costing"
-                      className="ingredient-section"
-                    >
-                      <h3>Purchase & costing</h3>
-                      <p>
-                        Preferred store/vendor:{' '}
-                        <strong>{i.vendor || 'Not set'}</strong>
-                      </p>
-                      <p>
-                        Price reference source:{' '}
-                        {i.referenceVendor || i.vendor || 'Not set'}
-                      </p>
-                      {i.productSourceUrl && (
+                            </thead>
+                            <tbody>
+                              {history.map(inventoryMovementView).map((l) => (
+                                <tr key={l.id}>
+                                  <td>{l.date}</td>
+                                  <td>{l.type}</td>
+                                  <td>
+                                    {inventoryQuantity(l.quantity)} {l.unit}
+                                    {l.resultingInventoryQuantity != null &&
+                                      l.inventoryUnit && (
+                                        <small>
+                                          {' '}
+                                          · Balance:{' '}
+                                          {inventoryQuantity(
+                                            l.resultingInventoryQuantity,
+                                          )}{' '}
+                                          {l.inventoryUnit}
+                                        </small>
+                                      )}
+                                  </td>
+                                  <td>{money(l.amount)}</td>
+                                  <td>
+                                    {l.reason} {l.vendor}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {!history.length && <p>No stock activity recorded.</p>}
+                      </details>
+                      <details>
+                        <summary>Cost history</summary>
+                        {history
+                          .filter(
+                            (l) =>
+                              l.type === 'purchase_receipt' && l.quantity > 0,
+                          )
+                          .map((l) => (
+                            <p key={l.id}>
+                              {l.date} ·{' '}
+                              {precise(
+                                (l.amount ??
+                                  l.packagePrice ??
+                                  l.purchasePrice) / l.quantity,
+                              )}{' '}
+                              / {l.unit} actual receipt cost
+                            </p>
+                          ))}
+                        {(i.costReferenceHistory || []).map(
+                          (h: any, index: number) => (
+                            <p key={index}>
+                              {h.date} · reference {h.purchaseQuantity}{' '}
+                              {h.purchaseUnit} for {money(h.packagePrice)} ·{' '}
+                              {h.reason}
+                            </p>
+                          ),
+                        )}
                         <p>
-                          Product source:{' '}
-                          <a
-                            href={
-                              /^https:\/\//.test(i.productSourceUrl)
-                                ? i.productSourceUrl
-                                : undefined
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            View retailer page
-                          </a>{' '}
-                          · checked {i.productCheckedAt}
+                          Completed production keeps historical cost snapshots.
                         </p>
-                      )}
-                      {i.listedOnlinePrice != null && (
-                        <p>
-                          Listed online price: {i.currency || 'USD'}{' '}
-                          {String(i.listedOnlinePrice)}. Confirm or replace the
-                          package price with the actual amount paid.
-                        </p>
-                      )}
-                      {i.priceCheckedAt && (
-                        <p>Price checked: {i.priceCheckedAt}</p>
-                      )}
-                      <p>
-                        Package:{' '}
-                        {hasPurchasePackage(i)
-                          ? `${precise(i.purchaseQuantity ?? i.packageQuantity)} ${i.purchaseUnit} for ${money(i.packagePrice)}`
-                          : 'Not set'}
-                      </p>
-                      <p className="muted">
-                        Purchase tax:{' '}
-                        {i.includesTax === true
-                          ? 'included'
-                          : i.includesTax === false
-                            ? 'excluded'
-                            : 'not specified'}{' '}
-                        · Shipping:{' '}
-                        {i.includesShipping === true
-                          ? 'included'
-                          : i.includesShipping === false
-                            ? 'excluded'
-                            : 'not specified'}
-                      </p>
-                    </section>
-                    <section
-                      aria-label="Vendor quotes"
-                      className="ingredient-section ingredient-section-wide"
-                    >
-                      <h3>Vendor quotes</h3>
-                      {canEdit && (
-                        <button
-                          className="text-button"
-                          onClick={() => editOffer()}
-                        >
-                          Enter store price manually
-                        </button>
-                      )}
-                      {offers.length > 0 && <h4>Saved offers</h4>}
-                      {(showAll ? offers : offers.slice(0, 2)).map((o: any) => (
-                        <StoreOffer
-                          key={o.id}
-                          ingredient={i}
-                          today={today()}
-                          offer={o}
-                          canEdit={canEdit && !busy}
-                          edit={() => editOffer(o)}
-                          act={(op) => {
-                            if (op === 'conversion') {
-                              setDetailTab('calculation')
-                              requestAnimationFrame(() => {
-                                const details = document.getElementById(
-                                  'ingredient-conversions',
-                                ) as HTMLDetailsElement | null
-                                if (details) {
-                                  details.scrollIntoView({ block: 'start' })
-                                }
-                              })
-                            } else if (op === 'reference') {
-                              referenceRevision.current = i.updatedAt
-                              setReference(o)
-                            } else
-                              void run('ingredientOffer', {
-                                operation: op,
-                                offerId: o.id,
-                              })
-                          }}
-                        />
-                      ))}
-                      {offers.length > 2 && (
-                        <button
-                          className="text-button"
-                          onClick={() => setShowAll(!showAll)}
-                        >
-                          {showAll
-                            ? 'Show two alternatives'
-                            : `Show all ${offers.length} alternatives`}
-                        </button>
-                      )}
-                      {reference && (
-                        <section
-                          className="calculation-box"
-                          aria-label="Confirm reference price"
-                        >
-                          <h3>Change recipe-cost reference?</h3>
-                          <p>
-                            {reference.vendor} · {reference.brand}
-                          </p>
-                          <PackageSummary ingredient={i} offer={reference} />
-                          <p>
-                            Current estimates affected:{' '}
-                            {usage.map((r) => r.name).join(', ') ||
-                              'No existing recipes'}
-                            . Inventory valuation and historical purchases stay
-                            unchanged.{' '}
-                            {food &&
-                              'Review supplier allergens and subingredients when changing brands.'}
-                          </p>
-                          <div className="button-row">
-                            <button
-                              className="btn secondary"
-                              onClick={() => setReference(null)}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              className="btn"
-                              disabled={busy}
-                              onClick={() =>
-                                void run('ingredientOffer', {
-                                  operation: 'reference',
-                                  offerId: reference.id,
-                                  confirmed: true,
-                                })
-                              }
-                            >
-                              Confirm reference price
-                            </button>
-                          </div>
-                        </section>
-                      )}
-                    </section>
-                  </TabsContent>
-                  <TabsContent
-                    value="labels"
-                    className="calculation-box ingredient-detail-card"
-                  >
-                    <section
-                      aria-label="Identification"
-                      className="ingredient-section"
-                    >
-                      <h3>Identification</h3>
-                      <p>Barcode: {i.barcode || 'Not set'}</p>
-                      <p>Internal SKU: {i.sku || 'Not set'}</p>
-                      <p>Retailer SKU: {i.retailerSku || 'Not provided'}</p>
-
-                      <p>
-                        Lot: {i.lot || 'Not recorded'} · Expiration:{' '}
-                        {i.expires || 'Not recorded'}
-                      </p>
-                      <p>Brand: {i.brand || 'Not set'}</p>
-                      <p>Notes: {i.notes || 'Not recorded'}</p>
-                    </section>
-                  </TabsContent>
-                  <TabsContent
-                    value="allergens"
-                    className="calculation-box ingredient-detail-card"
-                  >
-                    {food && (
+                      </details>
+                    </>
+                  }
+                  purchasing={
+                    <>
                       <section
-                        aria-label="Ingredients & Allergens"
+                        aria-label="Purchase & costing"
                         className="ingredient-section"
                       >
-                        <h3>Ingredients &amp; Allergens</h3>
-                        <p>Ingredient statement: {i.statement || i.name}</p>
+                        <h3>Purchase & costing</h3>
                         <p>
-                          Subingredients: {i.subingredients || 'Not recorded'}
+                          Preferred store/vendor:{' '}
+                          <strong>{i.vendor || 'Not set'}</strong>
                         </p>
-                        {i.sourceContains && (
+                        <p>
+                          Price reference source:{' '}
+                          {i.referenceVendor || i.vendor || 'Not set'}
+                        </p>
+                        {i.productSourceUrl && (
                           <p>
-                            Source Contains (verify package): {i.sourceContains}
+                            Product source:{' '}
+                            <a
+                              href={
+                                /^https:\/\//.test(i.productSourceUrl)
+                                  ? i.productSourceUrl
+                                  : undefined
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View retailer page
+                            </a>{' '}
+                            · checked {i.productCheckedAt}
                           </p>
                         )}
-                        {i.sourceMayContain && (
+                        {i.listedOnlinePrice != null && (
                           <p>
-                            Source May contain (verify package):{' '}
-                            {i.sourceMayContain}
+                            Listed online price: {i.currency || 'USD'}{' '}
+                            {String(i.listedOnlinePrice)}. Confirm or replace
+                            the package price with the actual amount paid.
                           </p>
                         )}
+                        {i.priceCheckedAt && (
+                          <p>Price checked: {i.priceCheckedAt}</p>
+                        )}
                         <p>
-                          Allergens:{' '}
-                          {[
-                            ...new Set([
-                              ...(i.allergens || []),
-                              ...(i.componentAllergens || []),
-                            ]),
-                          ].join(', ') ||
-                            'No declarations recorded — not confirmed allergen-free'}
+                          Package:{' '}
+                          {hasPurchasePackage(i)
+                            ? `${precise(i.purchaseQuantity ?? i.packageQuantity)} ${i.purchaseUnit} for ${money(i.packagePrice)}`
+                            : 'Not set'}
                         </p>
-                        <span
-                          className={`status ${i.reviewed && (!i.compoundRecipeId || i.componentReviewed) ? 'green' : 'amber'}`}
-                        >
-                          {i.reviewed &&
-                          (!i.compoundRecipeId || i.componentReviewed)
-                            ? 'Allergen information reviewed'
-                            : 'Needs label/allergen review'}
-                        </span>
-                        <p>{i.labelReviewReason}</p>
+                        <p className="muted">
+                          Purchase tax:{' '}
+                          {i.includesTax === true
+                            ? 'included'
+                            : i.includesTax === false
+                              ? 'excluded'
+                              : 'not specified'}{' '}
+                          · Shipping:{' '}
+                          {i.includesShipping === true
+                            ? 'included'
+                            : i.includesShipping === false
+                              ? 'excluded'
+                              : 'not specified'}
+                        </p>
                       </section>
-                    )}
-                  </TabsContent>
-                </Tabs>
+                      <section
+                        aria-label="Vendor quotes"
+                        className="ingredient-section ingredient-section-wide"
+                      >
+                        <h3>Vendor quotes</h3>
+                        {canEdit && (
+                          <button
+                            className="text-button"
+                            onClick={() => editOffer()}
+                          >
+                            Enter store price manually
+                          </button>
+                        )}
+                        {offers.length > 0 && <h4>Saved offers</h4>}
+                        {(showAll ? offers : offers.slice(0, 2)).map(
+                          (o: any) => (
+                            <StoreOffer
+                              key={o.id}
+                              ingredient={i}
+                              today={today()}
+                              offer={o}
+                              canEdit={canEdit && !busy}
+                              edit={() => editOffer(o)}
+                              act={(op) => {
+                                if (op === 'conversion') {
+                                  setCalculationOpen(true)
+                                } else if (op === 'reference') {
+                                  referenceRevision.current = i.updatedAt
+                                  setReference(o)
+                                } else
+                                  void run('ingredientOffer', {
+                                    operation: op,
+                                    offerId: o.id,
+                                  })
+                              }}
+                            />
+                          ),
+                        )}
+                        {offers.length > 2 && (
+                          <button
+                            className="text-button"
+                            onClick={() => setShowAll(!showAll)}
+                          >
+                            {showAll
+                              ? 'Show two alternatives'
+                              : `Show all ${offers.length} alternatives`}
+                          </button>
+                        )}
+                        {reference && (
+                          <section
+                            className="calculation-box"
+                            aria-label="Confirm reference price"
+                          >
+                            <h3>Change recipe-cost reference?</h3>
+                            <p>
+                              {reference.vendor} · {reference.brand}
+                            </p>
+                            <PackageSummary ingredient={i} offer={reference} />
+                            <p>
+                              Current estimates affected:{' '}
+                              {usage.map((r) => r.name).join(', ') ||
+                                'No existing recipes'}
+                              . Inventory valuation and historical purchases
+                              stay unchanged.{' '}
+                              {food &&
+                                'Review supplier allergens and subingredients when changing brands.'}
+                            </p>
+                            <div className="button-row">
+                              <button
+                                className="btn secondary"
+                                onClick={() => setReference(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                className="btn"
+                                disabled={busy}
+                                onClick={() =>
+                                  void run('ingredientOffer', {
+                                    operation: 'reference',
+                                    offerId: reference.id,
+                                    confirmed: true,
+                                  })
+                                }
+                              >
+                                Confirm reference price
+                              </button>
+                            </div>
+                          </section>
+                        )}
+                      </section>
+                    </>
+                  }
+                  identification={
+                    <>
+                      <section
+                        aria-label="Identification"
+                        className="ingredient-section"
+                      >
+                        <section
+                          aria-label="Recipe usage"
+                          className="ingredient-section ingredient-section-wide"
+                        >
+                          <h3>Recipe usage</h3>
+                          {usage.length ? (
+                            usage.map((r) => (
+                              <button
+                                key={r.id}
+                                className="text-button"
+                                onClick={() => open('recipe-detail', r)}
+                              >
+                                {r.name}
+                              </button>
+                            ))
+                          ) : (
+                            <p>
+                              No recipes use this{' '}
+                              {packaging ? 'packaging' : 'ingredient'} yet.
+                            </p>
+                          )}
+                        </section>
+                        {w.products.filter((product) =>
+                          (
+                            product.bom?.lines ||
+                            w.recipes.find(
+                              (recipe) =>
+                                recipe.id === product.recipeId &&
+                                recipe.workflow === 'handmade',
+                            )?.lines ||
+                            []
+                          ).some((line: Item) => line.ingredientId === i.id),
+                        ).length > 0 && (
+                          <section aria-label="Design usage">
+                            <h3>Design usage</h3>
+                            {w.products
+                              .filter((product) =>
+                                (
+                                  product.bom?.lines ||
+                                  w.recipes.find(
+                                    (recipe) =>
+                                      recipe.id === product.recipeId &&
+                                      recipe.workflow === 'handmade',
+                                  )?.lines ||
+                                  []
+                                ).some(
+                                  (line: Item) => line.ingredientId === i.id,
+                                ),
+                              )
+                              .map((product) => (
+                                <button
+                                  key={product.id}
+                                  type="button"
+                                  className="text-button"
+                                  onClick={() =>
+                                    open('product-detail', product)
+                                  }
+                                >
+                                  {product.name}
+                                </button>
+                              ))}
+                          </section>
+                        )}
+                        <h3>Identification</h3>
+                        <p>Barcode: {i.barcode || 'Not set'}</p>
+                        <p>Internal SKU: {i.sku || 'Not set'}</p>
+                        <p>Retailer SKU: {i.retailerSku || 'Not provided'}</p>
+
+                        <p>
+                          Lot: {i.lot || 'Not recorded'} · Expiration:{' '}
+                          {i.expires || 'Not recorded'}
+                        </p>
+                        <p>Brand: {i.brand || 'Not set'}</p>
+                        <p>Notes: {i.notes || 'Not recorded'}</p>
+                      </section>
+                    </>
+                  }
+                  allergens={
+                    <>
+                      {food && (
+                        <section
+                          aria-label="Ingredients & Allergens"
+                          className="ingredient-section"
+                        >
+                          <h3>Ingredients &amp; Allergens</h3>
+                          <p>Ingredient statement: {i.statement || i.name}</p>
+                          <p>
+                            Subingredients: {i.subingredients || 'Not recorded'}
+                          </p>
+                          {i.sourceContains && (
+                            <p>
+                              Source Contains (verify package):{' '}
+                              {i.sourceContains}
+                            </p>
+                          )}
+                          {i.sourceMayContain && (
+                            <p>
+                              Source May contain (verify package):{' '}
+                              {i.sourceMayContain}
+                            </p>
+                          )}
+                          <p>
+                            Allergens:{' '}
+                            {[
+                              ...new Set([
+                                ...(i.allergens || []),
+                                ...(i.componentAllergens || []),
+                              ]),
+                            ].join(', ') ||
+                              'No declarations recorded — not confirmed allergen-free'}
+                          </p>
+                          <span
+                            className={`status ${i.reviewed && (!i.compoundRecipeId || i.componentReviewed) ? 'green' : 'amber'}`}
+                          >
+                            {i.reviewed &&
+                            (!i.compoundRecipeId || i.componentReviewed)
+                              ? 'Allergen information reviewed'
+                              : 'Needs label/allergen review'}
+                          </span>
+                          <p>{i.labelReviewReason}</p>
+                        </section>
+                      )}
+                    </>
+                  }
+                />
               </ItemDetailLayout>
             </>
           )}
         </div>
         {!editing && !offerEdit && (
           <footer className="item-dialog-actions ingredient-detail-footer ingredient-detail-actions">
+            <FormErrorNotice message={error} />
             <ItemDeleteButton table="ingredients" item={i} />
-            <button type="button" className="btn secondary" onClick={close}>Close</button>
+            <button type="button" className="btn secondary" onClick={close}>
+              Close
+            </button>
             <CatalogAction
               label={editActionLabel(i, 'ingredients')}
               disabled={!canEdit}
@@ -2108,6 +2149,7 @@ export function IngredientDetail({
         )}
         {(editing || offerEdit) && (
           <footer className="item-dialog-actions ingredient-detail-footer">
+            <FormErrorNotice message={error} />
             <ItemDeleteButton table="ingredients" item={i} draft={dirty} />
             <Fragment key="edit-actions">
               <button

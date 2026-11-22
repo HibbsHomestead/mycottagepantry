@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useState, type FormEvent } from 'react'
 import QRCode from 'qrcode'
 
@@ -27,7 +29,6 @@ export function AdminCodeSignIn({
       onSuccess()
     } catch (e) {
       setError((e as Error).message)
-      setCode('')
     } finally {
       setBusy(false)
     }
@@ -39,7 +40,7 @@ export function AdminCodeSignIn({
         Your password is verified. Enter the code from the authenticator app
         enrolled for your administrator account.
       </p>
-      <form onSubmit={submit}>
+      <SubmissionForm onSubmit={submit}>
         <label>
           {recovery ? 'Single-use recovery code' : 'Authenticator code'}
           <input
@@ -51,11 +52,8 @@ export function AdminCodeSignIn({
             maxLength={recovery ? 39 : 6}
           />
         </label>
-        {error && (
-          <p role="alert" className="admin-error">
-            {error}
-          </p>
-        )}
+
+        <FormErrorNotice message={error} />
         <button className="admin-primary" disabled={busy}>
           {busy
             ? 'Checking code…'
@@ -74,7 +72,7 @@ export function AdminCodeSignIn({
         >
           {recovery ? 'Use authenticator app' : 'Use a recovery code'}
         </button>
-      </form>
+      </SubmissionForm>
       <p>
         Recovery codes work once with your password. Using a code does not
         remove your authenticator.
@@ -97,6 +95,7 @@ export function AdminMfaSettings({
 }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(
     null,
   )
@@ -125,6 +124,7 @@ export function AdminMfaSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
+    setError('')
     try {
       const result = await request('action=' + purpose, {})
       if (result.stage === 'totp_setup') {
@@ -140,7 +140,7 @@ export function AdminMfaSettings({
       }
       setPendingPurpose(null)
     } catch (e) {
-      setMessage((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -150,6 +150,7 @@ export function AdminMfaSettings({
     if (busy) return
     setBusy(true)
     setMessage('')
+    setError('')
     try {
       const result = await request('action=totp-confirm', {
         code: code.trim(),
@@ -160,8 +161,7 @@ export function AdminMfaSettings({
       setCodes(result.recoveryCodes)
       onChange()
     } catch (e) {
-      setMessage((e as Error).message)
-      setCode('')
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -176,7 +176,7 @@ export function AdminMfaSettings({
       setCode('')
       setMessage('Setup canceled. Existing methods are unchanged.')
     } catch (e) {
-      setMessage((e as Error).message)
+      setError((e as Error).message)
     } finally {
       setBusy(false)
     }
@@ -219,7 +219,7 @@ export function AdminMfaSettings({
           </button>
         </section>
       ) : setup ? (
-        <form onSubmit={confirm}>
+        <SubmissionForm onSubmit={confirm}>
           <h3>Connect your authenticator app</h3>
           <p>
             Setup expires in five minutes. Scan this QR with your authenticator
@@ -248,13 +248,15 @@ export function AdminMfaSettings({
               onChange={(e) => setCode(e.target.value)}
             />
           </label>
+
+          <FormErrorNotice message={error} />
           <button disabled={busy}>
             Confirm and enable authenticator codes
           </button>
           <button type="button" disabled={busy} onClick={cancel}>
             Cancel setup
           </button>
-        </form>
+        </SubmissionForm>
       ) : pendingPurpose ? (
         <div>
           <p>

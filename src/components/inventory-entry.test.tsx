@@ -47,7 +47,14 @@ it.each([
         onDirty={vi.fn()}
       />,
     )
-    // Product editors keep link import on the Details tab (opened first).
+    // Handmade products now use their dedicated editor; import controls belong
+    // to inventory/resale workflows rather than that product editor.
+    if (kind === 'trade-product') {
+      expect(screen.getByLabelText('Product name')).toBeVisible()
+      expect(screen.getByRole('button', { name: 'Save product & bill of materials' })).toBeVisible()
+      return
+    }
+    // Inventory and resale editors keep link import on the first tab.
     expect(screen.getByLabelText('Product URL')).toBeVisible()
     expect(screen.getByRole('button', { name: 'Import details' })).toBeVisible()
     expect(

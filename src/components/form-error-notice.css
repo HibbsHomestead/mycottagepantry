@@ -1,0 +1,81 @@
+.form-error-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 0 100%;
+  grid-column: 1 / -1;
+  box-sizing: border-box;
+  border: 1px solid #c56868;
+  border-radius: 8px;
+  background: #fff1f0;
+  color: #852323;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.form-error-notice > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.form-error-notice > div {
+  min-width: 0;
+}
+footer:has(> .form-error-notice),
+.form-footer:has(> .form-error-notice),
+.add-item-actions:has(> .form-error-notice),
+.product-editor-actions:has(> .form-error-notice) {
+  flex-wrap: wrap;
+  max-height: min(50dvh, 360px);
+  overflow-y: auto;
+}
+.finance-sticky-actions:has(> .form-error-notice) {
+  flex-wrap: wrap;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+.studio-submission-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--card);
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+.studio-submission-footer .button-row {
+  justify-content: flex-end;
+}
+/* Public and older page styles must not turn submission notices into banners. */
+.form-error-notice.form-error-notice.form-error-notice {
+  background: #fff1f0;
+  color: #852323;
+  border: 1px solid #c56868;
+}
+/* Very long feedback scrolls independently so the footer buttons stay in view. */
+.form-error-notice {
+  max-height: min(24dvh, 220px);
+  overflow-y: auto;
+}
+.form-error-notice:focus-visible {
+  outline: 2px solid #852323;
+  outline-offset: 2px;
+}
+footer > .form-error-notice,
+.form-footer > .form-error-notice,
+.add-item-actions > .form-error-notice,
+.finance-sticky-actions > .form-error-notice {
+  margin-bottom: 0;
+}
+footer:has(> .form-error-notice),
+.form-footer:has(> .form-error-notice),
+.add-item-actions:has(> .form-error-notice),
+.finance-sticky-actions:has(> .form-error-notice) {
+  row-gap: 10px;
+}

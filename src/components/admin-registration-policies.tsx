@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { adminRequest } from './admin-portal'
 import {
@@ -130,12 +132,12 @@ export function AdminRegistrationPolicies() {
           <p style={{ whiteSpace: 'pre-wrap' }}>{current.privacy}</p>
         </details>
       )}
-      {error && <p role="alert">{error}</p>}
+
       {message && <p role="status">{message}</p>}
       <button type="button" disabled={busy} onClick={() => void load()}>
         Reload published policies
       </button>
-      <form className="admin-policy-form" onSubmit={publish}>
+      <SubmissionForm className="admin-policy-form" onSubmit={publish}>
         <label>
           New policy revision
           <input
@@ -210,13 +212,15 @@ export function AdminRegistrationPolicies() {
             owner-approved revision.
           </span>
         </label>
+
+        <FormErrorNotice message={error} />
         <button
           className="admin-primary"
           disabled={!loaded || busy || !!reading || !approved}
         >
           {busy ? 'Publishing…' : 'Publish Terms and Privacy'}
         </button>
-      </form>
+      </SubmissionForm>
     </section>
   )
 }

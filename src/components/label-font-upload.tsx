@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState } from 'react'
 import { Upload, Check, FileType } from 'lucide-react'
 import type { Workspace } from '@/lib/domain'
@@ -93,6 +94,7 @@ export function FontUploadPanel({
           exported labels.
         </span>
       </label>
+      <FormErrorNotice message={error} />
       <button
         type="button"
         className="btn primary"
@@ -104,7 +106,6 @@ export function FontUploadPanel({
       </button>
       {!canEdit && <p>Connect as an Owner or Manager to upload fonts.</p>}
       {status && <p role="status">{status}</p>}
-      {error && <p role="alert">{error}</p>}
       {previewFont && (
         <div className="uploaded-font-row">
           <style>{fontCss([previewFont], fonts)}</style>
