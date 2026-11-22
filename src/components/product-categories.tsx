@@ -37,6 +37,7 @@ import {
   readCategoryResponse,
   type CategoryConfiguration as Configuration,
 } from '@/lib/product-category-response'
+import * as Popover from '@radix-ui/react-popover'
 import './product-editor.css'
 
 function useCategoryConfiguration(onConfig: (patch: Partial<Item>) => void) {
@@ -161,6 +162,16 @@ function LoadState({
             Retry category list
           </button>
         </div>
+      )}
+      {api.ready && (api.error || api.taxError) && (
+        <button
+          type="button"
+          className="text-button"
+          onClick={api.reload}
+          disabled={api.loading || api.saving}
+        >
+          Retry category list
+        </button>
       )}
       {!api.ready && (
         <p className="form-hint">
@@ -673,7 +684,10 @@ export function ProductCategorySelector({
   const scope = productCategoryScope(product)
   const categories = categoryOrder<ProductCategory>(
     api.data?.categories || business.productCategories || [],
-  ).filter((c) => c.scope === scope || c.id === product.productCategoryId)
+  ).filter(
+    (c) =>
+      productCategoryEligible(c, scope) || c.id === product.productCategoryId,
+  )
   const selectedCategory = categories.find(
     (c) => c.id === product.productCategoryId,
   )
@@ -879,6 +893,7 @@ function CategoryCombobox({
     [query, setQuery] = useState(''),
     [active, setActive] = useState(0)
   const listId = useId()
+  const anchor = useRef<HTMLDivElement>(null)
   const saved = categories.find((c) => c.id === value)
   const empty =
     legacyCategory && !value
@@ -925,81 +940,99 @@ function CategoryCombobox({
   }
   const optionId = (index: number) => `${listId}-${index}`
   return (
-    <div className="category-combobox">
-      <input
-        role="combobox"
-        aria-labelledby={labelledBy}
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        aria-activedescendant={
-          open && options[active] ? optionId(active) : undefined
-        }
-        autoComplete="off"
-        placeholder="Search or choose a category"
-        disabled={disabled}
-        value={open ? query : current}
-        onFocus={() => {
-          setOpen(true)
-          setQuery('')
-          setActive(0)
-        }}
-        onClick={() => setOpen(true)}
-        onBlur={() => {
-          setOpen(false)
-          setQuery('')
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setOpen(true)
-          setActive(0)
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault()
-            setOpen(true)
-            setActive((i) => Math.min(i + 1, options.length - 1))
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault()
-            setActive((i) => Math.max(i - 1, 0))
-          } else if (e.key === 'Enter') {
-            // Choosing a category never submits the surrounding form.
-            e.preventDefault()
-            if (open) choose(options[active])
-            else setOpen(true)
-          } else if (e.key === 'Escape' && open) {
-            e.preventDefault()
-            e.stopPropagation()
-            setOpen(false)
-            setQuery('')
-          }
-        }}
-      />
-      {open && (
-        <ul role="listbox" id={listId} className="category-listbox">
-          {options.map((option, index) => (
-            <li
-              key={option.id + index}
-              id={optionId(index)}
-              role="option"
-              aria-selected={!option.add && option.id === value}
-              data-active={index === active || undefined}
-              className={option.add ? 'category-add-option' : undefined}
-              onMouseDown={(e) => e.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => choose(option)}
-            >
-              {option.text}
-            </li>
-          ))}
-          {!options.length && (
-            <li role="option" aria-disabled="true" aria-selected={false}>
-              No matching categories
-            </li>
-          )}
-        </ul>
-      )}
-    </div>
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setQuery('')
+      }}
+    >
+      <Popover.Anchor asChild>
+        <div className="category-combobox" ref={anchor}>
+          <input
+            role="combobox"
+            aria-labelledby={labelledBy}
+            aria-expanded={open}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={
+              open && options[active] ? optionId(active) : undefined
+            }
+            autoComplete="off"
+            placeholder="Search or choose a category"
+            disabled={disabled}
+            value={open ? query : current}
+            onFocus={() => {
+              setOpen(true)
+              setQuery('')
+              setActive(0)
+            }}
+            onClick={() => setOpen(true)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setOpen(true)
+              setActive(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setOpen(true)
+                setActive((i) => Math.min(i + 1, options.length - 1))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setActive((i) => Math.max(i - 1, 0))
+              } else if (e.key === 'Enter') {
+                // Choosing a category never submits the surrounding form.
+                e.preventDefault()
+                if (open) choose(options[active])
+                else setOpen(true)
+              } else if (e.key === 'Escape' && open) {
+                e.preventDefault()
+                e.stopPropagation()
+                setOpen(false)
+                setQuery('')
+              }
+            }}
+          />
+        </div>
+      </Popover.Anchor>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={4}
+          className="category-popup"
+          onInteractOutside={(event) => {
+            if (anchor.current?.contains(event.target as Node))
+              event.preventDefault()
+          }}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <ul role="listbox" id={listId} className="category-listbox">
+            {options.map((option, index) => (
+              <li
+                key={option.id + index}
+                id={optionId(index)}
+                role="option"
+                aria-selected={!option.add && option.id === value}
+                data-active={index === active || undefined}
+                className={option.add ? 'category-add-option' : undefined}
+                onPointerDown={(e) => e.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => choose(option)}
+              >
+                {option.text}
+              </li>
+            ))}
+            {!options.length && (
+              <li role="option" aria-disabled="true" aria-selected={false}>
+                No matching categories
+              </li>
+            )}
+          </ul>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
 

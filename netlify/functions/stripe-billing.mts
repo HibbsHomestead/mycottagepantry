@@ -1,3 +1,4 @@
+import { demoRequested, demoUnavailable } from '../lib/demo-session'
 import { subscriptionExpenseRequest } from '../lib/subscription-expenses'
 import { customerMessage } from '../../src/lib/customer-message'
 import { deploymentRuntime } from '../lib/runtime-environment'
@@ -25,6 +26,7 @@ import {
   stripeCancelPending,
 } from '../lib/stripe-changes'
 export default async (request: Request) => {
+  if (demoRequested(request)) return demoUnavailable()
   const headers = {
     'Cache-Control': 'private, no-store',
     'X-Content-Type-Options': 'nosniff',

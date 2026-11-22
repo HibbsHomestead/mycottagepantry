@@ -1,3 +1,4 @@
+import { minimumOrder } from '../../src/lib/item-restocking'
 import { validatePurchaseDefaults } from '../../src/lib/resale-cost'
 import { validateHandmadeBom } from '../../src/lib/handmade'
 import { applyProductTemplateDraft } from '../../src/lib/label-preview'
@@ -329,6 +330,7 @@ export async function handleProductWorkflow(
     }
     applyProductTemplateDraft(state, item, existingProduct)
     item.price = number(required(item.price, 'Selling price'), 'Selling price')
+    Object.assign(item, minimumOrder(item, existingProduct))
     item.threshold = number(item.threshold || 0, 'Reorder threshold')
     item.unitsPerPackage = 1
     item.quantity = existingProduct?.quantity || 0

@@ -223,7 +223,6 @@ function DescriptionDraft({
               disabled={
                 disabled ||
                 busy ||
-                !!error ||
                 !proposal.trim() ||
                 (outdated && reviewed !== source)
               }

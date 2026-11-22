@@ -348,3 +348,32 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+
+/* Product details keep pricing beside the photo and its margin summary. */
+.item-detail-dialog .product-detail-media .product-margin-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.item-detail-dialog .product-detail-media .product-margin-card h3 {
+  margin-top: 0;
+}
+.item-detail-dialog .product-detail-media .product-margin-card > div {
+  margin: 10px 0 0;
+  padding: 12px;
+}
+.item-detail-dialog .product-detail-toolbar {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  align-items: flex-start;
+}
+.product-detail-primary-actions {
+  flex: 1 1 300px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.product-detail-primary-actions > .btn {
+  max-width: 100%;
+  white-space: normal;
+}

@@ -1,3 +1,4 @@
+import { minimumOrder } from '../../src/lib/item-restocking'
 import {
   inventoryProductKeys,
   reviewedProductMetadata,
@@ -157,6 +158,7 @@ export async function handleFabric(
       !state.graphic_assets.some((a) => a.id === item.imageAssetId)
     )
       throw new Error('Select a photo from this oven.')
+    Object.assign(item, minimumOrder(data, existing))
     item.threshold = number(item.threshold || 0, 'Reorder threshold')
     item.storageUnit = item.unit
     if (!create) {

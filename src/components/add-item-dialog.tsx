@@ -1,3 +1,6 @@
+import { ItemRestocking } from './item-restocking'
+import { minimumOrder } from '@/lib/item-restocking'
+import { convert } from '@/lib/domain'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { workspaceCategorySettings } from '@/lib/section-categories'
@@ -235,7 +238,6 @@ export function AddItemDialog({
     'imageAssetId',
     'storageLocation',
     'notes',
-    'threshold',
     'receivedDate',
     'purchaseDate',
     'receiptReference',
@@ -253,6 +255,32 @@ export function AddItemDialog({
   ]
   function change(key: string, v: Item[string]) {
     setDirty(true)
+    if (key === 'unit' && v !== value.unit && value.threshold !== '') {
+      let threshold: number | '' = ''
+      try {
+        threshold = convert(
+          Number(value.threshold || 0),
+          value.unit,
+          v,
+          value.conversions,
+        )
+      } catch {
+        /* Require an explicit review. */
+      }
+      setDrafts((d) => ({
+        ...d,
+        [draftKey]: {
+          ...d[draftKey],
+          threshold,
+          thresholdUnitReviewRequired: threshold === '',
+        },
+      }))
+    }
+    if (key === 'threshold')
+      setDrafts((d) => ({
+        ...d,
+        [draftKey]: { ...d[draftKey], thresholdUnitReviewRequired: false },
+      }))
     if (key === 'materialType')
       setDrafts((d) => ({
         ...d,
@@ -491,6 +519,11 @@ export function AddItemDialog({
                   data.inventoryPackageSetup = true
                   inventoryPackagePlan(data)
                 }
+                minimumOrder(data as Item)
+                if (value.thresholdUnitReviewRequired)
+                  throw new Error(
+                    'Review the reorder threshold in the selected stock unit before saving.',
+                  )
                 if (type === 'resale') delete data.stockChoice
                 if (
                   data.barcode &&
@@ -523,7 +556,7 @@ export function AddItemDialog({
                             message,
                           )
                         ? 'specific'
-                        : /reorder|threshold|sku|storage|specification/i.test(
+                        : /reorder|threshold|minimum order|sku|storage|specification/i.test(
                               message,
                             )
                           ? 'more'
@@ -1029,15 +1062,13 @@ export function AddItemDialog({
                       'more',
                       <>
                         <div className="form-grid">
-                          <Field label="SKU">{input('sku')}</Field>
+                          <Field label="Item code / SKU">{input('sku')}</Field>
                           <Field label="Barcode">{input('barcode')}</Field>
-                          <Field label="Storage location">
+                          <Field label="Where it’s stored">
                             {input('storageLocation')}
                           </Field>
-                          <Field label="Reorder threshold">
-                            {input('threshold', 'number')}
-                          </Field>
                         </div>
+                        <ItemRestocking value={value} change={change} />
                         <Field label="Notes">
                           <textarea
                             rows={2}

@@ -1,3 +1,4 @@
+import { DemoEntry } from './demo-entry'
 import { OpeningOven } from './opening-oven'
 
 /** The existing oven illustration follows real pending work, never a delay. */
@@ -29,6 +30,7 @@ export function OvenLoading({
           <a href="/help">Need help?</a>
         </div>
       )}
+      <DemoEntry />
       {children}
     </main>
   )

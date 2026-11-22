@@ -1,9 +1,14 @@
 import { FormErrorNotice } from './form-error-notice'
 import './item-deletion.css'
 import { ItemRemoveButton } from './item-remove-button'
-import { businessClassifications, classificationLabel } from '@/lib/product-categories'
+import {
+  businessClassifications,
+  classificationLabel,
+} from '@/lib/product-categories'
 import { isPackaging } from '@/lib/pantry-category'
-import { useRef, useState } from 'react'
+import { useRef, useState, useId } from 'react'
+import * as Popover from '@radix-ui/react-popover'
+import { Info } from 'lucide-react'
 import {
   ingredientUnits,
   unitLabel,
@@ -158,9 +163,7 @@ export function ConversionEditor({
         I verified these amounts for this{' '}
         {isPackaging(ingredient) ? 'packaging' : 'ingredient'}.
       </label>
-      {error && (
-        <FormErrorNotice message={error} />
-      )}
+      {error && <FormErrorNotice message={error} />}
       <div className="button-row conversion-actions">
         <button
           className={expanded ? 'btn' : 'text-button'}
@@ -215,6 +218,91 @@ export function ConversionEditor({
   )
 }
 
+function PackagingItemPicker({
+  items,
+  value,
+  onChange,
+  focusOnMount,
+}: {
+  items: Item[]
+  value: string
+  onChange: (id: string) => void
+  focusOnMount: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const id = useId()
+  const name =
+    items.find((item) => item.id === value)?.name || 'Choose packaging item'
+  return (
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) setSearch('')
+      }}
+    >
+      <label id={id} htmlFor={`${id}-trigger`}>
+        Packaging item
+      </label>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="packaging-item-picker"
+          id={`${id}-trigger`}
+          aria-labelledby={id}
+          aria-describedby={`${id}-value`}
+          title={name}
+          autoFocus={focusOnMount}
+        >
+          <span id={`${id}-value`} className="packaging-item-name">
+            {name}
+          </span>
+          <span aria-hidden="true">▾</span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          aria-label="Choose packaging item"
+          className="packaging-item-menu"
+          sideOffset={4}
+          align="start"
+          collisionPadding={12}
+        >
+          <input
+            aria-label="Search packaging items"
+            placeholder="Search packaging items…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div className="packaging-item-options">
+            {items
+              .filter((item) =>
+                item.name.toLowerCase().includes(search.toLowerCase()),
+              )
+              .map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  aria-pressed={item.id === value}
+                  onClick={() => {
+                    onChange(item.id)
+                    setOpen(false)
+                  }}
+                >
+                  {item.name}
+                </button>
+              ))}
+          </div>
+          {!items.some((item) =>
+            item.name.toLowerCase().includes(search.toLowerCase()),
+          ) && <p>No matching packaging items.</p>}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
+
 export function PackagingEditor({
   product,
   ingredients,
@@ -237,37 +325,40 @@ export function PackagingEditor({
         ]
       : [])
   const items = ingredients.filter((i) => i.usedAs === 'packaging')
+  const [focusIndex, setFocusIndex] = useState<number | null>(null)
   return (
-    <section className="calculation-box">
+    <section className="calculation-box compact-packaging">
       <h3>Packaging per sellable package</h3>
-      <p>
-        Include every bag, box, label, and seal. Optional lines entered here are
-        included in this product's cost and inventory use.
+      <p className="packaging-helper">
+        Bags, boxes, labels, and seals used for one sellable package.{' '}
+        <span
+          tabIndex={0}
+          title="Include every assigned bag, box, label, and seal. Optional assigned lines are included in this product’s cost and inventory usage."
+          aria-label="Optional assigned lines are included in cost and inventory usage"
+        >
+          <Info size={14} aria-hidden="true" />
+        </span>
       </p>
       {lines.map((line: any, index: number) => (
         <div className="packaging-editor" key={index}>
-          <label>
-            Packaging item
-            <select
+          <div className="packaging-item-field">
+            <PackagingItemPicker
+              items={items}
               value={line.ingredientId}
-              onChange={(e) =>
+              focusOnMount={focusIndex === index}
+              onChange={(ingredientId) =>
                 onChange(
                   lines.map((l: any, i: number) =>
-                    i === index ? { ...l, ingredientId: e.target.value } : l,
+                    i === index ? { ...l, ingredientId } : l,
                   ),
                 )
               }
-            >
-              {items.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-          </label>
+            />
+          </div>
           <label>
-            Quantity
+            Qty
             <input
+              aria-label="Quantity"
               type="text"
               value={line.quantity}
               onChange={(e) =>
@@ -303,37 +394,51 @@ export function PackagingEditor({
               ))}
             </select>
           </label>
-          <label>
-            Notes
-            <input
-              value={line.notes || ''}
-              onChange={(e) =>
-                onChange(
-                  lines.map((l: any, i: number) =>
-                    i === index ? { ...l, notes: e.target.value } : l,
-                  ),
-                )
-              }
-            />
-          </label>
-          <label className="check-label">
-            <input
-              type="checkbox"
-              checked={line.required !== false}
-              onChange={(e) =>
-                onChange(
-                  lines.map((l: any, i: number) =>
-                    i === index ? { ...l, required: e.target.checked } : l,
-                  ),
-                )
-              }
-            />
-            Required
-          </label>
+          <details className="packaging-row-details">
+            <summary>
+              Details{' '}
+              <span>
+                {line.required !== false ? 'Required' : 'Optional'}
+                {line.notes ? ' · Note' : ''}
+              </span>
+            </summary>
+            <div className="packaging-secondary">
+              {' '}
+              <label>
+                Notes
+                <input
+                  value={line.notes || ''}
+                  onChange={(e) =>
+                    onChange(
+                      lines.map((l: any, i: number) =>
+                        i === index ? { ...l, notes: e.target.value } : l,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={line.required !== false}
+                  onChange={(e) =>
+                    onChange(
+                      lines.map((l: any, i: number) =>
+                        i === index ? { ...l, required: e.target.checked } : l,
+                      ),
+                    )
+                  }
+                />
+                Required
+              </label>
+            </div>
+          </details>
           <ItemRemoveButton
             label="Remove packaging item"
             className="packaging-remove"
-            onClick={() => onChange(lines.filter((_: any, i: number) => i !== index))}
+            onClick={() =>
+              onChange(lines.filter((_: any, i: number) => i !== index))
+            }
           />
         </div>
       ))}
@@ -342,7 +447,8 @@ export function PackagingEditor({
         type="button"
         className="text-button"
         disabled={!items.length}
-        onClick={() =>
+        onClick={() => {
+          setFocusIndex(lines.length)
           onChange([
             ...lines,
             {
@@ -352,9 +458,9 @@ export function PackagingEditor({
               required: true,
             },
           ])
-        }
+        }}
       >
-        Add packaging item
+        + Add packaging item
       </button>
       {!lines.length && (
         <p className="warning-text">
@@ -386,69 +492,100 @@ export function TaxRateEditor({
       <p>
         Rates run in calculation order. A compounding rate uses pre-tax revenue
         plus all preceding taxes. Inclusive rates are backed out of the entered
-        price. Classification rules and applicable mapped category rules stack using calculation order; explicit product overrides take precedence. Each rate is applied once.
+        price. Classification rules and applicable mapped category rules stack
+        using calculation order; explicit product overrides take precedence.
+        Each rate is applied once.
       </p>
-      <p className="form-hint">Enter 8.25 for 8.25%. Zero is an explicit rate; a blank rate must be completed before saving.</p>
+      <p className="form-hint">
+        Enter 8.25 for 8.25%. Zero is an explicit rate; a blank rate must be
+        completed before saving.
+      </p>
       {rates.map((r, index) => (
         <details key={r.id} className="tax-rate-editor">
           <summary>
             {r.name || 'New tax rate'} · {r.ratePercent}% · {r.behavior}
           </summary>
           <div className="form-grid">
-            {showPrimaryFields && <>
-            <label>
-              Rate name
-              <input
-                value={r.name}
-                onChange={(e) => update(index, 'name', e.target.value)}
-              />
-            </label>
-            <label>
-              Jurisdiction
-              <input
-                value={r.jurisdiction}
-                onChange={(e) => update(index, 'jurisdiction', e.target.value)}
-              />
-            </label>
-            <label>
-              Jurisdiction type
-              <select
-                value={r.jurisdictionType || 'other'}
-                onChange={(e) =>
-                  update(index, 'jurisdictionType', e.target.value)
-                }
-              >
-                {['state', 'county', 'city', 'district', 'other'].map((v) => (
-                  <option key={v}>{v}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Rate (%)
-              <input
-                type="number"
-                required
-                min="0"
-                max="100"
-                step="any"
-                value={r.ratePercent}
-                onChange={(e) =>
-                  update(index, 'ratePercent', e.target.value === '' ? '' : Number(e.target.value))
-                }
-              />
-            </label>
-            <label>
-              Behavior
-              <select
-                value={r.behavior}
-                onChange={(e) => update(index, 'behavior', e.target.value)}
-              >
-                <option value="exclusive">Exclusive · add to price</option>
-                <option value="inclusive">Inclusive · included in price</option>
-              </select>
-            </label>
-            </>}
-            {!showPrimaryFields && <label>Jurisdiction type<select value={r.jurisdictionType || 'other'} onChange={e=>update(index,'jurisdictionType',e.target.value)}>{['state','county','city','district','other'].map(v=><option key={v}>{v}</option>)}</select></label>}
+            {showPrimaryFields && (
+              <>
+                <label>
+                  Rate name
+                  <input
+                    value={r.name}
+                    onChange={(e) => update(index, 'name', e.target.value)}
+                  />
+                </label>
+                <label>
+                  Jurisdiction
+                  <input
+                    value={r.jurisdiction}
+                    onChange={(e) =>
+                      update(index, 'jurisdiction', e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Jurisdiction type
+                  <select
+                    value={r.jurisdictionType || 'other'}
+                    onChange={(e) =>
+                      update(index, 'jurisdictionType', e.target.value)
+                    }
+                  >
+                    {['state', 'county', 'city', 'district', 'other'].map(
+                      (v) => (
+                        <option key={v}>{v}</option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <label>
+                  Rate (%)
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    max="100"
+                    step="any"
+                    value={r.ratePercent}
+                    onChange={(e) =>
+                      update(
+                        index,
+                        'ratePercent',
+                        e.target.value === '' ? '' : Number(e.target.value),
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Behavior
+                  <select
+                    value={r.behavior}
+                    onChange={(e) => update(index, 'behavior', e.target.value)}
+                  >
+                    <option value="exclusive">Exclusive · add to price</option>
+                    <option value="inclusive">
+                      Inclusive · included in price
+                    </option>
+                  </select>
+                </label>
+              </>
+            )}
+            {!showPrimaryFields && (
+              <label>
+                Jurisdiction type
+                <select
+                  value={r.jurisdictionType || 'other'}
+                  onChange={(e) =>
+                    update(index, 'jurisdictionType', e.target.value)
+                  }
+                >
+                  {['state', 'county', 'city', 'district', 'other'].map((v) => (
+                    <option key={v}>{v}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Calculation order
               <input
@@ -488,28 +625,40 @@ export function TaxRateEditor({
                 </option>
               </select>
             </label>
-            {r.appliesTo === 'classification' && <label>
-              Classification
-              <select
-                required
-                value={r.classification || ''}
-                onChange={(e) => update(index, 'classification', e.target.value)}
-              >
-                <option value="">Choose classification</option>
-                {r.classification && !classifications.includes(r.classification) &&
-                  <option value={r.classification} disabled>Saved classification unavailable</option>}
-                {classifications.map((id) =>
-                  <option key={id} value={id}>{classificationLabel(id)}</option>,
-                )}
-              </select>
-            </label>}
-            {r.appliesTo !== 'classification' && <label>
-              Product category
-              <input
-                value={r.category || ''}
-                onChange={(e) => update(index, 'category', e.target.value)}
-              />
-            </label>}
+            {r.appliesTo === 'classification' && (
+              <label>
+                Classification
+                <select
+                  required
+                  value={r.classification || ''}
+                  onChange={(e) =>
+                    update(index, 'classification', e.target.value)
+                  }
+                >
+                  <option value="">Choose classification</option>
+                  {r.classification &&
+                    !classifications.includes(r.classification) && (
+                      <option value={r.classification} disabled>
+                        Saved classification unavailable
+                      </option>
+                    )}
+                  {classifications.map((id) => (
+                    <option key={id} value={id}>
+                      {classificationLabel(id)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {r.appliesTo !== 'classification' && (
+              <label>
+                Product category
+                <input
+                  value={r.category || ''}
+                  onChange={(e) => update(index, 'category', e.target.value)}
+                />
+              </label>
+            )}
             <label>
               Notes
               <input
@@ -705,9 +854,7 @@ export function CustomCountUnit({
           onChange={(e) => setFactor(Number(e.target.value))}
         />
       </label>
-      {error && (
-        <FormErrorNotice message={error} />
-      )}
+      {error && <FormErrorNotice message={error} />}
       <button
         type="button"
         className="text-button"

@@ -1,8 +1,16 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { LabelStudio } from './label-studio'
 import { demoData } from '@/lib/demo'
+
+beforeEach(() => {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }))
+})
 
 it('makes a copy of a starter, edits dynamic elements, and exposes label checks before print', async () => {
   const user = userEvent.setup(),
@@ -16,7 +24,7 @@ it('makes a copy of a starter, edits dynamic elements, and exposes label checks 
     />,
   )
   expect(
-    screen.getByRole('navigation', { name: 'Label Studio sections' }),
+    screen.getByRole('navigation', { name: 'Labels sections' }),
   ).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Create label' }))
   await user.click(
@@ -93,12 +101,12 @@ it('offers the saved business disclaimer on either side with editable typography
       'business.cottageFoodDisclaimer',
     )
     expect(screen.getByLabelText('Size (pt)')).toBeEnabled()
-    expect(screen.getByLabelText('X (pt)')).toBeEnabled()
-    expect(screen.getByLabelText('Width (pt)')).toBeEnabled()
+    expect(screen.getByLabelText('X position (in)')).toBeEnabled()
+    expect(screen.getByLabelText('Width (in)')).toBeEnabled()
     expect(screen.getByLabelText('Rotation (°)')).toBeEnabled()
-    expect(document.querySelector('.studio-scroll-stage svg')).toHaveTextContent(
-      'Owner saved text',
-    )
+    expect(
+      document.querySelector('.studio-scroll-stage svg'),
+    ).toHaveTextContent('Owner saved text')
   }
 })
 it('moves, resizes and rotates on the canvas with one undo step per drag', async () => {
@@ -130,9 +138,9 @@ it('moves, resizes and rotates on the canvas with one undo step per drag', async
   const rotation = () =>
     Number((screen.getByLabelText('Rotation (°)') as HTMLInputElement).value)
   const x = () =>
-    Number((screen.getByLabelText('X (pt)') as HTMLInputElement).value)
+    Number((screen.getByLabelText('X position (in)') as HTMLInputElement).value)
   const width = () =>
-    Number((screen.getByLabelText('Width (pt)') as HTMLInputElement).value)
+    Number((screen.getByLabelText('Width (in)') as HTMLInputElement).value)
   expect(rotation()).toBe(0)
   const id = target.closest('[data-element]')!.getAttribute('data-element')!
   const overlay = () =>
@@ -173,4 +181,220 @@ it('moves, resizes and rotates on the canvas with one undo step per drag', async
   expect(x()).toBe(startX)
   await user.click(screen.getByRole('button', { name: 'Redo' }))
   expect(x()).not.toBe(startX)
+})
+
+it('aligns with undo, synchronizes layers, and deselects only editor backgrounds or Escape', async () => {
+  const { fireEvent } = await import('@testing-library/react')
+  const user = userEvent.setup()
+  render(
+    <LabelStudio
+      workspace={demoData()}
+      onWorkspace={vi.fn()}
+      ready={false}
+      role="Owner"
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.selectOptions(
+    screen.getByLabelText('Dynamic field'),
+    'business.name',
+  )
+  const overlay = () => document.querySelector('[data-selection-overlay]')
+  expect(overlay()).not.toBeNull()
+  expect(
+    document.querySelector('.studio-position-advanced'),
+  ).not.toHaveAttribute('open')
+  const originalX = Number(
+    (screen.getByLabelText('X position (in)') as HTMLInputElement).value,
+  )
+  await user.click(screen.getByRole('button', { name: 'Left' }))
+  expect(screen.getByLabelText('X position (in)')).toHaveValue(9 / 72)
+  expect(screen.getByLabelText('Data binding')).toHaveValue('business.name')
+  await user.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(screen.getByLabelText('X position (in)')).toHaveValue(originalX)
+  await user.click(screen.getByRole('button', { name: 'Redo' }))
+  expect(screen.getByLabelText('X position (in)')).toHaveValue(9 / 72)
+  await user.selectOptions(
+    screen.getByLabelText('Alignment reference'),
+    'edges',
+  )
+  await user.click(screen.getByRole('button', { name: 'Left' }))
+  expect(screen.getByLabelText('X position (in)')).toHaveValue(0)
+  await user.click(screen.getByLabelText('Safe area', { selector: 'input' }))
+  expect(screen.getByLabelText('Alignment reference')).toHaveValue('edges')
+  expect(overlay()).not.toBeNull()
+  await user.click(document.querySelector('.studio-position-advanced summary')!)
+  fireEvent.change(screen.getByLabelText('X position (in)'), {
+    target: { value: '0.75' },
+  })
+  screen.getByLabelText('X position (in)').focus()
+  await user.keyboard('{Escape}')
+  expect(overlay()).not.toBeNull()
+  await user.click(screen.getByRole('tab', { name: 'Layers' }))
+  const selectedLayer = document.querySelector(
+    '.studio-position-layers .selected button',
+  ) as HTMLButtonElement
+  expect(selectedLayer).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.pointerDown(document.querySelector('.studio-ruler')!, { button: 0 })
+  expect(overlay()).not.toBeNull()
+  const dialog = document.createElement('div')
+  dialog.setAttribute('role', 'dialog')
+  document.body.append(dialog)
+  selectedLayer.focus()
+  await user.keyboard('{Escape}')
+  expect(overlay()).not.toBeNull()
+  dialog.remove()
+  await user.keyboard('{Escape}')
+  expect(overlay()).toBeNull()
+  expect(screen.getByText('Select an element to edit')).toBeInTheDocument()
+  const target = document.querySelector('.studio-paper [data-element]')!
+  fireEvent.pointerDown(target, {
+    button: 0,
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+  })
+  fireEvent.pointerUp(document.querySelector('.studio-paper')!)
+  expect(overlay()).not.toBeNull()
+  const stage = document.querySelector('.studio-scroll-stage')!
+  Object.defineProperty(stage, 'clientWidth', { value: 1000 })
+  Object.defineProperty(stage, 'clientHeight', { value: 1000 })
+  fireEvent.pointerDown(stage, {
+    button: 0,
+    pointerId: 2,
+    clientX: 5,
+    clientY: 5,
+  })
+  fireEvent.pointerMove(stage, { pointerId: 2, clientX: 50, clientY: 50 })
+  fireEvent.pointerUp(stage, { pointerId: 2, clientX: 50, clientY: 50 })
+  expect(overlay()).not.toBeNull()
+
+  fireEvent.pointerDown(stage, {
+    button: 0,
+    pointerId: 3,
+    clientX: 5,
+    clientY: 5,
+  })
+  fireEvent.pointerUp(stage, {
+    button: 0,
+    pointerId: 3,
+    clientX: 5,
+    clientY: 5,
+  })
+  expect(overlay()).toBeNull()
+  fireEvent.pointerDown(target, {
+    button: 0,
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+  })
+  fireEvent.pointerUp(document.querySelector('.studio-paper')!)
+  fireEvent.pointerDown(document.querySelector('.studio-paper svg')!, {
+    button: 0,
+    pointerId: 4,
+    clientX: 5,
+    clientY: 5,
+  })
+  fireEvent.pointerUp(document.querySelector('.studio-paper svg')!, {
+    button: 0,
+    pointerId: 4,
+    clientX: 5,
+    clientY: 5,
+  })
+  expect(overlay()).toBeNull()
+})
+
+it('uses submenu thumbnails to switch sides without discarding edits or undo history', async () => {
+  const user = userEvent.setup()
+  render(
+    <LabelStudio
+      workspace={demoData()}
+      onWorkspace={vi.fn()}
+      ready={false}
+      role="Owner"
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  expect(
+    screen.getByRole('button', { name: 'Front', pressed: true }),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+  await user.selectOptions(screen.getByLabelText('Label format'), 'front-back')
+  const front = screen.getByRole('button', { name: 'Front' })
+  const back = screen.getByRole('button', { name: 'Back' })
+  expect(front.closest('nav')).toHaveAttribute('aria-label', 'Labels sections')
+  expect(back.closest('.studio-left')).toBeNull()
+  await user.selectOptions(
+    screen.getByLabelText('Dynamic field'),
+    'business.name',
+  )
+  const frontArtwork = Array.from(
+    document.querySelectorAll('.studio-scroll-stage svg text'),
+  )
+    .map((node) => node.textContent)
+    .join('')
+  await user.click(back)
+  expect(back).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.queryByLabelText('Data binding')).not.toBeInTheDocument()
+  await user.selectOptions(
+    screen.getByLabelText('Dynamic field'),
+    'business.name',
+  )
+  await waitFor(() => expect(back).toHaveTextContent('Hibbs Homestead Market'))
+  const backArtwork = Array.from(
+    document.querySelectorAll('.studio-scroll-stage svg text'),
+  )
+    .map((node) => node.textContent)
+    .join('')
+  await user.click(front)
+  expect(
+    Array.from(
+      document.querySelectorAll('.studio-scroll-stage svg text'),
+    )
+      .map((node) => node.textContent)
+      .join(''),
+  ).toBe(frontArtwork)
+  await user.click(back)
+  expect(
+    Array.from(
+      document.querySelectorAll('.studio-scroll-stage svg text'),
+    )
+      .map((node) => node.textContent)
+      .join(''),
+  ).toBe(backArtwork)
+  expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: 'Undo' }))
+  expect(
+    Array.from(
+      document.querySelectorAll('.studio-scroll-stage svg text'),
+    )
+      .map((node) => node.textContent)
+      .join(''),
+  ).not.toBe(backArtwork)
+})
+
+it('moves the single side switcher above the canvas when the submenu collapses', async () => {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }))
+  const user = userEvent.setup()
+  render(
+    <LabelStudio
+      workspace={demoData()}
+      onWorkspace={vi.fn()}
+      ready={false}
+      role="Owner"
+    />,
+  )
+  await user.click(screen.getByRole('button', { name: 'Create label' }))
+  await user.selectOptions(screen.getByLabelText('Label format'), 'front-back')
+  const front = screen.getByRole('button', { name: 'Front' })
+  expect(front.closest('nav')).toBeNull()
+  expect(screen.getAllByRole('group', { name: 'Label side' })).toHaveLength(1)
+  await user.click(screen.getByRole('button', { name: 'Back' }))
+  expect(
+    screen.getByRole('button', { name: 'Back', pressed: true }),
+  ).toBeInTheDocument()
 })

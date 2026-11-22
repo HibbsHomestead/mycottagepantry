@@ -11,12 +11,11 @@ import {
   Underline,
   ArrowDownUp,
   WholeWord,
-  RotateCcw,
   BringToFront,
   SendToBack,
-  Minus,
 } from 'lucide-react'
 import type { LabelElement } from '@/lib/label-studio'
+import { alignLabelElements, orderLabelElement } from '@/lib/label-arrange'
 import { elementAngle, setElementAngle } from '@/lib/label-transform'
 
 /** Keep incomplete numeric entry local; only valid values reach the document. */
@@ -247,122 +246,273 @@ export function LabelTextToolbar({
 export function LabelGeometryToolbar({
   element,
   onPatch,
-  onLayer,
-  atFront,
-  atBack,
+  elements,
+  width,
+  height,
+  onElements,
+  onSelect,
+  aspect,
+  onAspect,
 }: {
   element: LabelElement
   onPatch: (patch: Partial<LabelElement>) => void
-  onLayer: (layer: 'front' | 'back') => void
-  atFront: boolean
-  atBack: boolean
+  elements: LabelElement[]
+  width: number
+  height: number
+  onElements: (elements: LabelElement[]) => void
+  onSelect: (id: string) => void
+  aspect: boolean
+  onAspect: (locked: boolean) => void
 }) {
-  // Shift the decimal representation for display, avoiding binary multiplication
-  // artifacts while leaving the stored opacity untouched until the user edits it.
-  const [opacityDigits, opacityExponent = '0'] = String(element.opacity).split(
-    'e',
-  )
-  const opacityPercent = Number(
-    `${opacityDigits}e${Number(opacityExponent) + 2}`,
-  )
+  const [tab, setTab] = useState('Arrange')
+  const [reference, setReference] = useState('safe')
+  const index = elements.findIndex((e) => e.id === element.id)
+  const order = (action: 'front' | 'back' | 'forward' | 'backward') =>
+    onElements(orderLabelElement(elements, element.id, action))
   return (
-    <fieldset
-      className="studio-property-toolbar studio-geometry-toolbar"
-      aria-label="Position, size & layers"
-      disabled={element.locked}
-    >
-      <legend>Position, size &amp; layers</legend>
-      <div className="studio-numeric-row">
-        <CompactNumber
-          label="X (pt)"
-          shortLabel="X"
-          unit="pt"
-          value={element.x}
-          min={-1000}
-          onChange={(x) => onPatch({ x })}
-        />
-        <CompactNumber
-          label="Y (pt)"
-          shortLabel="Y"
-          unit="pt"
-          value={element.y}
-          min={-1000}
-          onChange={(y) => onPatch({ y })}
-        />
-      </div>
-      <div className="studio-numeric-row">
-        <CompactNumber
-          label="Width (pt)"
-          shortLabel="W"
-          unit="pt"
-          value={element.width}
-          min={1}
-          onChange={(width) => onPatch({ width })}
-        />
-        <CompactNumber
-          label="Height (pt)"
-          shortLabel="H"
-          unit="pt"
-          value={element.height}
-          min={1}
-          onChange={(height) => onPatch({ height })}
-        />
-      </div>
-      <div className="studio-numeric-row studio-angle-row">
-        <CompactNumber
-          label={element.type === 'line' ? 'Line angle (°)' : 'Rotation (°)'}
-          shortLabel="Angle"
-          unit="°"
-          value={elementAngle(element)}
-          min={-360}
-          max={360}
-          onChange={(angle) => onPatch(setElementAngle(element, angle))}
-        />
-        <CompactNumber
-          label="Opacity"
-          shortLabel="Opacity"
-          unit="%"
-          value={opacityPercent}
-          max={100}
-          onChange={(percent) => onPatch({ opacity: percent / 100 })}
-        />
-      </div>
-      <div className="studio-tool-row">
-        <StudioToolButton
-          label={
-            element.type === 'line' ? 'Make horizontal' : 'Reset rotation to 0°'
-          }
-          disabled={!elementAngle(element)}
-          onClick={() => onPatch(setElementAngle(element, 0))}
-        >
-          {element.type === 'line' ? (
-            <Minus size={16} />
-          ) : (
-            <RotateCcw size={16} />
-          )}
-        </StudioToolButton>
-        <div
-          className="studio-tool-group"
-          role="group"
-          aria-label="Layer order"
-        >
-          <StudioToolButton
-            label="Bring to front"
-            disabled={atFront}
-            onClick={() => onLayer('front')}
+    <section className="studio-position-panel" aria-label="Position">
+      <h4>Position</h4>
+      <div role="tablist" aria-label="Position panels">
+        {['Arrange', 'Layers'].map((t) => (
+          <button
+            type="button"
+            key={t}
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
           >
-            <BringToFront size={16} />
-          </StudioToolButton>
-          <StudioToolButton
-            label="Send to back"
-            disabled={atBack}
-            onClick={() => onLayer('back')}
+            {t}
+          </button>
+        ))}
+      </div>
+      {tab === 'Arrange' ? (
+        <div role="tabpanel" aria-label="Arrange">
+          <fieldset disabled={element.locked}>
+            <legend>Layer order</legend>
+            <div className="studio-arrange-grid">
+              {(
+                [
+                  ['forward', 'Forward', BringToFront],
+                  ['backward', 'Backward', SendToBack],
+                  ['front', 'To front', BringToFront],
+                  ['back', 'To back', SendToBack],
+                ] as const
+              ).map(([action, label, Icon]) => (
+                <button
+                  type="button"
+                  key={action}
+                  disabled={
+                    action === 'front' || action === 'forward'
+                      ? index === elements.length - 1
+                      : index === 0
+                  }
+                  onClick={() => order(action)}
+                >
+                  <Icon size={16} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset
+            disabled={
+              element.locked ||
+              !!(
+                element.groupId &&
+                elements.some((e) => e.groupId === element.groupId && e.locked)
+              )
+            }
           >
-            <SendToBack size={16} />
-          </StudioToolButton>
+            <legend>Align to label</legend>
+            <label className="studio-reference-control">
+              Alignment reference
+              <select
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              >
+                <option value="safe">Safe area</option>
+                <option value="edges">Label edges</option>
+              </select>
+            </label>
+            <div className="studio-arrange-grid">
+              {(
+                [
+                  ['top', 'Top', AlignVerticalJustifyStart],
+                  ['left', 'Left', AlignLeft],
+                  ['middle', 'Middle', AlignVerticalJustifyCenter],
+                  ['center', 'Center', AlignCenter],
+                  ['bottom', 'Bottom', AlignVerticalJustifyEnd],
+                  ['right', 'Right', AlignRight],
+                ] as const
+              ).map(([alignment, label, Icon]) => (
+                <button
+                  type="button"
+                  key={alignment}
+                  onClick={() =>
+                    onElements(
+                      alignLabelElements(
+                        elements,
+                        element.id,
+                        width,
+                        height,
+                        alignment,
+                        reference === 'safe',
+                      ),
+                    )
+                  }
+                >
+                  <Icon size={16} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <details className="studio-position-advanced">
+            <summary>Advanced</summary>
+            <fieldset disabled={element.locked}>
+              <div className="studio-measurements">
+                {(['width', 'height', 'x', 'y'] as const).map((key) => (
+                  <CompactNumber
+                    key={key}
+                    label={
+                      {
+                        width: 'Width',
+                        height: 'Height',
+                        x: 'X position',
+                        y: 'Y position',
+                      }[key] + ' (in)'
+                    }
+                    shortLabel={
+                      {
+                        width: 'Width',
+                        height: 'Height',
+                        x: 'X position',
+                        y: 'Y position',
+                      }[key]
+                    }
+                    unit="in"
+                    value={element[key] / 72}
+                    min={key === 'width' || key === 'height' ? 1 / 72 : -1000}
+                    onChange={(value) => {
+                      const points = value * 72
+                      onPatch({
+                        [key]: points,
+                        ...(aspect && key === 'width'
+                          ? {
+                              height: (element.height * points) / element.width,
+                            }
+                          : aspect && key === 'height'
+                            ? {
+                                width:
+                                  (element.width * points) / element.height,
+                              }
+                            : {}),
+                      })
+                    }}
+                  />
+                ))}
+              </div>
+              <label className="check-label">
+                <input
+                  type="checkbox"
+                  checked={aspect}
+                  onChange={(e) => onAspect(e.target.checked)}
+                />
+                Lock aspect ratio
+              </label>
+              <div className="studio-measurements">
+                <CompactNumber
+                  label="Rotation (°)"
+                  shortLabel="Rotation"
+                  unit="°"
+                  value={elementAngle(element)}
+                  min={-360}
+                  max={360}
+                  onChange={(angle) => onPatch(setElementAngle(element, angle))}
+                />
+                <CompactNumber
+                  label="Opacity"
+                  shortLabel="Opacity"
+                  unit="%"
+                  value={Number((element.opacity * 100).toPrecision(12))}
+                  max={100}
+                  onChange={(percent) => onPatch({ opacity: percent / 100 })}
+                />
+              </div>
+            </fieldset>
+          </details>
         </div>
-        <span className="studio-layer-caption">Layers</span>
-      </div>
-    </fieldset>
+      ) : (
+        <div
+          role="tabpanel"
+          aria-label="Layers"
+          className="studio-position-layers"
+        >
+          {[...elements].reverse().map((e) => (
+            <div key={e.id} className={e.id === element.id ? 'selected' : ''}>
+              <button
+                type="button"
+                aria-pressed={e.id === element.id}
+                onClick={() => onSelect(e.id)}
+              >
+                {e.binding || e.text || e.type}
+              </button>
+              <button
+                type="button"
+                aria-label={
+                  (e.locked ? 'Unlock ' : 'Lock ') +
+                  (e.binding || e.text || e.type)
+                }
+                onClick={() =>
+                  onElements(
+                    elements.map((x) =>
+                      x.id === e.id ? { ...x, locked: !x.locked } : x,
+                    ),
+                  )
+                }
+              >
+                {e.locked ? 'Unlock' : 'Lock'}
+              </button>
+              <button
+                type="button"
+                aria-label={
+                  (e.hidden ? 'Show ' : 'Hide ') +
+                  (e.binding || e.text || e.type)
+                }
+                onClick={() =>
+                  onElements(
+                    elements.map((x) =>
+                      x.id === e.id ? { ...x, hidden: !x.hidden } : x,
+                    ),
+                  )
+                }
+              >
+                {e.hidden ? 'Show' : 'Hide'}
+              </button>
+              <button
+                type="button"
+                aria-label={'Move forward ' + (e.binding || e.text || e.type)}
+                disabled={e.locked || elements.at(-1)?.id === e.id}
+                onClick={() =>
+                  onElements(orderLabelElement(elements, e.id, 'forward'))
+                }
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                aria-label={'Move backward ' + (e.binding || e.text || e.type)}
+                disabled={e.locked || elements[0]?.id === e.id}
+                onClick={() =>
+                  onElements(orderLabelElement(elements, e.id, 'backward'))
+                }
+              >
+                ↓
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

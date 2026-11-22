@@ -1,0 +1,11 @@
+# Baking conversion reference data
+
+The initial migration imported 18 ingredient entries from Weekend Bakery’s Baking Conversion Table at https://www.weekendbakery.com/cooking-conversions/ (accessed November 22, 2026). It used the table, rather than combining factors from its separate calculator.
+
+The source capacity chart explicitly lists a cup as 240 mL, a tablespoon as 15 mL, and a teaspoon as 5 mL. These source volumes are preserved in the reference records. App US liquid measures use the existing exact unit constants (one US cup = 236.5882365 mL). Consequently, an app US cup can weigh slightly less than the weight listed for a source cup. The displayed basis explains this normalization. The source’s approximate capacity chart is never used for the general unit calculator.
+
+Cup rows take priority over conflicting rounded spoon rows for butter, caster sugar, cornstarch, and flour. Salt uses the 1 teaspoon / 5.69 g row. Instant dry yeast uses the 1 teaspoon / 3.1 g row rather than the rounded packet equivalent. The source’s flour variants remain separate: USDA and Gold Medal all-purpose, whole wheat and bread flour; USDA rye flour; and the source’s King Arthur “all flour types” statement. These are source attributions, not claims of current manufacturer specifications. Brown sugar is not labeled packed or unpacked because the source does not specify preparation. The ambiguous flour tablespoon range and unnamed cornstarch-adjacent teaspoon row are not imported as additional factors. No stick units or preparation assumptions are inferred.
+
+Shared defaults are read-only under forced database row-level policies. Custom factors are private records owned by the server-resolved bakery. The API allows explicit saves by owners and managers, validates positive finite factors and volume metadata, checks inventory links against that bakery, and never writes to inventory or recipe records. Existing verified saved ingredient relationships may be selected for calculation; they are not altered. New custom factors retain the entered volume unit and quantity as well as normalized milliliters.
+
+The converter’s yeast substitution ratio is the requested 1 : 0.4 : 0.33 (fresh : active dry : instant), independent of the reference table’s yeast substitution suggestion. Every direction derives from that single ratio.

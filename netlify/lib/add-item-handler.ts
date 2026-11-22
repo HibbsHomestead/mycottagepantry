@@ -1,3 +1,4 @@
+import { minimumOrder } from '../../src/lib/item-restocking'
 import { applyProductTemplateDraft } from '../../src/lib/label-preview'
 import {
   barcodeText,
@@ -254,6 +255,7 @@ export async function handleAddItem(
       'Use the Oven costing currency; currency conversion is unavailable.',
     )
   item.currency = ctx.state.settings[0]?.currency || 'USD'
+  Object.assign(item, minimumOrder(item))
   item.threshold = number(item.threshold || 0, 'Reorder threshold')
   const fabric = type === 'material' && data.materialType === 'fabric'
   if (fabric) {

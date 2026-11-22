@@ -1,0 +1,180 @@
+.baking-converter {
+  max-width: 1100px;
+}
+.baking-converter .baking-tabs {
+  width: 100%;
+  height: auto;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 20px;
+  padding: 5px;
+}
+.baking-tabs button {
+  white-space: normal;
+  min-height: 44px;
+}
+.baking-card {
+  padding: 24px;
+  margin-bottom: 20px;
+  min-width: 0;
+}
+.baking-card h2 {
+  margin: 0 0 20px;
+}
+.baking-card h3 {
+  margin: 20px 0 12px;
+}
+.baking-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 0;
+}
+.baking-field input,
+.baking-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card, var(--background));
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+.baking-field :focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.baking-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto 1fr;
+  gap: 16px;
+  align-items: end;
+}
+.baking-swap {
+  margin-bottom: 3px;
+  min-width: 38px;
+  min-height: 38px;
+}
+.baking-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.baking-result {
+  margin: 24px 0 16px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.baking-result > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.baking-result strong {
+  font-family: var(--font-heading, 'Lora', serif);
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.baking-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.baking-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.baking-note,
+.baking-card .form-hint {
+  font-size: 13px;
+  line-height: 1.65;
+  margin: 12px 0 20px;
+}
+.baking-error {
+  padding: 12px;
+  border: 1px solid #b53d36;
+  border-radius: 8px;
+  color: #962d28;
+  background: #fff3f2;
+  font-size: 14px;
+}
+.baking-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.baking-table th,
+.baking-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.baking-table th:last-child,
+.baking-table td:last-child {
+  text-align: right;
+}
+.baking-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.baking-card a {
+  text-decoration: underline;
+}
+.baking-card-grid .baking-controls {
+  grid-template-columns: 1fr 1fr;
+}
+.baking-card-grid .baking-swap {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+}
+@media (max-width: 680px) {
+  .baking-converter .baking-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .baking-two {
+    grid-template-columns: 1fr;
+  }
+  .baking-card {
+    padding: 18px;
+  }
+  .baking-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .baking-controls > :first-child {
+    grid-column: 1/-1;
+  }
+  .baking-controls .baking-swap {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+  }
+  .baking-result {
+    padding: 18px;
+  }
+}
+.baking-converter .baking-tabs {
+  background: var(--surface-soft);
+}
+.baking-converter .baking-tabs button {
+  color: var(--foreground);
+}
+.baking-converter .baking-tabs button[data-state='active'] {
+  background: var(--card);
+  border-color: var(--accent-border);
+}

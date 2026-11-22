@@ -1431,3 +1431,27 @@ export const eventFinanceExpenseLinks = eventLink(
   'expense_id',
   true,
 )
+
+// Standalone baking reference factors; never read by inventory or recipe costing.
+export const bakingConversionReferences = pgTable('baking_conversion_references', {
+  id: text().primaryKey(),
+  businessId: uuid('business_id').references(() => businesses.id, { onDelete: 'cascade' }),
+  referenceId: text('reference_id').references((): AnyPgColumn => bakingConversionReferences.id),
+  inventoryIngredientId: text('inventory_ingredient_id'),
+  ingredientName: text('ingredient_name').notNull(),
+  description: text().notNull(),
+  referenceWeightG: numeric('reference_weight_g').notNull(),
+  referenceVolumeMl: numeric('reference_volume_ml').notNull(),
+  originalQuantity: numeric('original_quantity').notNull(),
+  originalUnit: text('original_unit').notNull(),
+  sourceName: text('source_name').notNull(),
+  sourceUrl: text('source_url').notNull(),
+  brand: text(),
+  scope: text().notNull(),
+}, (t) => [
+  check('baking_positive_basis', sql`${t.referenceWeightG} > 0 AND ${t.referenceVolumeMl} > 0 AND ${t.originalQuantity} > 0`),
+  check('baking_reference_scope', sql`(${t.scope} = 'shared' AND ${t.businessId} IS NULL AND ${t.inventoryIngredientId} IS NULL) OR (${t.scope} = 'private' AND ${t.businessId} IS NOT NULL)`),
+  foreignKey({ columns: [t.businessId, t.inventoryIngredientId], foreignColumns: [ingredients.businessId, ingredients.id] }),
+  uniqueIndex('baking_reference_override').on(t.businessId, t.referenceId).where(sql`${t.referenceId} IS NOT NULL`),
+  uniqueIndex('baking_inventory_override').on(t.businessId, t.inventoryIngredientId).where(sql`${t.inventoryIngredientId} IS NOT NULL`),
+])

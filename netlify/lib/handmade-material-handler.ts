@@ -1,3 +1,4 @@
+import { minimumOrder } from '../../src/lib/item-restocking'
 import { isFabric } from '../../src/lib/fabric'
 import { createHash } from 'node:crypto'
 import {
@@ -58,6 +59,7 @@ export async function handleHandmadeMaterial(
       notes: String(data.notes || '').slice(0, 5000),
       unit: data.unit,
       threshold: number(data.threshold || 0, 'Reorder threshold'),
+      ...minimumOrder(data, old),
       trackInventory: true,
       quantity: old?.quantity || 0,
       cost: old?.cost || 0,

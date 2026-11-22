@@ -8,7 +8,7 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { LabelStudio } from './label-studio'
 import { demoData } from '@/lib/demo'
 import { blankLabel, newElement, type LabelDocument } from '@/lib/label-studio'
@@ -24,6 +24,16 @@ vi.mock('@/lib/label-client-export', () => ({
   },
   exportLabelPng: vi.fn(),
 }))
+beforeEach(() => {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  )
+})
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
@@ -105,6 +115,12 @@ function setup(legacy = false) {
       if (body.action === 'labelDelete')
         workspace = {
           ...workspace,
+          products: workspace.products.map((p) => {
+            const next = { ...p }
+            if (body.data.ids.includes(next.labelDesignId))
+              delete next.labelDesignId
+            return next
+          }),
           label_templates: workspace.label_templates.map((d) =>
             body.data.ids.includes(d.id)
               ? {
@@ -152,7 +168,7 @@ it('provides one Labels list and opens a complete independent unsaved duplicate 
       ['labelSave', 'labelDraft', 'labelPrint'].includes(r.action),
     ),
   ).toHaveLength(0)
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0])
   expect(api.workspace().label_templates).toEqual([api.document])
 })
 it('requires review of manual text when selecting another product and saves a new independent label', async () => {
@@ -212,11 +228,11 @@ it('keeps shared legacy records and product assignments intact while opening Edi
   render(<api.App />)
   expect(screen.getByText(/2 linked products/)).toBeInTheDocument()
   expect(
-    screen.queryByRole('button', { name: 'Delete Market loaf' }),
-  ).not.toBeInTheDocument()
+    screen.getByRole('button', { name: 'Delete Market loaf' }),
+  ).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Edit Market loaf' }))
   expect(screen.getByLabelText('Label name')).toHaveValue('Market loaf — Copy')
-  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0])
   expect(api.workspace()).toEqual(before)
   expect(api.requests).toHaveLength(0)
 })
@@ -232,7 +248,7 @@ it('creates a blank draft without a template prerequisite and blocks print until
     'Save this label before printing or exporting.',
   )
   expect(api.requests).toHaveLength(0)
-  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  await user.click(screen.getAllByRole('button', { name: 'Cancel' })[0])
   expect(api.workspace().label_templates).toEqual([api.document])
 })
 
@@ -269,4 +285,131 @@ it('keeps counted bulk deletion and cancellation for independent labels', async 
     ).toBeInTheDocument(),
   )
   expect(api.workspace().label_templates.every((d) => d.deletedAt)).toBe(true)
+})
+
+it('deletes preserved shared designs after naming their linked products and keeps deletion after reopening', async () => {
+  const api = setup(true),
+    user = userEvent.setup()
+  const originalProducts = structuredClone(api.workspace().products)
+  render(<api.App />)
+  await user.click(screen.getByRole('button', { name: 'Delete Market loaf' }))
+  let dialog = within(screen.getByRole('dialog'))
+  expect(dialog.getByText(/Delete “Market loaf”/)).toBeInTheDocument()
+  expect(
+    dialog.getByText(/removes the label link from 2 products/),
+  ).toHaveTextContent(originalProducts[0].name)
+  await user.click(dialog.getByRole('button', { name: 'Cancel' }))
+  expect(api.requests).toHaveLength(0)
+  await user.click(screen.getByRole('button', { name: 'Delete Market loaf' }))
+  dialog = within(screen.getByRole('dialog'))
+  await user.click(dialog.getByRole('button', { name: 'Delete label' }))
+  await screen.findByText('1 label deleted.')
+  expect(
+    screen.queryByRole('button', { name: 'Delete Market loaf' }),
+  ).not.toBeInTheDocument()
+  expect(api.workspace().products).toEqual(
+    originalProducts.map((p) => {
+      const next = { ...p }
+      delete next.labelDesignId
+      return next
+    }),
+  )
+  const view = render(<api.App />)
+  expect(
+    view.queryByRole('button', { name: 'Delete Market loaf' }),
+  ).not.toBeInTheDocument()
+})
+it('bulk deletes mixed legacy and new records and selects only matching filtered labels', async () => {
+  const api = setup(),
+    user = userEvent.setup()
+  api.workspace().label_templates.push({
+    ...structuredClone(api.document),
+    id: 'legacy',
+    name: 'Preserved loaf',
+    workflowVersion: undefined,
+    recordKind: 'template',
+  })
+  render(<api.App />)
+  expect(
+    screen.queryByRole('button', { name: 'Delete Selected' }),
+  ).not.toBeInTheDocument()
+  await user.type(screen.getByPlaceholderText('Search labels…'), 'Preserved')
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Select All filtered labels' }),
+  )
+  expect(
+    screen.getByText('1 selected', { selector: 'strong' }),
+  ).toBeInTheDocument()
+  await user.clear(screen.getByPlaceholderText('Search labels…'))
+  await user.click(
+    screen.getByRole('checkbox', { name: 'Select All filtered labels' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Delete Selected' }))
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Delete 2 labels',
+    }),
+  )
+  await screen.findByText('2 labels deleted.')
+  expect(api.workspace().label_templates.every((d) => d.deletedAt)).toBe(true)
+  expect(
+    screen.queryByRole('button', { name: 'Delete Selected' }),
+  ).not.toBeInTheDocument()
+})
+it('keeps recovery collapsed and retains cards and selection when deletion fails', async () => {
+  const api = setup(true),
+    user = userEvent.setup()
+  api.workspace().label_recovery_drafts = [
+    {
+      id: 'draft',
+      name: 'Checkpoint loaf',
+      savedAt: '2026-11-22T00:00:00Z',
+      document: api.document,
+    },
+  ]
+  render(<api.App />)
+  const summary = screen.getByText('Recovery (1)')
+  expect(summary.closest('details')).not.toHaveAttribute('open')
+  await user.click(summary)
+  expect(
+    screen.getByRole('button', { name: 'Import editable recovery file' }),
+  ).toBeVisible()
+  expect(screen.getByText('Checkpoint loaf')).toBeVisible()
+  await user.click(screen.getByRole('checkbox', { name: 'Select Market loaf' }))
+  await user.click(screen.getByRole('button', { name: 'Delete Market loaf' }))
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: false,
+    json: async () => ({ error: 'Connection interrupted; retry deletion.' }),
+  } as Response)
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Delete label',
+    }),
+  )
+  expect(
+    await screen.findByText('Connection interrupted; retry deletion.'),
+  ).toBeInTheDocument()
+  expect(api.workspace().label_templates[0].deletedAt).toBeUndefined()
+  expect(api.workspace().label_recovery_drafts).toHaveLength(1)
+})
+
+it('shows authorization reasons and disabled controls for read-only saved and preserved cards', () => {
+  const api = setup(true)
+  render(
+    <LabelStudio
+      workspace={api.workspace()}
+      onWorkspace={vi.fn()}
+      ready
+      role="Read-only Accountant"
+    />,
+  )
+  expect(
+    screen.getByRole('button', { name: 'Delete Market loaf' }),
+  ).toBeDisabled()
+  expect(
+    screen.getByRole('checkbox', { name: 'Select Market loaf' }),
+  ).toBeDisabled()
+  expect(
+    screen.getByText('Deletion requires a connected Owner or Manager account.'),
+  ).toBeInTheDocument()
 })

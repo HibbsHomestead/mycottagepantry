@@ -1,3 +1,5 @@
+import { DemoEntry } from './demo-entry'
+import { activeDemoSession, enterDemo } from '@/lib/demo-client'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { useRouter } from '@tanstack/react-router'
@@ -23,6 +25,7 @@ import { resumeSelectedPlan } from '@/lib/signup-plan-client'
 export function LoginPage() {
   const router = useRouter({ warn: false })
   const submitting = useRef(false)
+  const [demoAvailable, setDemoAvailable] = useState(false)
   const [opening, setOpening] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -132,6 +135,7 @@ export function LoginPage() {
     reference.current = accessTraceId()
     async function initialize() {
       try {
+        if (await activeDemoSession()) { window.location.replace('/oven'); return }
         const identity = await import('@netlify/identity')
         callback.current ??= identity.handleAuthCallback()
         const result = await callback.current
@@ -193,6 +197,10 @@ export function LoginPage() {
     if (!reference.current) reference.current = accessTraceId()
     record('login_started', recovery ? 'recovery' : 'password')
     try {
+      if (!recovery && String(fields.get('email')).trim().toLowerCase() === 'demo') {
+        await enterDemo('demo', String(fields.get('password')))
+        return
+      }
       const identity = await import('@netlify/identity')
       if (recovery) {
         await identity.updateUser({ password: String(fields.get('password')) })
@@ -278,6 +286,7 @@ export function LoginPage() {
             events={events}
           />
         )}
+        {!recovery && <DemoEntry onAvailable={setDemoAvailable} />}
         <SubmissionForm onSubmit={submit}>
           <fieldset disabled={busy || !ready}>
             <legend className="sr-only">
@@ -285,9 +294,9 @@ export function LoginPage() {
             </legend>
             {!recovery && (
               <label>
-                Email
+                {demoAvailable ? 'Email or demo username' : 'Email'}
                 <input
-                  type="email"
+                  type={demoAvailable ? "text" : "email"}
                   name="email"
                   autoComplete="username"
                   inputMode="email"

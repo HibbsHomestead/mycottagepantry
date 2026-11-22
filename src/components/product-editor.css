@@ -611,14 +611,14 @@
   min-width: 0;
   container-type: inline-size;
 }
-.food-product-dialog .food-product-scroll .calculation-box > .packaging-editor {
+.food-product-dialog .food-product-scroll .calculation-box:not(.compact-packaging) > .packaging-editor {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
   gap: 10px;
 }
 .food-product-dialog
   .food-product-scroll
-  .calculation-box
+  .calculation-box:not(.compact-packaging)
   > .packaging-editor
   > label {
   min-width: 0;
@@ -628,24 +628,24 @@
 }
 .food-product-dialog
   .food-product-scroll
-  .calculation-box
+  .calculation-box:not(.compact-packaging)
   > .packaging-editor
   > label:first-child,
 .food-product-dialog
   .food-product-scroll
-  .calculation-box
+  .calculation-box:not(.compact-packaging)
   > .packaging-editor
   > label:nth-child(4) {
   grid-column: 1 / -1;
 }
 .food-product-dialog
   .food-product-scroll
-  .calculation-box
+  .calculation-box:not(.compact-packaging)
   > .packaging-editor
   input:not([type='checkbox']),
 .food-product-dialog
   .food-product-scroll
-  .calculation-box
+  .calculation-box:not(.compact-packaging)
   > .packaging-editor
   select {
   width: 100%;
@@ -669,7 +669,7 @@
 @container (min-width: 480px) {
   .food-product-dialog
     .food-product-scroll
-    .calculation-box
+    .calculation-box:not(.compact-packaging)
     > .packaging-editor {
     grid-template-columns:
       minmax(0, 2fr) minmax(70px, 1fr) minmax(70px, 1fr)
@@ -677,14 +677,14 @@
   }
   .food-product-dialog
     .food-product-scroll
-    .calculation-box
+    .calculation-box:not(.compact-packaging)
     > .packaging-editor
     > label:first-child {
     grid-column: 1 / -1;
   }
   .food-product-dialog
     .food-product-scroll
-    .calculation-box
+    .calculation-box:not(.compact-packaging)
     > .packaging-editor
     > label:nth-child(4) {
     grid-column: 1 / -1;
@@ -730,3 +730,14 @@
 }
 /* Recipes use their own inner grid, spanning the complete shared scroll body. */
 .food-product-dialog .editor-recipe > .food-product-scroll { display: block; }
+
+/* Portaled inside Radix's dialog interaction layer; not clipped by form scrolling. */
+.category-popup {
+  z-index: 160;
+  width: var(--radix-popover-trigger-width, 320px);
+  max-width: calc(100vw - 32px);
+}
+.category-popup .category-listbox {
+  position: static;
+  max-height: min(240px, var(--radix-popover-content-available-height));
+}

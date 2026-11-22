@@ -122,7 +122,7 @@ it('keeps edits and the editor open after a failed save, then retries the same p
 it('names a genuine SKU conflict with another product and saves nothing', async () => {
   const { mutate, close } = setup()
   tab('Pricing & Stock')
-  const sku = screen.getByLabelText('SKU')
+  const sku = screen.getByLabelText('Item code / SKU')
   await userEvent.clear(sku)
   await userEvent.type(sku, 'jar-1')
   await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
@@ -131,7 +131,7 @@ it('names a genuine SKU conflict with another product and saves nothing', async 
   )
   expect(mutate).not.toHaveBeenCalled()
   expect(close).not.toHaveBeenCalled()
-  expect(screen.getByLabelText('SKU')).toHaveValue('jar-1')
+  expect(screen.getByLabelText('Item code / SKU')).toHaveValue('jar-1')
   // The conflict reopens the tab that holds the field.
   expect(screen.getByRole('tab', { name: /Details/ })).toHaveAttribute(
     'data-state',
@@ -208,7 +208,7 @@ it('shows rounded stock while opening and saving preserve stored precision', asy
   expect(
     screen.getByRole('region', { name: 'Stock on hand' }),
   ).toHaveTextContent('12.35 items on hand')
-  expect(screen.getByLabelText('Reorder threshold (items)')).toHaveValue(
+  expect(screen.getByLabelText('Reorder when stock reaches')).toHaveValue(
     1.234567,
   )
   await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }))

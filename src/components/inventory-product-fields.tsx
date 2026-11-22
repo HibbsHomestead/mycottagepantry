@@ -10,7 +10,7 @@ export function InventoryProductFields({
 }) {
   return (
     <details className="form-step">
-      <summary>Product source & specifications</summary>
+      <summary>Where to buy & item details</summary>
       <label className="field">
         <span>Saved product URL</span>
         <input
