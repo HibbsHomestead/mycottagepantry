@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useRouter } from '@tanstack/react-router'
 import { OvenLoading } from './oven-loading'
 import { restoreIdentitySession } from '@/lib/identity-session'
@@ -253,7 +255,7 @@ export function LoginPage() {
             ? 'Finish your existing provider recovery flow.'
             : 'Log in to your existing Cottage Pantry account.'}
         </p>
-        {error && <p role="alert">{error}</p>}
+
         {message && <p role="status">{message}</p>}
         {typeof location !== 'undefined' &&
           new URLSearchParams(location.search).has('signedOut') && (
@@ -276,7 +278,7 @@ export function LoginPage() {
             events={events}
           />
         )}
-        <form onSubmit={submit}>
+        <SubmissionForm onSubmit={submit}>
           <fieldset disabled={busy || !ready}>
             <legend className="sr-only">
               {recovery ? 'New password' : 'Login details'}
@@ -315,6 +317,8 @@ export function LoginPage() {
             >
               {showPassword ? 'Hide password' : 'Show password'}
             </button>
+
+            <FormErrorNotice message={error} />
             <button className="public-button" type="submit">
               {!ready
                 ? 'Checking session…'
@@ -325,7 +329,7 @@ export function LoginPage() {
                     : 'Log in'}
             </button>
           </fieldset>
-        </form>
+        </SubmissionForm>
         <p>
           <a className="public-text-link" href="/recover">
             Forgot your password?

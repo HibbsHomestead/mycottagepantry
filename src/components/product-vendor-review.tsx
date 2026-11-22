@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import type { Item } from '@/lib/domain'
@@ -109,7 +110,7 @@ export function ProductVendorReview({
   return (
     <div className="product-vendor-review">
       {status === 'loading' && <p role="status">Loading oven vendors…</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       {status === 'error' && (
         <button
           type="button"

@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { SupportAiUsage, SupportAiSuggestion } from './support-ai-admin'
 import { SupportTranscript, SupportHelper } from './support-helper'
 import {
@@ -448,7 +450,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
         </header>
         {initialError ? (
           <div className="support-panel">
-            <p role="alert">{initialError}</p>
+            <FormErrorNotice message={initialError} />
             {initialStatus === 401 ? (
               <a
                 className="public-button"
@@ -493,11 +495,6 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
           <p role="status">Checking your verified account…</p>
         ) : (
           <>
-            {error && (
-              <p role="alert" className="support-alert">
-                {error}
-              </p>
-            )}
             {notice && (
               <p role="status" className="support-alert">
                 {notice}
@@ -617,7 +614,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
 
                   <aside className="support-panel support-list">
                     <h2>{staff ? 'Tickets' : 'Your tickets'}</h2>
-                    <form
+                    <SubmissionForm
                       className="support-search"
                       onSubmit={(e) => {
                         e.preventDefault()
@@ -638,13 +635,15 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                           }
                         />
                       </label>
+
+                      <FormErrorNotice message={!compose && !detail ? error : ''} />
                       <button
                         className="support-button"
                         aria-label="Search tickets"
                       >
                         <Search size={17} />
                       </button>
-                    </form>
+                    </SubmissionForm>
                     <label className="support-field">
                       Status
                       <select
@@ -741,7 +740,10 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                   </aside>
                   <div className="support-panel support-conversation">
                     {!staff && compose ? (
-                      <form onSubmit={create} aria-label="New support ticket">
+                      <SubmissionForm
+                        onSubmit={create}
+                        aria-label="New support ticket"
+                      >
                         <h2>Tell us what you need</h2>
                         <p className="support-warning">
                           Do not submit passwords, API keys or payment-card
@@ -799,10 +801,12 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                           version. Email notifications may be inactive; your
                           ticket is saved in the app.
                         </p>
+
+                        <FormErrorNotice message={compose ? error : ''} />
                         <button className="public-button" disabled={busy}>
                           {busy ? 'Saving…' : 'Submit ticket'}
                         </button>
-                      </form>
+                      </SubmissionForm>
                     ) : detailLoading ? (
                       <p role="status">Loading conversation…</p>
                     ) : detail ? (
@@ -973,7 +977,10 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                             }}
                           />
                         )}
-                        <form onSubmit={sendReply} aria-label="Ticket reply">
+                        <SubmissionForm
+                          onSubmit={sendReply}
+                          aria-label="Ticket reply"
+                        >
                           {staff && (
                             <label className="support-note-choice">
                               <input
@@ -1005,6 +1012,8 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                             key={replyKey}
                             onFile={setReplyFile}
                           />
+
+                          <FormErrorNotice message={!compose ? error : ''} />
                           <button className="public-button" disabled={busy}>
                             {busy
                               ? 'Saving…'
@@ -1014,7 +1023,7 @@ export function SupportPage({ staff = false }: { staff?: boolean }) {
                                   ? 'Send customer-visible reply'
                                   : 'Send reply'}
                           </button>
-                        </form>
+                        </SubmissionForm>
                         {staff && (
                           <details className="support-delivery">
                             <summary>Notification delivery · internal</summary>
@@ -1284,11 +1293,7 @@ function SupportNotificationSettings() {
         This is a platform setting, separate from business roles and plans. No
         personal mailbox is connected or imported.
       </p>
-      {error && (
-        <p role="alert" className="support-alert">
-          {error}
-        </p>
-      )}
+
       {saved && <p role="status">{saved}</p>}
       {settings && (
         <>
@@ -1296,7 +1301,7 @@ function SupportNotificationSettings() {
             {settings.deliveryBlock ||
               'Configured, not delivery-tested. Provider acceptance is tracked separately from delivery.'}
           </p>
-          <form onSubmit={save}>
+          <SubmissionForm onSubmit={save}>
             <label className="support-field">
               Support notification recipient
               <input
@@ -1342,10 +1347,12 @@ function SupportNotificationSettings() {
               Notifications say “Reply in Cottage Pantry”; inbound email ticket
               creation and replies are not implemented.
             </p>
+
+            <FormErrorNotice message={error} />
             <button className="public-button" disabled={busy}>
               Save notification settings
             </button>
-          </form>
+          </SubmissionForm>
           {settings.pendingRecipient && (
             <div className="support-confirm">
               <h3>Confirm changed recipient</h3>

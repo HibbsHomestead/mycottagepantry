@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { SubscriptionExpenses } from './subscription-expenses'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -148,11 +149,7 @@ export function StripeOwnerBilling({
           Loading verified subscription…
         </div>
       )}
-      {error && (
-        <p role="alert" className="billing-error">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
       {notice && (
         <p role="status" className="billing-notice">
           {notice}
@@ -666,7 +663,7 @@ export function StripeOwnerBilling({
                 I confirm the displayed amount, timing and access change for{' '}
                 {data?.workspace.name}.
               </label>
-              {error && <p role="alert">{error}</p>}
+              {error && <FormErrorNotice message={error} />}
               <div className="button-row">
                 <button
                   className="btn secondary"
@@ -706,7 +703,7 @@ export function StripeOwnerBilling({
             {tier(currentPlan)?.name}: ${tier(currentPlan)?.monthlyUsd}{' '}
             USD/month per business.
           </p>
-          {error && <p role="alert">{error}</p>}
+          {error && <FormErrorNotice message={error} />}
           <button
             className="btn primary"
             disabled={busy}

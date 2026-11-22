@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Item } from '@/lib/domain'
 import { searchPhrase } from '@/lib/price-search'
@@ -161,11 +162,7 @@ export function PriceSearchSetup({ ingredients }: { ingredients: Item[] }) {
         {busy ? 'Testing connection…' : 'Test shopping search'}
       </button>
       {!ingredients.length && <p>Add an ingredient before running a test.</p>}
-      {error && (
-        <p role="alert" className="warning-text">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
     </section>
   )
 }

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import {
   connectBridge,
@@ -151,11 +152,6 @@ export function LabelPrinterSettings({
         bridge can ask you to authorize this site. No security settings need to
         be disabled.
       </p>
-      {error && (
-        <p role="alert" className="warning-text">
-          {error}
-        </p>
-      )}
       <div className="studio-two">
         <label className="field">
           <span>Saved profile</span>
@@ -280,6 +276,7 @@ export function LabelPrinterSettings({
         />{' '}
         Preferred printer for this device
       </label>
+      <FormErrorNotice message={error} />
       <div className="button-row">
         <button
           className="btn"

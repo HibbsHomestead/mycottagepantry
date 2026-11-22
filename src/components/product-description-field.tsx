@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useLayoutEffect, useId, useRef, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import type { Item, Workspace } from '@/lib/domain'
@@ -181,7 +182,7 @@ function DescriptionDraft({
             persist it.
           </DialogDescription>
           {busy && <p role="status">Generating description…</p>}
-          {error && <p role="alert">{error}</p>}
+          {error && <FormErrorNotice message={error} />}
           <label className="field">
             Proposed description
             <textarea

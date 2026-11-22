@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { SectionNavigation } from './section-navigation'
 import { billingRequest } from '@/lib/billing-client'
 import { CategoryTaxSettings } from './product-categories'
@@ -262,6 +263,7 @@ export function SettingsWorkspace({
                   </button>
                 </div>
               </div>
+              <FormErrorNotice message={error} />
               <div className="appearance-footer">
                 <p>
                   {canSave
@@ -452,6 +454,7 @@ export function SettingsWorkspace({
                   setRates(next)
                 }}
               />
+              <FormErrorNotice message={error} />
               <button
                 className="btn"
                 disabled={busy || saving || !canSave}
@@ -586,11 +589,6 @@ export function SettingsWorkspace({
               savedAppearance === `${appearance.theme}:${appearance.mode}`) && (
               <p role="status">Saved successfully.</p>
             )}
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
         </section>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { FormErrorNotice } from './form-error-notice'
+import { SubmissionForm } from './submission-form'
 import { useAccountAccess } from '@/lib/account-access-client'
 import {
   AccountAccessStatus,
@@ -194,7 +196,7 @@ export function OnboardingPage() {
           {loading && (
             <p role="status">Checking your account and saved setup…</p>
           )}
-          {error && (
+          {error && !access?.privateTest && (
             <p role="alert" className="registration-notice">
               {error}
               <button
@@ -242,7 +244,7 @@ export function OnboardingPage() {
                   a duplicate oven. <a href="/oven">Open oven</a>.
                 </p>
               )}
-              <form onSubmit={save} className="registration-form">
+              <SubmissionForm onSubmit={save} className="registration-form">
                 <label>
                   Business/display name
                   <input
@@ -395,6 +397,7 @@ export function OnboardingPage() {
                   </span>
                 </label>
                 <div className="registration-actions">
+                  <FormErrorNotice message={error} />
                   <button
                     className="public-button"
                     disabled={busy}
@@ -406,7 +409,7 @@ export function OnboardingPage() {
                     Back to plans
                   </a>
                 </div>
-              </form>
+              </SubmissionForm>
               {access.draft && !access.membership && (
                 <div>
                   <h2>Development acceptance fixture</h2>

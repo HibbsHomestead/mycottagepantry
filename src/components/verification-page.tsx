@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useState, type FormEvent } from 'react'
 import { useAccountAccess } from '@/lib/account-access-client'
 import {
@@ -114,8 +116,7 @@ function PasswordRecoveryRequest() {
     }
   }
   return (
-    <form className="registration-form" onSubmit={submit}>
-      {error && <p role="alert">{error}</p>}
+    <SubmissionForm className="registration-form" onSubmit={submit}>
       {message && <p role="status">{message}</p>}
       <label>
         Email address
@@ -128,9 +129,11 @@ function PasswordRecoveryRequest() {
           onChange={(event) => setEmail(event.target.value)}
         />
       </label>
+
+      <FormErrorNotice message={error} />
       <button className="public-button" disabled={busy}>
         {busy ? 'Sending reset link…' : 'Send reset link'}
       </button>
-    </form>
+    </SubmissionForm>
   )
 }

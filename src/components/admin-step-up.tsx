@@ -1,3 +1,5 @@
+import { FormErrorNotice } from './form-error-notice'
+import { SubmissionForm } from './submission-form'
 import { useState, type FormEvent } from 'react'
 import { AdminCodeSignIn, AdminMfaSettings } from './admin-mfa'
 import type { AdminMetadata } from '@/lib/platform-admin-types'
@@ -35,7 +37,6 @@ export function AdminStepUp({
     } catch (e) {
       setMessage((e as Error).message)
     } finally {
-      setPassword('')
       setBusy(false)
     }
   }
@@ -65,7 +66,7 @@ export function AdminStepUp({
               onSuccess={() => window.location.reload()}
             />
           ) : (
-            <form onSubmit={verify}>
+            <SubmissionForm onSubmit={verify}>
               <p>
                 Confirm your account password. You can then set up an
                 authenticator app and recovery codes below.
@@ -81,10 +82,12 @@ export function AdminStepUp({
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </label>
+
+              <FormErrorNotice message={message} />
               <button disabled={busy}>
                 {busy ? 'Checking password…' : 'Verify password'}
               </button>
-            </form>
+            </SubmissionForm>
           )}
           <AdminMfaSettings
             enabled={!!session.totpEnabled}
@@ -100,7 +103,7 @@ export function AdminStepUp({
           </p>
         </>
       )}
-      {message && <p role="status">{message}</p>}
+      {!session && <FormErrorNotice message={message} />}
     </details>
   )
 }

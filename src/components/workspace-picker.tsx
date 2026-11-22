@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import { PublicSite } from './public-site'
 import { registrationRequest } from '@/lib/registration-client'
@@ -31,7 +32,7 @@ export function WorkspacePicker({
       <section className="public-auth">
         <h1>Choose your oven</h1>
         <p>Open a business you belong to.</p>
-        {error && <p role="alert">{error}</p>}
+        {error && <FormErrorNotice message={error} />}
         <ul>
           {memberships.map((membership) => (
             <li key={membership.id}>

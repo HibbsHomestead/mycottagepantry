@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
 import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { customerMessage } from '@/lib/customer-message'
@@ -595,10 +596,8 @@ export function FinanceWorkspace({
   )
   return (
     <div className="finance-workspace">
-      {error && (
-        <p className="finance-feedback error" role="alert">
-          {error}
-        </p>
+      {error && !modal && section !== 'Upload receipt' && !receipt && (
+        <FormErrorNotice message={error} />
       )}
       {message && (
         <p className="finance-feedback" role="status">
@@ -628,11 +627,7 @@ export function FinanceWorkspace({
                 posts until you confirm.
               </DialogDescription>
             </DialogHeader>
-            {error && (
-              <p role="alert" className="finance-feedback error">
-                {error}
-              </p>
-            )}
+            {error && <FormErrorNotice message={error} />}
             {uploadPanel}
             <button
               className="btn secondary"
@@ -1444,11 +1439,6 @@ export function FinanceWorkspace({
                 : 'Enter the details. Nothing posts until you review and confirm.'}
             </DialogDescription>
           </DialogHeader>
-          {error && (
-            <p role="alert" className="finance-feedback error">
-              {error}
-            </p>
-          )}
           {[
             'simpleSale',
             'financeEntry',
@@ -2148,6 +2138,7 @@ export function FinanceWorkspace({
             </div>
           )}
           <div className="finance-sticky-actions">
+            <FormErrorNotice message={error} />
             <button
               className="btn secondary"
               disabled={busy}
@@ -2811,11 +2802,6 @@ function ReceiptReview({
             )}
           </div>
         </DialogHeader>
-        {error && (
-          <p role="alert" className="finance-feedback error">
-            {error}
-          </p>
-        )}
         <div className="receipt-review-grid">
           <section className="receipt-preview">
             <div className="button-row receipt-desktop-controls">
@@ -4601,6 +4587,7 @@ function ReceiptReview({
           </section>
         )}
         <div className="finance-sticky-actions">
+          <FormErrorNotice message={error} />
           <span className="receipt-footer-status" role="status">
             {closed
               ? 'Original receipt preserved'

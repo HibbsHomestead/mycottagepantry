@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { Plus, Settings } from 'lucide-react'
 import {
   Dialog,
@@ -147,7 +148,7 @@ function LoadState({
       {api.loading && (
         <p role="status">Loading product categories and tax settings…</p>
       )}
-      {(api.error || api.taxError) && (
+      {!api.ready && (api.error || api.taxError) && (
         <div role="alert">
           {api.error && <p>{api.error}</p>}
           {api.taxError && <p>{api.taxError}</p>}
@@ -323,6 +324,7 @@ function CategoryForm({
           </label>
         </div>
       )}
+      <FormErrorNotice message={api.error || api.taxError} />
       <div className="category-actions">
         <button
           type="button"
@@ -1301,6 +1303,7 @@ function CategoryTaxSettingsFields({
       <p>
         Classification does not change Packaging-specific ingredient controls.
       </p>
+      <FormErrorNotice message={api.error || api.taxError} />
       <button
         type="button"
         className="btn secondary"

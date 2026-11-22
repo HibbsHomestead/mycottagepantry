@@ -1,3 +1,7 @@
+import { ItemDetailLayout } from './item-detail-layout'
+import { InventoryDetailTabs } from './inventory-detail-tabs'
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ScopedCategorySelect } from './section-categories'
 import { ProductLinkImport } from './product-link-import'
@@ -18,7 +22,6 @@ import {
   FabricPriceFields,
 } from './fabric-fields'
 import { ItemPhotoField } from './item-photo-field'
-import { PantryPhoto } from './pantry-photo'
 import { fabricUnitOptions } from '@/lib/fabric'
 import { convert, money, type Item, type Workspace } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
@@ -41,7 +44,9 @@ export function FabricDialog({
   close,
   onDirty,
   onEdit,
+  onStock,
 }: {
+  onStock?: (kind: 'fabric-receive' | 'fabric-adjust') => void
   onEdit?: () => void
   kind: string
   item: Item
@@ -145,7 +150,10 @@ export function FabricDialog({
         if (!open) dismiss()
       }}
     >
-      <DialogContent className="app-dialog wide-dialog">
+      <DialogContent
+        showCloseButton={!read}
+        className={`app-dialog wide-dialog ${read ? 'ingredient-detail-view item-detail-dialog' : ''}`}
+      >
         <DialogHeader>
           <DialogTitle>
             {read
@@ -194,105 +202,250 @@ export function FabricDialog({
                 }
               }}
             />
-            {error && <p role="alert">{error}</p>}
-            <PantryPhoto
-              className="pantry-edit-photo"
-              item={item}
-              assets={workspace.graphic_assets || []}
-            />
-            <dl className="fabric-summary">
-              <dt>Available</dt>
-              <dd>
-                {inventoryQuantity(
-                  convert(
-                    item.quantity,
-                    item.unit,
-                    item.storageUnit || item.unit,
-                  ),
-                )}{' '}
-                {item.storageUnit || item.unit}
-              </dd>
-              <dt>Width</dt>
-              <dd>
-                {item.fabricWidth} {item.widthUnit}
-              </dd>
-              <dt>Average cost per {item.storageUnit || item.unit}</dt>
-              <dd>
-                {precise(
-                  item.cost *
-                    convert(1, item.storageUnit || item.unit, item.unit),
-                )}
-              </dd>
-              <dt>Reorder at</dt>
-              <dd>
-                {inventoryQuantity(item.threshold)} {item.unit} ·{' '}
-                {item.quantity <= item.threshold ? 'Low stock' : 'In stock'}
-              </dd>
-            </dl>
-            <p>
-              {[item.fiber, item.color, item.pattern, item.collection]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
-            <p>
-              SKU: {item.sku || 'Not set'} · Barcode:{' '}
-              {item.barcode || 'Not set'}
-            </p>
-            <p>
-              Supplier: {item.vendor || 'Not set'} · Location:{' '}
-              {item.storageLocation || 'Not set'}
-            </p>
-            <p>
-              {item.fabricTracking === 'precut'
-                ? `Counted precuts / bundles${item.pieceLength ? ` · ${item.pieceLength} ${item.pieceLengthUnit} × ${item.fabricWidth} ${item.widthUnit} per piece` : ''}`
-                : item.pieceMode === 'separate'
-                  ? `Separate piece: ${item.pieceId}`
-                  : 'Total length; continuity unknown. Separate pieces are not one continuous length.'}
-            </p>
-            {item.parentMaterialId && (
-              <p>
-                Transferred from:{' '}
-                {workspace.ingredients.find(
-                  (i) => i.id === item.parentMaterialId,
-                )?.name || 'Parent fabric record'}
-              </p>
-            )}
-            <p>{item.notes}</p>
-            {manager && onEdit && (
-              <button type="button" className="btn secondary" onClick={onEdit}>
-                Edit Material
-              </button>
-            )}
-            <h3>Stock movement history</h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Movement</th>
-                    <th>Quantity</th>
-                    <th>Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workspace.ledger
-                    .filter((l) => l.ingredientId === item.id)
-                    .map((l) => (
-                      <tr key={l.id}>
-                        <td>{l.date}</td>
-                        <td>{l.type}</td>
-                        <td>
-                          {inventoryQuantity(l.quantity)} {l.unit}
-                        </td>
-                        <td>{l.reason}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+            <div className="ingredient-detail-body">
+              <ItemDetailLayout
+                item={item}
+                assets={workspace.graphic_assets || []}
+                photoDetails={
+                  <section
+                    className="ingredient-section"
+                    aria-label="Current stock"
+                  >
+                    <h3>Current stock</h3>
+                    <div className="ingredient-metrics">
+                      <div>
+                        <small>On hand</small>
+                        <strong>
+                          {inventoryQuantity(
+                            convert(
+                              item.quantity,
+                              item.unit,
+                              item.storageUnit || item.unit,
+                            ),
+                          )}{' '}
+                          {item.storageUnit || item.unit}
+                        </strong>
+                      </div>
+                      <div>
+                        <small>Inventory value</small>
+                        <strong>{money(item.quantity * item.cost)}</strong>
+                      </div>
+                      <div>
+                        <small>Reorder threshold</small>
+                        <strong>
+                          {inventoryQuantity(item.threshold)} {item.unit}
+                        </strong>
+                      </div>
+                      <div>
+                        <small>Reorder quantity</small>
+                        <strong>
+                          {item.reorderQuantity == null
+                            ? 'Not set'
+                            : `${inventoryQuantity(item.reorderQuantity)} ${item.unit}`}
+                        </strong>
+                      </div>
+                      <div>
+                        <small>Storage location</small>
+                        <strong>{item.storageLocation || 'Not set'}</strong>
+                      </div>
+                    </div>
+                    {onStock && (
+                      <div className="button-row">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          disabled={!canWrite}
+                          onClick={() => onStock('fabric-receive')}
+                        >
+                          Receive stock
+                        </button>
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          disabled={!canWrite}
+                          onClick={() => onStock('fabric-adjust')}
+                        >
+                          Adjust stock
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                }
+              >
+                <dl className="fabric-summary">
+                  <dt>Available</dt>
+                  <dd>
+                    {inventoryQuantity(
+                      convert(
+                        item.quantity,
+                        item.unit,
+                        item.storageUnit || item.unit,
+                      ),
+                    )}{' '}
+                    {item.storageUnit || item.unit}
+                  </dd>
+                  <dt>Width</dt>
+                  <dd>
+                    {item.fabricWidth} {item.widthUnit}
+                  </dd>
+                  <dt>Average cost per {item.storageUnit || item.unit}</dt>
+                  <dd>
+                    {precise(
+                      item.cost *
+                        convert(1, item.storageUnit || item.unit, item.unit),
+                    )}
+                  </dd>
+                  <dt>Reorder at</dt>
+                  <dd>
+                    {inventoryQuantity(item.threshold)} {item.unit} ·{' '}
+                    {item.quantity <= item.threshold ? 'Low stock' : 'In stock'}
+                  </dd>
+                </dl>
+
+                <InventoryDetailTabs
+                  inventory={
+                    <>
+                      <details>
+                        <summary>
+                          Inventory ledger &amp; purchase history
+                        </summary>{' '}
+                        <h3>Stock movement history</h3>
+                        <div className="table-wrap">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Movement</th>
+                                <th>Quantity</th>
+                                <th>Reason</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {workspace.ledger
+                                .filter((l) => l.ingredientId === item.id)
+                                .map((l) => (
+                                  <tr key={l.id}>
+                                    <td>{l.date}</td>
+                                    <td>{l.type}</td>
+                                    <td>
+                                      {inventoryQuantity(l.quantity)} {l.unit}
+                                    </td>
+                                    <td>{l.reason}</td>
+                                  </tr>
+                                ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                      <details>
+                        <summary>Cost history</summary>
+                        {workspace.ledger
+                          .filter(
+                            (line) =>
+                              line.ingredientId === item.id &&
+                              line.type === 'purchase_receipt',
+                          )
+                          .map((line) => (
+                            <p key={line.id}>
+                              {line.date} ·{' '}
+                              {line.amount == null
+                                ? 'Not recorded'
+                                : money(line.amount)}{' '}
+                              · {inventoryQuantity(line.quantity)} {line.unit}
+                            </p>
+                          ))}
+                      </details>
+                    </>
+                  }
+                  purchasing={
+                    <>
+                      <h3>Purchasing</h3>
+                      <p>Supplier: {item.vendor || 'Not set'}</p>
+                      <p>
+                        Purchase package: {item.purchaseQuantity ?? 'Not set'}{' '}
+                        {item.purchaseUnit || ''}
+                      </p>
+                      <p>
+                        Package price:{' '}
+                        {item.packagePrice == null
+                          ? 'Not set'
+                          : money(item.packagePrice)}
+                      </p>
+                    </>
+                  }
+                  allergens={
+                    <>
+                      <h3>Fabric composition</h3>
+                      <p>{item.fiber || 'Not recorded'}</p>
+                    </>
+                  }
+                  identification={
+                    <>
+                      <h3>Identification &amp; Notes</h3>
+                      <p>
+                        {[item.color, item.pattern, item.collection]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                      <p>
+                        SKU: {item.sku || 'Not set'} · Barcode:{' '}
+                        {item.barcode || 'Not set'}
+                      </p>{' '}
+                      <p>
+                        {item.fabricTracking === 'precut'
+                          ? `Counted precuts / bundles${item.pieceLength ? ` · ${item.pieceLength} ${item.pieceLengthUnit} × ${item.fabricWidth} ${item.widthUnit} per piece` : ''}`
+                          : item.pieceMode === 'separate'
+                            ? `Separate piece: ${item.pieceId}`
+                            : 'Total length; continuity unknown. Separate pieces are not one continuous length.'}
+                      </p>
+                      {item.parentMaterialId && (
+                        <p>
+                          Transferred from:{' '}
+                          {workspace.ingredients.find(
+                            (i) => i.id === item.parentMaterialId,
+                          )?.name || 'Parent fabric record'}
+                        </p>
+                      )}
+                      <p>{item.notes}</p>
+                      <h3>Design usage</h3>
+                      {workspace.products
+                        .filter((product) =>
+                          (
+                            product.bom?.lines ||
+                            workspace.recipes.find(
+                              (recipe) =>
+                                recipe.id === product.recipeId &&
+                                recipe.workflow === 'handmade',
+                            )?.lines ||
+                            []
+                          ).some((line: Item) => line.ingredientId === item.id),
+                        )
+                        .map((product) => (
+                          <p key={product.id}>{product.name}</p>
+                        ))}
+                    </>
+                  }
+                />
+              </ItemDetailLayout>
             </div>
+            <footer className="item-dialog-actions ingredient-detail-footer">
+              <FormErrorNotice message={error} />
+              <button type="button" className="btn secondary" onClick={dismiss}>
+                Close
+              </button>
+              {manager && onEdit && (
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={onEdit}
+                >
+                  Edit Material
+                </button>
+              )}
+            </footer>
           </>
         ) : (
-          <form
+          <SubmissionForm
             className="app-form"
             onSubmit={async (event) => {
               event.preventDefault()
@@ -381,7 +534,21 @@ export function FabricDialog({
                 <>
                   {field('name', 'Fabric name', true)}
                   <FabricFields value={draft} change={change} fixed />
-                  <ScopedCategorySelect workspace={workspace} scope="handmade-materials" item={draft} canManage={['Owner','Manager'].includes(role)} onSettings={patch=>onWorkspace({...workspace,settings:workspace.settings.map((b,i)=>i===0 ? {...b,...patch} : b)})} onChange={change} />
+                  <ScopedCategorySelect
+                    workspace={workspace}
+                    scope="handmade-materials"
+                    item={draft}
+                    canManage={['Owner', 'Manager'].includes(role)}
+                    onSettings={(patch) =>
+                      onWorkspace({
+                        ...workspace,
+                        settings: workspace.settings.map((b, i) =>
+                          i === 0 ? { ...b, ...patch } : b,
+                        ),
+                      })
+                    }
+                    onChange={change}
+                  />
                   <div className="form-grid">
                     {field('sku', 'SKU')}
                     {field('barcode', 'Barcode')}
@@ -591,7 +758,8 @@ export function FabricDialog({
                 </>
               )}
             </fieldset>
-            {error && <p role="alert">{error}</p>}
+
+            <FormErrorNotice message={error} />
             <div className="form-actions">
               <button
                 className="btn secondary"
@@ -609,7 +777,7 @@ export function FabricDialog({
                 {busy ? 'Saving…' : remnant ? 'Transfer remnant' : 'Save'}
               </button>
             </div>
-          </form>
+          </SubmissionForm>
         )}
       </DialogContent>
     </Dialog>

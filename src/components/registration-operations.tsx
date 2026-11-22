@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useState } from 'react'
 import { registrationRequest } from '@/lib/registration-client'
 import { PublicSite } from './public-site'
@@ -28,7 +29,7 @@ export function RegistrationOperations() {
             Private test metadata only. Oven Owner status does not provide
             platform administration access.
           </p>
-          {error && <p role="alert">{error}</p>}
+          {error && <FormErrorNotice message={error} />}
           {!data && !error && (
             <p role="status">Verifying administrator access…</p>
           )}

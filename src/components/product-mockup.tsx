@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { DestructiveConfirmationContent } from './destructive-confirmation'
 import './item-deletion.css'
 import { TooltipProvider } from './ui/tooltip'
@@ -146,40 +147,40 @@ function DeleteMockup({
           }}
         >
           <DestructiveConfirmationContent
-              busy={busy}
-              title={<> Delete “{asset.name}”? </>}
-              description={
-                <>
-                  Only this saved mockup is deleted. The product, original Dropbox file,
-                  source image and artwork remain available.{' '}
-                  {primary
-                    ? 'This is the primary product image. It is removed without selecting a replacement.'
-                    : 'Other product images remain unchanged.'}
-                </>
-              }
-              actions={
-                <>
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    disabled={busy}
-                    onClick={() => setOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn destructive-confirm"
-                    disabled={busy}
-                    onClick={() => void remove()}
-                  >
-                    {busy ? 'Deleting…' : 'Delete mockup'}
-                  </button>
-                </>
-              }
-            >
-              {error && <p role="alert">{error}</p>}
-            </DestructiveConfirmationContent>
+            busy={busy}
+            title={<> Delete “{asset.name}”? </>}
+            description={
+              <>
+                Only this saved mockup is deleted. The product, original Dropbox
+                file, source image and artwork remain available.{' '}
+                {primary
+                  ? 'This is the primary product image. It is removed without selecting a replacement.'
+                  : 'Other product images remain unchanged.'}
+              </>
+            }
+            actions={
+              <>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  disabled={busy}
+                  onClick={() => setOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn destructive-confirm"
+                  disabled={busy}
+                  onClick={() => void remove()}
+                >
+                  {busy ? 'Deleting…' : 'Delete mockup'}
+                </button>
+              </>
+            }
+          >
+            {error && <FormErrorNotice message={error} />}
+          </DestructiveConfirmationContent>
         </Dialog>
       )}
     </>
@@ -229,7 +230,9 @@ export function ProductMockups(props: Props) {
                   className="btn secondary responsive-action"
                   aria-label="Duplicate mockup"
                   title="Duplicate mockup"
-                  onClick={() => setEditing({ ...a, id: '', name: `${a.name} copy` })}
+                  onClick={() =>
+                    setEditing({ ...a, id: '', name: `${a.name} copy` })
+                  }
                 >
                   <Copy size={18} aria-hidden="true" />
                   <span className="responsive-action-label">Copy</span>
@@ -241,7 +244,8 @@ export function ProductMockups(props: Props) {
                   onWorkspace={props.onWorkspace}
                   onDeleted={() => {
                     if (editing?.id === a.id) setEditing(undefined)
-                    if (a.id === props.primaryImageAssetId) props.onPrimaryImage?.('')
+                    if (a.id === props.primaryImageAssetId)
+                      props.onPrimaryImage?.('')
                   }}
                 />
               </footer>
@@ -1132,8 +1136,6 @@ function MockupEditor({
                 </label>
               )}
               <div className="button-row">
-
-
                 <button
                   type="button"
                   className="btn secondary"
@@ -1158,7 +1160,6 @@ function MockupEditor({
                 >
                   Download JPG
                 </button>
-
               </div>
             </fieldset>
             <p className="form-hint">
@@ -1169,11 +1170,6 @@ function MockupEditor({
               <p role="status">Processing image… Keep this editor open.</p>
             )}
             {status && <p role="status">{status}</p>}
-            {error && (
-              <p role="alert" className="form-error">
-                {error}
-              </p>
-            )}
             {discard && (
               <div role="alert" className="mockup-confirm">
                 <p>Discard unsaved mockup changes?</p>
@@ -1192,6 +1188,7 @@ function MockupEditor({
           </div>
         </div>
         <footer className="item-dialog-actions mockup-editor-actions">
+          <FormErrorNotice message={error} />
           {initial?.id && (
             <DeleteMockup
               asset={initial}
@@ -1205,7 +1202,11 @@ function MockupEditor({
             />
           )}
           <div className="product-editor-buttons">
-            <button type="button" className="btn secondary" onClick={requestClose}>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={requestClose}
+            >
               Cancel
             </button>
             <button

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useRef, useState } from 'react'
 import {
   Dialog,
@@ -512,11 +513,7 @@ export function ShelfLabels({
               I checked media size, supported margins and preview for this
               printer.
             </label>
-            {error && (
-              <p role="alert" className="warning-text">
-                {error}
-              </p>
-            )}
+            {error && <FormErrorNotice message={error} />}
             <div className="inventory-tool-actions">
               <button
                 className="btn"

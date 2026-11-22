@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import type { Item, Workspace } from '@/lib/domain'
 import { imageDisplayName } from '@/lib/image-display-name'
@@ -124,11 +125,7 @@ export function ItemPhotoField({
           onChange('imageAssetId', id)
         }}
       />
-      {error && (
-        <p id={errorId} role="alert" className="form-error">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
       {children}
     </div>
   )

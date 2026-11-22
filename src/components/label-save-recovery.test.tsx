@@ -8,7 +8,7 @@ import {
   within,
 } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { LabelStudio } from './label-studio'
 import { demoData } from '@/lib/demo'
 import { blankLabel, newElement, type LabelDocument } from '@/lib/label-studio'
@@ -23,6 +23,9 @@ vi.mock('@/lib/label-client-export', () => ({
     state.snapshots.push(JSON.parse(new TextDecoder().decode(bytes))),
   exportLabelPng: vi.fn(),
 }))
+beforeEach(() => {
+  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+})
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()

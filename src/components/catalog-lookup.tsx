@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LookupActionContext, LookupError } from './lookup-error'
 import { ProductImportFailure } from '@/lib/product-import-diagnostics'
@@ -232,7 +233,7 @@ export function CatalogLookup({
             diagnostics={failure?.diagnostics}
           />
         )}
-      {!compact && error && <p role="alert">{error}</p>}
+      {!compact && error && <FormErrorNotice message={error} />}
       {data?.notice && <p role="status">{data.notice}</p>}
       {data?.existing?.map((item: Item) => (
         <div key={item.id} className="catalog-result">
@@ -444,7 +445,7 @@ export function CatalogUpdates({
             />
           )
         ) : (
-          <p role="alert">{error}</p>
+          <FormErrorNotice message={error} />
         ))}
       {checked && !update && (
         <small>Your accepted catalog revision is current.</small>
@@ -604,7 +605,7 @@ export function CatalogContribution({
             />
           )
         ) : (
-          <p role="alert">{error}</p>
+          <FormErrorNotice message={error} />
         ))}
     </details>
   )

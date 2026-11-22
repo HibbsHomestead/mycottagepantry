@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import type { Item } from '@/lib/domain'
 import type { LabelData, LabelDocument } from '@/lib/label-studio'
 import {
@@ -126,11 +127,7 @@ export function LabelSetControls({
         Two separate stickers per product. Browser printing cannot change loaded
         stock or confirm physical output.
       </small>
-      {error && (
-        <p role="alert" className="error-text">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
     </div>
   )
 }

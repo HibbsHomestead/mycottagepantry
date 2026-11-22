@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState, type FormEvent } from 'react'
 import { registrationRequest } from '@/lib/registration-client'
 import { useRegistrationPolicy } from '@/lib/registration-policy-client'
@@ -132,7 +134,7 @@ export function FreeWorkspaceSetup({
             <p role="status">Checking published Terms and Privacy…</p>
           )}
           {setupLoading && <p role="status">Checking your saved setup…</p>}
-          {policies.error && <p role="alert">{policies.error}</p>}
+          {policies.error && <FormErrorNotice message={policies.error} />}
           {setupError && (
             <p role="alert">
               {setupError}{' '}
@@ -153,7 +155,7 @@ export function FreeWorkspaceSetup({
           >
             Check published policies again
           </button>
-          {error && <p role="alert">{error}</p>}
+
           {sessionError && (
             <p>
               Sign in or finish email verification in another tab, then retry
@@ -167,7 +169,7 @@ export function FreeWorkspaceSetup({
               </a>
             </p>
           )}
-          <form onSubmit={submit} className="registration-form">
+          <SubmissionForm onSubmit={submit} className="registration-form">
             <label>
               Business/display name
               <input
@@ -272,6 +274,8 @@ export function FreeWorkspaceSetup({
                 business creation.
               </p>
             )}
+
+            <FormErrorNotice message={error} />
             <button
               className="public-button"
               type="submit"
@@ -279,7 +283,7 @@ export function FreeWorkspaceSetup({
             >
               {busy ? 'Creating oven…' : 'Create your business'}
             </button>
-          </form>
+          </SubmissionForm>
           <SignOutAccountButton />
         </div>
       </section>

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState, useEffect, type ComponentProps } from 'react'
 import { type Item, money, units } from '../lib/domain'
 import { ovenToday } from '../lib/oven-dates'
@@ -865,7 +866,7 @@ function RunEditor({
           ))}
         </details>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
       {!terminal && (
         <div className="button-row">
           {canEdit && (

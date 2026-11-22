@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { HandmadeProductEditor } from './handmade-workspace'
@@ -290,7 +292,7 @@ function WorkflowDialog({
             draft
           />
         )}
-        <form
+        <SubmissionForm
           className="app-form"
           onSubmit={async (event) => {
             event.preventDefault()
@@ -919,11 +921,8 @@ function WorkflowDialog({
               </>
             )}
           </fieldset>
-          {error && (
-            <p role="alert" className="form-error">
-              {error}
-            </p>
-          )}
+
+          <FormErrorNotice message={error} />
           <div className="form-actions">
             <button
               type="button"
@@ -945,7 +944,7 @@ function WorkflowDialog({
               {busy ? 'Saving…' : isComplete ? 'Complete production' : 'Save'}
             </button>
           </div>
-        </form>
+        </SubmissionForm>
       </DialogContent>
     </Dialog>
   )

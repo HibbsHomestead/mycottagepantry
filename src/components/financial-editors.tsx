@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import './item-deletion.css'
 import { ItemRemoveButton } from './item-remove-button'
 import { businessClassifications, classificationLabel } from '@/lib/product-categories'
@@ -158,9 +159,7 @@ export function ConversionEditor({
         {isPackaging(ingredient) ? 'packaging' : 'ingredient'}.
       </label>
       {error && (
-        <p role="alert" className="warning-text">
-          {error}
-        </p>
+        <FormErrorNotice message={error} />
       )}
       <div className="button-row conversion-actions">
         <button
@@ -707,9 +706,7 @@ export function CustomCountUnit({
         />
       </label>
       {error && (
-        <p className="warning-text" role="alert">
-          {error}
-        </p>
+        <FormErrorNotice message={error} />
       )}
       <button
         type="button"
@@ -717,6 +714,7 @@ export function CustomCountUnit({
         disabled={busy}
         onClick={async () => {
           setBusy(true)
+          setError('')
           try {
             await onSave({ ingredientId: ingredient.id, abbreviation, factor })
             setError('')

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState, useEffect } from 'react'
 import * as Popover from '@radix-ui/react-popover'
 import { Check, Pipette, X } from 'lucide-react'
@@ -465,7 +466,7 @@ export function LabelColorPicker({
                   Save to Brand Kit
                 </button>
               </div>
-              {error && <p role="alert">{error}</p>}
+              {error && <FormErrorNotice message={error} />}
               <div className="picker-actions">
                 <button type="button" className="btn secondary" onClick={close}>
                   Cancel

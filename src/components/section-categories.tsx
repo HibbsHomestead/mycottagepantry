@@ -1,3 +1,5 @@
+import { FormErrorNotice } from './form-error-notice'
+import { SubmissionForm } from './submission-form'
 import { TooltipProvider } from './ui/tooltip'
 import { ActionTip } from './action-tip'
 import { MoreHorizontal, Plus, Settings, RefreshCw } from 'lucide-react'
@@ -171,22 +173,10 @@ export function SectionCategoryManager({
             cancelling the item editor does not undo them.
           </DialogDescription>
         </DialogHeader>
-        {error && (
-          <div role="alert">
-            <p>{error}</p>
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy}
-              onClick={() => void request()}
-            >
-              Reload categories
-            </button>
-          </div>
-        )}
+
         {!loaded && !error && <p role="status">Loading categories…</p>}
         {editing ? (
-          <form
+          <SubmissionForm
             className="app-form category-detail-form"
             onSubmit={(e) => {
               e.preventDefault()
@@ -323,6 +313,20 @@ export function SectionCategoryManager({
               )}
             </fieldset>
             <div className="form-footer">
+              {error && (
+                <FormErrorNotice>
+                  {error}
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => void request()}
+                  >
+                    Reload categories
+                  </button>
+                </FormErrorNotice>
+              )}
+
               <button
                 type="button"
                 className="btn secondary"
@@ -338,7 +342,7 @@ export function SectionCategoryManager({
                 {busy ? 'Saving…' : 'Save category'}
               </button>
             </div>
-          </form>
+          </SubmissionForm>
         ) : (
           <>
             <div className="button-row">

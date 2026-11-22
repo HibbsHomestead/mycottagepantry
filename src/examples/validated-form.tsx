@@ -1,3 +1,5 @@
+import { SubmissionForm } from '@/components/submission-form'
+import { FormErrorNotice } from '@/components/form-error-notice'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -46,7 +48,7 @@ export function ValidatedForm({
 
   return (
     <Form {...form}>
-      <form
+      <SubmissionForm
         onSubmit={submit}
         onChange={() => setSubmitted(false)}
         noValidate
@@ -74,17 +76,20 @@ export function ValidatedForm({
               </FormItem>
             )}
           />
-          {form.formState.errors.root && (
-            <p role="alert" className="text-sm text-destructive">
-              {form.formState.errors.root.message}
-            </p>
-          )}
           {submitted && <p role="status">Your submission was saved.</p>}
+          <FormErrorNotice
+            message={
+              form.formState.errors.root?.message ||
+              (form.formState.errors.email
+                ? 'Review the email address before submitting.'
+                : '')
+            }
+          />
           <Button type="submit" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? 'Saving…' : 'Submit'}
           </Button>
         </fieldset>
-      </form>
+      </SubmissionForm>
     </Form>
   )
 }

@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import type { AccountAccess } from '@/lib/access-state'
 import { OvenLoading } from './oven-loading'
@@ -27,7 +28,7 @@ export function SignOutAccountButton() {
       >
         Sign out and use another account
       </button>
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
     </>
   )
 }

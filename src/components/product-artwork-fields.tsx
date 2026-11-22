@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import type { Workspace, Item } from '@/lib/domain'
 import { ItemPhotoField } from './item-photo-field'
@@ -172,7 +173,7 @@ export function ProductArtworkFields({
         and logos.
       </small>
       {status && <p role="status">{status}</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && <FormErrorNotice message={error} />}
     </details>
   )
 }

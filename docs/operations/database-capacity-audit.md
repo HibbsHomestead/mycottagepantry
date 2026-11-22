@@ -45,6 +45,14 @@ The deploy command exited with code 1 during database setup. The supplied excerp
 
 This log is failure evidence only. It does not supply the missing support inventory or prove that any existing branch is safe to remove. The no-deletion authorization boundary and blocked audit status remain in effect.
 
+## Supplied form-notice deployment failure
+
+The later supplied log reported deploy `6b02253c137b026507927dc8` attempting database branch `agent-6b0220a0ca2d9cb6f79f3b5f`. The `createSiteDatabaseBranch` operation returned HTTP 403 with the same branch-limit message above. The deployment exited 1 during database setup; application compilation completion was not established. The failure timestamp and current remote branch count were unavailable. This was supplied evidence, not a new deployment or inventory query performed during repair.
+
+The existing form-notice and inventory-detail implementation was preserved. No source defect was identified by this log. No build, deployment retry, database provisioning, branch cleanup, migration change, or production-database fallback was performed. No deployed UI of these changes was verified. Capacity resolution remained outside the authorized repair scope.
+
+The subsequent supplied deployment `6b02257d33d052011c227da4` failed at the same `createSiteDatabaseBranch` operation for `agent-6b0220a0ca2d9cb6f79f3b5f`, with HTTP 403 and the active-branch-limit message. This did not establish an application compilation result, a successful database branch creation, or released capacity. No retry or resource modification was performed in response.
+
 ## Results kept separate
 
 1. Cleanup approved/performed: none / none.

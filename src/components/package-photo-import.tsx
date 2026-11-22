@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LookupActionContext, LookupError } from './lookup-error'
 import {
@@ -244,7 +245,7 @@ export function PackagePhotoImport({
             />
           )
         ) : (
-          <p role="alert">{error}</p>
+          <FormErrorNotice message={error} />
         ))}
       {usage && <p className="form-hint">{usage}</p>}
       {evidence && (

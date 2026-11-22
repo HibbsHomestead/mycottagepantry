@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { workspaceCategorySettings } from '@/lib/section-categories'
@@ -543,12 +545,13 @@ function MaterialDialog({
               : 'Dedicated handmade stock; food-only fields are not required.'}
           </DialogDescription>
         </DialogHeader>
-        <form
+        <SubmissionForm
           className="app-form"
           onSubmit={async (e) => {
             e.preventDefault()
             if (saving.current) return
             saving.current = true
+            setError('')
             setBusy(true)
             try {
               await mutate(
@@ -638,11 +641,12 @@ function MaterialDialog({
                 ))}
             </details>
           )}
-          {error && <p role="alert">{error}</p>}
+
+          <FormErrorNotice message={error} />
           <button className="btn" disabled={busy}>
             {busy ? 'Saving…' : receipt ? 'Receive purchase' : 'Save material'}
           </button>
-        </form>
+        </SubmissionForm>
       </DialogContent>
     </Dialog>
   )
@@ -774,13 +778,15 @@ export function HandmadeProductEditor({
   const content = (
     <div className="handmade-editor">
       <h2>
-        {item && w.products.some(p => p.id === item.id) ? 'Edit handmade product & BOM' : 'Create handmade product & BOM'}
+        {item && w.products.some((p) => p.id === item.id)
+          ? 'Edit handmade product & BOM'
+          : 'Create handmade product & BOM'}
       </h2>
       <p className="muted">
         Save updates the product and BOM together. Inventory and completed runs
         stay unchanged.
       </p>
-      <form
+      <SubmissionForm
         className="app-form"
         noValidate
         onSubmit={async (e) => {
@@ -860,7 +866,12 @@ export function HandmadeProductEditor({
                   </select>
                 </label>
               </div>
-              <ProductDescriptionField product={{ ...d, bom }} workspace={w} change={change} disabled={!manage} />
+              <ProductDescriptionField
+                product={{ ...d, bom }}
+                workspace={w}
+                change={change}
+                disabled={!manage}
+              />
               <ProductCategorySelector
                 business={w.settings[0]}
                 product={d}
@@ -1077,9 +1088,11 @@ export function HandmadeProductEditor({
             <p>Cost incomplete: {costError}</p>
           )}
         </section>
-        {error && <p role="alert">{error}</p>}
+
         <footer className="product-editor-actions item-dialog-actions">
-          {item && w.products.some(p => p.id === item.id) && (
+          <FormErrorNotice message={error} />
+
+          {item && w.products.some((p) => p.id === item.id) && (
             <ItemDeleteButton table="products" item={item} draft={dirty} />
           )}
           <div className="product-editor-buttons">
@@ -1096,7 +1109,7 @@ export function HandmadeProductEditor({
             </button>
           </div>
         </footer>
-      </form>
+      </SubmissionForm>
     </div>
   )
   return inline ? (

@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { customerMessage } from '@/lib/customer-message'
 import { useEffect, useState } from 'react'
 import { billingRequest } from '@/lib/billing-client'
@@ -108,10 +110,10 @@ export function SubscriptionExpenses() {
           ) : (
             <p>Automatic tracking is off.</p>
           )}
-          {error && <p role="alert">{error}</p>}
+          <FormErrorNotice message={error} />
         </section>
       )
-    return error ? <p role="alert">{error}</p> : null
+    return error ? <FormErrorNotice message={error} /> : null
   }
   const payments: AdminMetadata[] = data.payments || []
   const offer = payments.find(
@@ -190,7 +192,7 @@ export function SubscriptionExpenses() {
           </a>
         </p>
       )}
-      {error && !payment && <p role="alert">{error}</p>}
+
       <details
         onToggle={(event) => setExpanded(event.currentTarget.open)}
         open={expanded}
@@ -201,7 +203,7 @@ export function SubscriptionExpenses() {
           tracking off leaves your subscription and existing records unchanged.
           Past payments are not added automatically.
         </p>
-        <form
+        <SubmissionForm
           className="subscription-expense-form"
           onSubmit={(event) => {
             event.preventDefault()
@@ -249,10 +251,12 @@ export function SubscriptionExpenses() {
             Each future successful payment is recorded using these defaults. If
             they are unavailable, the payment stays available for review.
           </p>
+
+          <FormErrorNotice message={error} />
           <button className="btn secondary" disabled={busy}>
             Save tracking preferences
           </button>
-        </form>
+        </SubmissionForm>
         <h4>Confirmed payments and refunds</h4>
         {!payments.length && (
           <p>No paid subscription payments are available to record.</p>
@@ -296,7 +300,7 @@ export function SubscriptionExpenses() {
             </DialogDescription>
           </DialogHeader>
           {payment && (
-            <form
+            <SubmissionForm
               className="subscription-expense-form"
               onSubmit={(event) => {
                 event.preventDefault()
@@ -425,7 +429,8 @@ export function SubscriptionExpenses() {
                 />
                 I confirm this payment and account are correct.
               </label>
-              {error && <p role="alert">{error}</p>}
+
+              <FormErrorNotice message={error} />
               <div className="button-row">
                 <button
                   type="submit"
@@ -467,7 +472,7 @@ export function SubscriptionExpenses() {
                   Cancel
                 </button>
               </div>
-            </form>
+            </SubmissionForm>
           )}
         </DialogContent>
       </Dialog>

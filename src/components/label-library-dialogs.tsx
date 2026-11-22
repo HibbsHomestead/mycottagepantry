@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import type { LabelDocument } from '@/lib/label-studio'
 import {
@@ -54,11 +55,7 @@ export function DeleteDesignDialog({
             Resolve assignments before deletion: {affectedProducts.join(', ')}
           </p>
         )}
-        {error && (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        )}
+        {error && <FormErrorNotice message={error} />}
         <DialogFooter>
           <button className="btn secondary" disabled={busy} onClick={onClose}>
             Cancel

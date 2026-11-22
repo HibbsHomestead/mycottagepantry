@@ -1,3 +1,5 @@
+import { SubmissionForm } from './submission-form'
+import { FormErrorNotice } from './form-error-notice'
 import { PageOverview, PageActions } from './application-page'
 import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
 import { RecordLink } from './linked-purchase-records'
@@ -362,18 +364,14 @@ export function Checkbook({
             </button>
           </div>
         </PageActions>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
+        {error && <FormErrorNotice message={error} />}
         {message && <p role="status">{message}</p>}
         {!b && (
           <p>Connect your business to load the saved register and balances.</p>
         )}
         {b && (
           <>
-            <form
+            <SubmissionForm
               className="book-filters"
               onSubmit={(e) => {
                 e.preventDefault()
@@ -394,6 +392,8 @@ export function Checkbook({
                   onChange={(e) => setTo(e.target.value)}
                 />
               </Field>
+
+              <FormErrorNotice />
               <button className="secondary" disabled={busy}>
                 Update period
               </button>
@@ -423,7 +423,7 @@ export function Checkbook({
                   {name}
                 </button>
               ))}
-            </form>
+            </SubmissionForm>
             {tab === 'Overview' && (
               <>
                 <PageOverview>
@@ -1116,12 +1116,7 @@ export function Checkbook({
                 currency.
               </DialogDescription>
             </DialogHeader>
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
-            )}
-            <form
+            <SubmissionForm
               onSubmit={(e) => {
                 e.preventDefault()
                 const actions: Record<string, string> = {
@@ -1609,6 +1604,7 @@ export function Checkbook({
                     })}
                 </>
               )}
+              <FormErrorNotice message={error} />
               {!['detail', 'import'].includes(modal) && (
                 <button disabled={!canWrite || busy} type="submit">
                   {busy
@@ -1620,7 +1616,7 @@ export function Checkbook({
                         : 'Confirm & save'}
                 </button>
               )}
-            </form>
+            </SubmissionForm>
           </DialogContent>
         </Dialog>
       </div>

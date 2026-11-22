@@ -1,3 +1,4 @@
+import { FormErrorNotice } from './form-error-notice'
 export async function readPriceResponse(response: Response) {
   const mime = response.headers.get('content-type') || ''
   if (!mime.includes('application/json'))
@@ -281,11 +282,7 @@ export function StorePriceSearch({
           )}
         </div>
       )}
-      {error && (
-        <p role="alert" className="warning-text">
-          {error}
-        </p>
-      )}
+      {error && <FormErrorNotice message={error} />}
       {busy && (
         <p role="status">
           Checking store listings… Existing costs and stock stay unchanged.
