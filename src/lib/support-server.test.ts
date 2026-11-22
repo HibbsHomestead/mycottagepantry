@@ -1731,7 +1731,7 @@ it('generates a business-scoped description with request and spending metering, 
   expect((await ai(descriptionInput())).status).toBe(429)
   expect(vi.mocked(productDescriptionAnswer).mock.calls).toHaveLength(1)
 })
-it('denies description requests for unverified sessions, inactive membership, read-only roles and evaluation exclusions', async () => {
+it('denies description requests for unverified sessions, inactive membership and read-only roles while separating support evaluation', async () => {
   runtime.session = null
   expect((await ai(descriptionInput())).status).toBe(401)
   runtime.session = 'maker-a'
@@ -1741,7 +1741,14 @@ it('denies description requests for unverified sessions, inactive membership, re
   expect((await ai(descriptionInput())).status).toBe(403)
   await db.query("UPDATE users SET active=true WHERE identity_id='maker-a'")
   await db.query("UPDATE support_ai_policy SET data=data || '{\"evaluationBusinessIds\":[]}'::jsonb WHERE id='platform'")
-  expect((await ai(descriptionInput())).status).toBe(503)
+  const excluded = await ai(descriptionInput())
+  expect(excluded.status).toBe(503)
+  expect(JSON.stringify(await excluded.json())).toContain('Product description generation is limited')
+  await db.query("UPDATE support_ai_policy SET data=data || $1::jsonb WHERE id='platform'", [JSON.stringify({ descriptionBusinessIds: [business] })])
+  expect((await ai(descriptionInput())).status).toBe(200)
+  const support = await ai({ action: 'chat', message: 'How do I add an item?', consent: true })
+  expect(support.status).toBe(503)
+  expect(JSON.stringify(await support.json())).toContain('private evaluation')
 })
 it('rejects private context fields and holds failed provider reservations against spending', async () => {
   const input = descriptionInput()

@@ -494,24 +494,10 @@ export function ProductLinkImport({
       } catch {
         invalidUrl = true
       }
-      const amazon = (() => {
-        try {
-          return /(^|\.)amazon\.[a-z.]+$/i.test(new URL(url).hostname)
-        } catch {
-          return false
-        }
-      })()
       setError(
-        lookupPanel
-          ? invalidUrl
-            ? 'Enter a valid product URL.'
-            : e instanceof ProductHumanVerificationError
-              ? 'Walmart import requires verification.'
-              : `Product details unavailable. Your entries are preserved. Retry or enter details manually.`
-          : amazon
-            ? 'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.'
-            : (e as Error).message +
-              ' Your entries are still in this form. Keep this page open to continue manually.',
+        invalidUrl
+          ? (e as Error).message
+          : `${lookupPanel ? 'Product details unavailable. ' : ''}${e instanceof Error ? e.message : 'Product retrieval is unavailable.'} Your entries are still in this form. Keep this page open to continue manually.`,
       )
     } finally {
       pending.current = false
@@ -928,7 +914,7 @@ export function ProductLinkImport({
       )}
       {busy && <p role="status">Reading product details…</p>}
       {!lookupPanel && error && (
-        <div>
+        <div className="product-import-error-actions">
           <FormErrorNotice message={error} />
           {!verificationUrl && (
             <button

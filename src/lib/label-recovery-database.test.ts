@@ -364,7 +364,11 @@ it('stores multiple independent product labels and copies both layouts without i
   expect(deleted.status, deleted.error).toBe(200)
   expect(
     deleted.workspace.label_templates.find((d: Item) => d.id === document.id),
-  ).toMatchObject({ name: document.name, revision: 1, back: JSON.parse(JSON.stringify(document.back)) })
+  ).toMatchObject({
+    name: document.name,
+    revision: 1,
+    back: JSON.parse(JSON.stringify(document.back)),
+  })
   expect(
     deleted.workspace.label_templates.find((d: Item) => d.id === copy.id)
       .deletedAt,
@@ -393,7 +397,10 @@ it('reopens independent page backgrounds and preserves them in duplicates and pr
   expect(labelContent(reopened)).toBe(labelContent(document))
   const before = structuredClone(reopened)
   reopened.back!.background = '#b8dfef'
-  result = await request('labelSave', { document: reopened, expectedRevision: 1 })
+  result = await request('labelSave', {
+    document: reopened,
+    expectedRevision: 1,
+  })
   expect(result.status, result.error).toBe(200)
   reopened = (await request()).workspace.label_templates.find(
     (d: Item) => d.id === document.id,
@@ -491,10 +498,6 @@ it('preserves legacy templates and shared links and rejects obsolete assignment 
       })
     ).status,
   ).toBe(400)
-  expect(
-    (await request('labelDelete', { ids: [legacy.id], recordKind: 'template' }))
-      .status,
-  ).toBe(400)
   for (const action of ['templateAssignments', 'productLabelAssignment'])
     expect(
       (
@@ -517,6 +520,33 @@ it('preserves legacy templates and shared links and rejects obsolete assignment 
   expect(after.label_templates.find((d: Item) => d.id === legacy.id)).toEqual(
     before.label_templates.find((d: Item) => d.id === legacy.id),
   )
+  const deleted = await request('labelDelete', { ids: [legacy.id] })
+  expect(deleted.status, deleted.error).toBe(200)
+  const refreshed = (await request()).workspace
+  expect(
+    refreshed.label_templates.find((d: Item) => d.id === legacy.id).deletedAt,
+  ).toBeTruthy()
+  expect(
+    refreshed.label_templates.find((d: Item) => d.id === copy.id).deletedAt,
+  ).toBeFalsy()
+  expect(refreshed.products).toEqual(
+    after.products.map((p: Item) => {
+      const next = { ...p }
+      if (next.labelDesignId === legacy.id) delete next.labelDesignId
+      return next
+    }),
+  )
+  const stale = await request('labelSave', {
+    document: {
+      ...legacy,
+      workflowVersion: 1,
+      recordKind: 'label',
+      source,
+      manualTextReviewedFor: sourceKey(source),
+    },
+    expectedRevision: 0,
+  })
+  expect(stale.status).toBe(400)
 })
 it('rejects cross-business product links and output and enforces the composite database foreign key', async () => {
   runtime.user = 'label-owner-b'
@@ -584,7 +614,9 @@ it('saves and resolves only the verified business disclaimer and rejects a read-
   const workspaceB = (await request()).workspace
   const source = { kind: 'product' as const, id: 'label-product-a' }
   expect(
-    resolveLabelData(workspaceB, source).values['business.cottageFoodDisclaimer'],
+    resolveLabelData(workspaceB, source).values[
+      'business.cottageFoodDisclaimer'
+    ],
   ).toBe('Business B saved text')
   runtime.user = 'label-reader'
   const rejected = await request(
@@ -596,7 +628,9 @@ it('saves and resolves only the verified business disclaimer and rejects a read-
   runtime.user = 'label-owner-a'
   const workspaceA = (await request()).workspace
   expect(
-    resolveLabelData(workspaceA, source).values['business.cottageFoodDisclaimer'],
+    resolveLabelData(workspaceA, source).values[
+      'business.cottageFoodDisclaimer'
+    ],
   ).toBe('Business A saved text')
   expect(workspaceA.settings[0]).toMatchObject({
     ...beforeA,
@@ -638,7 +672,86 @@ it('saves and resolves only the verified business disclaimer and rejects a read-
     binding: 'business.cottageFoodDisclaimer',
     text: '',
   })
-  expect(job.renderedDataSnapshot.values['business.cottageFoodDisclaimer']).toBe(
-    'Business A saved text',
+  expect(
+    job.renderedDataSnapshot.values['business.cottageFoodDisclaimer'],
+  ).toBe('Business A saved text')
+})
+
+it('atomically deletes mixed saved and preserved designs, retaining copies, checkpoint data, and unrelated business records', async () => {
+  runtime.user = 'label-owner-a'
+  const normal = label(),
+    legacy = {
+      ...label(),
+      id: crypto.randomUUID(),
+      name: 'Mixed preserved',
+      workflowVersion: undefined,
+      recordKind: 'template',
+    }
+  const normalSave = await request('labelSave', {
+    document: normal,
+    expectedRevision: 0,
+  })
+  expect(normalSave.status, normalSave.error).toBe(200)
+  await db.query("SELECT set_config('app.business_id',$1,false)", [orgA])
+  await db.query(
+    'INSERT INTO label_templates(id,business_id,data) VALUES($1,$2,$3)',
+    [legacy.id, orgA, JSON.stringify(legacy)],
   )
+  const sibling = {
+    ...legacy,
+    id: crypto.randomUUID(),
+    name: 'Separate record, same design',
+  }
+  await db.query(
+    'INSERT INTO label_templates(id,business_id,data) VALUES($1,$2,$3)',
+    [sibling.id, orgA, JSON.stringify(sibling)],
+  )
+  await db.query(
+    "UPDATE products SET data=data || jsonb_build_object('labelDesignId',$1::text) WHERE business_id=$2 AND id=$3",
+    [legacy.id, orgA, 'label-product-a'],
+  )
+  const checkpoint = await request('labelDraft', {
+    id: crypto.randomUUID(),
+    sessionId: crypto.randomUUID(),
+    sequence: 1,
+    expectedScope: normalSave.workspace.settings[0].labelEditorScope,
+    document: { ...normal, name: 'Recover my draft' },
+  })
+  expect(checkpoint.status, checkpoint.error).toBe(200)
+  const before = (await request()).workspace
+  const removed = await request('labelDelete', { ids: [normal.id, legacy.id] })
+  expect(removed.status, removed.error).toBe(200)
+  const after = (await request()).workspace
+  for (const id of [normal.id, legacy.id])
+    expect(
+      after.label_templates.find((d: Item) => d.id === id).deletedAt,
+    ).toBeTruthy()
+  expect(after.label_templates.find((d: Item) => d.id === sibling.id)).toEqual(
+    before.label_templates.find((d: Item) => d.id === sibling.id),
+  )
+  expect(after.label_recovery_drafts).toEqual(before.label_recovery_drafts)
+  for (const table of [
+    'ingredients',
+    'recipes',
+    'ledger',
+    'label_versions',
+    'graphic_assets',
+  ])
+    expect(after[table]).toEqual(before[table])
+  expect(after.products).toEqual(
+    before.products.map((p: Item) => {
+      const next = { ...p }
+      if ([normal.id, legacy.id].includes(next.labelDesignId))
+        delete next.labelDesignId
+      return next
+    }),
+  )
+  runtime.user = 'label-owner-b'
+  expect(
+    (await request()).workspace.label_templates.some(
+      (d: Item) => d.id === legacy.id,
+    ),
+  ).toBe(false)
+  expect((await request('labelDelete', { ids: [legacy.id] })).status).toBe(400)
+  runtime.user = 'label-owner-a'
 })

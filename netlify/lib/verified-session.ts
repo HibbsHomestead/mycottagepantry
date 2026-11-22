@@ -1,3 +1,4 @@
+import { demoRequested } from './demo-session'
 import { getIdentityConfig, refreshSession } from '@netlify/identity'
 
 export class SessionError extends Error {
@@ -209,6 +210,7 @@ export async function verifiedSession(
   request: Request,
   diagnose?: (diagnostic: SessionDiagnostic) => void,
 ) {
+  if (demoRequested(request)) return null
   const cookie = request.headers.get('cookie') || ''
   if (!/(?:^|;\s*)nf_jwt=/.test(cookie)) return null
   let token = cookie.match(/(?:^|;\s*)nf_jwt=([^;]*)/)?.[1]

@@ -18,7 +18,7 @@ it('gives every implemented tab a distinct round-trippable route', () => {
       expect(parseWorkspaceHash(hash)).toMatchObject(route)
     }
   }
-  expect(Object.keys(sectionTabs)).toHaveLength(12)
+  expect(Object.keys(sectionTabs)).toHaveLength(13)
 })
 it('maps old shared destinations without losing existing functionality', () => {
   for (const [old, section, tab] of [

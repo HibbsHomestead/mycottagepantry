@@ -1,3 +1,4 @@
+import { minimumOrder } from './item-restocking'
 import { applyPurchaseSetup, validateConversions } from './purchase-setup'
 import { supportsExpiry } from './fabric'
 import { inventoryProductKeys } from './inventory-product'
@@ -314,7 +315,7 @@ export function updateIngredient(
 ) {
   const basis = prepareStockUnitBasis(existing, input, options.hasStockHistory)
   input = applyPurchaseSetup(existing, basis.input)
-  const next = { ...existing }
+  const next: Item = { ...existing, ...minimumOrder(input, existing) }
   for (const key of ['purchaseSetup', 'legacyPurchaseBasis'])
     if (input[key] !== undefined) next[key] = input[key]
   if (input.catalogSource !== undefined)

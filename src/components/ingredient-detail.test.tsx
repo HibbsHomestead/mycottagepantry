@@ -488,7 +488,7 @@ it('opens Edit Item with incomplete units, preserves saved fields and cancels wi
   )
   expect(screen.getByText(/Conversion required\./)).toBeVisible()
   await user.click(screen.getByRole('tab', { name: 'Stock & Other Details' }))
-  expect(screen.getByLabelText('Reorder threshold (each)')).toHaveValue(2)
+  expect(screen.getByLabelText('Reorder when stock reaches')).toHaveValue(2)
   expect(screen.getByLabelText('Reorder quantity (each)')).toHaveValue('3')
   expect(screen.getByText(/Current balance: 7 each/)).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Save changes' }))

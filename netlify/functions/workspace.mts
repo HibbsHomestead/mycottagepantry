@@ -1,3 +1,6 @@
+import { demoBusiness, demoRequested, demoWorkspaceBlocked, demoUnavailable } from '../lib/demo-session'
+import { demoWorkspaceSeed } from '../lib/demo-workspace-seed'
+import { handleBakingConverter } from '../lib/baking-converter-handler'
 import { supportedPrepYieldUnit } from '../../src/lib/prep-yield'
 import { handleItemDeletion } from '../lib/item-deletion-handler'
 import { deliverGraphic } from '../lib/graphic-delivery'
@@ -273,6 +276,7 @@ export default async (req: Request, context: Context) => {
         { status: 403 },
       )
   }
+  if (demoRequested(req) && await demoWorkspaceBlocked(req)) return demoUnavailable()
   const suppliedSaveTrace = req.headers.get('X-Ingredient-Save-Trace') || ''
   const saveTrace = /^[a-f0-9-]{36}$/i.test(suppliedSaveTrace)
     ? suppliedSaveTrace
@@ -342,7 +346,10 @@ export default async (req: Request, context: Context) => {
     client = await getDatabase().pool.connect()
     await client.query('BEGIN')
     if (saveTrace) ingredientSaveStage = 'session_verification'
-    const user = await verifiedSession(req)
+    const sandbox = await demoBusiness(client, req)
+    const user = sandbox
+      ? { id: `demo-${sandbox.id}`, email: '', confirmedAt: new Date().toISOString(), roles: [] }
+      : await verifiedSession(req)
     if (!user) {
       await client.query('ROLLBACK')
       return Response.json(
@@ -368,13 +375,13 @@ export default async (req: Request, context: Context) => {
     }
     if (saveTrace) ingredientSaveStage = 'workspace_resolution'
     if (importTrace) importStage = 'workspace_resolution'
-    let business: any,
+    let business: any = sandbox,
       role = 'Owner'
     if (user)
       await client.query("SELECT set_config('app.identity_id',$1,true)", [
         user.id,
       ])
-    if (user) {
+    if (user && !sandbox) {
       const r = await client.query(
         'SELECT b.*, u.role FROM businesses b JOIN users u ON u.business_id=b.id WHERE u.identity_id=$1 AND u.active=true',
         [user.id],
@@ -418,6 +425,11 @@ export default async (req: Request, context: Context) => {
     const org = business.id
     if (importTrace) importStage = 'workspace_authorization'
     await client.query("SELECT set_config('app.business_id',$1,true)", [org])
+    if (requestUrl.searchParams.has('bakingConverter')) {
+      const response = await handleBakingConverter(req, client, org, role)
+      await client.query('COMMIT')
+      return response
+    }
     // Billing screens remain Owner-only. The application must nevertheless read
     // this minimal server-only policy for every verified member of a new-policy
     // business, otherwise a second login could bypass module restrictions.
@@ -1180,6 +1192,15 @@ export default async (req: Request, context: Context) => {
         r.added_at ? { ...r.data, addedAt: r.added_at } : r.data,
       )
     }
+    if (sandbox && !state.settings.length) {
+      // Provision once under the workspace lock, in the same transaction. A
+      // failed seed rolls back completely; normal page loads never reseed it.
+      Object.assign(state, demoWorkspaceSeed())
+      for (const table of ['settings', 'units', 'vendors', 'ingredients', 'recipes',
+        'products', 'ledger', 'batches', 'sales', 'orders', 'expenses', 'activity', 'label_templates']) {
+        for (const item of state[table] || []) await save(table, item, true)
+      }
+    }
     // The business row is locked above. Normalize only category metadata, never
     // run general record saves (which may recalculate stock or costing).
     const categorySettingsBefore = JSON.stringify(state.settings[0])
@@ -1938,7 +1959,7 @@ export default async (req: Request, context: Context) => {
       }
       await client.query('COMMIT')
       return Response.json(
-        { workspace: workspaceForDevice(state), asset, role, demo: !user },
+        { workspace: workspaceForDevice(state), asset, role, demo: !!sandbox },
         { headers: { 'Cache-Control': 'no-store' } },
       )
     }
@@ -2188,7 +2209,7 @@ export default async (req: Request, context: Context) => {
       state.graphic_assets.push(asset)
       await client.query('COMMIT')
       return Response.json(
-        { workspace: workspaceForDevice(state), asset, role, demo: !user },
+        { workspace: workspaceForDevice(state), asset, role, demo: !!sandbox },
         { headers: { 'Cache-Control': 'no-store' } },
       )
     }
@@ -3878,7 +3899,8 @@ export default async (req: Request, context: Context) => {
             'The oven or account changed. Reopen the correct oven.',
           )
         if (
-          !['label', 'template'].includes(data.recordKind) ||
+          (data.recordKind != null &&
+            !['label', 'template'].includes(data.recordKind)) ||
           !Array.isArray(data.ids) ||
           !data.ids.length ||
           data.ids.length >
@@ -3899,43 +3921,41 @@ export default async (req: Request, context: Context) => {
         if (
           targets.some(
             (t: Item | undefined) =>
-              !t || labelRecordKind(t as LabelDocument) !== data.recordKind,
+              !t ||
+              (data.recordKind != null &&
+                labelRecordKind(t as LabelDocument) !== data.recordKind),
           )
         )
           throw new Error(
             'A selected design is unavailable or has a different type. Refresh and select again.',
           )
-        if (targets.some((t: Item) => t.workflowVersion !== 1))
-          throw new Error(
-            'Existing designs are preserved pending conversion review. No original was deleted.',
-          )
+        // Detach only explicit pointers to these IDs. Never run product saves,
+        // which can recalculate stock/costs, and never delete design siblings.
         const affected = state.products.filter((p) =>
           targets.some((t: Item) => t.id === p.labelDesignId),
         )
-        if (affected.length)
-          throw new Error(
-            `Resolve label assignments before deletion: ${affected
-              .map((p) => p.name)
-              .join(', ')
-              .slice(0, 1000)}`,
+        for (const product of affected) {
+          await client.query(
+            "UPDATE products SET data=data - 'labelDesignId',updated_at=NOW() WHERE business_id=$1 AND id=$2",
+            [org, product.id],
           )
+          delete product.labelDesignId
+        }
         for (const target of targets) {
           if (!target.deletedAt)
             await save('label_templates', {
               ...target,
               // Built-in designs are immutable code assets. Only this tenant's
               // removal marker is saved; no shared template or child is deleted.
-              recordKind: data.recordKind,
+              recordKind: labelRecordKind(target as LabelDocument),
               deletedAt: new Date().toISOString(),
               revision: Number(target.revision || 0) + 1,
             })
-          await client.query(
-            "UPDATE label_recovery_drafts SET data=jsonb_set(data,'{resolvedAt}',to_jsonb(NOW()::text)) WHERE business_id=$1 AND label_id=$2 AND data->>'resolvedAt' IS NULL",
-            [org, target.id],
-          )
+          // Retain recovery checkpoints unchanged. Explicit recovery uses a new
+          // record ID; stale saves/drafts of this tombstoned ID remain blocked.
         }
         await audit(
-          `${targets.length} ${data.recordKind === 'template' ? 'templates' : 'labels'} deleted`,
+          `${targets.length} saved label designs deleted`,
           targets
             .map((t: Item) => t.name)
             .join(', ')
@@ -4126,7 +4146,7 @@ export default async (req: Request, context: Context) => {
           ) {
             await client.query('COMMIT')
             return Response.json(
-              { workspace: workspaceForDevice(state), role, demo: !user },
+              { workspace: workspaceForDevice(state), role, demo: !!sandbox },
               { headers: { 'Cache-Control': 'no-store' } },
             )
           }
@@ -5560,7 +5580,7 @@ export default async (req: Request, context: Context) => {
         }),
       )
     return Response.json(
-      { workspace: workspaceForDevice(result), role, demo: !user },
+      { workspace: workspaceForDevice(result), role, demo: !!sandbox },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {

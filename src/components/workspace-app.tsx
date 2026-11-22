@@ -1,3 +1,6 @@
+import { DemoBanner } from './demo-banner'
+import { activeDemoSession } from '@/lib/demo-client'
+import { BakingConverter } from './baking-converter'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { ProductLabelFlow } from './product-label-flow'
@@ -22,7 +25,6 @@ import { Gift, Scissors, Store } from 'lucide-react'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { CalendarDays } from 'lucide-react'
 import { EventsWorkspace } from './events-workspace'
-import { ProductMockups } from './product-mockup'
 import {
   ApplicationPage,
   PageOverviewOutlet,
@@ -72,7 +74,6 @@ import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
 import { KitIncludedProducts } from './kit-included-products'
 import { ProductLabelsInfo } from './product-labels'
-import { labelsForProduct } from '@/lib/saved-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
 import { componentStock } from '@/lib/recipe-components'
 import { RecipeBaseFields } from './recipe-base-fields'
@@ -254,6 +255,7 @@ const navigation = [
   { name: 'Purchasing', icon: Receipt },
   { name: 'Finance', icon: Wallet },
   { name: 'Labels', icon: StickyNote },
+  { name: 'Baking Converter', icon: CookingPot },
   { name: 'Settings', icon: Settings },
 ]
 const dateLabel = (date: string) =>
@@ -743,7 +745,9 @@ export function WorkspaceApp() {
     import('@netlify/identity').then((identity) => {
       if (!active) return
       unsubscribe = identity.onAuthChange((event) => {
-        if (event === 'logout') window.location.replace('/login?signedOut=1')
+        if (event === 'logout') void activeDemoSession().then(active => {
+          if (!active) window.location.replace('/login?signedOut=1')
+        })
       })
     })
     return () => {
@@ -1612,6 +1616,7 @@ export function WorkspaceApp() {
         />
       )}
       <div className="main-shell" data-page={page} inert={mobile || undefined}>
+        {demo && <DemoBanner />}
         <AppUpdateNotice />
         <header className="topbar">
           <div className="breadcrumb">
@@ -1732,7 +1737,9 @@ export function WorkspaceApp() {
                         : route.section}
               </h1>
               <p>
-                {route.section === 'Purchasing'
+                {route.section === 'Baking Converter'
+                  ? 'Quickly convert baking ingredients, measurements, oven temperatures, and yeast.'
+                  : route.section === 'Purchasing'
                   ? 'Review receipts, record purchases, and track incoming stock.'
                   : page === 'Dashboard'
                     ? 'Here’s what needs your attention today.'
@@ -3317,6 +3324,7 @@ export function WorkspaceApp() {
                   </div>
                 </>
               )}
+              {page === 'Baking Converter' && <BakingConverter ready={ready} canSave={ready && ['Owner', 'Manager'].includes(role)} ingredients={state.ingredients || []} />}
               {page === 'Settings' && (
                 <SettingsWorkspace
                   openTaxReports={() => go('Finances', 'Tax center')}
@@ -3594,10 +3602,9 @@ export function WorkspaceApp() {
         }}
       >
         <DialogContent className="app-dialog logout-dialog">
-          <DialogTitle>Log out of Cottage Pantry?</DialogTitle>
+          <DialogTitle>{demo ? 'Leave demo workspace?' : 'Log out of Cottage Pantry?'}</DialogTitle>
           <DialogDescription>
-            Sign out on this device. You can sign in again with your saved
-            password.
+            {demo ? 'Leaving ends access to this demo session. Your real account session stays unchanged.' : 'Sign out on this device. You can sign in again with your saved password.'}
           </DialogDescription>
           <FormErrorNotice message={logoutError} />
           <div className="button-row">
@@ -3611,15 +3618,21 @@ export function WorkspaceApp() {
                 setLogoutBusy(true)
                 setLogoutError('')
                 try {
-                  const identity = await import('@netlify/identity')
-                  await identity.logout()
+                  if (demo) {
+                    const response = await fetch('/api/demo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'exit' }) })
+                    if (!response.ok) throw new Error('Unable to leave demo')
+                    window.location.replace('/login')
+                  } else {
+                    const identity = await import('@netlify/identity')
+                    await identity.logout()
+                  }
                 } catch {
                   setLogoutError('Log out could not complete. Please retry.')
                   setLogoutBusy(false)
                 }
               }}
             >
-              {logoutBusy ? 'Logging out…' : 'Log out'}
+              {logoutBusy ? 'Please wait…' : demo ? 'Leave demo' : 'Log out'}
             </Btn>
           </div>
         </DialogContent>
@@ -4775,9 +4788,13 @@ export function WorkspaceApp() {
                         checked={draft.unpacked === true}
                         onChange={(e) => change('unpacked', e.target.checked)}
                       />
-                      This product is sold unpackaged (only when no packaging
-                      lines are assigned).
+                      This product is sold unpackaged
                     </label>
+                    {draft.unpacked && (draft.packagingLines != null ? draft.packagingLines.length > 0 : !!draft.packagingId) ? (
+                      <p className="warning-text" role="alert">
+                        Unpackaged products cannot have packaging assignments. Remove the assigned rows or turn off unpackaged before saving.
+                      </p>
+                    ) : null}
                   </Tabs.Content>
                   <Tabs.Content
                     value="images"
@@ -5724,43 +5741,69 @@ export function WorkspaceApp() {
                   )}
                   <div className="button-row product-detail-toolbar item-dialog-actions">
                     <ItemDeleteButton table="products" item={selected} />
-                    <Btn secondary onClick={() => setModal(null)}>
-                      Close
-                    </Btn>
-                    {selected.workflow !== 'kit' && (
-                      <Btn
-                        secondary
-                        onClick={() => open('label-preview', selected)}
-                      >
-                        Preview Label
+                    <div className="button-row product-detail-primary-actions">
+                      <Btn secondary onClick={() => setModal(null)}>
+                        Close
                       </Btn>
-                    )}
-                    {selected.workflow !== 'kit' && (
-                      <Btn onClick={() => open('product', selected)}>
-                        Edit Product
-                      </Btn>
-                    )}
-                    <ItemCopyButton table="products" item={selected} />
-                    {selected.workflow !== 'resale' && (
-                      <Btn
-                        disabled={!ready}
-                        onClick={() => open('batch', selected)}
-                      >
-                        {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
-                      </Btn>
-                    )}
+                      {selected.workflow !== 'kit' && (
+                        <Btn
+                          secondary
+                          onClick={() => open('label-preview', selected)}
+                        >
+                          Preview Label
+                        </Btn>
+                      )}
+                      {selected.workflow !== 'kit' && (
+                        <Btn
+                          secondary
+                          onClick={() =>
+                            setDetailLabelFlow({ productId: selected.id, labelId: '' })
+                          }
+                        >
+                          Create label
+                        </Btn>
+                      )}
+                      {selected.workflow !== 'kit' &&
+                        kitContext &&
+                        state.products.some((p) => p.id === kitContext) && (
+                          <Btn
+                            secondary
+                            onClick={() => {
+                              open(
+                                'product-detail',
+                                state.products.find((p) => p.id === kitContext)!,
+                              )
+                              setKitContext(null)
+                            }}
+                          >
+                            Back to {state.products.find((p) => p.id === kitContext)!.name}
+                          </Btn>
+                        )}
+                      {selected.workflow !== 'kit' && (
+                        <Btn onClick={() => open('product', selected)}>
+                          Edit Product
+                        </Btn>
+                      )}
+                      <ItemCopyButton table="products" item={selected} />
+                      {selected.workflow !== 'resale' && (
+                        <Btn
+                          disabled={!ready}
+                          onClick={() => open('batch', selected)}
+                        >
+                          {selected.workflow === 'kit' ? 'Assemble' : 'Produce'}
+                        </Btn>
+                      )}
+                    </div>
                   </div>
                 </>
               }
-              photoDetails={
-                <ProductMockups
-                productId={selected.id}
-                primaryImageAssetId={state.products.find(p => p.id === selected.id)?.imageAssetId}
-                assets={state.graphic_assets || []}
-                canEdit={ready && ['Owner', 'Manager'].includes(role)}
-                onWorkspace={setState}
-              />
-              }
+              photoDetails={selected.workflow !== 'kit' ? (
+                <ProductMarginCard
+                  product={selected}
+                  cost={productCost(selected, true)}
+                  workspace={state}
+                />
+              ) : undefined}
               lowerDetails={
                 selected.workflow === 'kit' ? (
                   <>
@@ -5783,87 +5826,7 @@ export function WorkspaceApp() {
                       </Btn>
                     </div>
                   </>
-                ) : (
-                  <>
-                    <ProductMarginCard
-                      product={selected}
-                      cost={productCost(selected, true)}
-                      workspace={state}
-                    />
-                    <section
-                      aria-label="Product labels"
-                      className="product-linked-labels"
-                    >
-                      <h3>Labels</h3>
-                      {labelsForProduct(state, selected).length ? (
-                        labelsForProduct(state, selected).map((label) => (
-                          <div className="product-linked-label" key={label.id}>
-                            <span>
-                              <strong>{label.name}</strong>
-                              {label.format === 'front-back'
-                                ? ' · Front + Back'
-                                : ''}
-                            </span>
-                            <Btn
-                              secondary
-                              small
-                              onClick={() => {
-                                setPreviewLabelId(label.id)
-                                setPreviewProduct(selected)
-                              }}
-                            >
-                              Preview/Print
-                            </Btn>
-                            <Btn
-                              secondary
-                              small
-                              onClick={() => {
-                                setDetailLabelFlow({ productId: selected.id, labelId: label.id })
-                              }}
-                            >
-                              Edit
-                            </Btn>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="table-note">
-                          No linked labels. Create one in Labels when needed.
-                        </p>
-                      )}
-                    <div className="button-row product-detail-actions">
-                      {kitContext &&
-                        state.products.some((p) => p.id === kitContext) && (
-                          <Btn
-                            secondary
-                            onClick={() => {
-                              open(
-                                'product-detail',
-                                state.products.find(
-                                  (p) => p.id === kitContext,
-                                )!,
-                              )
-                              setKitContext(null)
-                            }}
-                          >
-                            Back to{' '}
-                            {
-                              state.products.find((p) => p.id === kitContext)!
-                                .name
-                            }
-                          </Btn>
-                        )}
-                      <Btn
-                        secondary
-                        onClick={() => {
-                          setDetailLabelFlow({ productId: selected.id, labelId: '' })
-                        }}
-                      >
-                        Create label
-                      </Btn>
-                    </div>
-                    </section>
-                  </>
-                )
+                ) : undefined
               }
             >
               {selected.workflow === 'kit' ? (
@@ -6109,7 +6072,7 @@ export function WorkspaceApp() {
                   <strong>{business.name}</strong>
                   <small>
                     {demo
-                      ? 'Private browser demo · expires after 30 days'
+                      ? 'Private browser demo · expires after 7 days'
                       : 'Authenticated business oven'}
                   </small>
                 </span>

@@ -1,3 +1,4 @@
+import { memo, useEffect, useMemo, useState } from 'react'
 import { FormErrorNotice } from './form-error-notice'
 import type { Item } from '@/lib/domain'
 import type { LabelData, LabelDocument } from '@/lib/label-studio'
@@ -7,17 +8,100 @@ import {
   labelSides,
   type LabelOrder,
   type LabelParts,
+  type LabelSide,
 } from '@/lib/label-sets'
 import { LabelCanvas } from './label-canvas'
+
+/** Small, read-only live thumbnails; debounce geometry changes during gestures. */
+export const LabelSideNavigation = memo(function LabelSideNavigation({
+  document,
+  data,
+  assets,
+  active,
+  onSelect,
+}: {
+  document: LabelDocument
+  data: LabelData
+  assets: Item[]
+  active: LabelSide
+  onSelect: (side: LabelSide) => void
+}) {
+  const [snapshot, setSnapshot] = useState({ document, data, assets })
+  const preview = snapshot.document
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setSnapshot({ document, data, assets }),
+      120,
+    )
+    return () => window.clearTimeout(timer)
+  }, [document, data, assets])
+  const artwork = useMemo(
+    () =>
+      Object.fromEntries(
+        labelSides(preview).map((side) => [
+          side,
+          <LabelCanvas
+            document={labelSide(preview, side)}
+            data={snapshot.data}
+            assets={snapshot.assets}
+          />,
+        ]),
+      ),
+    [snapshot],
+  )
+  return (
+    <div
+      className="studio-side-navigation"
+      role="group"
+      aria-label="Label side"
+    >
+      {labelSides(document).map((side) => {
+        const layout = labelSide(
+          preview,
+          side === 'back' && !preview.back ? 'front' : side,
+        )
+        const current = labelSide(document, side)
+        const name = side === 'front' ? 'Front' : 'Back'
+        return (
+          <button
+            type="button"
+            key={side}
+            aria-label={name}
+            aria-pressed={active === side}
+            onClick={() => onSelect(side)}
+          >
+            <strong>{name}</strong>
+            <span
+              className="studio-side-art"
+              aria-hidden="true"
+              style={{
+                aspectRatio: `${layout.width}/${layout.height}`,
+                maxWidth: `${(120 * layout.width) / layout.height}px`,
+              }}
+            >
+              {artwork[side] || null}
+            </span>
+            <small>
+              {(current.width / 72).toFixed(2)} ×{' '}
+              {(current.height / 72).toFixed(2)} in
+            </small>
+          </button>
+        )
+      })}
+    </div>
+  )
+})
 
 export function PairedLabelPreview({
   document,
   data,
   assets,
+  maxHeight,
 }: {
   document: LabelDocument
   data: LabelData
   assets: Item[]
+  maxHeight?: number
 }) {
   return (
     <div className="label-set-preview">
@@ -29,7 +113,14 @@ export function PairedLabelPreview({
               {side === 'front' ? 'Front' : 'Back'} ·{' '}
               {(d.width / 72).toFixed(2)} × {(d.height / 72).toFixed(2)} in
             </figcaption>
-            <div style={{ aspectRatio: `${d.width}/${d.height}` }}>
+            <div
+              style={{
+                aspectRatio: `${d.width}/${d.height}`,
+                maxWidth: maxHeight
+                  ? (maxHeight * d.width) / d.height
+                  : undefined,
+              }}
+            >
               <LabelCanvas document={d} data={data} assets={assets} />
             </div>
             {!d.elements.some((e) => !e.hidden) && (

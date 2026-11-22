@@ -7,7 +7,11 @@ import {
   layoutKeys,
   type LabelSide,
 } from '@/lib/label-sets'
-import { LabelSetControls, PairedLabelPreview } from './label-set-controls'
+import {
+  LabelSetControls,
+  PairedLabelPreview,
+  LabelSideNavigation,
+} from './label-set-controls'
 import { LabelCanvas } from './label-canvas'
 import { withLibraryArtwork } from '@/lib/artwork-library'
 import { LabelPrinterSettings } from './label-printer-settings'
@@ -111,7 +115,6 @@ import {
   mergeLabelWorkspace,
 } from '@/lib/label-persistence'
 import { applySelectionFont, editStaticText } from '@/lib/label-rich-text'
-import { labelRecordKind } from '@/lib/label-library'
 import {
   duplicateSavedLabel,
   labelSource,
@@ -184,7 +187,28 @@ export function LabelStudio({
   onSectionChange?: (section: string) => void
   onDirtyChange?: (dirty: boolean) => void
 }) {
+  const backgroundPress = useRef<{
+    x: number
+    y: number
+    pointerId: number
+  } | null>(null)
+  const [aspectLocks, setAspectLocks] = useState<Record<string, boolean>>({})
   const [editorSide, setEditorSide] = useState<LabelSide>('front')
+  const [compactSideNavigation, setCompactSideNavigation] = useState(
+    () =>
+      (typeof window !== 'undefined' &&
+        window.matchMedia?.('(max-width: 1000px)').matches) ||
+      false,
+  )
+  useEffect(() => {
+    if (!window.matchMedia) return
+    const media = window.matchMedia('(max-width: 1000px)')
+    const update = () => setCompactSideNavigation(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
   const [partsDraft, setParts] = useState<'both' | LabelSide>('both')
   const [orderDraft, setOrder] = useState<'grouped' | 'paired'>('grouped')
   const [runIndex, setRunIndex] = useState(0)
@@ -284,10 +308,8 @@ export function LabelStudio({
         String(a.savedAt || a.updatedAt || ''),
       ),
     )
-  const selectableLabels = filteredRecords.filter(
-    (d) => d.workflowVersion === 1,
-  )
-  const selectedLabels = selectableLabels.filter((d) =>
+  const selectableLabels = filteredRecords
+  const selectedLabels = libraryRecords.filter((d) =>
     selectedIds.includes(d.id),
   )
   const svgRef = useRef<SVGSVGElement | null>(null),
@@ -766,7 +788,6 @@ export function LabelStudio({
     const ids = deleteTargets.map((t) => t.id)
     const workspace = await request('labelDelete', {
       ids,
-      recordKind: labelRecordKind(deleteTargets[0]),
     })
     if (
       ids.some(
@@ -793,7 +814,7 @@ export function LabelStudio({
       setSection('Labels')
     }
     setLibraryStatus(
-      `${ids.length} ${labelRecordKind(deleteTargets[0]) === 'template' ? 'template' : 'label'}${ids.length === 1 ? '' : 's'} deleted.${closed ? ' The deleted design’s editor is closed.' : ''}`,
+      `${ids.length} label${ids.length === 1 ? '' : 's'} deleted.${closed ? ' The deleted design’s editor is closed.' : ''}`,
     )
   }
   async function saveDocument(): Promise<boolean> {
@@ -1024,6 +1045,14 @@ export function LabelStudio({
         )
       )
         return
+      if (
+        e.key === 'Escape' &&
+        !document.querySelector('[role="dialog"], [role="alertdialog"]') &&
+        !drag.current
+      ) {
+        setSelected('')
+        return
+      }
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
@@ -1500,8 +1529,89 @@ export function LabelStudio({
       )}
     </div>
   )
+  const sideNavigation =
+    doc && section === 'Editor' ? (
+      <LabelSideNavigation
+        document={doc}
+        data={data}
+        assets={assets}
+        active={editorSide}
+        onSelect={(side) => {
+          setEditorSide(side)
+          setSelected('')
+          setTextSelection([0, 0])
+        }}
+      />
+    ) : null
+  const recoveryTools = (
+    <details className="studio-recovery-panel">
+      <summary>Recovery ({w.label_recovery_drafts?.length || 0})</summary>
+      <p>
+        Recovering creates a separate editable copy and does not overwrite the
+        saved label.
+      </p>
+      <div className="studio-recovery-bar">
+        <button
+          className="btn secondary"
+          onClick={() => recoveryInput.current?.click()}
+        >
+          Import editable recovery file
+        </button>
+        <input
+          ref={recoveryInput}
+          type="file"
+          accept=".json,application/json"
+          aria-label="Editable label recovery file"
+          hidden
+          onChange={async (event) => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            try {
+              if (file.size > 1_000_000)
+                throw new Error('Recovery files must be at most 1 MB.')
+              const value = JSON.parse(await file.text())
+              if (
+                value.format !== 'cottage-pantry-label-recovery' ||
+                value.version !== 1
+              )
+                throw new Error(
+                  'Choose a Cottage Pantry editable recovery file.',
+                )
+              recover(
+                validateLabelDocument(value.document, customFonts),
+                value.source,
+                value.displayUnit,
+              )
+            } catch (e) {
+              setError((e as Error).message)
+            }
+            event.target.value = ''
+          }}
+        />
+      </div>
+      {(w.label_recovery_drafts || []).map((draft) => (
+        <div className="studio-recovery-checkpoint" key={draft.id}>
+          <strong>{draft.name}</strong>
+          <time dateTime={draft.savedAt}>
+            {new Date(draft.savedAt).toLocaleString()}
+          </time>
+          <button
+            className="text-button"
+            disabled={saveBusy}
+            onClick={() =>
+              recover(draft.document, draft.source, draft.displayUnit)
+            }
+          >
+            Recover as editable copy
+          </button>
+        </div>
+      ))}
+    </details>
+  )
   return (
-    <div className="label-studio">
+    <div
+      className={`label-studio${section === 'Labels' ? ' studio-label-library' : ''}`}
+    >
       <style>{fontCss()}</style>
       <style>
         {fontCss(
@@ -1530,6 +1640,18 @@ export function LabelStudio({
           customFonts,
         )}
       </style>
+      {section === 'Labels' && (
+        <div className="studio-gallery-heading">
+          <h1>Labels</h1>
+          <button
+            className="btn"
+            disabled={saveBusy}
+            onClick={() => createLabel()}
+          >
+            <Plus size={18} /> Create label
+          </button>
+        </div>
+      )}
       <div className="section-workspace">
         <SectionNavigation name="Labels" active={section}>
           {sections.map((s) => (
@@ -1551,6 +1673,7 @@ export function LabelStudio({
               Editor <ArrowRight size={15} />
             </button>
           )}
+          {!compactSideNavigation && sideNavigation}
         </SectionNavigation>
         <div className="section-workspace-content">
           {libraryStatus && (
@@ -1561,61 +1684,27 @@ export function LabelStudio({
           {deleteTargets && (
             <DeleteDesignDialog
               documents={deleteTargets}
-              kind={labelRecordKind(deleteTargets[0])}
+              kind="label"
               openDocumentId={doc?.id}
               affectedProducts={w.products
                 .filter((p) =>
-                  deleteTargets.some((t) => t.id === p.labelDesignId),
+                  deleteTargets.some(
+                    (t) => t.id === p.labelDesignId || t.productId === p.id,
+                  ),
                 )
                 .map((p) => p.name)}
               onDelete={deleteDesigns}
               onClose={() => setDeleteTargets(null)}
             />
           )}
-          <div className="studio-recovery-bar">
-            <button
-              className="btn secondary"
-              onClick={() => recoveryInput.current?.click()}
-            >
-              Import editable recovery file
-            </button>
-            <input
-              ref={recoveryInput}
-              type="file"
-              accept=".json,application/json"
-              aria-label="Editable label recovery file"
-              hidden
-              onChange={async (event) => {
-                const file = event.target.files?.[0]
-                if (!file) return
-                try {
-                  if (file.size > 1_000_000)
-                    throw new Error('Recovery files must be at most 1 MB.')
-                  const value = JSON.parse(await file.text())
-                  if (
-                    value.format !== 'cottage-pantry-label-recovery' ||
-                    value.version !== 1
-                  )
-                    throw new Error(
-                      'Choose a Cottage Pantry editable recovery file.',
-                    )
-                  recover(
-                    validateLabelDocument(value.document, customFonts),
-                    value.source,
-                    value.displayUnit,
-                  )
-                } catch (e) {
-                  setError((e as Error).message)
-                }
-                event.target.value = ''
-              }}
-            />
-            {doc && (
+          {section !== 'Labels' && recoveryTools}
+          {doc && (
+            <div className="studio-recovery-bar">
               <button className="btn secondary" onClick={exportRecovery}>
                 Export editable recovery file
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {draftStatus && (
             <p
               role={
@@ -1628,35 +1717,6 @@ export function LabelStudio({
               {draftStatus}
             </p>
           )}
-          {!!w.label_recovery_drafts?.length && (
-            <details className="studio-recovery-panel" open={!doc}>
-              <summary>
-                Recover interrupted label sessions (
-                {w.label_recovery_drafts.length})
-              </summary>
-              <p>
-                These are private recovery checkpoints, not confirmed saved
-                labels. Restore a separate editable copy to compare with the
-                latest saved version. Existing labels remain intact.
-              </p>
-              {w.label_recovery_drafts.map((draft) => (
-                <div key={draft.id}>
-                  <strong>{draft.name}</strong> ·{' '}
-                  {new Date(draft.savedAt).toLocaleString()} · based on revision{' '}
-                  {draft.baseRevision}
-                  <button
-                    className="text-button"
-                    disabled={saveBusy}
-                    onClick={() =>
-                      recover(draft.document, draft.source, draft.displayUnit)
-                    }
-                  >
-                    Recover as editable copy
-                  </button>
-                </div>
-              ))}
-            </details>
-          )}
           {section !== 'Editor' && section !== 'Print & Export' && (
             <FormErrorNotice message={error} />
           )}
@@ -1668,23 +1728,6 @@ export function LabelStudio({
           )}
           {section === 'Labels' && (
             <>
-              <div className="studio-gallery-heading">
-                <div>
-                  <span className="eyebrow">LABELS</span>
-                  <h2>Your labels</h2>
-                  <p>
-                    Create, choose a product, design, save and print. Duplicate
-                    a label to reuse its design.
-                  </p>
-                </div>
-                <button
-                  className="btn"
-                  disabled={saveBusy}
-                  onClick={() => createLabel()}
-                >
-                  <Plus size={18} /> Create label
-                </button>
-              </div>
               <div className="studio-gallery-toolbar">
                 <label className="search-field">
                   <Search size={18} />
@@ -1709,40 +1752,65 @@ export function LabelStudio({
                     ))}
                   </select>
                 </Control>
+                {recoveryTools}
               </div>
               {!filteredRecords.length && (
                 <p className="calm-empty">
                   No labels to show. Create a label or clear the search.
                 </p>
               )}
-              {!!selectableLabels.length && (
-                <div className="studio-selection-toolbar">
-                  <label>
-                    <input
-                      type="checkbox"
-                      aria-label="Select All filtered labels"
-                      checked={
-                        selectedLabels.length > 0 &&
-                        selectedLabels.length === selectableLabels.length
-                      }
-                      onChange={(event) =>
-                        setSelectedIds(
-                          event.target.checked
-                            ? selectableLabels.map((d) => d.id)
-                            : [],
-                        )
-                      }
-                    />{' '}
-                    Select All
-                  </label>
-                  <span role="status">{selectedLabels.length} selected</span>
+              <div className="studio-selection-toolbar">
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label="Select All filtered labels"
+                    disabled={!canEdit || saveBusy || !selectableLabels.length}
+                    checked={
+                      selectableLabels.length > 0 &&
+                      selectableLabels.every((d) => selectedIds.includes(d.id))
+                    }
+                    onChange={(event) =>
+                      setSelectedIds((ids) =>
+                        event.target.checked
+                          ? [
+                              ...new Set([
+                                ...ids,
+                                ...selectableLabels.map((d) => d.id),
+                              ]),
+                            ]
+                          : ids.filter(
+                              (id) =>
+                                !selectableLabels.some((d) => d.id === id),
+                            ),
+                      )
+                    }
+                  />{' '}
+                  Select All matching labels ({selectableLabels.length})
+                </label>
+                <span role="status">{selectedLabels.length} selected</span>
+              </div>
+              {selectedLabels.length > 0 && (
+                <div className="studio-bulk-actions">
+                  <strong>{selectedLabels.length} selected</strong>
+                  <button
+                    className="text-button"
+                    disabled={saveBusy}
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Clear selection
+                  </button>
                   <button
                     className="text-button studio-delete-button"
-                    disabled={!canEdit || saveBusy || !selectedLabels.length}
+                    disabled={!canEdit || saveBusy}
                     onClick={() => setDeleteTargets(selectedLabels)}
                   >
                     Delete Selected
                   </button>
+                  {!canEdit && (
+                    <span>
+                      Deletion requires a connected Owner or Manager account.
+                    </span>
+                  )}
                 </div>
               )}
               <div className="studio-label-list">
@@ -1761,43 +1829,65 @@ export function LabelStudio({
                   )
                   return (
                     <article className="studio-label-row" key={t.id}>
+                      <label className="studio-card-selection">
+                        <input
+                          type="checkbox"
+                          aria-label={'Select ' + t.name}
+                          disabled={!canEdit || saveBusy}
+                          checked={selectedIds.includes(t.id)}
+                          onChange={(event) =>
+                            setSelectedIds((ids) =>
+                              event.target.checked
+                                ? [...new Set([...ids, t.id])]
+                                : ids.filter((id) => id !== t.id),
+                            )
+                          }
+                        />
+                        <span className="sr-only">Select {t.name}</span>
+                      </label>
                       <div className="studio-label-thumbnail">
                         <PairedLabelPreview
                           document={t}
                           data={labelData}
                           assets={assets}
+                          maxHeight={190}
                         />
                       </div>
                       <div className="studio-label-description">
-                        {t.workflowVersion === 1 && (
-                          <label className="studio-small-note">
-                            <input
-                              type="checkbox"
-                              aria-label={'Select ' + t.name}
-                              checked={selectedIds.includes(t.id)}
-                              onChange={(event) =>
-                                setSelectedIds((ids) =>
-                                  event.target.checked
-                                    ? [...ids, t.id]
-                                    : ids.filter((id) => id !== t.id),
-                                )
-                              }
-                            />{' '}
-                            Select
-                          </label>
-                        )}
                         <h3>{t.name}</h3>
                         <p>
-                          {linkedProducts.length > 1
-                            ? `${linkedProducts.length} linked products · Preserved shared design`
-                            : product?.name ||
-                              (t.workflowVersion === 1
-                                ? 'No product link'
-                                : 'Preserved design')}{' '}
-                          · {(t.width / 72).toFixed(1)} ×{' '}
-                          {(t.height / 72).toFixed(1)} in
-                          {t.format === 'front-back' ? ' · Front + Back' : ''}
+                          {linkedProducts.length
+                            ? linkedProducts.map((p) => p.name).join(', ')
+                            : product?.name || 'No product linked.'}
                         </p>
+                        {linkedProducts.length > 1 && (
+                          <small>{linkedProducts.length} linked products</small>
+                        )}
+                        <p>
+                          Width {(t.width / 72).toFixed(2)} in · Height{' '}
+                          {(t.height / 72).toFixed(2)} in
+                        </p>
+                        <p>
+                          {t.format === 'front-back'
+                            ? 'Front + Back'
+                            : 'Front-only'}
+                        </p>
+                        {t.workflowVersion !== 1 && (
+                          <span
+                            className="studio-preserved-badge"
+                            title="Original artwork stays intact. Edit opens an independent unsaved copy; preview/print uses the original."
+                          >
+                            {linkedProducts.length > 1
+                              ? 'Preserved shared design'
+                              : 'Preserved design'}
+                          </span>
+                        )}
+                        {!canEdit && (
+                          <small>
+                            Deletion requires a connected Owner or Manager
+                            account.
+                          </small>
+                        )}
                       </div>
                       <div className="studio-library-actions">
                         <button
@@ -1828,28 +1918,19 @@ export function LabelStudio({
                         >
                           <Copy size={16} /> Duplicate
                         </button>
-                        {t.workflowVersion === 1 && (
-                          <button
-                            className="text-button studio-delete-button"
-                            aria-label={'Delete ' + t.name}
-                            disabled={!canEdit || saveBusy}
-                            onClick={() => setDeleteTargets([t])}
-                          >
-                            <Trash2 size={16} /> Delete
-                          </button>
-                        )}
+                        <button
+                          className="text-button studio-delete-button"
+                          aria-label={'Delete ' + t.name}
+                          disabled={!canEdit || saveBusy}
+                          onClick={() => setDeleteTargets([t])}
+                        >
+                          <Trash2 size={18} /> Delete
+                        </button>
                       </div>
                     </article>
                   )
                 })}
               </div>
-              {libraryRecords.some((t) => t.workflowVersion !== 1) && (
-                <p className="studio-small-note">
-                  Existing designs and shared product links are preserved
-                  pending conversion review. Edit opens an independent unsaved
-                  copy; preview/print uses the original.
-                </p>
-              )}
             </>
           )}
           {section === 'Editor' && doc && (
@@ -2011,33 +2092,8 @@ export function LabelStudio({
                     <option value="front-back">Front + Back labels</option>
                   </select>
                 </Control>
-                {doc.format === 'front-back' && (
-                  <div role="group" aria-label="Label side">
-                    {labelSides(doc).map((side) => (
-                      <button
-                        className="btn secondary"
-                        key={side}
-                        aria-pressed={editorSide === side}
-                        onClick={() => {
-                          setEditorSide(side)
-                          setSelected('')
-                          history.current = []
-                          future.current = []
-                        }}
-                      >
-                        {side === 'front' ? 'Front' : 'Back'}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
-              {doc.format === 'front-back' && (
-                <PairedLabelPreview
-                  document={doc}
-                  data={data}
-                  assets={assets}
-                />
-              )}
+              {compactSideNavigation && sideNavigation}
               <div className="studio-editor">
                 <aside className="studio-left panel">
                   <div className="studio-left-tabs">
@@ -2329,7 +2385,62 @@ export function LabelStudio({
                       Bleed guide
                     </label>
                   </div>
-                  <div className="studio-scroll-stage">
+                  <div
+                    className="studio-scroll-stage"
+                    onPointerDown={(event) => {
+                      if (
+                        event.button !== 0 ||
+                        event.target !== event.currentTarget ||
+                        drag.current
+                      )
+                        return
+                      const bounds = event.currentTarget.getBoundingClientRect()
+                      // Scrollbar gutters are controls, not blank workspace.
+                      if (
+                        event.clientX - bounds.left >=
+                          event.currentTarget.clientWidth ||
+                        event.clientY - bounds.top >=
+                          event.currentTarget.clientHeight
+                      )
+                        return
+                      backgroundPress.current = {
+                        x: event.clientX,
+                        y: event.clientY,
+                        pointerId: event.pointerId,
+                      }
+                    }}
+                    onPointerMove={(event) => {
+                      const press = backgroundPress.current
+                      if (
+                        press &&
+                        Math.hypot(
+                          event.clientX - press.x,
+                          event.clientY - press.y,
+                        ) > 4
+                      )
+                        backgroundPress.current = null
+                    }}
+                    onPointerUp={(event) => {
+                      const press = backgroundPress.current
+                      backgroundPress.current = null
+                      if (
+                        press &&
+                        press.pointerId === event.pointerId &&
+                        Math.hypot(
+                          event.clientX - press.x,
+                          event.clientY - press.y,
+                        ) <= 4 &&
+                        !drag.current
+                      )
+                        setSelected('')
+                    }}
+                    onPointerCancel={() => {
+                      backgroundPress.current = null
+                    }}
+                    onPointerLeave={() => {
+                      backgroundPress.current = null
+                    }}
+                  >
                     <div
                       className={`studio-paper ${bleed ? 'with-bleed' : ''}`}
                       style={{
@@ -2343,9 +2454,19 @@ export function LabelStudio({
                             ?.getAttribute('data-element'),
                           e = editorDoc.elements.find((x) => x.id === id)
                         if (!e) {
-                          setSelected('')
+                          if (
+                            target.closest('.studio-ruler') ||
+                            event.button !== 0
+                          )
+                            return
+                          backgroundPress.current = {
+                            x: event.clientX,
+                            y: event.clientY,
+                            pointerId: event.pointerId,
+                          }
                           return
                         }
+                        backgroundPress.current = null
                         setSelected(e.id)
                         if (e.locked || event.button > 0) return
                         event.preventDefault()
@@ -2405,7 +2526,8 @@ export function LabelStudio({
                           patch = resizeElement(original, move.handle, point, {
                             // Shift temporarily toggles proportional resizing.
                             keepAspect:
-                              keepsAspect(original) !== event.shiftKey,
+                              (aspectLocks[original.id] ??
+                                keepsAspect(original)) !== event.shiftKey,
                             snap:
                               snap && !original.rotation
                                 ? (v) => Math.round(v / 3) * 3
@@ -2499,7 +2621,11 @@ export function LabelStudio({
                 <aside className="studio-inspector panel">
                   <div className="studio-panel-title">
                     <SlidersHorizontal size={18} />
-                    <h3>{element ? 'Element settings' : 'Label setup'}</h3>
+                    <h3>
+                      {element
+                        ? 'Element settings'
+                        : 'Select an element to edit'}
+                    </h3>
                   </div>
                   {element ? (
                     <div className="studio-inspector-fields studio-element-fields">
@@ -2619,28 +2745,19 @@ export function LabelStudio({
                         )}
                       />
                       <LabelGeometryToolbar
-                        key={`geometry-${element.id}`}
                         element={element}
                         onPatch={patchElement}
-                        atFront={editorDoc.elements.at(-1)?.id === selected}
-                        atBack={editorDoc.elements[0]?.id === selected}
-                        onLayer={(layer) =>
-                          change({
-                            elements:
-                              layer === 'front'
-                                ? [
-                                    ...editorDoc.elements.filter(
-                                      (e) => e.id !== selected,
-                                    ),
-                                    element,
-                                  ]
-                                : [
-                                    element,
-                                    ...editorDoc.elements.filter(
-                                      (e) => e.id !== selected,
-                                    ),
-                                  ],
-                          })
+                        elements={editorDoc.elements}
+                        width={editorDoc.width}
+                        height={editorDoc.height}
+                        onElements={(elements) => change({ elements })}
+                        onSelect={setSelected}
+                        aspect={aspectLocks[element.id] ?? keepsAspect(element)}
+                        onAspect={(locked) =>
+                          setAspectLocks((previous) => ({
+                            ...previous,
+                            [element.id]: locked,
+                          }))
                         }
                       />
                       {element.type === 'text' && (
@@ -3154,7 +3271,16 @@ export function LabelStudio({
               </div>
               <footer className="studio-submission-footer">
                 <FormErrorNotice message={error}>
-                  {saveFailed && <button type="button" className="btn secondary" disabled={saveBusy} onClick={() => void saveDocument()}>Retry save</button>}
+                  {saveFailed && (
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      disabled={saveBusy}
+                      onClick={() => void saveDocument()}
+                    >
+                      Retry save
+                    </button>
+                  )}
                 </FormErrorNotice>
                 <div className="button-row">
                   <button

@@ -287,7 +287,7 @@ it('preserves edits across tabs and opens a hidden invalid field on Save', async
     target: { value: 'Cotton remnant' },
   })
   await user.click(screen.getByRole('tab', { name: 'More' }))
-  fireEvent.change(screen.getByLabelText('SKU', { exact: true }), {
+  fireEvent.change(screen.getByLabelText('Item code / SKU', { exact: true }), {
     target: { value: 'COT-44' },
   })
   await user.click(screen.getByRole('button', { name: 'Save item' }))
@@ -635,4 +635,22 @@ it('keeps manual editing and barcode lookup available during and after a failed 
   expect(screen.getByRole('dialog')).toBe(modal)
   expect(save).not.toHaveBeenCalled()
   expect(close).not.toHaveBeenCalled()
+})
+
+it('keeps the purchase minimum and stock alert separate across More tab changes and save', async () => {
+  const {user,save} = start('packaging')
+  fireEvent.change(screen.getByLabelText('Item name'), {target:{value:'Order-minimum bags'}})
+  await user.selectOptions(screen.getByLabelText('Purchase unit'), 'pack')
+  fireEvent.change(screen.getByLabelText('Amount in each package'), {target:{value:'100'}})
+  fireEvent.change(screen.getByLabelText('Cost per package'), {target:{value:'8'}})
+  await user.click(screen.getByRole('tab', {name:'More'}))
+  expect(screen.getByLabelText('Minimum order quantity')).toHaveValue(null)
+  fireEvent.change(screen.getByLabelText('Minimum order quantity'), {target:{value:'2'}})
+  fireEvent.change(screen.getByLabelText('Reorder when stock reaches'), {target:{value:'25'}})
+  await user.click(screen.getByRole('tab', {name:'Details'}))
+  await user.click(screen.getByRole('tab', {name:'More'}))
+  expect(screen.getByLabelText('Minimum order quantity')).toHaveValue(2)
+  expect(screen.getByLabelText('Reorder when stock reaches')).toHaveValue(25)
+  await user.click(screen.getByRole('button', {name:'Save item'}))
+  expect(save).toHaveBeenCalledWith('ingredients', expect.objectContaining({ minimumOrderQuantity:'2', minimumOrderUnit:'pack', threshold:'25', unit:'each' }))
 })

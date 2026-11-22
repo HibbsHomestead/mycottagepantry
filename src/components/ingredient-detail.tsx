@@ -1,3 +1,5 @@
+import { ItemRestocking } from './item-restocking'
+import { minimumOrder } from '@/lib/item-restocking'
 import { FormErrorNotice } from './form-error-notice'
 import { ItemDeleteButton } from './item-deletion'
 import { CatalogAction } from './catalog-controls'
@@ -771,6 +773,7 @@ export function IngredientDetail({
                       hasStockHistory,
                     )
                     applyPurchaseSetup(i, basis.input)
+                    minimumOrder(draft, i)
                     if (draft.threshold === '' || draft.reorderQuantity === '')
                       throw new Error(
                         'Re-enter reorder threshold and quantity in their labeled unit.',
@@ -1046,7 +1049,9 @@ export function IngredientDetail({
                               </div>
                             </Field>
                             {!packaging && (
-                              <Field label="Internal SKU">{input('sku')}</Field>
+                              <Field label="Item code / SKU">
+                                {input('sku')}
+                              </Field>
                             )}
                           </div>
                         </div>
@@ -1065,7 +1070,7 @@ export function IngredientDetail({
                         </div>
                       </div>
                       {packaging && (
-                        <Field label="Internal SKU">{input('sku')}</Field>
+                        <Field label="Item code / SKU">{input('sku')}</Field>
                       )}
                     </section>
                   </div>
@@ -1345,13 +1350,15 @@ export function IngredientDetail({
                           Stock balances change only through Receive stock or a
                           reason-backed adjustment.
                         </p>
-                        <Field label={`Reorder threshold (${reorderUnit})`}>
-                          {input('threshold', 'number')}
-                        </Field>
+                        <ItemRestocking
+                          value={draft}
+                          change={change}
+                          stockUnit={reorderUnit}
+                        />
                         <Field label={`Reorder quantity (${reorderUnit})`}>
                           {input('reorderQuantity', 'number')}
                         </Field>
-                        <Field label="Storage location">
+                        <Field label="Where it’s stored">
                           {input('storageLocation')}
                         </Field>
                       </section>

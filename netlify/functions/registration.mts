@@ -1,3 +1,4 @@
+import { demoRequested, demoUnavailable } from '../lib/demo-session'
 import { customerMessage } from '../../src/lib/customer-message'
 import { SessionError } from '../lib/verified-session'
 import { requireLegacyAdmin } from '../lib/platform-admin-legacy'
@@ -20,6 +21,7 @@ import {
 } from '../lib/registration-core'
 
 export default async (request: Request) => {
+  if (demoRequested(request)) return demoUnavailable()
   const headers = {
     'Cache-Control': 'private, no-store',
     Vary: 'Cookie',

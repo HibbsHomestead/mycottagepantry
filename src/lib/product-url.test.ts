@@ -55,3 +55,20 @@ it('leaves unsafe credentials and ports for the protected fetcher to reject', ()
   expect(url.username).toBe('user')
   expect(url.port).toBe('8443')
 })
+
+it('validates complete Amazon product IDs before retrieval and supports existing mobile product links', async () => {
+  const { productUrl } = await import('./product-import-response')
+  expect(() => productUrl('https://www.amazon.com/dp/B0SHORT')).toThrow(
+    /10-character/,
+  )
+  expect(() => productUrl('not a url')).toThrow(/complete product URL/)
+  expect(
+    productUrl('https://www.amazon.com/gp/product/B0BQMJJBNP?th=1&tag=example'),
+  ).toContain('B0BQMJJBNP')
+  expect(
+    normalizeProductUrl(
+      productUrl('https://www.amazon.com/gp/aw/d/B0BQMJJBNP?tag=example'),
+    ),
+  ).toBe('https://www.amazon.com/dp/B0BQMJJBNP')
+  expect(productUrl('https://a.co/d/example')).toBe('https://a.co/d/example')
+})

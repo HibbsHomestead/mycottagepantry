@@ -24,7 +24,11 @@ vi.mock('@/lib/label-client-export', () => ({
   exportLabelPng: vi.fn(),
 }))
 beforeEach(() => {
-  vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }))
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -486,10 +490,10 @@ it('round-trips compact formatting, precise geometry and layer order through sav
     ['Size (pt)', '11.375'],
     ['Line height', '1.45'],
     ['Letter spacing (pt)', '-0.125'],
-    ['X (pt)', '-12.375'],
-    ['Y (pt)', '83.0625'],
-    ['Width (pt)', '174.875'],
-    ['Height (pt)', '57.25'],
+    ['X position (in)', String(-12.375 / 72)],
+    ['Y position (in)', String(83.0625 / 72)],
+    ['Width (in)', String(174.875 / 72)],
+    ['Height (in)', String(57.25 / 72)],
     ['Opacity', '37.125'],
   ])
     fireEvent.change(screen.getByLabelText(label), { target: { value } })
@@ -497,7 +501,7 @@ it('round-trips compact formatting, precise geometry and layer order through sav
   // Keyboard operation of a toolbar button does not nudge the active element.
   screen.getByRole('button', { name: 'Bold' }).focus()
   await user.keyboard('{ArrowRight}')
-  expect(screen.getByLabelText('X (pt)')).toHaveValue(-12.375)
+  expect(screen.getByLabelText('X position (in)')).toHaveValue(-12.375 / 72)
   await user.click(screen.getByRole('button', { name: 'Choose text color' }))
   fireEvent.change(screen.getByLabelText('Picker HEX'), {
     target: { value: '#123abc' },
@@ -516,8 +520,8 @@ it('round-trips compact formatting, precise geometry and layer order through sav
     screen.getByRole('button', { name: 'Choose text color' }),
   ).toHaveAttribute('title', `Text color: ${initial.elements[0].color} · 100%`)
   await user.click(screen.getByRole('button', { name: 'Redo' }))
-  await user.click(screen.getByRole('button', { name: 'Bring to front' }))
-  expect(screen.getByRole('button', { name: 'Bring to front' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'To front' }))
+  expect(screen.getByRole('button', { name: 'To front' })).toBeDisabled()
   expect(overlay()).not.toBeNull()
   await user.click(screen.getByRole('button', { name: 'Save' }))
   await screen.findByText(/^Saved ·/)

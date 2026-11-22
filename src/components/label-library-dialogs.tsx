@@ -52,7 +52,9 @@ export function DeleteDesignDialog({
         </DialogDescription>
         {affectedProducts.length > 0 && (
           <p role="alert">
-            Resolve assignments before deletion: {affectedProducts.join(', ')}
+            This removes the label link from {affectedProducts.length} product
+            {affectedProducts.length === 1 ? '' : 's'}:{' '}
+            {affectedProducts.join(', ')}. The products remain intact.
           </p>
         )}
         {error && <FormErrorNotice message={error} />}
@@ -62,7 +64,7 @@ export function DeleteDesignDialog({
           </button>
           <button
             className="btn studio-delete-button"
-            disabled={busy || affectedProducts.length > 0}
+            disabled={busy}
             onClick={async () => {
               if (busy) return
               setBusy(true)

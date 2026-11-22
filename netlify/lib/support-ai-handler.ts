@@ -96,17 +96,33 @@ async function reserve(
   business: string | null,
   id: string,
   staff = false,
+  purpose: 'support' | 'description' = 'support',
 ) {
   const p = await policy(c)
-  if (!staff && (!business || !p.evaluationBusinessIds.includes(business)))
+  if (
+    purpose === 'support' &&
+    !staff &&
+    (!business || !p.evaluationBusinessIds.includes(business))
+  )
     throw new SupportError(
       503,
       'AI support is in private evaluation. Help guides and Contact support remain available.',
     )
+  if (
+    purpose === 'description' &&
+    (!business ||
+      !(p.descriptionBusinessIds ?? p.evaluationBusinessIds).includes(business))
+  )
+    throw new SupportError(
+      503,
+      'Product description generation is limited to approved bakeries during evaluation. You can write or edit the description manually.',
+    )
   if (!p.enabled)
     throw new SupportError(
       503,
-      'The AI helper is paused. Help guides and Contact support remain available.',
+      purpose === 'description'
+        ? 'Product description generation is currently paused. You can write or edit the description manually.'
+        : 'The AI helper is paused. Help guides and Contact support remain available.',
     )
   await c.query("SELECT pg_advisory_xact_lock(hashtext('support-ai-usage'))")
   await c.query("SELECT set_config('app.support_ai_counter','true',true)")
@@ -128,7 +144,9 @@ async function reserve(
   )
     throw new SupportError(
       429,
-      'AI usage limit reached. Wait before retrying; guides and Contact support remain available.',
+      purpose === 'description'
+        ? 'Product description usage limit reached. Wait before trying again, or edit manually.'
+        : 'AI usage limit reached. Wait before retrying; guides and Contact support remain available.',
     )
   await c.query(
     'INSERT INTO support_ai_usage(id,requester_id,business_id) VALUES($1,$2,$3)',
@@ -191,6 +209,7 @@ export async function handleSupportAi(
           policy: {
             ...p,
             evaluationBusinessIds: [],
+            descriptionBusinessIds: [],
             enabled:
               p.enabled &&
               !!business &&
@@ -260,7 +279,14 @@ export async function handleSupportAi(
           403,
           'Only an Owner or Manager can generate product descriptions.',
         )
-      const policy = await reserve(c, actor, business, requestId)
+      const policy = await reserve(
+        c,
+        actor,
+        business,
+        requestId,
+        false,
+        'description',
+      )
       return { business, policy }
     })
     try {
@@ -288,7 +314,22 @@ export async function handleSupportAi(
           [requestId, actor.id],
         )
       }).catch(() => {})
-      if (error instanceof SupportError) throw error
+      console.info(
+        JSON.stringify({
+          area: 'product_description',
+          result: 'failed',
+          requestId,
+          status: error instanceof SupportError ? error.status : 503,
+          type: error instanceof Error ? error.name : 'unknown',
+        }),
+      )
+      if (error instanceof SupportError)
+        throw new SupportError(
+          error.status,
+          error.status === 429
+            ? 'Product description generation has reached its usage or spending limit. Try later or edit manually. Your draft is unchanged.'
+            : 'Product description generation is temporarily unavailable. Edit manually or contact support. Your draft is unchanged.',
+        )
       throw new SupportError(
         503,
         'Description generation did not complete. Your text is unchanged. Try again when ready; requests are never retried automatically.',
@@ -386,12 +427,20 @@ export async function handleSupportAi(
     if (!input.policy) throw new SupportError(400, 'Review the usage policy.')
     return response(
       await supportTransaction(actor, async (c) => {
+        const previous = await policy(c)
+        const next = {
+          ...input.policy!,
+          descriptionBusinessIds:
+            input.policy!.descriptionBusinessIds ??
+            previous.descriptionBusinessIds ??
+            previous.evaluationBusinessIds,
+        }
         await c.query(
           "UPDATE support_ai_policy SET data=$1 WHERE id='platform'",
-          [JSON.stringify(input.policy)],
+          [JSON.stringify(next)],
         )
         await supportAudit(c, actor, 'support_ai_policy_updated')
-        return { policy: input.policy }
+        return { policy: next }
       }),
     )
   }

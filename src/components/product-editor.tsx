@@ -1,3 +1,5 @@
+import { ItemRestocking } from './item-restocking'
+import { minimumOrder } from '@/lib/item-restocking'
 import {
   ResalePurchaseSetup,
   ResaleCostBreakdown,
@@ -228,6 +230,7 @@ export function ProductEditor({
     try {
       const payload: Item = { ...draft, id: editId.current ?? draft.id }
       if (editing) for (const key of creationOnlyKeys) delete payload[key]
+      minimumOrder(payload, current || undefined)
       const conflict = productIdentityConflict(
         workspace.products,
         payload,
@@ -354,7 +357,7 @@ export function ProductEditor({
         }
       />
       <div className="form-grid">
-        <Field label="SKU">{input('sku')}</Field>
+        <Field label="Item code / SKU">{input('sku')}</Field>
         <Field label="Barcode">{input('barcode')}</Field>
         <Field label="Variant group (optional)">{input('variantGroup')}</Field>
         <Field label="Size / color / variant (optional)">
@@ -427,9 +430,7 @@ export function ProductEditor({
     <>
       <div className="form-grid">
         <Field label="Selling price">{input('price', 'number', true)}</Field>
-        <Field label="Reorder threshold (items)">
-          {input('threshold', 'number')}
-        </Field>
+        <ItemRestocking value={draft as Item} change={change} />
       </div>
       {resale && (
         <>

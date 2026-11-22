@@ -1,3 +1,4 @@
+import { demoRequested, demoUnavailable } from '../lib/demo-session'
 import { customerMessage } from '../../src/lib/customer-message'
 import type { Config, Context } from '@netlify/functions'
 import { getDatabase } from '@netlify/database'
@@ -17,6 +18,7 @@ import {
 } from '../lib/signup-plan-intent'
 
 export default async (request: Request, context: Context) => {
+  if (demoRequested(request)) return demoUnavailable()
   const headers = {
     'Cache-Control': 'private, no-store',
     'Referrer-Policy': 'no-referrer',

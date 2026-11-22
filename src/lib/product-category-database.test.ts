@@ -1055,3 +1055,24 @@ it('saves and reloads an existing unscoped product category without rewriting it
   expect(reopened.workspace.products.find((p: Item) => p.id === 'legacy-category-save').productCategoryId).toBe('unclassified')
   expect((await call()).categories).toEqual(before)
 })
+
+it('saves optional purchase minimums separately from stock alerts and preserves tenant stock/ledger data', async () => {
+  session.user = 'category-owner-a'
+  const before = (await call(undefined, '')).workspace
+  const current = before.ingredients.find((i: Item) => i.id === 'flour')
+  const purchaseUnit = current.purchaseUnit || 'g'
+  const data = { ...current, purchaseUnit, minimumOrderQuantity: 2, minimumOrderUnit: purchaseUnit, storageUnit: current.storageUnit || current.unit, threshold: current.threshold || 0, reorderQuantity: current.reorderQuantity || 0, expectedUpdatedAt: current.updatedAt }
+  const result = await call({ action:'ingredientUpdate', table:'ingredients', data }, '')
+  expect(result.status, result.error).toBe(200)
+  const reopened = (await call(undefined, '')).workspace
+  expect(reopened.ingredients.find((i: Item) => i.id === 'flour')).toMatchObject({ minimumOrderQuantity: 2, minimumOrderUnit: purchaseUnit, threshold:current.threshold || 0, quantity:current.quantity, cost:current.cost })
+  expect(reopened.ledger).toEqual(before.ledger)
+  session.user = 'category-owner-b'
+  const other = (await call(undefined, '')).workspace.ingredients.find((i: Item) => i.id === 'flour')
+  expect(other.minimumOrderQuantity).toBeUndefined()
+  session.user = 'category-owner-a'
+  const saved = reopened.ingredients.find((i: Item) => i.id === 'flour')
+  const invalid = await call({action:'ingredientUpdate',table:'ingredients',data:{...data,expectedUpdatedAt:saved.updatedAt,minimumOrderQuantity:0}}, '')
+  expect(invalid.status).not.toBe(200)
+  expect(invalid.error).toMatch(/positive/)
+})

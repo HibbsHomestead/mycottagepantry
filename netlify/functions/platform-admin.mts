@@ -1,3 +1,4 @@
+import { demoRequested, demoUnavailable } from '../lib/demo-session'
 import { reconcileSupportBilling } from '../lib/support-billing-recovery'
 import { adminMembership, adminIdentityStatus } from '../lib/admin-memberships'
 import {
@@ -49,6 +50,7 @@ import {
 import { readAdministration } from '../lib/platform-admin-read'
 
 export default async (request: Request, context: Context) => {
+  if (demoRequested(request)) return demoUnavailable()
   const reference = requestReference()
   let actor: string | null = null
   const headers = new Headers({

@@ -30,6 +30,8 @@ export const supportAiPolicySchema = z
     enabled: z.boolean(),
     model: z.enum(supportAiModels).default(supportAiModel),
     evaluationBusinessIds: z.array(z.uuid()).max(20).default([]),
+    // Missing on legacy policies: preserve their original description access.
+    descriptionBusinessIds: z.array(z.uuid()).max(20).optional(),
     maxToolCalls: z.number().int().min(1).max(6).default(6),
     maxProviderCalls: z.number().int().min(1).max(4).default(4),
     businessDailyUsd: z.number().positive().max(10).default(1),

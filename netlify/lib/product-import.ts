@@ -113,9 +113,7 @@ function samsOffers(
 function amazonProduct($: ReturnType<typeof load>, sourceUrl: string) {
   const url = new URL(sourceUrl)
   if (!['amazon.com', 'www.amazon.com'].includes(url.hostname)) return null
-  const asin = url.pathname.match(
-    /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/,
-  )?.[1]
+  const asin = amazonAsin(url)
   const ids = $('input#ASIN')
     .map((_, el) => $(el).attr('value') || '')
     .get()
@@ -627,9 +625,7 @@ export async function fetchProductDetails(url: string) {
   try {
     if (requestedAsin) {
       const finalUrl = new URL(page.url)
-      const finalAsin = finalUrl.pathname.match(
-        /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:\/|$)/i,
-      )?.[1]
+      const finalAsin = amazonAsin(finalUrl)
       if (
         !finalUrl.hostname.match(/(^|\.)amazon\.[a-z.]+$/i) ||
         finalAsin?.toUpperCase() !== requestedAsin.toUpperCase() ||

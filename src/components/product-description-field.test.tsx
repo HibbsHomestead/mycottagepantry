@@ -55,9 +55,7 @@ function deferred() {
 it('blocks duplicate calls, preserves text on cancel, and ignores late responses after switching products', async () => {
   const resolve = deferred()
   render(<Harness />)
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Generate description' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Generate description' }))
   expect(screen.getByRole('button', { name: 'Generate again' })).toBeDisabled()
   expect(fetch).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
@@ -76,9 +74,7 @@ it('blocks duplicate calls, preserves text on cancel, and ignores late responses
 it('requires acknowledgement of changed sources, applies only on approval and can restore', async () => {
   const resolve = deferred()
   render(<Harness />)
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Generate description' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Generate description' }))
   // Simulate an upstream change while a request is running.
   fireEvent.click(screen.getByText('Change source'))
   resolve(Response.json({ description: 'Proposed text' }))
@@ -104,9 +100,7 @@ it('shows a failure without replacing draft text or automatically retrying', asy
     ),
   )
   render(<Harness />)
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Generate description' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Generate description' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'AI usage limit reached',
   )
@@ -132,9 +126,7 @@ it('aborts a timed-out request, preserves the draft and does not retry', async (
     ),
   )
   render(<Harness />)
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Generate description' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Generate description' }))
   await act(async () => {
     await vi.advanceTimersByTimeAsync(25001)
   })
@@ -144,4 +136,38 @@ it('aborts a timed-out request, preserves the draft and does not retry', async (
   expect(
     screen.getByLabelText('Product description (customer-facing)'),
   ).toHaveValue('Existing description')
+})
+
+it('retains an editable usable proposal after regeneration fails and applies only on explicit Use', async () => {
+  let calls = 0
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      ++calls === 1
+        ? Response.json({ description: 'One loaf and two muffins.' })
+        : Response.json(
+            { error: 'Description generation is temporarily unavailable.' },
+            { status: 503 },
+          ),
+    ),
+  )
+  render(<Harness />)
+  fireEvent.click(screen.getByRole('button', { name: 'Generate description' }))
+  const proposal = await screen.findByLabelText('Proposed description')
+  await waitFor(() => expect(proposal).toHaveValue('One loaf and two muffins.'))
+  fireEvent.change(proposal, {
+    target: { value: 'Reviewed assortment description.' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Generate again' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Description generation is temporarily unavailable',
+  )
+  expect(proposal).toHaveValue('Reviewed assortment description.')
+  expect(
+    screen.getByLabelText('Product description (customer-facing)'),
+  ).toHaveValue('Existing description')
+  fireEvent.click(screen.getByRole('button', { name: 'Use description' }))
+  expect(
+    screen.getByLabelText('Product description (customer-facing)'),
+  ).toHaveValue('Reviewed assortment description.')
 })

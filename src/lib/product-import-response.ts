@@ -1,3 +1,4 @@
+import { amazonAsin } from './product-url'
 import { customerMessage } from './customer-message'
 import {
   ProductImportFailure,
@@ -91,6 +92,13 @@ export function productUrl(value: string) {
   )
     throw new Error(
       'Enter a complete HTTP or HTTPS product URL without credentials (up to 8,192 characters).',
+    )
+  if (
+    ['amazon.com', 'www.amazon.com'].includes(parsed.hostname) &&
+    !amazonAsin(parsed)
+  )
+    throw new Error(
+      'Enter an Amazon product link with a complete 10-character product ID (ASIN), or use the product’s Share link.',
     )
   // Preserve the original path, identifier and query. The server upgrades HTTP to HTTPS.
   return input

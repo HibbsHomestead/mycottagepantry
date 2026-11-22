@@ -145,7 +145,13 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
   useEffect(() => {
     supportAiRequest(true)
       .then((v) => {
-        setPolicy(supportAiPolicySchema.parse(v.policy))
+        const loaded = supportAiPolicySchema.parse(v.policy)
+        setPolicy({
+          ...loaded,
+          descriptionBusinessIds: loaded.descriptionBusinessIds ?? [
+            ...loaded.evaluationBusinessIds,
+          ],
+        })
         setUsage(v.usage)
         setMetering(v.metering || [])
       })
@@ -192,7 +198,7 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
       {policy && (
         <SubmissionForm onSubmit={save}>
           <label>
-            Support model
+            AI model (support and descriptions)
             <select
               disabled={!admin}
               value={policy.model}
@@ -211,7 +217,7 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
             </select>
           </label>
           <label>
-            Private evaluation business IDs (one per line; leave empty to keep
+            Support evaluation business IDs (one per line; leave empty to keep
             customer AI closed)
             <textarea
               disabled={!admin}
@@ -226,6 +232,29 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
               }
             />
           </label>
+          <label>
+            Product description evaluation business IDs (one per line; leave
+            empty to keep generation closed)
+            <textarea
+              disabled={!admin}
+              value={(
+                policy.descriptionBusinessIds ?? policy.evaluationBusinessIds
+              ).join('\n')}
+              onChange={(e) =>
+                setPolicy({
+                  ...policy,
+                  descriptionBusinessIds: e.target.value
+                    .split(/\s+/)
+                    .filter(Boolean),
+                })
+              }
+            />
+          </label>
+          <p>
+            Existing description permissions are retained until explicitly
+            changed here. Support access is managed separately. Both tools
+            retain the shared pause switch and spending limits.
+          </p>
           <div className="ai-admin-policy">
             {(
               [
@@ -277,8 +306,7 @@ export function SupportAiUsage({ admin }: { admin: boolean }) {
                 setPolicy({ ...policy, enabled: e.target.checked })
               }
             />
-            Enable AI replies (guides and support tickets remain available when
-            paused)
+            Enable AI replies and product descriptions (guides and support tickets remain available when paused)
           </label>
           {admin && (
             <>

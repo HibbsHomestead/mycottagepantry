@@ -433,3 +433,37 @@
     grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr);
   }
 }
+
+.product-import-error-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.product-import-error-actions > :first-child,
+.product-import-error-actions > p {
+  flex-basis: 100%;
+}
+
+.item-restocking {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-block: 12px;
+}
+.item-restocking h3 {
+  margin: 0 0 8px;
+}
+.restocking-quantity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.restocking-quantity input {
+  width: 100px;
+  min-width: 80px;
+}
+.item-restocking small {
+  font-weight: 400;
+  color: var(--muted);
+}

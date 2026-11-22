@@ -877,7 +877,7 @@ it('offers Paste product text after an oversized-page failure and keeps the exis
   )
   await userEvent.click(screen.getByRole('button', { name: 'Import details' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Your entries are preserved',
+    'Your entries are still in this form',
   )
   await userEvent.click(
     screen.getByRole('button', { name: 'Paste product text instead' }),
@@ -1031,7 +1031,7 @@ it('honors Retry-After, performs only two explicit retries and preserves the com
       fireEvent.click(screen.getByRole('button', { name: 'Import details' })),
     )
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Amazon product details couldn’t be retrieved. Your entries are preserved. Retry or continue manually.',
+      'Upstream unavailable',
     )
     expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
     await act(async () => vi.advanceTimersByTime(59000))

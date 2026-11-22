@@ -52,12 +52,10 @@ for (const [width, height] of [
     const dir = 'docs/reviews/product-refresh'
     mkdirSync(dir, { recursive: true })
     await page.screenshot({ path: `${dir}/${phase}-cards-${width}.png` })
-    await card
-      .getByRole('button', { name: 'View details', exact: true })
-      .click()
+    await card.getByRole('button', { name: /^View details for / }).click()
     const dialog = page.getByRole('dialog', { name: p.name, exact: true })
     await expect(
-      dialog.getByRole('heading', { name: 'Labels', exact: true }),
+      dialog.getByRole('heading', { name: 'Gross margin', exact: true }),
     ).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${dir}/${phase}-${width}.png` })
@@ -79,8 +77,8 @@ for (const [width, height] of [
     expect(geometry.overflowX).toBeLessThanOrEqual(1)
     expect(geometry.nested).toBe(0)
     await expect(
-      dialog.getByRole('button', { name: 'Preview/Print' }),
-    ).toHaveCount(2)
+      dialog.getByRole('button', { name: 'Preview Label', exact: true }),
+    ).toHaveCount(1)
     if (phase === 'after') {
       await dialog.getByText('How this is calculated', { exact: true }).click()
       await dialog
@@ -152,7 +150,7 @@ for (const scenario of [
     await page.goto(workspaceFixtureUrl('Products/All Products'))
     await page
       .getByRole('article', { name: p.name, exact: true })
-      .getByRole('button', { name: 'View details', exact: true })
+      .getByRole('button', { name: /^View details for / })
       .click()
     const dialog = page.getByRole('dialog', { name: p.name, exact: true })
     await expect(dialog).toBeVisible()
@@ -244,7 +242,7 @@ test('product workflows retain a return to the originating product', async ({
   await page.goto(workspaceFixtureUrl('Products/Food'))
   await page
     .getByRole('article', { name: product.name, exact: true })
-    .getByRole('button', { name: 'View details', exact: true })
+    .getByRole('button', { name: /^View details for / })
     .click()
   const detail = page.getByRole('dialog', { name: product.name, exact: true })
   await detail
@@ -259,12 +257,15 @@ test('product workflows retain a return to the originating product', async ({
     .getByRole('button', { name: 'Back to product details', exact: true })
     .click()
   await expect(detail).toBeVisible()
-  await detail.getByRole('button', { name: 'Edit', exact: true }).click()
+  await detail
+    .getByRole('button', { name: 'Create label', exact: true })
+    .click()
   await expect(page.getByLabel('Label name', { exact: true })).toHaveValue(
-    'Kitchen label',
+    'Untitled label',
   )
+  page.once('dialog', (dialog) => dialog.accept())
   await page
-    .getByRole('button', { name: 'Back to product details', exact: true })
+    .getByRole('button', { name: 'Close label editor', exact: true })
     .click()
   await expect(detail).toBeVisible()
   expect(writes).toBe(0)

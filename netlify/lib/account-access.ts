@@ -1,3 +1,5 @@
+import { getDatabase } from '@netlify/database'
+import { demoBusiness, demoRequested } from './demo-session'
 import { randomUUID } from 'node:crypto'
 import { verifiedSession, selectedWorkspace } from './verified-session'
 import {
@@ -67,6 +69,30 @@ export async function resolveAccountAccess(
     result.reason = reason
     event('access_decision', status + ':' + reason)
     return result
+  }
+  if (demoRequested(request)) {
+    let client:
+      | Awaited<ReturnType<ReturnType<typeof getDatabase>['pool']['connect']>>
+      | undefined
+    try {
+      client = await getDatabase().pool.connect()
+      await client.query('BEGIN')
+      const sandbox = await demoBusiness(client, request)
+      await client.query('COMMIT')
+      if (!sandbox) return finish('signed_out', 'DEMO_EXPIRED')
+      result.membership = {
+        id: sandbox.id,
+        name: sandbox.business_name,
+        role: 'Owner',
+      }
+      result.memberships = [result.membership]
+      return finish('workspace', 'DEMO_WORKSPACE')
+    } catch {
+      await client?.query('ROLLBACK').catch(() => {})
+      return finish('membership_error', 'DEMO_DATABASE_UNAVAILABLE')
+    } finally {
+      client?.release()
+    }
   }
   let user
   try {
