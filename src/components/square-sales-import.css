@@ -1,0 +1,88 @@
+.square-import-access {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--border, #d8d4ca);
+  border-radius: 10px;
+  background: var(--surface, #fffdf7);
+}
+.square-import-dialog {
+  width: min(960px, 96vw);
+  max-width: 960px;
+  max-height: 90dvh;
+  overflow: auto;
+}
+.square-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted-foreground, #656457);
+  font-size: 0.85rem;
+}
+.square-steps [aria-current] {
+  color: var(--foreground, #323c27);
+  font-weight: 700;
+  border-bottom: 2px solid currentColor;
+}
+.square-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.square-mapping-grid label,
+.square-product-match label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.square-mapping-grid input,
+.square-mapping-grid select,
+.square-product-match select,
+.square-product-match input[type='number'] {
+  width: 100%;
+  min-width: 0;
+}
+.square-product-match {
+  padding: 16px 0;
+  border-bottom: 1px solid #dedbd1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.square-product-match strong,
+.square-product-match small {
+  grid-column: 1 / -1;
+}
+.square-product-match .check-label {
+  display: flex;
+  flex-direction: row;
+}
+.square-table-scroll {
+  overflow: auto;
+  max-width: 100%;
+}
+.square-table-scroll td,
+.square-table-scroll th {
+  padding: 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.square-table-scroll pre {
+  white-space: pre-wrap;
+  min-width: 180px;
+  max-width: 320px;
+}
+.square-import-review li {
+  margin-block: 8px;
+}
+@media (max-width: 600px) {
+  .square-mapping-grid,
+  .square-product-match {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .square-import-access {
+    padding: 10px;
+  }
+}

@@ -1,3 +1,4 @@
+import { SquareSalesImport } from './square-sales-import'
 import { DemoBanner } from './demo-banner'
 import { activeDemoSession } from '@/lib/demo-client'
 import { BakingConverter } from './baking-converter'
@@ -589,7 +590,7 @@ export function WorkspaceApp() {
   const cogs = state.sales.reduce(
       (s, i) =>
         s +
-        (i.historicalCogs ??
+        (i.externalSource === 'square' ? 0 : i.historicalCogs ??
           productCost(
             products.find((p) => p.id === i.productId) || products[0],
           ) * i.quantity),
@@ -2787,6 +2788,7 @@ export function WorkspaceApp() {
               )}
               {page === 'Labels' && (
                 <LabelStudio
+                  onOpenSource={open}
                   initialProductId={labelProduct}
                   initialLabelId={labelDesign}
                   initialCreateRequest={labelCreateRequest}
@@ -2945,6 +2947,8 @@ export function WorkspaceApp() {
                           </Btn>
                         </div>
                       </div>
+                      {sub === 'Sales' && <SquareSalesImport workspace={state} onWorkspace={setState} ready={ready} role={role} demo={demo} />}
+                      {state.sales.some(s => s.externalSource === 'square') && <p className="warning-text">Square imports are reporting only. Historical imported costs are unavailable; profit totals exclude those costs and are incomplete. Unmatched sales remain included in revenue. Tips and service charges are separate from product revenue.</p>}
                       <DataTable
                         rows={state[sub.toLowerCase()]}
                         columns={
@@ -3036,6 +3040,7 @@ export function WorkspaceApp() {
                     </>
                   ) : (
                     <>
+                      {state.sales.some(s => s.externalSource === 'square') && <p className="warning-text">Imported Square sales have no historical cost snapshots. COGS and profit figures exclude those costs and are incomplete; do not interpret them as confirmed profit.</p>}
                       <PageOverview>
                         <section className="stat-grid">
                           <Stat
@@ -3046,7 +3051,7 @@ export function WorkspaceApp() {
                             trend="Revenue"
                           />
                           <Stat
-                            title="Estimated COGS"
+                            title={state.sales.some(s=>s.externalSource==='square') ? 'COGS · imported costs unavailable' : 'Estimated COGS'}
                             value={money(cogs)}
                             icon={<CookingPot size={18} />}
                             foot="Historical when available"
@@ -3060,7 +3065,7 @@ export function WorkspaceApp() {
                             trend="Expenses"
                           />
                           <Stat
-                            title="Estimated net profit"
+                            title={state.sales.some(s=>s.externalSource==='square') ? 'Net profit · incomplete imported costs' : 'Estimated net profit'}
                             value={money(netProfit)}
                             icon={<TrendingUp size={18} />}
                             foot={`${(totalSales + commissionIncome > 0 ? (netProfit / (totalSales + commissionIncome)) * 100 : 0).toFixed(1)}% net margin`}
@@ -4714,7 +4719,7 @@ export function WorkspaceApp() {
                           .map((r) => ({ value: r.id, label: r.name })),
                       )}
                     </Field>
-                    <div className="form-grid">
+                    <div className="product-pricing-grid">
                       <Field label="Units per package">
                         {input('unitsPerPackage', 'number')}
                       </Field>
@@ -4724,24 +4729,24 @@ export function WorkspaceApp() {
                       <Field label="Wholesale price ($)">
                         {input('wholesale', 'number')}
                       </Field>
-                      <Field label="Target margin (%)">
-                        {input('targetMargin', 'number')}
-                      </Field>
                       <Field label="Entered prices">
                         {select('priceTaxMode', [
                           {
                             value: 'configured',
-                            label: 'Use rate behaviors (supports mixed taxes)',
+                            label: 'Rate behaviors',
                           },
                           {
                             value: 'before',
-                            label: 'My entered price is before tax',
+                            label: 'Excludes tax',
                           },
                           {
                             value: 'includes',
-                            label: 'My entered price includes tax',
+                            label: 'Includes tax',
                           },
                         ])}
+                      </Field>
+                      <Field label="Target margin (%)">
+                        {input('targetMargin', 'number')}
                       </Field>
                       <Field label="Target food cost (%)">
                         {input('targetFoodCost', 'number')}
@@ -4780,21 +4785,9 @@ export function WorkspaceApp() {
                         name: draft.name || 'Product',
                       }}
                       ingredients={ingredients}
+                      onUnpackedChange={(value) => change('unpacked', value)}
                       onChange={(lines) => change('packagingLines', lines)}
                     />
-                    <label className="check-label">
-                      <input
-                        type="checkbox"
-                        checked={draft.unpacked === true}
-                        onChange={(e) => change('unpacked', e.target.checked)}
-                      />
-                      This product is sold unpackaged
-                    </label>
-                    {draft.unpacked && (draft.packagingLines != null ? draft.packagingLines.length > 0 : !!draft.packagingId) ? (
-                      <p className="warning-text" role="alert">
-                        Unpackaged products cannot have packaging assignments. Remove the assigned rows or turn off unpackaged before saving.
-                      </p>
-                    ) : null}
                   </Tabs.Content>
                   <Tabs.Content
                     value="images"

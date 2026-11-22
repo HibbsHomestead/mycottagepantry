@@ -307,10 +307,12 @@ export function PackagingEditor({
   product,
   ingredients,
   onChange,
+  onUnpackedChange,
 }: {
   product: Item
   ingredients: Item[]
   onChange: (lines: any[]) => void
+  onUnpackedChange?: (unpacked: boolean) => void
 }) {
   const lines =
     product.packagingLines ??
@@ -325,10 +327,18 @@ export function PackagingEditor({
         ]
       : [])
   const items = ingredients.filter((i) => i.usedAs === 'packaging')
+  const [unpackedError, setUnpackedError] = useState('')
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   return (
     <section className="calculation-box compact-packaging">
-      <h3>Packaging per sellable package</h3>
+      <div className="packaging-heading"><h3>Packaging per sellable package</h3>
+      {onUnpackedChange && <label className="check-label"><input type="checkbox" checked={product.unpacked === true && !lines.length} onChange={e => {
+        if (e.target.checked && lines.length) { setUnpackedError('Remove assigned packaging before choosing Sold unpackaged.'); return }
+        setUnpackedError(''); onUnpackedChange(e.target.checked)
+      }} />Sold unpackaged</label>}</div>
+      {product.unpacked && lines.length > 0 && onUnpackedChange && <p className="warning-text">Assigned packaging conflicts with Sold unpackaged. <button type="button" className="text-button" onClick={()=>onUnpackedChange(false)}>Keep packaging and turn off unpackaged</button></p>}
+      {unpackedError && <p className="warning-text" role="alert">{unpackedError}</p>}
+      {product.unpacked && !lines.length && <p>No packaging used</p>}
       <p className="packaging-helper">
         Bags, boxes, labels, and seals used for one sellable package.{' '}
         <span
@@ -448,6 +458,8 @@ export function PackagingEditor({
         className="text-button"
         disabled={!items.length}
         onClick={() => {
+          onUnpackedChange?.(false)
+          setUnpackedError('')
           setFocusIndex(lines.length)
           onChange([
             ...lines,
@@ -462,7 +474,7 @@ export function PackagingEditor({
       >
         + Add packaging item
       </button>
-      {!lines.length && (
+      {!lines.length && !product.unpacked && (
         <p className="warning-text">
           No packaging assigned. Add packaging or confirm this product is sold
           unpackaged.

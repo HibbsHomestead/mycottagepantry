@@ -81,7 +81,7 @@ it('orders verified weights and preserves subingredients without making an aller
       'recipe.allergens'
     ],
   ).toBe('')
-  expect(data.warnings.join(' ')).toContain('finished-product order')
+  expect(data.warnings).toEqual([])
 })
 it('uses actual normalized batch usage with its matching unit', () => {
   const w = workspace()

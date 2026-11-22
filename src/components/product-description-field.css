@@ -46,3 +46,5 @@
     flex-shrink: 0;
   }
 }
+
+.description-generate-row { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }

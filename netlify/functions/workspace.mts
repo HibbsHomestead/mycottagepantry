@@ -1,3 +1,4 @@
+import { squareSalesAction } from '../lib/square-sales-import'
 import { demoBusiness, demoRequested, demoWorkspaceBlocked, demoUnavailable } from '../lib/demo-session'
 import { demoWorkspaceSeed } from '../lib/demo-workspace-seed'
 import { handleBakingConverter } from '../lib/baking-converter-handler'
@@ -241,6 +242,8 @@ const tables = [
   'batches',
   'batch_usage',
   'sales',
+  'sales_imports',
+  'sales_product_mappings',
   'expenses',
   'vendors',
   'orders',
@@ -623,6 +626,8 @@ export default async (req: Request, context: Context) => {
           'accounts',
           'journals',
           'sales',
+          'sales_imports',
+          'sales_product_mappings',
           'expenses',
         ])
           workspace[table] = []
@@ -2543,6 +2548,7 @@ export default async (req: Request, context: Context) => {
       audit: async (_name: string, _detail: string) => {},
     })
     async function recordSale(item: Item) {
+      if (item.externalSource) throw new Error('External sales must use their import workflow.')
       item.paymentAccount = businessMoneyAccount(state, item.paymentAccount)
       delete item.stockDeducted
       if (state.sales.some((s) => s.id === item.id))
@@ -2797,7 +2803,10 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Produce component products separately; kit production is unavailable.',
         )
-      if (['itemDeleteCheck', 'itemDelete', 'itemArchive'].includes(action)) {
+      if (['squareStage','squareReview','squareCommit','squareUndo'].includes(action)) {
+        if (!['Owner','Manager'].includes(role)) throw new Error('Only an Owner or Manager can import or undo sales.')
+        await squareSalesAction(action, data, { state, client, org, save, audit, actor: user?.id || 'Demo owner' })
+      } else if (['itemDeleteCheck', 'itemDelete', 'itemArchive'].includes(action)) {
         const check = await handleItemDeletion(action, table, data, { client, org, role, state, audit })
         if (check) {
           await client.query('COMMIT')
@@ -4376,6 +4385,8 @@ export default async (req: Request, context: Context) => {
             )
               throw new Error('Choose product artwork from this oven.')
           productCosting(item, state)
+          if (item.unpacked === true && packagingLines(item).length)
+            throw new Error('Remove assigned packaging or turn off Sold unpackaged before saving.')
           if (!packagingLines(item).length && item.unpacked !== true)
             throw new Error(
               'Add product packaging or confirm it is sold unpackaged.',
@@ -4899,6 +4910,7 @@ export default async (req: Request, context: Context) => {
         const original = state.sales.find(
           (s) => s.id === data.id && !s.refundOf,
         )
+        if (original?.externalSource) throw new Error('Imported sales are reporting-only. Correct the source import instead of posting a manual refund.')
         if (!original || state.sales.some((s) => s.refundOf === original.id))
           throw new Error('Sale is unavailable or already refunded.')
         const refund = {
