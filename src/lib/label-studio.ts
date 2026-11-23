@@ -1,3 +1,4 @@
+import { labelFontExtents } from './label-font-extents'
 import type { LabelLayout } from './label-sets'
 import { libraryArtwork, withLibraryArtwork } from './artwork-library'
 import type { LabelFont } from './label-font-catalog'
@@ -137,6 +138,9 @@ export type LabelElement = {
   condition?: 'always' | 'nonempty' | 'batch' | 'allergens'
   font: string
   fontSize: number
+  /** Opt-in presentation only; fontSize remains the selected maximum. */
+  autoFit?: boolean
+  minimumFontSize?: number
   bold: boolean
   italic: boolean
   underline: boolean
@@ -842,7 +846,7 @@ export function labelTextLines(
   measure = (text: string, font: string, bold = e.bold) =>
     measureLabelText({ ...e, font, bold }, text),
 ): LabelTextRun[][] {
-  const ingredients = e.binding === 'recipe.ingredients'
+  const ingredients = e.binding === 'recipe.ingredients' || !!e.autoFit
   if (!ingredients && (!e.textRuns || e.binding))
     return wrapLabelText(
       elementText(e, data),
@@ -919,6 +923,177 @@ export function labelTextLines(
     return runs
   })
 }
+export function ingredientFontExtents(e: LabelElement) {
+  const extents = [e.font, ...(e.textRuns || []).map((run) => run.font)].map(
+    (name) => {
+      const font = labelFonts.find((f) => f.name === name)
+      const metrics =
+        labelFontMetrics[name] || labelFontMetrics[font?.file || '']
+      const boldMetrics =
+        labelFontMetrics[name + '-bold'] ||
+        labelFontMetrics[(font?.file || '') + '-bold']
+      const regular = labelFontExtents[font?.file || name]
+      const bold = labelFontExtents[(font?.file || name) + '-bold']
+      return {
+        ascent: Math.max(
+          regular?.ascent || metrics?.__ascent || 1.5,
+          bold?.ascent || boldMetrics?.__ascent || 0,
+        ),
+        descent: Math.max(
+          regular?.descent || metrics?.__descent || 0.5,
+          bold?.descent || boldMetrics?.__descent || 0,
+        ),
+      }
+    },
+  )
+  return {
+    ascent: Math.max(...extents.map((e) => e.ascent)),
+    descent: Math.max(...extents.map((e) => e.descent)),
+  }
+}
+export function labelTextBaseline(e: LabelElement) {
+  return e.fontSize * (e.autoFit ? ingredientFontExtents(e).ascent : 1)
+}
+
+export const ingredientOverflowMessage =
+  'Ingredient list does not fit at the minimum text size. Enlarge the ingredient box or choose a larger label.'
+
+/** Resolve on every render, never write the fitted size back to a saved design.
+ * One point inset keeps glyphs clear of the text box edge on physical output.
+ * Font advances come from the same loaded font metrics used by SVG output.
+ */
+export function fitIngredientText(source: LabelElement, data: LabelData) {
+  if (!source.autoFit || source.type !== 'text')
+    return { element: source, overflow: false }
+  const minimum = source.minimumFontSize
+  const extents = ingredientFontExtents(source)
+  const inset = 1
+  const candidate = (fontSize: number): LabelElement => {
+    // Half-em horizontal breathing room also contains glyph side bearings and
+    // the SVG outline used for single-weight bold. It does not change tracking.
+    const horizontal = Math.max(inset, fontSize * 0.5)
+    const radians = (source.rotation * Math.PI) / 180
+    return {
+      ...source,
+      fontSize,
+      x: source.x + horizontal * Math.cos(radians) - inset * Math.sin(radians),
+      y: source.y + horizontal * Math.sin(radians) + inset * Math.cos(radians),
+      width: Math.max(0, source.width - horizontal * 2),
+      height: Math.max(0, source.height - inset * 2),
+      lineHeight: Math.max(extents.ascent + extents.descent, source.lineHeight),
+      textCase: 'none',
+    }
+  }
+  const fits = (e: LabelElement) => {
+    const runs = labelTextRuns(e, data)
+    if (
+      runs.some((run) => {
+        const bold = run.bold ?? e.bold
+        const font = labelFonts.find((f) => f.name === run.font)
+        const metrics =
+          labelFontMetrics[run.font + (bold ? '-bold' : '')] ||
+          labelFontMetrics[
+            (font?.file || run.font) +
+              (bold && font?.weights.includes(700) ? '-bold' : '')
+          ] ||
+          labelFontMetrics[run.font]
+        return (
+          !metrics ||
+          Array.from(run.text).some(
+            (c) =>
+              c !== '\n' && !Object.hasOwn(metrics, String(c.codePointAt(0))),
+          )
+        )
+      })
+    )
+      return false
+    const lines = labelTextLines(e, data)
+    return (
+      e.width > 0 &&
+      e.height > 0 &&
+      lines.length * e.fontSize * e.lineHeight <= e.height &&
+      lines.every(
+        (line) =>
+          line.reduce(
+            (n, run) =>
+              n +
+              measureLabelText(
+                {
+                  ...e,
+                  font: run.font,
+                  bold: run.bold ?? e.bold,
+                  letterSpacing: 0,
+                },
+                run.text,
+              ),
+            0,
+          ) +
+            Math.max(
+              0,
+              Array.from(line.map((r) => r.text).join('')).length - 1,
+            ) *
+              e.letterSpacing <=
+          e.width,
+      )
+    )
+  }
+  if (!minimum || minimum < 1 || minimum > source.fontSize)
+    return { element: candidate(source.fontSize), overflow: true }
+  if (fits(candidate(source.fontSize)))
+    return { element: candidate(source.fontSize), overflow: false }
+  if (!fits(candidate(minimum)))
+    return { element: candidate(minimum), overflow: true }
+  let low = minimum,
+    high = source.fontSize
+  for (let i = 0; i < 16; i++) {
+    const mid = (low + high) / 2
+    if (fits(candidate(mid))) low = mid
+    else high = mid
+  }
+  return {
+    element: candidate(Math.max(minimum, Math.floor(low * 1000) / 1000)),
+    overflow: false,
+  }
+}
+
+/** Auto-fitted ingredient boxes must remain within the existing ⅛-inch safe area. */
+export function ingredientTextOverflow(
+  d: LabelDocument,
+  e: LabelElement,
+  data: LabelData,
+) {
+  if (!e.autoFit || !elementVisible(e, data)) return false
+  const angle = (e.rotation * Math.PI) / 180
+  const corners = [
+    [0, 0],
+    [e.width, 0],
+    [0, e.height],
+    [e.width, e.height],
+  ].map(([x, y]) => ({
+    x: e.x + x * Math.cos(angle) - y * Math.sin(angle),
+    y: e.y + x * Math.sin(angle) + y * Math.cos(angle),
+  }))
+  return (
+    fitIngredientText(e, data).overflow ||
+    corners.some(
+      ({ x, y }) =>
+        x < 9 ||
+        y < 9 ||
+        x > d.width - 9 ||
+        y > d.height - 9 ||
+        (d.round &&
+          Math.pow((x - d.width / 2) / (d.width / 2 - 9), 2) +
+            Math.pow((y - d.height / 2) / (d.height / 2 - 9), 2) >
+            1),
+    )
+  )
+}
+
+export function assertIngredientFit(d: LabelDocument, data: LabelData) {
+  if (d.elements.some((e) => ingredientTextOverflow(d, e, data)))
+    throw new Error(ingredientOverflowMessage)
+}
+
 export function checkLabel(
   d: LabelDocument,
   data: LabelData,
@@ -926,7 +1101,13 @@ export function checkLabel(
   customFonts: LabelFont[] = [],
   requiredElements: LabelElement[] = d.elements,
 ) {
-  const issues = [...data.warnings],
+  const fitIssues: string[] = []
+  try {
+    assertIngredientFit(d, data)
+  } catch {
+    fitIssues.push(ingredientOverflowMessage)
+  }
+  const issues = [...data.warnings, ...fitIssues],
     visible = d.elements.filter((e) => elementVisible(e, data)),
     has = (binding: string) =>
       requiredElements.some(
@@ -1102,6 +1283,27 @@ export function validateLabelDocument(
       throw new Error('Invalid color opacity.')
   const ids = new Set<string>()
   for (const e of input.elements) {
+    if (e.autoFit !== undefined && typeof e.autoFit !== 'boolean')
+      throw new Error('Invalid auto-fit setting.')
+    if (
+      e.minimumFontSize !== undefined &&
+      (typeof e.minimumFontSize !== 'number' ||
+        !Number.isFinite(e.minimumFontSize) ||
+        e.minimumFontSize < 1 ||
+        e.minimumFontSize > 300)
+    )
+      throw new Error(
+        'Choose a minimum text size between 1 and 300 pt for this design.',
+      )
+    if (
+      e.autoFit &&
+      (e.type !== 'text' ||
+        !e.minimumFontSize ||
+        e.minimumFontSize > e.fontSize)
+    )
+      throw new Error(
+        'Set the minimum text size at or below the selected font size.',
+      )
     if (e.binding === 'product.icon') e.binding = 'product.graphic'
     if (typeof e.id !== 'string' || ids.has(e.id))
       throw new Error('Label elements need unique IDs.')

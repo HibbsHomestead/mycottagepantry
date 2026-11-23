@@ -123,7 +123,6 @@ function DescriptionDraft({
         <label htmlFor={id}>
           Product description <small>(customer-facing)</small>
         </label>
-
       </div>
       <textarea
         id={id}
@@ -134,27 +133,27 @@ function DescriptionDraft({
         onChange={(e) => change(field, e.target.value)}
       />
       <div className="description-generate-row">
+        <p className="form-hint">
+          For future customer use. Saving does not publish this text. Keep
+          required ingredient and allergen labeling separate.
+        </p>
         <TooltipProvider>
           <ActionTip label="Generate description">
             <button
               type="button"
-              className="btn secondary responsive-action"
+              className="btn secondary description-generate-button"
               aria-label="Generate description"
               disabled={disabled || busy || !product.name?.trim()}
               onClick={generate}
             >
               <Sparkles size={18} aria-hidden="true" />
-              <span className="responsive-action-label">
+              <span className="description-generate-label">
                 Generate description
               </span>
             </button>
           </ActionTip>
         </TooltipProvider>
       </div>
-      <p className="form-hint">
-        For future customer use. Saving does not publish this text. Keep
-        required ingredient and allergen labeling separate.
-      </p>
       {restore && (
         <button
           type="button"

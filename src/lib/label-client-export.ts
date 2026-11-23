@@ -1,7 +1,40 @@
+import { labelFontMetrics } from './label-font-metrics'
 import { libraryArtwork, withLibraryArtwork } from './artwork-library'
-import { type LabelFont, fontFileUrl } from './label-font-catalog'
+import { type LabelFont, fontFileUrl, fontFaceKey } from './label-font-catalog'
 import { labelFonts, type LabelDocument } from './label-studio'
 import type { Item } from './domain'
+/** Load real custom/online font advances before laying out a saved auto-fit design. */
+export async function loadLabelFitMetrics(
+  d: LabelDocument,
+  customFonts: LabelFont[] = [],
+) {
+  let changed = false
+  const elements = [...d.elements, ...(d.back?.elements || [])].filter(
+    (e) => e.autoFit,
+  )
+  const names = new Set(
+    elements.flatMap((e) => [e.font, ...(e.textRuns || []).map((r) => r.font)]),
+  )
+  for (const font of [...labelFonts, ...customFonts].filter(
+    (f) => names.has(f.name) && f.source !== 'bundled',
+  )) {
+    for (const bold of [false, true]) {
+      const key = fontFaceKey(font, bold)
+      if (!labelFontMetrics[key]?.__ascent) {
+        const response = await fetch(fontFileUrl(key) + '&metrics=1&layout=2')
+        if (!response.ok)
+          throw new Error(
+            'The ingredient font could not load. Try again before printing or exporting.',
+          )
+        labelFontMetrics[key] = await response.json()
+        changed = true
+      }
+      labelFontMetrics[font.name + (bold ? '-bold' : '')] =
+        labelFontMetrics[key]
+    }
+  }
+  return changed
+}
 export async function assetPng(asset: Item): Promise<Uint8Array> {
   const original = libraryArtwork(asset.id)
   if (original) {

@@ -44,6 +44,10 @@ const fields = z.object({
   sourceMayContain: z.string().max(6000).optional(),
   packagePrice: z.number().finite().nonnegative().optional(),
   currency: z.string().max(10).optional(),
+  amountPerPackage: z.number().finite().positive().optional(),
+  unit: z.string().max(20).optional(),
+  packageRelationship: z.string().max(6000).optional(),
+  priceBasisQuantity: z.number().finite().positive().optional(),
   purchaseQuantity: z.number().finite().positive().optional(),
   purchaseUnit: z.string().max(20).optional(),
 })

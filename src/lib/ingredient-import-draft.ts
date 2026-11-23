@@ -26,6 +26,12 @@ export function ingredientImportFields(
 ) {
   const mapped = { ...fields }
   delete mapped.packageSize
+  if (fields.amountPerPackage != null && fields.purchaseUnit && fields.unit) {
+    // Explicit counted package: retain its purchase type and stock basis even
+    // when the new editor starts with a default weight unit.
+    delete mapped.purchaseQuantity
+    return mapped
+  }
   if (packageSetup) {
     delete mapped.purchaseQuantity
     delete mapped.purchaseUnit

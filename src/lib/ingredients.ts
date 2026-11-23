@@ -17,6 +17,7 @@ import {
   validateDate,
   allergens,
   effectiveRecipeLines,
+  effectiveProductionSupplies,
   type Item,
 } from './domain'
 export type IngredientPurchaseOffer = {
@@ -535,9 +536,10 @@ export function affectedRecipes(
     for (const r of recipes)
       if (
         !affected.has(r.id) &&
-        effectiveRecipeLines(r, recipes).some((l: any) =>
-          ids.has(l.ingredientId),
-        )
+        [
+          ...effectiveRecipeLines(r, recipes),
+          ...effectiveProductionSupplies(r, recipes),
+        ].some((l: any) => ids.has(l.ingredientId))
       ) {
         affected.add(r.id)
         changed = true

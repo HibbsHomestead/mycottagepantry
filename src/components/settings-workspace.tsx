@@ -1,9 +1,10 @@
-import { FormErrorNotice } from './form-error-notice'
-import { SectionNavigation } from './section-navigation'
-import { billingRequest } from '@/lib/billing-client'
-import { CategoryTaxSettings } from './product-categories'
-import { StripeOwnerBilling } from './stripe-owner-billing'
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import type { ReactNode } from "react";
+import { FormErrorNotice } from "./form-error-notice";
+import { SectionNavigation } from "./section-navigation";
+import { billingRequest } from "@/lib/billing-client";
+import { CategoryTaxSettings } from "./product-categories";
+import { StripeOwnerBilling } from "./stripe-owner-billing";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Palette,
   Sun,
@@ -21,13 +22,13 @@ import {
   Database,
   ArrowRight,
   CreditCard,
-} from 'lucide-react'
+} from "lucide-react";
 import {
   accentThemes,
   appearanceVariables,
   defaultAppearance,
   type Appearance,
-} from '@/lib/appearance'
+} from "@/lib/appearance";
 import {
   applicableTaxes,
   money,
@@ -35,26 +36,26 @@ import {
   unitLabel,
   type Item,
   type Workspace,
-} from '@/lib/domain'
-import { TaxRateEditor } from './financial-editors'
+} from "@/lib/domain";
+import { TaxRateEditor } from "./financial-editors";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from './ui/dropdown-menu'
+} from "./ui/dropdown-menu";
 export const settingsSections = [
-  'Business Profile',
-  'Billing & Subscription',
-  'Appearance',
-  'Units & Costing Defaults',
-  'Inventory Rules',
-  'Taxes',
-  'Data Import & Export',
-  'Integrations',
-  'Team & Roles',
-  'Backup / Data Management',
-]
+  "Business Profile",
+  "Billing & Subscription",
+  "Appearance",
+  "Units & Costing Defaults",
+  "Inventory Rules",
+  "Taxes",
+  "Data Import & Export",
+  "Integrations",
+  "Team & Roles",
+  "Backup / Data Management",
+];
 const icons = [
   Building2,
   CreditCard,
@@ -66,7 +67,7 @@ const icons = [
   Plug,
   ShieldCheck,
   Database,
-]
+];
 export function SettingsWorkspace({
   workspace: w,
   section,
@@ -83,56 +84,60 @@ export function SettingsWorkspace({
   canSave,
   openTaxReports,
   isOwner,
+  squareIntegration,
 }: {
-  workspace: Workspace
-  isOwner?: boolean
-  openTaxReports?: () => void
-  section: string
-  go: (section: string) => void
-  open: (kind: string, item?: Item) => void
-  appearance: Appearance
-  preview: (a: Appearance) => void
-  saveAppearance: () => Promise<void>
-  saveBusiness: (item: Item) => Promise<void>
-  onCategoryConfig?: (patch: Partial<Item>) => void
-  exportData: (type: string, template?: boolean) => void
-  backup: () => void
-  busy: boolean
-  canSave: boolean
+  workspace: Workspace;
+  squareIntegration?: ReactNode;
+  isOwner?: boolean;
+  openTaxReports?: () => void;
+  section: string;
+  go: (section: string) => void;
+  open: (kind: string, item?: Item) => void;
+  appearance: Appearance;
+  preview: (a: Appearance) => void;
+  saveAppearance: () => Promise<void>;
+  saveBusiness: (item: Item) => Promise<void>;
+  onCategoryConfig?: (patch: Partial<Item>) => void;
+  exportData: (type: string, template?: boolean) => void;
+  backup: () => void;
+  busy: boolean;
+  canSave: boolean;
 }) {
   const business = w.settings[0],
-    selected = settingsSections.includes(section) ? section : 'Business Profile'
+    selected = settingsSections.includes(section)
+      ? section
+      : "Business Profile";
   const [rates, setRates] = useState(
       business.taxRates ??
-        applicableTaxes({ id: 'default', name: '' }, business),
+        applicableTaxes({ id: "default", name: "" }, business),
     ),
-    [error, setError] = useState(''),
-    [savedSection, setSavedSection] = useState(''),
-    [savedAppearance, setSavedAppearance] = useState(''),
-    [saving, setSaving] = useState(false)
-  const taxDraftDirty = useRef(false)
+    [error, setError] = useState(""),
+    [savedSection, setSavedSection] = useState(""),
+    [savedAppearance, setSavedAppearance] = useState(""),
+    [saving, setSaving] = useState(false);
+  const taxDraftDirty = useRef(false);
   useEffect(() => {
-    if (taxDraftDirty.current) return
+    if (taxDraftDirty.current) return;
     setRates(
       business.taxRates ??
-        applicableTaxes({ id: 'default', name: '' }, business),
-    )
-  }, [business])
+        applicableTaxes({ id: "default", name: "" }, business),
+    );
+  }, [business]);
   const save = async (fn: () => Promise<void>) => {
     try {
-      setError('')
-      setSavedSection('')
-      setSaving(true)
-      await fn()
-      setSavedSection(selected)
-      setSavedAppearance(`${appearance.theme}:${appearance.mode}`)
-      if (selected === 'Taxes') taxDraftDirty.current = false
+      setError("");
+      setSavedSection("");
+      setSaving(true);
+      await fn();
+      setSavedSection(selected);
+      setSavedAppearance(`${appearance.theme}:${appearance.mode}`);
+      if (selected === "Taxes") taxDraftDirty.current = false;
     } catch (e) {
-      setError((e as Error).message)
+      setError((e as Error).message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
   return (
     <div className="settings-workspace">
       <SectionNavigation name="Settings" active={selected}>
@@ -142,24 +147,24 @@ export function SettingsWorkspace({
           </a>
         )}
         {settingsSections.map((s, i) => {
-          const Icon = icons[i]
+          const Icon = icons[i];
           return (
             <button
               key={s}
-              className={selected === s ? 'active' : ''}
-              aria-current={selected === s ? 'page' : undefined}
+              className={selected === s ? "active" : ""}
+              aria-current={selected === s ? "page" : undefined}
               onClick={() => go(s)}
             >
               <Icon size={18} />
               {s}
             </button>
-          )
+          );
         })}
       </SectionNavigation>
       <div className="settings-content">
         <section className="panel settings-section">
           <h2>{selected}</h2>
-          {selected === 'Billing & Subscription' &&
+          {selected === "Billing & Subscription" &&
             (isOwner ? (
               <StripeOwnerBilling embedded />
             ) : (
@@ -168,7 +173,7 @@ export function SettingsWorkspace({
                 section to manage the subscription, payment method and invoices.
               </p>
             ))}
-          {selected === 'Appearance' && (
+          {selected === "Appearance" && (
             <>
               <p>A little more you. Choose your oven color and display mode.</p>
               <fieldset className="theme-options">
@@ -176,7 +181,7 @@ export function SettingsWorkspace({
                 <div className="theme-swatch-grid">
                   {accentThemes.map((t) => (
                     <label
-                      className={`theme-swatch ${appearance.theme === t.id ? 'selected' : ''}`}
+                      className={`theme-swatch ${appearance.theme === t.id ? "selected" : ""}`}
                       key={t.id}
                     >
                       <input
@@ -190,8 +195,8 @@ export function SettingsWorkspace({
                         className="swatch-colors"
                         style={
                           {
-                            '--swatch': t.primary,
-                            '--swatch-soft': t.accent,
+                            "--swatch": t.primary,
+                            "--swatch-soft": t.accent,
                           } as CSSProperties
                         }
                       >
@@ -207,12 +212,12 @@ export function SettingsWorkspace({
                 <legend>Display mode</legend>
                 <div>
                   {[
-                    { id: 'light', name: 'Light', icon: Sun },
-                    { id: 'dark', name: 'Dark', icon: Moon },
-                    { id: 'system', name: 'System', icon: Monitor },
+                    { id: "light", name: "Light", icon: Sun },
+                    { id: "dark", name: "Dark", icon: Moon },
+                    { id: "system", name: "System", icon: Monitor },
                   ].map(({ id, name, icon: Icon }) => (
                     <label
-                      className={appearance.mode === id ? 'selected' : ''}
+                      className={appearance.mode === id ? "selected" : ""}
                       key={id}
                     >
                       <input
@@ -223,7 +228,7 @@ export function SettingsWorkspace({
                         onChange={() =>
                           preview({
                             ...appearance,
-                            mode: id as Appearance['mode'],
+                            mode: id as Appearance["mode"],
                           })
                         }
                       />
@@ -238,8 +243,8 @@ export function SettingsWorkspace({
                 style={
                   appearanceVariables(
                     appearance,
-                    typeof window !== 'undefined' &&
-                      !!window.matchMedia?.('(prefers-color-scheme: dark)')
+                    typeof window !== "undefined" &&
+                      !!window.matchMedia?.("(prefers-color-scheme: dark)")
                         .matches,
                   ) as CSSProperties
                 }
@@ -267,8 +272,8 @@ export function SettingsWorkspace({
               <div className="appearance-footer">
                 <p>
                   {canSave
-                    ? 'Preview appearance changes here, then save them to your oven.'
-                    : 'This device remembers your appearance for startup. Oven changes require an authorized connection.'}
+                    ? "Preview appearance changes here, then save them to your oven."
+                    : "This device remembers your appearance for startup. Oven changes require an authorized connection."}
                 </p>
                 <button
                   className="btn secondary"
@@ -293,7 +298,7 @@ export function SettingsWorkspace({
                   disabled={busy || saving || !canSave}
                   onClick={() => save(saveAppearance)}
                 >
-                  {busy || saving ? 'Saving…' : 'Save appearance'}
+                  {busy || saving ? "Saving…" : "Save appearance"}
                 </button>
               </div>
               {!canSave && (
@@ -303,35 +308,35 @@ export function SettingsWorkspace({
               )}
             </>
           )}
-          {selected === 'Business Profile' && (
+          {selected === "Business Profile" && (
             <>
               <p>
                 Your business details, used across your oven and printed labels.
               </p>
               <dl className="business-details">
                 {[
-                  ['Business', business.name],
-                  ['Owner', business.owner],
-                  ['Email', business.email],
-                  ['Address', business.address],
-                  ['Jurisdiction', business.jurisdiction],
-                  ['Oven timezone', business.timezone || 'America/Chicago'],
+                  ["Business", business.name],
+                  ["Owner", business.owner],
+                  ["Email", business.email],
+                  ["Address", business.address],
+                  ["Jurisdiction", business.jurisdiction],
+                  ["Oven timezone", business.timezone || "America/Chicago"],
                 ].map(([k, v]) => (
                   <div key={k}>
                     <dt>{k}</dt>
-                    <dd>{v || 'Not set'}</dd>
+                    <dd>{v || "Not set"}</dd>
                   </div>
                 ))}
               </dl>
               <button
                 className="btn"
-                onClick={() => open('settings', business)}
+                onClick={() => open("settings", business)}
               >
                 Edit business profile
               </button>
             </>
           )}
-          {selected === 'Units & Costing Defaults' && (
+          {selected === "Units & Costing Defaults" && (
             <>
               <p>
                 Start every new recipe with consistent labor, overhead, and
@@ -349,7 +354,7 @@ export function SettingsWorkspace({
                 <div>
                   <small>Overhead</small>
                   <strong>{money(business.defaultOverhead || 0)}</strong>
-                  <small>{business.overheadMode || 'per batch'}</small>
+                  <small>{business.overheadMode || "per batch"}</small>
                 </div>
               </div>
               <div className="info-banner">
@@ -362,13 +367,13 @@ export function SettingsWorkspace({
               </div>
               <button
                 className="btn"
-                onClick={() => open('settings', business)}
+                onClick={() => open("settings", business)}
               >
                 Edit costing defaults
               </button>
               <details className="setting-disclosure">
                 <summary>Supported measurement units</summary>
-                {['weight', 'volume', 'count'].map((category) => (
+                {["weight", "volume", "count"].map((category) => (
                   <p key={category}>
                     <strong>{category}: </strong>
                     {Object.entries(units)
@@ -376,14 +381,14 @@ export function SettingsWorkspace({
                         ([, u]) => u.category === category && u.factor > 0,
                       )
                       .map(([id]) => unitLabel(id))
-                      .join(', ')}
+                      .join(", ")}
                   </p>
                 ))}
                 <p>
-                  Package labels:{' '}
+                  Package labels:{" "}
                   {Object.keys(units)
                     .filter((id) => units[id].factor === 0)
-                    .join(', ')}
+                    .join(", ")}
                   . Define verified contents per item, such as 1 bottle = 1 US
                   gallon and 1 case = 4 bottles. Packages have no universal
                   size.
@@ -409,7 +414,7 @@ export function SettingsWorkspace({
               </details>
             </>
           )}
-          {selected === 'Inventory Rules' && (
+          {selected === "Inventory Rules" && (
             <>
               <p>
                 Stock changes stay traceable, from receiving to completed
@@ -417,10 +422,10 @@ export function SettingsWorkspace({
               </p>
               <div className="rule-list">
                 {[
-                  'Receipts update weighted-average inventory costs.',
-                  'Batch completion deducts actual ingredients and tracked packaging.',
-                  'Stock changes always create a ledger entry.',
-                  'Reorder points and packaging tracking are configured per item.',
+                  "Receipts update weighted-average inventory costs.",
+                  "Batch completion deducts actual ingredients and tracked packaging.",
+                  "Stock changes always create a ledger entry.",
+                  "Reorder points and packaging tracking are configured per item.",
                 ].map((r) => (
                   <p key={r}>
                     <Check size={18} />
@@ -428,12 +433,12 @@ export function SettingsWorkspace({
                   </p>
                 ))}
               </div>
-              <button className="btn" onClick={() => open('receive-picker')}>
+              <button className="btn" onClick={() => open("receive-picker")}>
                 Receive stock
               </button>
             </>
           )}
-          {selected === 'Taxes' && (
+          {selected === "Taxes" && (
             <>
               <CategoryTaxSettings
                 business={business}
@@ -449,9 +454,9 @@ export function SettingsWorkspace({
                 business={business}
                 rates={rates}
                 onChange={(next) => {
-                  taxDraftDirty.current = true
-                  setSavedSection('')
-                  setRates(next)
+                  taxDraftDirty.current = true;
+                  setSavedSection("");
+                  setRates(next);
                 }}
               />
               <FormErrorNotice message={error} />
@@ -462,11 +467,11 @@ export function SettingsWorkspace({
                   save(() => saveBusiness({ ...business, taxRates: rates }))
                 }
               >
-                {busy || saving ? 'Saving…' : 'Save tax rates'}
+                {busy || saving ? "Saving…" : "Save tax rates"}
               </button>
             </>
           )}
-          {selected === 'Data Import & Export' && (
+          {selected === "Data Import & Export" && (
             <>
               <p>Move your records in clear, familiar CSV files.</p>
               <div className="data-action-grid">
@@ -477,7 +482,7 @@ export function SettingsWorkspace({
                     Import ingredients, recipes, products, sales, or expenses.
                     CSV · up to 500 rows.
                   </p>
-                  <button className="btn" onClick={() => open('import')}>
+                  <button className="btn" onClick={() => open("import")}>
                     Choose a CSV file
                   </button>
                 </div>
@@ -512,8 +517,9 @@ export function SettingsWorkspace({
               </div>
             </>
           )}
-          {selected === 'Integrations' && (
+          {selected === "Integrations" && (
             <>
+              {squareIntegration}
               <div className="integration-row">
                 <Receipt size={23} aria-hidden="true" />
                 <div>
@@ -533,7 +539,7 @@ export function SettingsWorkspace({
               </div>
             </>
           )}
-          {selected === 'Team & Roles' && (
+          {selected === "Team & Roles" && (
             <>
               {isOwner && <TeamAllowance />}
               <p>
@@ -541,31 +547,31 @@ export function SettingsWorkspace({
                 administration are not yet available.
               </p>
               {[
-                'Owner',
-                'Manager',
-                'Production Staff',
-                'Read-only Accountant',
+                "Owner",
+                "Manager",
+                "Production Staff",
+                "Read-only Accountant",
               ].map((role, i) => (
                 <div className="role-row" key={role}>
                   <strong>{role}</strong>
                   <small>
                     {
                       [
-                        'Full oven access',
-                        'Day-to-day management',
-                        'Receiving and production',
-                        'View and export records',
+                        "Full oven access",
+                        "Day-to-day management",
+                        "Receiving and production",
+                        "View and export records",
                       ][i]
                     }
                   </small>
                 </div>
               ))}
-              <button className="btn secondary" onClick={() => open('signin')}>
+              <button className="btn secondary" onClick={() => open("signin")}>
                 Account & sign in
               </button>
             </>
           )}
-          {selected === 'Backup / Data Management' && (
+          {selected === "Backup / Data Management" && (
             <>
               <p>Keep a copy of your records outside this oven.</p>
               <div className="info-banner">
@@ -585,21 +591,21 @@ export function SettingsWorkspace({
           {saving && <p role="status">Saving…</p>}
           {!saving &&
             savedSection === selected &&
-            (selected !== 'Appearance' ||
+            (selected !== "Appearance" ||
               savedAppearance === `${appearance.theme}:${appearance.mode}`) && (
               <p role="status">Saved successfully.</p>
             )}
         </section>
       </div>
     </div>
-  )
+  );
 }
 function DataMenu({
   label,
   onSelect,
 }: {
-  label: string
-  onSelect: (type: string) => void
+  label: string;
+  onSelect: (type: string) => void;
 }) {
   return (
     <DropdownMenu>
@@ -610,7 +616,7 @@ function DataMenu({
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="workspace-menu">
-        {['ingredients', 'recipes', 'products', 'sales', 'expenses'].map(
+        {["ingredients", "recipes", "products", "sales", "expenses"].map(
           (type) => (
             <DropdownMenuItem key={type} onSelect={() => onSelect(type)}>
               {type[0].toUpperCase() + type.slice(1)} · CSV
@@ -619,52 +625,52 @@ function DataMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function TeamAllowance() {
   const [usage, setUsage] = useState<{
-    seatUsage: number
-    includedUsers: number
-  } | null>(null)
-  const [failed, setFailed] = useState(false)
-  const [attempt, setAttempt] = useState(0)
+    seatUsage: number;
+    includedUsers: number;
+  } | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    let active = true
+    let active = true;
     billingRequest()
       .then((data) => {
         if (active) {
           setUsage({
             seatUsage: data.seatUsage,
             includedUsers: data.includedUsers,
-          })
-          setFailed(false)
+          });
+          setFailed(false);
         }
       })
       .catch(() => {
-        if (active) setFailed(true)
-      })
+        if (active) setFailed(true);
+      });
     return () => {
-      active = false
-    }
-  }, [attempt])
+      active = false;
+    };
+  }, [attempt]);
   if (failed)
     return (
       <p role="alert">
-        Team usage could not be loaded.{' '}
+        Team usage could not be loaded.{" "}
         <button type="button" onClick={() => setAttempt((v) => v + 1)}>
           Try again
-        </button>{' '}
+        </button>{" "}
         or <a href="/support">contact support</a>.
       </p>
-    )
-  if (!usage) return <p role="status">Loading team usage…</p>
+    );
+  if (!usage) return <p role="status">Loading team usage…</p>;
   return (
     <p role="status">
       {usage.seatUsage} of {usage.includedUsers} total users, including the
       owner.
       {usage.seatUsage >= usage.includedUsers &&
-        ' This business has reached its user allowance. Existing members remain active. Contact support to review memberships.'}
+        " This business has reached its user allowance. Existing members remain active. Contact support to review memberships."}
     </p>
-  )
+  );
 }

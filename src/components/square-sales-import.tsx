@@ -134,6 +134,7 @@ export function SquareSalesImport({
   }
   return (
     <section className="square-import-access">
+      <a className="btn secondary" href="#Settings/Integrations?integration=Square">Connect / manage Square</a>
       <div className="button-row">
         <button
           className="btn secondary"
@@ -148,7 +149,7 @@ export function SquareSalesImport({
           Import sales
         </button>
         <span>
-          Square CSV · Reporting only · Direct Square connection coming later
+          Square CSV · Reporting only
         </span>
       </div>
       {!!unmatched.length && (

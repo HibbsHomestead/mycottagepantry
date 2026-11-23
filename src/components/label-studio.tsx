@@ -87,7 +87,9 @@ import {
   imageBindings,
   imageBindingNames,
   validateLabelDocument,
+  fitIngredientText,
   labelTextLines,
+  ingredientOverflowMessage,
   type LabelDocument,
   type LabelElement,
   type LabelSource,
@@ -417,9 +419,9 @@ export function LabelStudio({
     ]
     Promise.all(
       keys
-        .filter((key) => !labelFontMetrics[key])
+        .filter((key) => !labelFontMetrics[key]?.__ascent)
         .map(async (key) => {
-          const response = await fetch(fontFileUrl(key) + '&metrics=1')
+          const response = await fetch(fontFileUrl(key) + '&metrics=1&layout=2')
           if (!response.ok)
             throw new Error(
               'A label font could not load. Choose a bundled font or try again before printing.',
@@ -1119,7 +1121,9 @@ export function LabelStudio({
         y: e.y * sy,
         width: e.width * sx,
         height: e.height * sy,
-        fontSize: Math.max(1, e.fontSize * Math.min(sx, sy)),
+        fontSize: e.autoFit
+          ? e.fontSize
+          : Math.max(1, e.fontSize * Math.min(sx, sy)),
       })),
     })
   }
@@ -2930,6 +2934,77 @@ export function LabelStudio({
                         )}
                       {element.type === 'shape' &&
                         elementColor('Shape fill', 'fill', 'fillOpacity', true)}
+                      {element.type === 'text' &&
+                        (element.binding === 'recipe.ingredients' ||
+                          (!element.binding &&
+                            /^\s*ingredients\s*:/i.test(element.text)) ||
+                          element.autoFit) && (
+                          <section aria-label="Ingredient text fitting">
+                            <label className="studio-review">
+                              <input
+                                type="checkbox"
+                                checked={!!element.autoFit}
+                                disabled={element.locked}
+                                onChange={(e) =>
+                                  patchElement({
+                                    autoFit: e.target.checked,
+                                    ...(e.target.checked &&
+                                    !element.minimumFontSize
+                                      ? {
+                                          minimumFontSize: element.fontSize,
+                                        }
+                                      : {}),
+                                  })
+                                }
+                              />
+                              Auto-fit text
+                            </label>
+                            {element.autoFit && (
+                              <>
+                                <Control label="Minimum text size for this design (pt)">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={element.fontSize}
+                                    step={0.1}
+                                    value={element.minimumFontSize ?? ''}
+                                    disabled={element.locked}
+                                    onChange={(e) =>
+                                      patchElement({
+                                        minimumFontSize: Number(e.target.value),
+                                      })
+                                    }
+                                  />
+                                </Control>
+                                <p className="form-hint">
+                                  Set the minimum for your template’s labeling
+                                  requirements. It starts at your selected size;
+                                  lower it only after reviewing font character
+                                  height at actual print size. This is not a
+                                  legal-compliance guarantee.
+                                </p>
+                                <p className="form-hint">
+                                  Keep the ingredient box within the ⅛-inch safe area.
+                                  Fitting reserves glyph padding and the font’s full line height.
+                                </p>
+                                <p role="status">
+                                  Fitted size:{' '}
+                                  {fitIngredientText(
+                                    element,
+                                    data,
+                                  ).element.fontSize.toFixed(3)}{' '}
+                                  pt
+                                  {' · '}Selected size: {element.fontSize} pt
+                                </p>
+                                {fitIngredientText(element, data).overflow && (
+                                  <FormErrorNotice
+                                    message={ingredientOverflowMessage}
+                                  />
+                                )}
+                              </>
+                            )}
+                          </section>
+                        )}
                       <details className="studio-advanced">
                         <summary>Advanced</summary>
                         <div className="studio-advanced-fields">
@@ -3004,27 +3079,30 @@ export function LabelStudio({
                                   ))}
                                 </select>
                               </Control>
-                              <button
-                                className="text-button"
-                                disabled={element.locked}
-                                onClick={() => {
-                                  let size = element.fontSize
-                                  while (
-                                    size > 7 &&
-                                    labelTextLines(
-                                      { ...element, fontSize: size },
-                                      data,
-                                    ).length *
-                                      size *
-                                      element.lineHeight >
-                                      element.height
-                                  )
-                                    size = Math.max(7, size - 0.5)
-                                  patchElement({ fontSize: size })
-                                }}
-                              >
-                                Fit text to box (minimum 7 pt)
-                              </button>
+                              {!element.autoFit &&
+                                element.binding !== 'recipe.ingredients' && (
+                                  <button
+                                    className="text-button"
+                                    disabled={element.locked}
+                                    onClick={() => {
+                                      let size = element.fontSize
+                                      while (
+                                        size > 7 &&
+                                        labelTextLines(
+                                          { ...element, fontSize: size },
+                                          data,
+                                        ).length *
+                                          size *
+                                          element.lineHeight >
+                                          element.height
+                                      )
+                                        size = Math.max(7, size - 0.5)
+                                      patchElement({ fontSize: size })
+                                    }}
+                                  >
+                                    Fit text to box (minimum 7 pt)
+                                  </button>
+                                )}
                               {elementColor(
                                 'Text background',
                                 'fill',
@@ -3781,6 +3859,13 @@ export function LabelStudio({
               <div className="studio-print-layout">
                 <section className="panel studio-print-controls">
                   <h2>Preview and print</h2>
+                  <FormErrorNotice
+                    message={
+                      issues.some((i) => i.includes(ingredientOverflowMessage))
+                        ? ingredientOverflowMessage
+                        : ''
+                    }
+                  />
                   <FormErrorNotice message={error} />
                   {doc.workflowVersion === 1 && (
                     <div className="button-row">

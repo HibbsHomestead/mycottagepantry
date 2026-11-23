@@ -308,7 +308,8 @@ async function handleSingleProduction(
     throw new Error('Explain the waste.')
   const usage: Item[] = []
   let ingredient = 0,
-    packagingCost = 0
+    packagingCost = 0,
+    suppliesCost = 0
   for (const line of result.requirements) {
     const item = (
       line.kind === 'product' ? state.products : state.ingredients
@@ -327,10 +328,13 @@ async function handleSingleProduction(
     if (item.needsCostSetup || item.cost == null)
       throw new Error(`${line.name}: stock cost is incomplete.`)
     const amount = quantity * number(item.cost, 'Stock unit cost')
-    const isPackaging =
-      line.kind === 'ingredient' && item.usedAs === 'packaging'
-    if (isPackaging) packagingCost += amount
-    else ingredient += amount
+    const supplyAmount = Number(line.supplyQuantity || 0) * Number(item.cost)
+    const hasAllocations = ['supplyQuantity', 'packagingQuantity', 'ingredientQuantity'].some(key => Object.hasOwn(line, key))
+    const packageAmount =
+      (hasAllocations ? Number(line.packagingQuantity || 0) : line.kind === 'ingredient' && item.usedAs === 'packaging' ? quantity : 0) * Number(item.cost)
+    suppliesCost += supplyAmount
+    packagingCost += packageAmount
+    ingredient += amount - supplyAmount - packageAmount
     const movementId = `production-${existing.id}-${line.id}`
     const actualLine = {
       ...line,
@@ -386,10 +390,24 @@ async function handleSingleProduction(
       result.multiplier
     : 0
   const total =
-    ingredient + packagingCost + flatPackaging + c.labor + c.overhead + c.waste
+    ingredient +
+    suppliesCost +
+    packagingCost +
+    flatPackaging +
+    c.labor +
+    c.overhead +
+    c.waste
   const snapshot = {
     lines: usage,
     ingredient,
+    suppliesCost,
+    supplies: usage
+      .filter((line) => Number(line.supplyQuantity) > 0)
+      .map((line) => ({
+        ...line,
+        quantity: line.supplyQuantity,
+        cost: line.supplyQuantity * line.unitCost,
+      })),
     packagingCost: packagingCost + flatPackaging,
     laborMinutes: c.laborMinutes,
     laborRate: c.laborRate,

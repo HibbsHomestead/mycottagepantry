@@ -1,0 +1,45 @@
+.url-import-modal {
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 16px;
+  overflow: hidden;
+}
+.url-import-modal > header {
+  padding-right: 32px;
+  flex: none;
+}
+.url-import-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.url-import-modal .product-import-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface, #fffdf7);
+  padding-block: 14px;
+}
+.url-import-modal .product-import-footer .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.url-import-modal .product-import-footer .button-row .secondary {
+  order: -1;
+}
+@media (max-width: 600px) {
+  .url-import-modal {
+    padding: 16px;
+  }
+  .url-import-modal .product-import-summary {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+  .url-import-modal input {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+.product-import-visible-url { overflow-wrap: anywhere; font-size: .85rem; }

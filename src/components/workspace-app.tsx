@@ -1,3 +1,5 @@
+import { SquareIntegration } from './square-integration'
+import { ProductionSupplies } from './production-supplies'
 import { SquareSalesImport } from './square-sales-import'
 import { DemoBanner } from './demo-banner'
 import { activeDemoSession } from '@/lib/demo-client'
@@ -78,7 +80,7 @@ import { ProductLabelsInfo } from './product-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
 import { componentStock } from '@/lib/recipe-components'
 import { RecipeBaseFields } from './recipe-base-fields'
-import { effectiveRecipeLines, recipeProductionLines } from '@/lib/domain'
+import { effectiveRecipeLines, effectiveProductionSupplies, recipeProductionLines, packagingLines } from '@/lib/domain'
 import { ItemDetailHeader, ItemDetailLayout } from './item-detail-layout'
 import { NetWeightField } from './net-weight-field'
 import { RecipeLineCost } from './recipe-line-cost'
@@ -3332,6 +3334,7 @@ export function WorkspaceApp() {
               {page === 'Baking Converter' && <BakingConverter ready={ready} canSave={ready && ['Owner', 'Manager'].includes(role)} ingredients={state.ingredients || []} />}
               {page === 'Settings' && (
                 <SettingsWorkspace
+                  squareIntegration={<SquareIntegration allowed={ready && role === 'Owner' && !demo} onWorkspace={setState} />}
                   openTaxReports={() => go('Finances', 'Tax center')}
                   isOwner={ready && role === 'Owner'}
                   workspace={state}
@@ -3693,7 +3696,7 @@ export function WorkspaceApp() {
           ) : (
             <DialogHeader>
               {productDetailReturn &&
-                ['product', 'recipe-detail', 'batch'].includes(modal || '') && (
+                ['recipe-detail', 'batch'].includes(modal || '') && (
                   <button
                     type="button"
                     className="text-button"
@@ -3702,7 +3705,7 @@ export function WorkspaceApp() {
                     Back to product details
                   </button>
                 )}
-              <div className="eyebrow">COTTAGE PANTRY · YOUR OVEN</div>
+              {modal !== 'product' && <div className="eyebrow">COTTAGE PANTRY · YOUR OVEN</div>}
               <DialogTitle>
                 {(
                   {
@@ -4580,6 +4583,7 @@ export function WorkspaceApp() {
                       )
                     })}
                   </section>
+                  <ProductionSupplies recipe={{ ...draft, id: draft.id || 'supply-preview', name: draft.name || 'Recipe', baseRecipe: recipes.find(r => r.id === draft.baseRecipeId) }} items={ingredients} recipes={recipes} change={value => change('productionSupplies', value)} />
                   <section className="recipe-editor-labor">
                     <h3>2 · Labor</h3>
                     <div className="form-grid">
@@ -4609,6 +4613,7 @@ export function WorkspaceApp() {
                         lines,
                       }}
                       ingredients={recipeIngredients}
+                      recipes={recipes}
                       onConversion={(data) => mutate('conversion', 'ingredients', data)}
                     />
                     <section
@@ -4778,6 +4783,7 @@ export function WorkspaceApp() {
                         )
                       }
                     />
+                    {draft.recipeId && effectiveProductionSupplies(recipes.find(r => r.id === draft.recipeId) || { id: '', name: '' }, recipes).some(line => packagingLines(draft as Item).some(pack => pack.ingredientId === line.ingredientId)) && <FormErrorNotice message="Review duplicate usage: the same inventory item appears in production supplies and product packaging. Confirm that both quantities represent separate usage." />}
                     <PackagingEditor
                       product={{
                         ...draft,
@@ -5484,7 +5490,16 @@ export function WorkspaceApp() {
               <div className="form-footer item-dialog-actions">
                 <FormErrorNotice message={formError} />
                 {modal === 'recipe' && selected && <ItemDeleteButton table="recipes" item={selected} draft={formDirty} />}
-                {modal === 'product' && selected && <ItemDeleteButton table="products" item={selected} draft={formDirty} />}
+                {modal === 'product' && (
+                  <div className="product-footer-navigation">
+                    {selected && <ItemDeleteButton table="products" item={selected} draft={formDirty} />}
+                    {productDetailReturn && state.products.some((p) => p.id === productDetailReturn) && (
+                      <button type="button" className="text-button" onClick={returnToProductDetails}>
+                        Back to product details
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <Btn secondary onClick={() => setModal(null)}>
                   Cancel
@@ -6392,7 +6407,9 @@ function RecipeCalculation({
   recipe,
   ingredients,
   onConversion,
+  recipes,
 }: {
+  recipes?: Item[]
   recipe: Item
   ingredients: Item[]
   onConversion?: (data: any) => Promise<void>
@@ -6401,8 +6418,8 @@ function RecipeCalculation({
     warning = ''
   let calculationLines = recipe.lines || []
   try {
-    calculationLines = effectiveRecipeLines(recipe)
-    c = costBreakdown(recipe, ingredients)
+    calculationLines = effectiveRecipeLines(recipe, recipes)
+    c = costBreakdown(recipe, ingredients, { recipes })
   } catch (e) {
     warning = (e as Error).message
   }
@@ -6447,6 +6464,10 @@ function RecipeCalculation({
             <strong>{money(c.ingredient)}</strong>
           </div>
           <div>
+            <span>Production supplies</span>
+            <strong>{money(c.suppliesCost)}</strong>
+          </div>
+          <div>
             <span>Packaging</span>
             <strong>{money(c.packagingCost)}</strong>
           </div>
@@ -6488,7 +6509,7 @@ function RecipeCalculation({
               = {c.waste.toFixed(6)}
             </p>
             <p>
-              Total = {c.ingredient.toFixed(6)} + {c.packagingCost.toFixed(6)} +{' '}
+              Total = {c.ingredient.toFixed(6)} + {c.suppliesCost.toFixed(6)} supplies + {c.packagingCost.toFixed(6)} +{' '}
               {c.labor.toFixed(6)} + {c.overhead.toFixed(6)} +{' '}
               {c.waste.toFixed(6)} = {c.total.toFixed(6)}
             </p>
@@ -6570,6 +6591,7 @@ function PricingSummary({
           {(
             [
               ['Ingredients', c.ingredient / c.packages, 'var(--primary)'],
+              ['Production supplies', c.suppliesCost / c.packages, 'var(--olive)'],
               ['Packaging', c.packagingCost / c.packages, 'var(--info)'],
               ['Labor', c.labor / c.packages, 'var(--warning)'],
               ['Overhead', c.overhead / c.packages, 'var(--muted)'],
@@ -6590,6 +6612,7 @@ function PricingSummary({
         <div className="cost-bar-legend">
           {[
             ['Ingredients', 'var(--primary)'],
+            ['Production supplies', 'var(--olive)'],
             ['Packaging', 'var(--info)'],
             ['Labor', 'var(--warning)'],
             ['Overhead', 'var(--muted)'],
@@ -6613,6 +6636,7 @@ function PricingSummary({
           {(
             [
               ['Ingredients', c.ingredient],
+              ['Production supplies', c.suppliesCost],
               ['Packaging', c.packagingCost],
               ['Labor', c.labor],
               ['Overhead', c.overhead],
@@ -6625,6 +6649,7 @@ function PricingSummary({
               pre-tax revenue
             </p>
           ))}
+          {c.supplies.some((l: Item) => c.packaging.some((p: Item) => p.ingredientId === l.ingredientId)) && <FormErrorNotice>Review duplicate usage: the same inventory item appears in production supplies and product packaging. Both quantities are charged; confirm they represent separate usage.</FormErrorNotice>}
           {c.packaging.map((l: any, index: number) => (
             <p key={index}>
               {l.name}: {l.inventoryQuantity} {l.storageUnit} × $

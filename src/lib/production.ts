@@ -7,6 +7,7 @@ import {
   convert,
   costBreakdown,
   effectiveRecipeLines,
+  effectiveProductionSupplies,
   number,
   packagingLines,
   validateKit,
@@ -49,7 +50,10 @@ function normalizedProductionLines(
   recipes: Item[],
 ) {
   const merged = new Map<string, Item>()
-  for (const line of effectiveRecipeLines(recipe, recipes)) {
+  for (const line of [
+    ...effectiveRecipeLines(recipe, recipes),
+    ...effectiveProductionSupplies(recipe, recipes),
+  ]) {
     const i = ingredients.find((i) => i.id === line.ingredientId)
     if (!i) throw new Error('Ingredient unavailable. Review the recipe inputs.')
     const quantity = convert(line.quantity, line.unit, i.unit, i.conversions)
@@ -70,7 +74,7 @@ function normalizedProductionLines(
 export function productionDefinition(
   product: Item,
   state: Workspace,
-  mapping: Item,
+  mapping: Record<string, any>,
 ): Item {
   const workflow = workflowOf(product)
   if (!['food', 'kit', 'handmade'].includes(workflow))
@@ -154,9 +158,11 @@ export function productionDefinition(
     state.recipes.filter((r) => included.has(r.id)),
   )
   const ids = new Set(
-    [...effectiveRecipeLines(recipe, recipes), ...packagingLines(product)].map(
-      (l) => l.ingredientId,
-    ),
+    [
+      ...effectiveRecipeLines(recipe, recipes),
+      ...effectiveProductionSupplies(recipe, recipes),
+      ...packagingLines(product),
+    ].map((l) => l.ingredientId),
   )
   return {
     id: product.id,
@@ -192,8 +198,15 @@ export function productionRequirements(
   const add = (kind: string, item: Item, q: number, source: Item) => {
     const key = kind + ':' + item.id
     const prior = requirements.find((r) => r.id === key)
-    if (prior) prior.quantity += q
-    else
+    const allocation = source.productionSupply
+      ? 'supplyQuantity'
+      : item.usedAs === 'packaging'
+        ? 'packagingQuantity'
+        : 'ingredientQuantity'
+    if (prior) {
+      prior.quantity += q
+      prior[allocation] = Number(prior[allocation] || 0) + q
+    } else
       requirements.push({
         id: key,
         name: item.name,
@@ -201,9 +214,10 @@ export function productionRequirements(
         itemId: item.id,
         unit: kind === 'product' ? 'package' : item.unit,
         quantity: q,
+        [allocation]: q,
         tracked:
           kind === 'product' ||
-          item.usedAs !== 'packaging' ||
+          !['supply', 'material', 'packaging'].includes(item.usedAs) ||
           item.trackInventory !== false,
         source,
       })
@@ -281,31 +295,31 @@ export function productionRequirements(
         line,
       )
     }
+    const resolvedActualLines: Item[] = normalizedProductionLines(
+      r,
+      inputs,
+      definition.recipes,
+    ).map((line) => {
+      const item = inputs.find((i) => i.id === line.ingredientId)!
+      return {
+        ...line,
+        quantity:
+          (number(
+            actual.usage?.[item.id] ?? line.quantity * multiplier,
+            'Actual use',
+          ) +
+            number(actual.materialWaste?.[item.id] || 0, 'Material waste')) /
+          multiplier,
+      }
+    })
     const actualRecipe = {
       ...r,
       baseRecipeId: undefined,
       baseRecipe: undefined,
-      lines: normalizedProductionLines(r, inputs, definition.recipes).map(
-        (line) => {
-          const i = inputs.find((i) => i.id === line.ingredientId)!
-          return {
-            ...line,
-            unit: i.unit,
-            quantity:
-              (actual.usage?.[i.id] == null
-                ? convert(
-                    line.quantity * multiplier,
-                    line.unit,
-                    i.unit,
-                    i.conversions,
-                  )
-                : number(actual.usage[i.id], 'Actual use')) /
-                multiplier +
-              number(actual.materialWaste?.[i.id] || 0, 'Material waste') /
-                multiplier,
-          }
-        },
+      productionSupplies: resolvedActualLines.filter(
+        (line) => line.productionSupply,
       ),
+      lines: resolvedActualLines.filter((line) => !line.productionSupply),
     }
     // Expand inputs once, while preserving the existing base allocation policy.
     cost = costBreakdown(actualRecipe, inputs, {

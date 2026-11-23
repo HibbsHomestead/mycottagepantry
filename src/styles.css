@@ -3677,7 +3677,7 @@ main > .recipe-grid {
 .recipe-editor-overhead { grid-area: overhead; padding: 18px; align-self: start; }
 .recipe-editor-notes { grid-area: notes; }
 .recipe-editor-summary { display: contents; align-self: start; }
-.recipe-editor-layout { grid-template-areas: 'identity' 'components' 'labor' 'overhead' 'summary' 'notes'; }
+.recipe-editor-layout { grid-template-areas: 'identity' 'components' 'supplies' 'labor' 'overhead' 'summary' 'notes'; }
 .recipe-identity-fields { display: grid; gap: 16px; min-width: 0; }
 .recipe-editor-overhead .form-grid { grid-template-columns: minmax(0, 1fr); }
 .recipe-editor-overhead select { width: 100%; min-width: 0; }
@@ -3686,7 +3686,7 @@ main > .recipe-grid {
 @media (min-width: 1100px) {
   .recipe-editor-layout {
     grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
-    grid-template-areas: 'identity sidebar' 'components sidebar' 'labor sidebar' 'notes sidebar';
+    grid-template-areas: 'identity sidebar' 'components sidebar' 'supplies sidebar' 'labor sidebar' 'notes sidebar';
     align-items: start;
   }
 }
@@ -3891,3 +3891,16 @@ main > .recipe-grid {
 .demo-entry form { display: grid; gap: 10px; margin-block: 10px; text-align: left; }
 .demo-entry label { display: grid; gap: 4px; }
 .demo-entry input { width: 100%; }
+
+.product-footer-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; margin-right: auto; min-width: 0; }
+.editor-product > .form-footer { flex-wrap: wrap; }
+.editor-product > .form-footer > [role="alert"] { flex-basis: 100%; }
+@media (max-width: 540px) {
+  .product-footer-navigation { flex-basis: 100%; }
+}
+
+.production-supplies { min-width: 0; }
+.recipe-editor-layout > .production-supplies { grid-area: supplies; }
+.production-supply-line { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(90px, 1fr) minmax(75px, 1fr) auto; gap: 12px; align-items: end; padding-block: 12px; border-bottom: 1px solid var(--border); }
+.production-supply-line > p { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 600px) { .production-supply-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .production-supply-line > :first-child { grid-column: 1 / -1; } }

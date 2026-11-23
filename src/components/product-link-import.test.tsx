@@ -46,11 +46,11 @@ it('applies only selected fields to the draft, keeps missing fields and requires
   await userEvent.click(screen.getByRole('checkbox', { name: 'Name' }))
   await userEvent.click(screen.getByRole('checkbox', { name: 'Package price' }))
   expect(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   ).toBeDisabled()
   await userEvent.click(screen.getByLabelText(/I approve changing/))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({ name: 'New flour', listedOnlinePrice: 10.95 }),
@@ -64,26 +64,25 @@ it('cancels without altering saved or draft values', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   expect(apply).not.toHaveBeenCalled()
 })
-it('keeps text usable and clears reviewed status when photo import fails', async () => {
+it('keeps text usable without saving an image asset on acceptance', async () => {
   const apply = await open()
   await userEvent.click(
     screen.getByRole('checkbox', {
       name: 'Source ingredient statement',
     }),
   )
-  await userEvent.click(screen.getByLabelText(/Import product photo/))
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ error: 'Unavailable' }, { status: 403 })),
   )
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({ subingredients: 'Wheat flour', reviewed: false }),
   )
   expect(apply.mock.calls[0][0]).not.toHaveProperty('imageAssetId')
-  expect(await screen.findByRole('alert')).toHaveTextContent(/Photo could not/)
+  expect(fetch).not.toHaveBeenCalled()
 })
 it.each([
   [
@@ -176,7 +175,7 @@ it('edits a selected suggestion without applying other fields, and makes the uns
   await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
   await userEvent.click(screen.getByRole('checkbox', { name: 'Name' }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({ name: 'Corrected flour' }),
@@ -212,29 +211,26 @@ it('shows missing price and image without inventing either', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
   await userEvent.click(screen.getByRole('checkbox', { name: 'Name' }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply.mock.calls[0][0]).not.toHaveProperty('packagePrice')
   expect(apply.mock.calls[0][0]).not.toHaveProperty('imageAssetId')
 })
-it('attaches a copied asset only when photo permission is explicitly selected', async () => {
+it('shows the source image without creating a saved asset during review or acceptance', async () => {
   const apply = await open()
+  expect(screen.getByRole('img', { name: /Source product/ })).toHaveAttribute(
+    'src',
+    p.imageUrl,
+  )
+  expect(
+    screen.queryByRole('checkbox', { name: /Import product photo/ }),
+  ).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Name' }))
   await userEvent.click(
-    screen.getByRole('checkbox', { name: /Import product photo/ }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      Response.json({ asset: { id: 'permitted-photo' }, workspace: {} }),
-    ),
-  )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
-  )
-  expect(apply).toHaveBeenCalledWith(
-    expect.objectContaining({ imageAssetId: 'permitted-photo' }),
-  )
-  expect(apply.mock.calls[0][0]).not.toHaveProperty('packagePrice')
+  expect(apply.mock.calls[0][0]).not.toHaveProperty('imageAssetId')
+  expect(fetch).toHaveBeenCalledTimes(1)
 })
 
 it.skipIf(!process.env.TEST_LIVE_RETAILER && !process.env.TEST_RETAILER_HTML)(
@@ -289,7 +285,7 @@ it.skipIf(!process.env.TEST_LIVE_RETAILER && !process.env.TEST_RETAILER_HTML)(
     ])
       await userEvent.click(screen.getByRole('checkbox', { name }))
     await userEvent.click(
-      screen.getByRole('button', { name: 'Apply selected values' }),
+      screen.getByRole('button', { name: 'Accept & use information' }),
     )
     expect(apply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -341,7 +337,7 @@ it('applies available package metadata without overwriting the current price or 
   for (const label of ['Brand', 'Pack count'])
     await userEvent.click(screen.getByRole('checkbox', { name: label }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -544,15 +540,9 @@ it.each([true, false])(
   },
 )
 
-it('keeps an existing extraction review intact when a subsequent Walmart import is blocked', async () => {
+it('preserves the editor when canceling review, then leaves the URL available after a failed retry', async () => {
   const apply = await open()
-  await userEvent.click(screen.getByText('Edit name', { selector: 'summary' }))
-  await userEvent.clear(screen.getByLabelText('Imported name'))
-  await userEvent.type(
-    screen.getByLabelText('Imported name'),
-    'Reviewed flour name',
-  )
-  await userEvent.click(screen.getByRole('checkbox', { name: /^Name$/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
   vi.stubGlobal(
     'fetch',
     vi.fn(async () =>
@@ -572,12 +562,10 @@ it('keeps an existing extraction review intact when a subsequent Walmart import 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     walmartVerificationMessage,
   )
-  expect(screen.getByLabelText('Imported name')).toHaveValue(
-    'Reviewed flour name',
+  expect(screen.getByLabelText('Product URL')).toHaveValue(
+    'https://www.walmart.com/ip/oil/10291484',
   )
-  expect(screen.getByRole('checkbox', { name: /^Name$/ })).toBeChecked()
   expect(apply).not.toHaveBeenCalled()
-  expect(fetch).toHaveBeenCalledTimes(1)
 })
 
 const samsProduct = {
@@ -664,7 +652,7 @@ it('suggests and applies a stable existing vendor ID, keeping brand separate and
     await userEvent.click(screen.getByRole('checkbox', { name }))
   expect(screen.getByText('7 fields selected.')).toBeVisible()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -703,7 +691,7 @@ it('requires a choice for multiple matches and supports searching other existing
   )
   expect(screen.getByRole('checkbox', { name: 'Vendor' })).toBeChecked()
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({ vendorId: 'mill', vendor: 'Local Mill' }),
@@ -726,7 +714,7 @@ it('reuses the same vendor on repeated imports and Apply without requesting vend
     }
     await userEvent.click(screen.getByRole('checkbox', { name: 'Vendor' }))
     await userEvent.click(
-      screen.getByRole('button', { name: 'Apply selected values' }),
+      screen.getByRole('button', { name: 'Accept & use information' }),
     )
   }
   expect(apply.mock.calls.map(([patch]) => patch.vendorId)).toEqual([
@@ -773,22 +761,13 @@ it('does not treat vendor-list failure as no match, and allows retry', async () 
   )
   expect(await screen.findByLabelText('Existing vendor')).toHaveValue('sams')
 })
-it('offers new vendor creation only as an explicit confirmed action', async () => {
+it('keeps vendor creation outside the review so acceptance cannot persist records', async () => {
   const { fetcher } = await vendorReview([])
   expect(screen.getByText(/No matching vendor/)).toBeVisible()
+  expect(
+    screen.queryByRole('button', { name: 'Add new vendor' }),
+  ).not.toBeInTheDocument()
   expect(fetcher.mock.calls).toHaveLength(2)
-  await userEvent.click(screen.getByRole('button', { name: 'Add new vendor' }))
-  expect(fetcher.mock.calls).toHaveLength(2)
-  fetcher.mockImplementation(async () =>
-    Response.json({
-      vendors: [{ id: 'new', name: 'Sam’s Club' }],
-      vendor: { id: 'new' },
-    }),
-  )
-  await userEvent.click(
-    screen.getByRole('button', { name: 'Confirm add vendor' }),
-  )
-  expect(await screen.findByLabelText('Existing vendor')).toHaveValue('new')
 })
 it('preserves collapsed edits, separates identifiers and requires explicit replacement of reviewed wording', async () => {
   const { apply } = await vendorReview([{ id: 'sams', name: 'Sam’s Club' }], {
@@ -797,7 +776,9 @@ it('preserves collapsed edits, separates identifiers and requires explicit repla
   })
   const details = screen.getByText('Source details').closest('details')!
   expect(details).not.toHaveAttribute('open')
-  expect(screen.queryByText(samsProduct.sourceUrl)).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('link', { name: samsProduct.sourceUrl }),
+  ).toBeVisible()
   expect(
     screen.getByLabelText('Imported retailer sku (not barcode)'),
   ).toHaveValue('000123')
@@ -821,13 +802,13 @@ it('preserves collapsed edits, separates identifiers and requires explicit repla
     screen.getByRole('checkbox', { name: 'Source ingredient statement' }),
   )
   expect(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   ).toBeDisabled()
   await userEvent.click(
     screen.getByLabelText(/Replace existing reviewed ingredient/),
   )
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -955,7 +936,7 @@ it.each([
     )
     await userEvent.click(screen.getByRole('checkbox', { name: 'Brand' }))
     await userEvent.click(
-      screen.getByRole('button', { name: 'Apply selected values' }),
+      screen.getByRole('button', { name: 'Accept & use information' }),
     )
     expect(apply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1030,9 +1011,7 @@ it('honors Retry-After, performs only two explicit retries and preserves the com
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Import details' })),
     )
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Upstream unavailable',
-    )
+    expect(screen.getByRole('alert')).toHaveTextContent('Upstream unavailable')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
     await act(async () => vi.advanceTimersByTime(59000))
     expect(fetcher).toHaveBeenCalledTimes(1)

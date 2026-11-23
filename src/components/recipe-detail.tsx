@@ -1,3 +1,4 @@
+import { ProductionSupplies } from './production-supplies'
 import { FormErrorNotice } from './form-error-notice'
 import { ItemCopyButton } from './item-copy'
 import { ItemDeleteButton } from './item-deletion'
@@ -171,6 +172,7 @@ export function RecipeDetail({
                 conversions.
               </p>
             )}
+            <ProductionSupplies recipe={{ ...r, baseRecipe: w.recipes.find(base => base.id === r.baseRecipeId) }} items={w.ingredients} recipes={w.recipes} />
             <details className="recipe-breakdown">
               <summary>Cost breakdown</summary>
               {cost && (
@@ -178,6 +180,7 @@ export function RecipeDetail({
                   <dl>
                     {[
                       ['Ingredients', cost.ingredient],
+                      ['Production supplies', cost.suppliesCost],
                       ['Packaging', cost.packagingCost],
                       ['Labor', cost.labor],
                       ['Overhead', cost.overhead],

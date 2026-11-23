@@ -448,8 +448,9 @@ it('reads the ASIN-matched Amazon product, primary pay price, image and explicit
     retailerSku: 'B0FK3XFMQQ',
     brand: 'Roppolo',
     packagePrice: 31.99,
-    purchaseQuantity: 100,
-    purchaseUnit: 'each',
+    amountPerPackage: 100,
+    purchaseUnit: 'package',
+    unit: 'each',
     packageSize: '100 each',
   })
   expect(result.imageUrl).toContain('m.media-amazon.com')
