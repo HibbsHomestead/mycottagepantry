@@ -758,7 +758,7 @@ export function ProductLinkImport({
     const conflict =
       importValuePresent(current) && String(current) !== String(value);
     return (
-      <li className="product-import-field" key={key}>
+      <li className="product-import-field" data-wide={longText} key={key}>
         <input
           type="checkbox"
           id={`${reviewId}-${key}`}
@@ -1147,7 +1147,8 @@ export function ProductLinkImport({
         }}
       >
         <DialogContent
-          className="url-import-modal"
+          className="product-import url-import-modal"
+          positioning="css"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             requestAnimationFrame(() =>
@@ -1492,76 +1493,66 @@ export function ProductLinkImport({
                   </label>
                 )}
                 <p>{calculation}</p>
-                <footer className="product-import-footer">
-                  <FormErrorNotice message={error} />
-                  {discardReview && (
-                    <div role="alert" className="form-error-notice">
-                      <p>Discard corrections made in this review?</p>
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => {
-                          setDiscardReview(false);
-                        }}
-                      >
-                        Keep reviewing
-                      </button>
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={clearReview}
-                      >
-                        Discard import
-                      </button>
-                    </div>
-                  )}
-                  <p aria-live="polite">
-                    {applicableSelected.length} fields selected.
-                  </p>
-                  <p>
-                    Acceptance fills the unsaved form. Save {itemWord} stores
-                    your changes.
-                  </p>
-                  <div className="button-row">
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={
-                        busy ||
-                        (replacesReviewed && !replaceReviewed) ||
-                        (selected.includes("vendor") && !vendorChoice) ||
-                        !applicableSelected.length ||
-                        (packageSelected && !confirmed) ||
-                        (conditionalPrice && !conditionalPriceConfirmed)
-                      }
-                      onClick={commit}
-                    >
-                      Accept &amp; use information
-                    </button>
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      disabled={busy}
-                      onClick={cancelReview}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </footer>
-              </div>
-            )}
-            {!product && (
-              <div className="button-row">
-                <button
-                  type="button"
-                  className="btn secondary"
-                  onClick={cancelReview}
-                >
-                  Cancel
-                </button>
               </div>
             )}
           </div>
+          <footer className="product-import-footer">
+            <FormErrorNotice message={error} />
+            {discardReview && (
+              <div role="alert" className="form-error-notice">
+                <p>Discard corrections made in this review?</p>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => {
+                    setDiscardReview(false);
+                  }}
+                >
+                  Keep reviewing
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={clearReview}
+                >
+                  Discard import
+                </button>
+              </div>
+            )}
+            <p aria-live="polite">
+              {applicableSelected.length} fields selected.
+            </p>
+            <p>
+              Acceptance fills the unsaved form. Save {itemWord} stores
+              your changes.
+            </p>
+            <div className="button-row">
+              <button
+                type="button"
+                className="btn"
+                disabled={
+                  !product ||
+                  busy ||
+                  (replacesReviewed && !replaceReviewed) ||
+                  (selected.includes("vendor") && !vendorChoice) ||
+                  !applicableSelected.length ||
+                  (packageSelected && !confirmed) ||
+                  (conditionalPrice && !conditionalPriceConfirmed)
+                }
+                onClick={commit}
+              >
+                Accept &amp; use information
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={cancelReview}
+              >
+                Cancel
+              </button>
+            </div>
+          </footer>
         </DialogContent>
       </Dialog>
     </section>

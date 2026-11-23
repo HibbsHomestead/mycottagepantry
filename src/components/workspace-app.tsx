@@ -119,6 +119,13 @@ import { ingredientCreateErrors } from '@/lib/ingredient-create'
 import { InventoryTools } from './inventory-tools'
 import { ShelfLabels } from './shelf-labels'
 import { BarcodeScanner } from './barcode-scanner'
+import { RecipeTypeBadge } from '@/components/recipe-type-badge'
+import {
+  matchesRecipeType,
+  recipeComponentUsage,
+  recipeTypeFilters,
+  type RecipeTypeFilter,
+} from '@/lib/recipe-type'
 import { RecipeDetail } from '@/components/recipe-detail'
 import { ProductLinkImport } from '@/components/product-link-import'
 import { Upload } from 'lucide-react'
@@ -385,6 +392,7 @@ export function WorkspaceApp() {
   const [managingRecipeCategories, setManagingRecipeCategories] =
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
+  const [recipeTypeFilter, setRecipeTypeFilter] = useState<RecipeTypeFilter>('all')
   const [productCategoryFilter, setProductCategoryFilter] = useState('all')
   const [productSort, setProductSort] = useState<ProductSort>('name-asc')
   const saveCatalogView = (
@@ -541,6 +549,9 @@ export function WorkspaceApp() {
     batches = state.batches,
     business = state.settings[0]
   const recipeCategoryOptions = recipeCategories(state)
+  const purchasedRecipeInputs = ingredients.filter(
+    (i) => !i.compoundRecipeId && (!i.usedAs || i.usedAs === 'ingredient'),
+  )
   const recipeIngredients = [...ingredients]
   for (const line of lines) {
     if (
@@ -910,7 +921,7 @@ export function WorkspaceApp() {
     go('Products', 'All Products')
     open('product-detail', product)
   }
-  function open(kind: string, item?: Item, newDraft = false) {
+  function open(kind: string, item?: Item, newDraft = false, prep = false) {
     if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
 
     if (
@@ -1220,7 +1231,8 @@ export function WorkspaceApp() {
                 : recipes[0]?.id,
             productId: kind === 'batch' ? '' : products[0]?.id,
             yield: demo ? 4 : 1,
-            yieldUnit: demo ? 'loaves' : 'each',
+            yieldUnit: prep ? 'each' : demo ? 'loaves' : 'each',
+            ...(kind === 'recipe' ? { compound: prep } : {}),
             laborMinutes: demo ? 25 : 0,
             overhead: business.defaultOverhead ?? 0,
             overheadMode: business.overheadMode || 'batch',
@@ -1242,9 +1254,11 @@ export function WorkspaceApp() {
         demo
           ? { ingredientId: 'flour', quantity: 1200, unit: 'g' }
           : {
-              ingredientId: ingredients[0]?.id || '',
+              ingredientId: (kind === 'recipe' ? purchasedRecipeInputs[0] : ingredients[0])?.id || '',
               quantity: 0,
-              unit: business.measurements === 'metric' ? 'g' : 'oz',
+              unit: kind === 'recipe' && purchasedRecipeInputs[0]?.unit
+                ? purchasedRecipeInputs[0].unit
+                : business.measurements === 'metric' ? 'g' : 'oz',
             },
       ],
     )
@@ -1490,8 +1504,19 @@ export function WorkspaceApp() {
   }
   const filtered = (rows: Item[]) =>
     rows.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+  const componentUsage = recipeComponentUsage(state)
+  const linkedPrepIds = new Set(ingredients.map((i) => i.compoundRecipeId).filter(Boolean))
+  const hasPrepLink = (id: string) => componentUsage.has(id) || linkedPrepIds.has(id)
+  const prepFlagConflicts = recipes.filter(
+    (r) => matchesRecipeType(r, 'recipe') && hasPrepLink(r.id),
+  )
+  const recipeEmptyMessage = {
+    all: 'No recipes or preps match these filters.',
+    recipe: 'No regular recipes match these filters.',
+    prep: 'No compound or prep recipes match these filters.',
+  }[recipeTypeFilter]
   const visibleRecipes = filtered(recipes)
-    .filter((r) => r.workflow !== 'handmade')
+    .filter((r) => matchesRecipeType(r, recipeTypeFilter))
     .filter(
       (r) =>
         recipeCategoryFilter === 'all' ||
@@ -2085,6 +2110,28 @@ export function WorkspaceApp() {
               )}
               {page === 'Recipes' && (
                 <div className="catalog-page">
+                  <div className="recipe-type-navigation">
+                    <div className="recipe-type-filters" role="group" aria-label="Recipe type filter">
+                      {recipeTypeFilters.map(({ value, label }) => (
+                        <button key={value} type="button" aria-pressed={recipeTypeFilter === value} onClick={() => setRecipeTypeFilter(value)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="muted">
+                      <strong>Recipes:</strong> Used to make finished products.{' '}
+                      <strong>Compound &amp; Prep:</strong> Prepared components used inside other recipes.
+                    </p>
+                  </div>
+                  {!!prepFlagConflicts.length && (
+                    <details className="recipe-type-review">
+                      <summary>{prepFlagConflicts.length} recipe type {prepFlagConflicts.length === 1 ? 'needs' : 'need'} review</summary>
+                      <p>These recipes are marked as regular recipes but have prepared stock or component links. Their types and links are unchanged.</p>
+                      <ul>{prepFlagConflicts.map((r) => (
+                        <li key={r.id}><button type="button" className="text-button" onClick={() => open('recipe-detail', r)}>{r.name}</button></li>
+                      ))}</ul>
+                    </details>
+                  )}
                   <div className="catalog-toolbar">
                     <CatalogViewToggle
                       label="Recipes display"
@@ -2092,17 +2139,20 @@ export function WorkspaceApp() {
                       onView={setRecipesView}
                     />
                     <div
-                      className="inventory-tool-actions inventory-primary-actions"
+                      className="inventory-tool-actions inventory-primary-actions recipe-create-actions"
                       role="group"
                       aria-label="Recipe actions"
                     >
-                      <CatalogAction
-                        label="Create recipe"
-                        primary
-                        onClick={() => open('recipe')}
-                      >
-                        <Plus size={21} />
-                      </CatalogAction>
+                      {[recipeTypeFilter === 'prep', recipeTypeFilter !== 'prep'].map((prep, index) => (
+                        <CatalogAction
+                          key={String(prep)}
+                          label={prep ? 'Create compound/prep recipe' : 'Create recipe'}
+                          primary={index === 0}
+                          onClick={() => open('recipe', undefined, false, prep)}
+                        >
+                          <Plus size={21} />
+                        </CatalogAction>
+                      ))}
                       <CatalogAction
                         label="Import recipe"
                         onClick={() => open('recipe-import')}
@@ -2172,6 +2222,7 @@ export function WorkspaceApp() {
                             {[
                               'Photo',
                               'Recipe / prep name',
+                              'Type',
                               'Category',
                               'Yield',
                               'Time',
@@ -2214,6 +2265,7 @@ export function WorkspaceApp() {
                                     {r.name}
                                   </button>
                                 </td>
+                                <td><RecipeTypeBadge recipe={r} /></td>
                                 <td>
                                   {recipeCategoryLabel(
                                     r,
@@ -2248,7 +2300,7 @@ export function WorkspaceApp() {
                           })}
                           {!visibleRecipes.length && (
                             <tr>
-                              <td colSpan={8}>No recipes match this view.</td>
+                              <td colSpan={9}>{recipeEmptyMessage}</td>
                             </tr>
                           )}
                         </tbody>
@@ -2256,6 +2308,7 @@ export function WorkspaceApp() {
                     </div>
                   ) : (
                     <div className="recipe-grid">
+                      {!visibleRecipes.length && <p role="status">{recipeEmptyMessage}</p>}
                       {visibleRecipes.map((r) => {
                         let cost = 0,
                           warning = ''
@@ -2283,10 +2336,11 @@ export function WorkspaceApp() {
                                 <h2>{r.name}</h2>
                                 <ArrowUpRight size={17} />
                               </div>
-                              <p>
-                                {r.description ||
-                                  'A hardworking prep for your kitchen.'}
-                              </p>
+                              <RecipeTypeBadge recipe={r} />
+                              {r.description && <p>{r.description}</p>}
+                              {r.compound === true && (
+                                <p className="muted">Used in {componentUsage.get(r.id)?.length || 0} {(componentUsage.get(r.id)?.length || 0) === 1 ? 'recipe' : 'recipes'}</p>
+                              )}
                               <div className="recipe-meta">
                                 <span>
                                   <CookingPot size={14} />
@@ -4455,6 +4509,10 @@ export function WorkspaceApp() {
                       <RecipeYieldFields
                         recipe={draft}
                         onChange={change}
+                        typeLocked={
+                          hasPrepLink(draft.id) &&
+                          recipes.some((r) => r.id === draft.id && r.compound === true)
+                        }
                         linkedOutputUnit={
                           state.ingredients.find((i) => i.compoundRecipeId === draft.id)
                             ?.unit
@@ -4469,14 +4527,17 @@ export function WorkspaceApp() {
                         <button
                           type="button"
                           className="text-button"
+                          disabled={!purchasedRecipeInputs.length}
                           onClick={() => {
+                            const first = purchasedRecipeInputs[0]
+                            if (!first) return
                             setFormDirty(true)
                             setLines((l) => [
                               ...l,
                               {
-                                ingredientId: ingredients[0].id,
+                                ingredientId: first.id,
                                 quantity: 100,
-                                unit: 'g',
+                                unit: first.unit,
                               },
                             ])
                           }}
@@ -4490,7 +4551,7 @@ export function WorkspaceApp() {
                           onClick={() => setComponentPicker(true)}
                         >
                           <Plus size={15} />
-                          Add recipe component
+                          Add compound / prep
                         </button>
                       </div>
                     </div>
@@ -4507,6 +4568,7 @@ export function WorkspaceApp() {
                           {source ? (
                             <div className="recipe-component-source">
                               <strong>{source.name}</strong>
+                              <RecipeTypeBadge recipe={source} />
                               <small>
                                 Finished yield: {source.yield}{' '}
                                 {unitLabel(source.yieldUnit)}
@@ -4537,9 +4599,8 @@ export function WorkspaceApp() {
                                 )
                               }
                             >
-                              {ingredients
-                                .filter((i) => i.usedAs === 'ingredient')
-                                .map((i) => (
+                              {!line.ingredientId && <option value="">Choose an ingredient</option>}
+                              {purchasedRecipeInputs.map((i) => (
                                   <option key={i.id} value={i.id}>
                                     {i.name}
                                   </option>

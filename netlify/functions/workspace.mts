@@ -4469,11 +4469,21 @@ export default async (req: Request, context: Context) => {
             throw new Error(
               'A recipe supplying prepared stock must retain its yield unit. An explicit stock migration is required.',
             )
-          if (existingPrep && item.compound === false)
+          const previousRecipe = state.recipes.find((r) => r.id === item.id)
+          if (item.compound === undefined && previousRecipe?.compound === true)
+            item.compound = true
+          const linkedComponent = state.recipes.some(
+            (r) => r.id !== item.id &&
+              r.lines?.some((line: Item) => line.componentRecipeId === item.id),
+          )
+          if (
+            (existingPrep || linkedComponent) &&
+            previousRecipe?.compound === true &&
+            item.compound !== true
+          )
             throw new Error(
               'This recipe supplies prepared stock. Keep compound prep enabled to preserve its production link.',
             )
-          if (existingPrep) item.compound = true
           if (
             (item.lines || []).some(
               (l: Item) =>
@@ -4518,10 +4528,11 @@ export default async (req: Request, context: Context) => {
             const source = state.recipes.find(
               (r) => r.id === stock.compoundRecipeId,
             )!
-            if (!source.compound) {
-              source.compound = true
-              await save('recipes', source)
-            }
+            if (
+              source.compound !== true &&
+              !state.ingredients.some((i) => i.id === stock.id && i.compoundRecipeId === source.id)
+            )
+              throw new Error(`Set ${source.name} to Compound prep before adding it as a component.`)
             await save('ingredients', stock)
             const at = state.ingredients.findIndex((i) => i.id === stock.id)
             if (at < 0) state.ingredients.push(stock)

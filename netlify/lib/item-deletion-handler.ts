@@ -116,13 +116,14 @@ export async function handleItemDeletion(
         )
       if (ownDefinitions[entity][source] === column) continue
       const found = await client.query(
-        `SELECT id, data FROM "${source}" WHERE business_id=$1 AND "${column}"=$2 LIMIT 20`,
+        `SELECT ref.id, to_jsonb(ref)->'data'->>'name' AS name
+         FROM "${source}" AS ref
+         WHERE ref.business_id=$1 AND ref."${column}"=$2 LIMIT 20`,
         [org, item.id],
       )
       for (const row of found.rows) {
-        const record = row.data as Record<string, unknown> | undefined
         blockers.push(
-          `${source.replaceAll('_', ' ')}: ${record?.name || row.id} (ID: ${row.id}) uses this ${entity === 'recipes' ? 'recipe/prep' : 'inventory item'} through ${column.replaceAll('_', ' ')}. Review current links; historical records must be retained.`,
+          `${source.replaceAll('_', ' ')}: ${row.name || row.id} (ID: ${row.id}) uses this ${entity === 'recipes' ? 'recipe/prep' : 'inventory item'} through ${column.replaceAll('_', ' ')}. Review current links; historical records must be retained.`,
         )
       }
     }

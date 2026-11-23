@@ -745,6 +745,7 @@ it('links component recipes and consumes prepared stock once, with immutable his
   const source: Item = {
     id: 'component-frosting',
     name: 'Test frosting',
+    compound: true,
     yield: 100,
     yieldUnit: 'g',
     lines: [{ ingredientId: raw.id, quantity: 150, unit: 'g' }],
@@ -752,12 +753,32 @@ it('links component recipes and consumes prepared stock once, with immutable his
     laborRate: 10,
     overhead: 2,
   }
+  const regular = await call(
+    { action: 'save', table: 'recipes', data: { ...source, compound: false } },
+    '',
+  )
+  expect(regular.status, regular.error).toBe(200)
+  expect(regular.workspace.ingredients.some((i: Item) => i.compoundRecipeId === source.id)).toBe(false)
+  const premature = await call({ action: 'save', table: 'recipes', data: {
+    id: 'premature-link', name: 'Premature link', yield: 1, yieldUnit: 'each',
+    lines: [{ ingredientId: `prep-${source.id}`, componentRecipeId: source.id, quantity: 25, unit: 'g' }],
+  } }, '')
+  expect(premature.error).toMatch(/Set Test frosting to Compound prep/)
   let response = await call(
     { action: 'save', table: 'recipes', data: source },
     '',
   )
   expect(response.status, response.error).toBe(200)
   const before = response.workspace
+  expect(before.ledger).toEqual(regular.workspace.ledger)
+  expect(before.recipes.find((r: Item) => r.id === source.id)).toMatchObject({
+    compound: true, yield: source.yield, yieldUnit: source.yieldUnit, lines: source.lines,
+  })
+  const blockedDemotion = await call(
+    { action: 'save', table: 'recipes', data: { ...source, compound: false } },
+    '',
+  )
+  expect(blockedDemotion.error).toMatch(/preserve its production link/)
   const parent: Item = {
     id: 'component-cake',
     name: 'Test cake',

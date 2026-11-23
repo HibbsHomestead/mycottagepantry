@@ -1,0 +1,86 @@
+.recipe-type-navigation {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.recipe-type-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.recipe-type-filters button {
+  min-height: 44px;
+  padding: 7px clamp(9px, 2vw, 18px);
+  border: 1px solid #c9bfce;
+  border-radius: 9px 9px 0 0;
+  background: #eee8f6;
+  color: #36303d;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recipe-type-filters button:nth-child(2) {
+  background: #e9f1f8;
+}
+.recipe-type-filters button:nth-child(3) {
+  background: #edf2e7;
+}
+.recipe-type-filters button[aria-pressed='true'] {
+  border-color: #786881;
+  box-shadow: inset 0 3px 0 #786881;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.recipe-type-filters button:focus-visible {
+  outline: 2px solid #665179;
+  outline-offset: 2px;
+}
+.recipe-type-navigation p {
+  margin: 0;
+  padding: 8px 0;
+}
+.recipe-type-badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.recipe-type-badge[data-prep='true'] {
+  background: #edf2e7;
+  color: #31422d;
+}
+.recipe-card-body > .recipe-type-badge {
+  margin-block: 0 6px;
+}
+.recipe-type-review {
+  margin-block: 0 12px;
+}
+@media (max-width: 700px) {
+  .workspace-standard .catalog-toolbar .recipe-create-actions {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+  .workspace-standard
+    .catalog-toolbar
+    .recipe-create-actions
+    > .btn[aria-label^='Create'] {
+    flex: 0 1 auto;
+    min-width: 0;
+    width: auto;
+  }
+  .workspace-standard
+    .catalog-toolbar
+    .recipe-create-actions
+    > .btn[aria-label^='Create']
+    .responsive-action-label {
+    display: inline;
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+    white-space: normal;
+  }
+}

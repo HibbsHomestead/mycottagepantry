@@ -16,6 +16,8 @@ import {
 } from '@/lib/domain'
 import { singularYield } from '@/lib/product-recipe-links'
 import { precise } from '@/lib/ingredients'
+import { recipeComponentUsage } from '@/lib/recipe-type'
+import { RecipeTypeBadge } from './recipe-type-badge'
 import { PantryPhoto } from './pantry-photo'
 import {
   DropdownMenu,
@@ -54,6 +56,8 @@ export function RecipeDetail({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('')
   const pending = useRef(false)
+  const prepStock = w.ingredients.filter((i) => i.compoundRecipeId === r.id)
+  const usedIn = recipeComponentUsage(w).get(r.id) || []
   const linked = w.products.filter((p) => p.recipeId === r.id)
   const product = w.products.find((p) => p.id === chosen?.id)
   const existing = w.recipes.find((x) => x.id === product?.recipeId)
@@ -134,6 +138,7 @@ export function RecipeDetail({
                 recipeCategories={recipeCategories(w)}
               />
               <span>{recipeCategoryLabel(r, recipeCategories(w))}</span>
+              <RecipeTypeBadge recipe={r} />
             </div>
             {r.importedCategory && (
               <p className="form-hint">
@@ -166,6 +171,18 @@ export function RecipeDetail({
                 <dd>{cost ? money(cost.perItem) : 'Unavailable'}</dd>
               </div>
             </dl>
+            {(r.compound === true || prepStock.length > 0 || usedIn.length > 0) && (
+              <section aria-label="Prepared component details">
+                {r.compound !== true && <p className="form-hint">Type needs review: this recipe is marked regular but has prepared stock or component links.</p>}
+                <p><strong>Prepared stock on hand:</strong>{' '}
+                  {prepStock.length ? prepStock.map((i) => `${precise(i.quantity ?? 0)} ${i.unit}`).join(' · ') : 'No linked stock record'}
+                </p>
+                <h3>Used in ({usedIn.length})</h3>
+                {usedIn.length ? <ul>{usedIn.map((recipe) => (
+                  <li key={recipe.id}><button type="button" className="text-button" onClick={() => open('recipe-detail', recipe)}>{recipe.name}</button></li>
+                ))}</ul> : <p className="muted">No recipes directly use this component.</p>}
+              </section>
+            )}
             {warning && (
               <p className="warning-text" role="alert">
                 Cost incomplete: {warning} Open Cost breakdown to review
