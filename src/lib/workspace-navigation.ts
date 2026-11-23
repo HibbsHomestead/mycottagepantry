@@ -34,6 +34,7 @@ export const sectionTabs: Record<string, string[]> = {
     'Overview',
     'Recipes & Designs',
     'Production Runs',
+    'Grocery & Prep',
     'Waste & Adjustments',
   ],
   Sales: ['Sales', 'Consignment'],

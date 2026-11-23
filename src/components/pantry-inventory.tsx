@@ -32,6 +32,7 @@ import {
 } from '@/lib/inventory-review'
 import { InventoryReviewBadges } from './inventory-review'
 import { isFabric, supportsExpiry } from '@/lib/fabric'
+import { stockPrepUnavailable } from '@/lib/stock-prep'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -74,9 +75,11 @@ export function PantryInventory({
   workspace,
   onCategorySettings,
   canManageCategories = false,
+  canPrepStock = false,
 }: {
   onCategorySettings?: (patch: Partial<Item>) => void
   canManageCategories?: boolean
+  canPrepStock?: boolean
   workspace?: Workspace
   actions?: ReactNode
   labelSelection?: InventoryLabelSelection
@@ -93,6 +96,15 @@ export function PantryInventory({
   setSearch: (search: string) => void
   open: (kind: string, item?: Item) => void
 }) {
+  function prepAction(item: Item) {
+    if (!canPrepStock) return null
+    const reason = stockPrepUnavailable(item, workspace?.lots)
+    return (
+      <DropdownMenuItem disabled={Boolean(reason)} onSelect={() => open('stock-prep', item)}>
+        <span>Prep / portion stock{reason && <small className="block">{reason}</small>}</span>
+      </DropdownMenuItem>
+    )
+  }
   const [categoryFilter, setCategoryFilter] = useState('all')
   const categoryScope: CategoryScope =
     typeFilter === 'packaging' || filter === 'Packaging'
@@ -404,6 +416,7 @@ export function PantryInventory({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {prepAction(i)}
                       <DropdownMenuItem onSelect={() => open('shelf-label', i)}>
                         Print shelf/bin label
                       </DropdownMenuItem>
@@ -682,6 +695,7 @@ export function PantryInventory({
                             align="end"
                             className="workspace-menu"
                           >
+                            {prepAction(i)}
                             <DropdownMenuItem
                               onSelect={() => open('shelf-label', i)}
                             >

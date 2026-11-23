@@ -60,6 +60,7 @@ import {
 } from '@/lib/recipe-categories'
 import { SupportHelper } from './support-helper'
 import { ProductionRun } from './production-run'
+import { GroceryPrepList } from './grocery-prep-list'
 import { InventoryCounts } from './inventory-counts'
 import {
   fetchWorkspaceWithDiagnostics,
@@ -221,7 +222,7 @@ import {
 } from '@/components/financial-editors'
 
 import { IngredientDetail } from '@/components/ingredient-detail'
-import { PrepStockSourceSelect } from '@/components/stock-prep'
+import { PrepStockSourceSelect, StockPrepPanel } from '@/components/stock-prep'
 import { PantryPhoto } from '@/components/pantry-photo'
 import { PantryInventory, PantrySummary } from '@/components/pantry-inventory'
 import { WorkspaceDashboard } from '@/components/workspace-dashboard'
@@ -957,11 +958,14 @@ export function WorkspaceApp() {
             ? 'handmade'
             : 'food',
       }
-      const action = kind.includes('receive')
-        ? 'receive'
-        : kind.includes('adjust')
-          ? 'adjust'
-          : 'save'
+      const action =
+        kind === 'stock-prep'
+          ? 'stockPrepPost'
+          : kind.includes('receive')
+            ? 'receive'
+            : kind.includes('adjust')
+              ? 'adjust'
+              : 'save'
       const table =
         kind.includes('product') || kind === 'kit'
           ? 'products'
@@ -1044,6 +1048,11 @@ export function WorkspaceApp() {
                     : '',
       })
       setModal('add-item')
+      return
+    }
+    if (kind === 'stock-prep' && item) {
+      setSelected(item)
+      setModal(kind)
       return
     }
     if (kind === 'receive' && item?.workflow === 'resale') {
@@ -1553,7 +1562,7 @@ export function WorkspaceApp() {
               ? 'trade-product-resale'
               : 'product',
       ],
-      Production: ['Start production', 'batch'],
+      ...(sub === 'Grocery & Prep' ? {} : { Production: ['Start production', 'batch'] }),
       Finances: ['Record a transaction', 'transaction'],
       Labels: ['Print label', 'print'],
       Reports: ['Export report', 'export'],
@@ -2003,6 +2012,7 @@ export function WorkspaceApp() {
                       >
                         {({ actions, labelSelection }) => (
                           <PantryInventory
+                            canPrepStock={ready && ['Owner', 'Manager'].includes(role)}
                             canManageCategories={
                               ready && ['Owner', 'Manager'].includes(role)
                             }
@@ -2619,7 +2629,9 @@ export function WorkspaceApp() {
               )}
               {page === 'Production' && (
                 <>
-                  {sub === 'Waste / adjustments' ? (
+                  {sub === 'Grocery & Prep' ? (
+                    <GroceryPrepList state={state} ready={ready} role={role} />
+                  ) : sub === 'Waste / adjustments' ? (
                     <>
                       <div className="info-banner">
                         <Leaf size={20} />
@@ -3653,6 +3665,16 @@ export function WorkspaceApp() {
           onClose={() => setBarcodeEntryOpen(false)}
         />
       )}
+      {modal === 'stock-prep' && selected && ready && ['Owner', 'Manager'].includes(role) && (
+        <StockPrepPanel
+          key={selected.id}
+          ingredient={ingredients.find((item) => item.id === selected.id) || selected}
+          workspace={state}
+          canEdit
+          save={(action, data) => mutate(action, 'ingredients', data)}
+          onStandaloneClose={() => setModal(null)}
+        />
+      )}
       {(modal === 'ingredient-detail' || (inventoryDetailReturn.current?.kind === 'ingredient-detail' && ['receive', 'adjust'].includes(modal || ''))) && selected && (
         <IngredientDetail
           key={selected.id}
@@ -3716,7 +3738,7 @@ export function WorkspaceApp() {
           modal !== 'signin' &&
           !modal.startsWith('trade-') &&
           !modal.startsWith('fabric-') &&
-          !['ingredient-detail', 'recipe-import', 'add-item', 'kit'].includes(
+          !['ingredient-detail', 'stock-prep', 'recipe-import', 'add-item', 'kit'].includes(
             modal,
           )
         }

@@ -10,6 +10,7 @@ import {
   effectiveProductionSupplies,
   number,
   packagingLines,
+  recipeInputLines,
   validateKit,
   units,
   type Item,
@@ -50,10 +51,7 @@ function normalizedProductionLines(
   recipes: Item[],
 ) {
   const merged = new Map<string, Item>()
-  for (const line of [
-    ...effectiveRecipeLines(recipe, recipes),
-    ...effectiveProductionSupplies(recipe, recipes),
-  ]) {
+  for (const line of recipeInputLines(recipe, recipes)) {
     const i = ingredients.find((i) => i.id === line.ingredientId)
     if (!i) throw new Error('Ingredient unavailable. Review the recipe inputs.')
     const quantity = convert(line.quantity, line.unit, i.unit, i.conversions)
@@ -177,6 +175,10 @@ export function productionDefinition(
   }
 }
 
+export function productionBatchMultiplier(recipe: Item, output: number) {
+  return output / number(recipe.yield, 'Recipe yield', 0.000001)
+}
+
 export function productionRequirements(
   definition: Item,
   quantity: number,
@@ -262,8 +264,7 @@ export function productionRequirements(
     }
   } else {
     const r = definition.recipe
-    multiplier =
-      (quantity * p.unitsPerPackage) / number(r.yield, 'Recipe yield', 0.000001)
+    multiplier = productionBatchMultiplier(r, quantity * p.unitsPerPackage)
     for (const line of normalizedProductionLines(
       r,
       inputs,

@@ -65,6 +65,7 @@ export const ingredients = pgTable(
   (t) => [uniqueIndex('ingredients_org_id').on(t.businessId, t.id)],
 )
 export const inventoryCounts = orgTable('inventory_counts')
+export const groceryLists = orgTable('grocery_lists')
 export const ingredientConversions = orgTable('ingredient_conversions')
 export const compoundIngredientLines = orgTable('compound_ingredient_lines')
 export const recipes = orgTable('recipes')

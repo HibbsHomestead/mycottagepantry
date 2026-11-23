@@ -23,6 +23,7 @@ import {
 } from './fabric-fields'
 import { ItemPhotoField } from './item-photo-field'
 import { fabricUnitOptions } from '@/lib/fabric'
+import { stockPrepUnavailable } from '@/lib/stock-prep'
 import { convert, money, type Item, type Workspace } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
 import { stockReceiptPreview } from '@/lib/inventory-browse'
@@ -269,6 +270,7 @@ export function FabricDialog({
                         </button>
                       </div>
                     )}
+                    {manager && <p className="muted">Prep / portion stock unavailable: {stockPrepUnavailable(item, workspace.lots)}</p>}
                   </section>
                 }
               >

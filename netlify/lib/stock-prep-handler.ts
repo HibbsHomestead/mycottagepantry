@@ -8,7 +8,7 @@ import {
   prepStockBalance,
 } from '../../src/lib/stock-prep'
 
-type StockContext = {
+export type StockContext = {
   state: Workspace
   save: (table: string, item: Item) => Promise<void>
   authorizePreparedWrite?: (id: string) => void
@@ -51,7 +51,7 @@ export async function handleStockPrep(
   )
     throw new Error('Reopen the prep form to get a new reference.')
   const i = state.ingredients.find((item) => item.id === data.id)
-  if (!i) throw new Error('Choose an ingredient from this business.')
+  if (!i) throw new Error('Choose a stocked item from this business.')
   const posting = action === 'stockPrepPost'
   const lotId = posting ? `prep-${data.operationId}` : String(data.lotId || '')
   const lot = state.lots.find(
@@ -97,7 +97,7 @@ export async function handleStockPrep(
     const p = planStockPrep(i, state.lots, data, today)
     if (data.review !== prepReviewKey(p))
       throw new Error(
-        'Stock or prep details changed since review. Refresh the ingredient and review the movement again.',
+        'Stock or prep details changed since review. Refresh the item and review the movement again.',
       )
     await move(
       key,
@@ -125,7 +125,7 @@ export async function handleStockPrep(
       remaining: undefined,
       totalAfter: undefined,
       id: lotId,
-      name: p.method,
+      name: p.method || 'Prepared portions',
       kind: 'ingredient_prep',
       ingredientId: i.id,
       quantity: p.usable,
@@ -137,7 +137,7 @@ export async function handleStockPrep(
     ctx.authorizePreparedWrite?.(i.id)
     await save('ingredients', i)
     await audit(
-      'Ingredient stock prepared',
+      'Stock prepared',
       `${i.name}: ${p.portions} portions stored in ${p.location}.`,
     )
   } else {
@@ -191,6 +191,6 @@ export async function handleStockPrep(
     i.cost = balance.value / i.quantity
     ctx.authorizePreparedWrite?.(i.id)
     await save('ingredients', i)
-    await audit('Ingredient prep reversed', `${i.name}: ${reason}`)
+    await audit('Stock prep reversed', `${i.name}: ${reason}`)
   }
 }

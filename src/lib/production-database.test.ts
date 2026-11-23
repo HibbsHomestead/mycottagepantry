@@ -1493,3 +1493,73 @@ it('posts count and weight prep, preserves costs and identity, consumes a partia
     expect((await call('stockPrepPost', 'ingredients', count)).error).toMatch(/from this business/)
   } finally { session.user = 'production-owner-a' }
 })
+
+it('portions generic materials, packaging and supplies without duplicating stock or value', async () => {
+  session.user = 'production-owner-a'
+  const date = '2026-01-01'
+  const ribbon = { id: 'prep-ribbon', name: 'Fixture ribbon', usedAs: 'material', unit: 'yd', quantity: 12, cost: 3 }
+  const boxes = { id: 'prep-boxes', name: 'Fixture boxes', usedAs: 'packaging', unit: 'each', quantity: 12, cost: 2 }
+  const glue = { id: 'prep-glue', name: 'Fixture glue', usedAs: 'supply', unit: 'ml', quantity: 1000, cost: 0.02 }
+  const empty = { ...boxes, id: 'prep-empty', quantity: 0 }
+  const archived = { ...boxes, id: 'prep-archived', archived: true }
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  for (const item of [ribbon, boxes, glue, empty, archived])
+    await db.query('INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5)', [item.id, a, JSON.stringify(item), item.quantity, item.cost])
+  const input = { date, location: 'Fixture shelf', portions: 2 }
+  const ribbonRequest = { ...input, id: ribbon.id, used: 4, perPortion: 6, outputUnit: 'ft', operationId: '831d27f9-93b4-49a2-8b01-8e94ae318ab0' }
+  const boxesRequest = { ...input, id: boxes.id, used: 6, operationId: '831d27f9-93b4-49a2-8b01-8e94ae318ab1' }
+  const glueRequest = { ...input, id: glue.id, used: 500, perPortion: 0.225, outputUnit: 'l', loss: 50, lossReason: 'Measured spill', operationId: '831d27f9-93b4-49a2-8b01-8e94ae318ab2' }
+  const before = await ok()
+  for (const [request, reason] of [
+    [{ ...boxesRequest, id: empty.id }, /no stock on hand/],
+    [{ ...boxesRequest, id: archived.id }, /archived/],
+    [{ ...boxesRequest, used: '' }, /Source quantity/],
+    [{ ...ribbonRequest, outputUnit: 'cup' }, /no verified unit conversion/],
+    [{ ...ribbonRequest, perPortion: 3 }, /Difference: 2 yd unaccounted/],
+  ] as const)
+    expect((await call('stockPrepPost', 'ingredients', request)).error).toMatch(reason)
+  const rejected = await ok()
+  for (const table of ['ingredients', 'ledger', 'lots', 'journals']) expect(rejected[table]).toEqual(before[table])
+  let current = before
+  for (const [request, item, balances, quantity] of [
+    [ribbonRequest, ribbon, [2, 2], 12],
+    [boxesRequest, boxes, [3, 3], 12],
+    [glueRequest, glue, [225, 225], 950],
+  ] as const) {
+    const reviewed = { ...request, review: prepReviewKey(planStockPrep(find(current.ingredients, item.id), current.lots, request, date)) }
+    current = await ok('stockPrepPost', 'ingredients', reviewed)
+    expect(find(current.lots, `prep-${request.operationId}`)).toMatchObject({ ingredientId: item.id, balances, expires: '', name: 'Prepared portions' })
+    const stock = find(current.ingredients, item.id)
+    expect(stock.quantity).toBe(quantity)
+    expect(stock.quantity * stock.cost).toBeCloseTo(item.quantity * item.cost)
+    expect((await ok('stockPrepPost', 'ingredients', reviewed)).ledger).toEqual(current.ledger)
+  }
+  const glueLot = `prep-${glueRequest.operationId}`
+  const correction = { id: glue.id, lotId: glueLot, operationId: '831d27f9-93b4-49a2-8b01-8e94ae318ab3', reason: 'Fixture correction', confirmPhysicalStock: true }
+  const reversed = await ok('stockPrepReverse', 'ingredients', correction)
+  expect(find(reversed.ingredients, glue.id)).toMatchObject({ quantity: 1000, cost: glue.cost })
+  expect((await ok('stockPrepReverse', 'ingredients', correction)).ledger).toEqual(reversed.ledger)
+
+  const design = { id: 'portion-ribbon-design', name: 'Ribbon project', workflow: 'handmade', yield: 1, laborMinutes: 0, laborRate: 0, overhead: 0, lines: [{ ingredientId: ribbon.id, quantity: 1, unit: 'yd' }, { ingredientId: boxes.id, quantity: 1, unit: 'each' }] }
+  await ok('save', 'recipes', design)
+  const product = { id: 'portion-ribbon-product', name: 'Ribbon project', workflow: 'handmade', recipeId: design.id, price: 15, sku: 'RIBBON-FIXTURE', productCategoryId: 'goods' }
+  await ok('save', 'products', product)
+  const prepSources = { [ribbon.id]: `prep-${ribbonRequest.operationId}`, [boxes.id]: `prep-${boxesRequest.operationId}` }
+  await ok('productionSave', 'batches', { id: 'portion-project-run', productId: product.id, quantity: 1, status: 'scheduled', date, mapping: { quantity: 1, unit: 'each', verified: true } })
+  const done = await ok('productionComplete', 'batches', { id: 'portion-project-run', output: 1, prepSources })
+  expect(find(done.ingredients, ribbon.id).quantity).toBe(11)
+  expect(find(done.ingredients, boxes.id).quantity).toBe(11)
+  expect(find(done.lots, prepSources[ribbon.id]).balances).toEqual([1, 2])
+  expect(find(done.lots, prepSources[boxes.id]).balances).toEqual([2, 3])
+  expect(done.ledger.filter((line: Item) => line.batchId === 'portion-project-run' && line.ingredientId)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ ingredientId: ribbon.id, prepLotId: prepSources[ribbon.id], quantity: -1, amount: -3 }),
+    expect.objectContaining({ ingredientId: boxes.id, prepLotId: prepSources[boxes.id], quantity: -1, amount: -2 }),
+  ]))
+  const legacy = { id: 'portion-legacy-project', name: 'Legacy ribbon project', productId: product.id, recipeId: design.id, count: 1, yield: 1, date }
+  await ok('save', 'batches', legacy)
+  const actual = { id: legacy.id, actualYield: 1, laborMinutes: 0, usage: { [ribbon.id]: 1, [boxes.id]: 1 }, materialWaste: { [ribbon.id]: 0, [boxes.id]: 0 }, prepSources }
+  const completed = await ok('complete', 'batches', actual)
+  expect(find(completed.ingredients, ribbon.id).quantity).toBe(10)
+  expect(find(completed.lots, prepSources[ribbon.id]).balances).toEqual([0, 2])
+  expect((await ok('complete', 'batches', actual)).ledger).toEqual(completed.ledger)
+})

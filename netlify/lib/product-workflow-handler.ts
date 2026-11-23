@@ -18,6 +18,8 @@ import {
 } from '../../src/lib/domain'
 import { tracksFinishedStock } from '../../src/lib/product-workflows'
 import { checkFabricWidth, fabricConvert, isFabric } from '../../src/lib/fabric'
+import { planPrepUsage } from '../../src/lib/stock-prep'
+import { applyPrepUsage, type StockContext } from './stock-prep-handler'
 import { handleFabric } from './fabric-handler'
 import {
   conflictMessage,
@@ -26,7 +28,7 @@ import {
 } from '../../src/lib/product-edit'
 
 type Save = (table: string, item: Item) => Promise<void>
-type Context = {
+type Context = StockContext & {
   state: Workspace
   save: Save
   audit: (name: string, detail: string) => Promise<void>
@@ -545,6 +547,7 @@ export async function handleProductWorkflow(
           data.laborMinutes,
           data.waste,
           data.wasteReason,
+          ...(Object.keys(data.prepSources || {}).length ? [data.prepSources] : []),
         ]),
       )
       .digest('hex')
@@ -574,6 +577,7 @@ export async function handleProductWorkflow(
       'Actual labor minutes',
     )
     const usage: Item[] = []
+    const preparedUsage = new Map<string, NonNullable<ReturnType<typeof planPrepUsage>>>()
     let inputCost = 0
     for (const line of design.lines) {
       const input = state.ingredients.find((i) => i.id === line.ingredientId)!
@@ -590,7 +594,10 @@ export async function handleProductWorkflow(
         : convert(used + wasted, line.unit, input.unit, input.conversions)
       if (input.quantity < quantity)
         throw new Error(`${input.name} has insufficient stock.`)
-      const amount = quantity * input.cost
+      const prepared = planPrepUsage(input, state.lots, quantity, data.prepSources?.[input.id])
+      if (prepared) preparedUsage.set(input.id, prepared)
+      const unitCost = prepared?.unitCost ?? input.cost
+      const amount = prepared?.cost ?? quantity * unitCost
       inputCost += amount
       usage.push({
         id: input.id,
@@ -601,8 +608,9 @@ export async function handleProductWorkflow(
         used,
         wasted,
         enteredUnit: line.unit,
-        unitCost: input.cost,
+        unitCost,
         cost: amount,
+        ...(prepared?.lot ? { prepLotId: prepared.lot.id, prepLocation: prepared.lot.location } : {}),
       })
     }
     const reason = String(data.wasteReason || '').trim()
@@ -614,8 +622,12 @@ export async function handleProductWorkflow(
     const total = inputCost + labor + overhead
     for (const line of usage) {
       const input = state.ingredients.find((i) => i.id === line.id)!
-      input.quantity -= line.quantity
-      await save('ingredients', input)
+      const prepared = preparedUsage.get(input.id)
+      if (prepared) await applyPrepUsage(ctx, input, prepared)
+      else {
+        input.quantity -= line.quantity
+        await save('ingredients', input)
+      }
       await save('ledger', {
         id: `run-${batch.id}-${input.id}`,
         name: input.name,
@@ -633,6 +645,7 @@ export async function handleProductWorkflow(
         actualUsed: line.used,
         materialWaste: line.wasted,
         enteredUnit: line.enteredUnit,
+        ...(line.prepLotId ? { prepLotId: line.prepLotId, location: line.prepLocation } : {}),
       })
     }
     batch.status = 'completed'

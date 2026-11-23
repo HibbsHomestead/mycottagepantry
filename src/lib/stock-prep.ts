@@ -1,19 +1,63 @@
 import {
   convert,
   ingredientUnits,
+  isMissingUnitConversion,
   number,
   validateDate,
   type Item,
 } from './domain'
+import { isFabric } from './fabric'
 
 const EPS = 1e-8
 const stockRound = (n: number) => Math.round(n * 1e8) / 1e8
 export const UNPORTIONED = 'unportioned'
-export const canPrepStock = (i: Item) =>
-  !i.archived &&
-  !i.compoundRecipeId &&
-  i.trackInventory !== false &&
-  (!i.usedAs || i.usedAs === 'ingredient')
+export const isFoodStockPrep = (item: Item) =>
+  (!item.usedAs || item.usedAs === 'ingredient') &&
+  item.classification !== 'non_food'
+
+export function stockPrepTypeReason(item: Item) {
+  if (isFabric(item)) return 'Fabric uses separate cut and remnant tracking.'
+  if (item.compoundRecipeId)
+    return 'Recipe-produced components use their own prep workflow.'
+  if (
+    item.trackInventory === false ||
+    !['ingredient', 'material', 'packaging', 'supply'].includes(
+      item.usedAs || 'ingredient',
+    )
+  )
+    return 'This item type does not support portioning tracked stock.'
+  if (!Object.hasOwn(ingredientUnits(item.conversions), item.unit))
+    return 'Set a supported stock unit before portioning this item.'
+  return ''
+}
+
+export function stockPrepUnavailable(item: Item, lots: Item[] = []) {
+  if (item.archived) return 'This item is archived.'
+  const reason = stockPrepTypeReason(item)
+  if (reason) return reason
+  if (!(Number(item.quantity) > 0)) return 'There is no stock on hand.'
+  if (item.needsCostSetup || item.cost == null)
+    return 'Review the recorded stock cost before portioning this item.'
+  try {
+    if (!prepStockBalance(item, lots).available)
+      return 'There is no unportioned stock left.'
+  } catch (error) {
+    return (error as Error).message
+  }
+  return ''
+}
+
+export class StockPrepValidationError extends Error {
+  constructor(
+    message: string,
+    readonly fields: string[],
+  ) {
+    super(message)
+  }
+}
+
+const prepQuantity = (quantity: number, unit: string) =>
+  `${Number(quantity.toPrecision(12))} ${unit}`
 export const prepLots = (lots: Item[] = [], id: string) =>
   lots.filter(
     (l) =>
@@ -36,7 +80,7 @@ export function prepStockBalance(i: Item, lots: Item[]) {
   const value = quantity * number(i.cost ?? 0, 'Stock unit cost')
   if (quantity + EPS < preparedQuantity || value + EPS < preparedValue)
     throw new Error(
-      'Prepared stock no longer matches the ingredient balance. Review inventory before continuing.',
+      'Prepared stock no longer matches this item’s balance. Review inventory before continuing.',
     )
   return {
     quantity,
@@ -79,14 +123,8 @@ export function planStockPrep(
   data: Record<string, unknown>,
   today: string,
 ) {
-  if (!canPrepStock(i))
-    throw new Error('Choose an active food ingredient with tracked stock.')
-  if (!ingredientUnits(i.conversions)[i.unit])
-    throw new Error('Choose a supported inventory unit before preparing stock.')
-  if (i.needsCostSetup || i.cost == null)
-    throw new Error(
-      'Review the recorded stock cost before preparing this ingredient.',
-    )
+  const unavailable = stockPrepUnavailable(i, lots)
+  if (unavailable) throw new Error(unavailable)
   const balance = prepStockBalance(i, lots)
   const sourceUnit = prepSourceUnit(i)
   const enteredUsed = number(data.used, 'Source quantity', EPS)
@@ -99,11 +137,15 @@ export function planStockPrep(
   )
   const usable = stockRound(used - loss)
   if (used > balance.available + EPS / 2)
-    throw new Error(
-      'Insufficient unportioned stock. Reduce the source quantity or receive stock first.',
+    throw new StockPrepValidationError(
+      `Insufficient unportioned stock: ${prepQuantity(enteredUsed, sourceUnit)} entered; ${prepQuantity(balance.available, i.unit)} available. Reduce the source quantity or receive stock first.`,
+      ['used'],
     )
   if (usable <= 0)
-    throw new Error('The measured loss must be less than the quantity used.')
+    throw new StockPrepValidationError(
+      `Measured loss (${prepQuantity(enteredLoss, sourceUnit)}) must be less than the source quantity (${prepQuantity(enteredUsed, sourceUnit)}).`,
+      ['loss', 'used'],
+    )
   const portions = number(data.portions, 'Number of portions', 1)
   if (!Number.isInteger(portions) || portions > 200)
     throw new Error('Enter between 1 and 200 whole portions.')
@@ -111,7 +153,8 @@ export function planStockPrep(
   const location = String(data.location || '').trim()
   const lossReason = String(data.lossReason || '').trim()
   const note = String(data.note || '').trim()
-  if (!method || method.length > 200)
+  const food = isFoodStockPrep(i)
+  if ((food && !method) || method.length > 200)
     throw new Error('Enter a preparation method of up to 200 characters.')
   if (!location || location.length > 200)
     throw new Error(
@@ -119,13 +162,9 @@ export function planStockPrep(
     )
   if (note.length > 1000 || lossReason.length > 200)
     throw new Error('Shorten the note or loss reason.')
-  if (loss > 0 && !lossReason)
-    throw new Error(
-      'Explain the measured loss. If stock already represents edible quantity, do not record peel loss again.',
-    )
   const date = validateDate(String(data.date || ''))
   if (date > today) throw new Error('Prep date cannot be in the future.')
-  const expires = data.expires ? validateDate(String(data.expires)) : ''
+  const expires = food && data.expires ? validateDate(String(data.expires)) : ''
   if (expires && expires < date)
     throw new Error('Best-before cannot be before the prep date.')
   const hasMeasurement = data.perPortion !== '' && data.perPortion != null
@@ -133,13 +172,29 @@ export function planStockPrep(
   const perPortion = hasMeasurement
     ? number(data.perPortion, 'Amount per portion', EPS)
     : usable / portions
-  const normalized = hasMeasurement
-    ? convert(perPortion, outputUnit, i.unit, i.conversions)
-    : perPortion
-  if (Math.abs(normalized * portions - usable) > EPS)
-    throw new Error(
-      'The measured portions must equal the source quantity minus any measured loss. Use a verified unit and correct the quantities before saving.',
+  let normalized = perPortion
+  const summary = `Source: ${prepQuantity(enteredUsed, sourceUnit)}. ${portions} portions × ${prepQuantity(perPortion, outputUnit)} = ${prepQuantity(perPortion * portions, outputUnit)}. Measured loss: ${prepQuantity(enteredLoss, sourceUnit)}.`
+  if (hasMeasurement) {
+    try {
+      normalized = convert(perPortion, outputUnit, i.unit, i.conversions)
+    } catch (error) {
+      if (!isMissingUnitConversion(error, outputUnit, i.unit)) throw error
+      throw new StockPrepValidationError(
+        `${summary} Difference cannot be calculated: there is no verified unit conversion for ${outputUnit} on this item. Choose a matching unit (${sourceUnit}) and enter the measured amount in that unit.`,
+        ['used', 'perPortion', 'outputUnit'],
+      )
+    }
+  }
+  const difference = usable - normalized * portions
+  if (Math.abs(difference) > EPS)
+    throw new StockPrepValidationError(
+      `${summary} Difference: ${prepQuantity(Math.abs(difference), i.unit)} ${difference > 0 ? 'unaccounted for' : 'over the source after loss'}. Check the source, portion count, amount per portion${difference > 0 ? ', or record actual measured loss' : loss > 0 ? ', and measured loss' : ', and unit'}.`,
+      ['used', 'portions', 'perPortion', 'outputUnit', 'loss'],
     )
+  if (loss > 0 && !lossReason)
+    throw new StockPrepValidationError('Explain the measured loss.', [
+      'lossReason',
+    ])
   // Count stock can only be split into whole individual units when it has a defined each conversion.
   if (ingredientUnits(i.conversions)[i.unit].category === 'count') {
     let each: number | undefined
@@ -150,7 +205,7 @@ export function planStockPrep(
     }
     if (each !== undefined && Math.abs(each - Math.round(each)) > EPS)
       throw new Error(
-        'Each portion must contain a whole number of counted items. Use a measured weight for fractional pieces.',
+        'Each portion must contain a whole number of counted items. Use a verified measurable unit for fractional quantities.',
       )
   }
   const balances = Array.from(

@@ -35,22 +35,26 @@ export function componentStock(source: Item, ingredients: Item[]): Item {
   }
 }
 
-/** Normalizes legacy prep lines and rejects unsupported production modes/cycles before any save. */
-export function validateRecipeComponents(recipe: Item, state: Workspace) {
+export function componentSourceId(
+  line: { ingredientId: string; componentRecipeId?: string },
+  ingredients: Item[],
+) {
+  const prep = ingredients.find((i) => i.id === line.ingredientId)
+  if (
+    line.componentRecipeId &&
+    prep?.compoundRecipeId &&
+    prep.compoundRecipeId !== line.componentRecipeId
+  )
+    throw new Error('Recipe component and prepared stock do not match.')
+  return line.componentRecipeId || prep?.compoundRecipeId
+}
+
+export function assertRecipeComponentGraph(
+  recipe: Item,
+  state: Workspace,
+  allowMissingComponents = false,
+) {
   const recipes = [...state.recipes.filter((r) => r.id !== recipe.id), recipe]
-  function sourceId(line: {
-    ingredientId: string
-    componentRecipeId?: string
-  }) {
-    const prep = state.ingredients.find((i) => i.id === line.ingredientId)
-    if (
-      line.componentRecipeId &&
-      prep?.compoundRecipeId &&
-      prep.compoundRecipeId !== line.componentRecipeId
-    )
-      throw new Error('Recipe component and prepared stock do not match.')
-    return line.componentRecipeId || prep?.compoundRecipeId
-  }
   const visiting = new Set<string>(),
     done = new Set<string>()
   function visit(id: string) {
@@ -60,6 +64,7 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
       )
     if (done.has(id)) return
     const r = recipes.find((r) => r.id === id)
+    if (!r && allowMissingComponents) return
     if (!r)
       throw new Error(
         'The component source recipe is unavailable in this oven.',
@@ -79,13 +84,19 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
       visit(r.baseRecipeId)
     }
     for (const line of r.lines || []) {
-      const child = sourceId(line)
+      const child = componentSourceId(line, state.ingredients)
       if (child) visit(child)
     }
     visiting.delete(id)
     done.add(id)
   }
   visit(recipe.id)
+  return recipes
+}
+
+/** Normalizes legacy prep lines and rejects unsupported production modes/cycles before any save. */
+export function validateRecipeComponents(recipe: Item, state: Workspace) {
+  const recipes = assertRecipeComponentGraph(recipe, state)
   if (recipe.baseRecipeId)
     recipe.baseMultiplier = parseQuantity(recipe.baseMultiplier)
   const overlap = baseIngredientOverlap(recipe, recipes)
@@ -95,7 +106,7 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
     )
   const stocks: Item[] = []
   for (const line of recipe.lines || []) {
-    const id = sourceId(line)
+    const id = componentSourceId(line, state.ingredients)
     if (!id) continue
     if (line.productionMode && line.productionMode !== 'prepared_stock')
       throw new Error(
