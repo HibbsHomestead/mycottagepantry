@@ -29,7 +29,7 @@ for (const width of [1440, 390])
           { id: "a", name: "Test market A", timezone: "UTC", currency: "USD" },
           { id: "b", name: "Test market B", timezone: "UTC", currency: "USD" },
         ],
-        selectedLocations: [],
+        selectedLocations: ["a", "b"],
         lastSuccessfulSync: null,
         lastAttemptedSync: post ? "2026-01-02T12:00:00Z" : null,
         error: post
@@ -53,13 +53,15 @@ for (const width of [1440, 390])
     await expect(
       page.getByText("Fictional test seller", { exact: false }),
     ).toBeVisible();
-    await page.getByLabel("Test market A", { exact: false }).check();
-    await page.getByLabel("Test market B", { exact: false }).check();
+    await expect(
+      page.getByLabel("Test market A", { exact: false }),
+    ).toBeChecked();
+    await expect(
+      page.getByLabel("Test market B", { exact: false }),
+    ).toBeChecked();
     await page.getByLabel("Start (UTC, inclusive)").fill("2026-01-01T00:00");
     await page.getByLabel("End (UTC, exclusive)").fill("2026-01-03T00:00");
-    await page
-      .getByRole("button", { name: "Retrieve sample for review" })
-      .click();
+    await page.getByRole("button", { name: "Preview sales" }).click();
     await expect(page.getByRole("alert")).toContainText(
       "Retry the selected range",
     );
@@ -167,9 +169,7 @@ test("reviewing a bounded sample requires separate explicit import approval", as
   await page.goto(workspaceFixtureUrl("Settings/Integrations"));
   await page.getByLabel("Start (UTC, inclusive)").fill("2026-01-01T00:00");
   await page.getByLabel("End (UTC, exclusive)").fill("2026-01-03T00:00");
-  await page
-    .getByRole("button", { name: "Retrieve sample for review" })
-    .click();
+  await page.getByRole("button", { name: "Preview sales" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(
     page.getByText("fixture-payment", { exact: true }),

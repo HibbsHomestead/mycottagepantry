@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type { Context } from '@netlify/functions'
-import { applicableTaxes, calculateTax, type Item } from './domain'
+import { applicableTaxes, calculateTax, saleTaxReviewKey, type Item } from './domain'
 const session = vi.hoisted(() => ({
   client: null as null | {
     query: (sql: string, params?: unknown[]) => Promise<unknown>
@@ -1075,4 +1075,89 @@ it('saves optional purchase minimums separately from stock alerts and preserves 
   const invalid = await call({action:'ingredientUpdate',table:'ingredients',data:{...data,expectedUpdatedAt:saved.updatedAt,minimumOrderQuantity:0}}, '')
   expect(invalid.status).not.toBe(200)
   expect(invalid.error).toMatch(/positive/)
+})
+
+it('keeps default changes prospective and requires a current, tenant scoped bulk review before updating prices', async () => {
+  const org = '00000000-0000-4000-8000-000000000019'
+  const owner = 'price-tax-owner'
+  await db.exec('RESET ROLE')
+  try {
+    await db.query('INSERT INTO businesses(id,business_name,identity_owner) VALUES($1,$2,$3)', [org, 'Price test', owner])
+    await db.query('INSERT INTO users(id,business_id,data,identity_id,role) VALUES($1,$2,$3,$4,$5)', ['owner', org, '{}', owner, 'Owner'])
+    await db.query('INSERT INTO settings(id,business_id,data) VALUES($1,$2,$3)', ['business', org, JSON.stringify({ id: 'business', name: 'Price test', taxRates: [rate] })])
+    for (const p of [
+      { id: 'inherit', name: 'Inherited food', workflow: 'food', priceTaxMode: 'inherit', price: 100, wholesale: 40 },
+      { id: 'override', name: 'Resale override', workflow: 'resale', priceTaxMode: 'before', price: 50 },
+      { id: 'kit', name: 'Exempt kit', workflow: 'kit', taxStatus: 'exempt', price: 50 },
+      { id: 'handmade', name: 'Legacy handmade', workflow: 'handmade', price: 50 },
+    ]) await db.query('INSERT INTO products(id,business_id,data) VALUES($1,$2,$3)', [p.id, org, JSON.stringify(p)])
+    await db.query('INSERT INTO sales(id,business_id,product_id,data) VALUES($1,$2,$3,$4)', ['historical-square', org, 'inherit', JSON.stringify({ id: 'historical-square', name: 'Recorded Square sale', amount: 100, tax: 5, customerTotal: 105, externalSource: 'square', priceTaxMode: 'before' })])
+    await db.query('INSERT INTO orders(id,business_id,data) VALUES($1,$2,$3)', ['open-po', org, JSON.stringify({ id: 'open-po', name: 'Open vendor order', status: 'ordered', amount: 27 })])
+  } finally {
+    await db.exec('SET ROLE category_app')
+  }
+  const request = (action: string, data: Record<string, unknown>) => call({ action, table: 'settings', data }, '')
+  const find = (w: Record<string, Item[]>, id: string) => w.products.find((p) => p.id === id)!
+  session.user = owner
+  try {
+    const before = (await call(undefined, '')).workspace
+    const historical = calculateTax(100, applicableTaxes(find(before, 'inherit'), before.settings[0]))
+    const saved = await request('priceTaxDefault', { expected: 'before', mode: 'includes' })
+    expect(saved.status, saved.error).toBe(200)
+    const w = saved.workspace
+    expect(w.settings[0].defaultPriceTaxMode).toBe('includes')
+    expect(find(w, 'inherit')).toMatchObject({ price: 100, wholesale: 40, priceTaxMode: 'saved-before' })
+    expect(calculateTax(100, applicableTaxes(find(w, 'inherit'), w.settings[0]))).toEqual(historical)
+    const staleEditor = await saveProduct(find(before, 'inherit'))
+    expect(staleEditor.status).not.toBe(200)
+    expect(staleEditor.error).toMatch(/price tax treatment changed/)
+
+    const choices = { strategy: 'total', includeOverrides: false }
+    const preview = await request('priceTaxPreview', choices)
+    expect(preview.status, preview.error).toBe(200)
+    expect(preview.plan).toMatchObject({ counts: { Food: 1, Handmade: 1, Resale: 0, Kits: 1 }, overrides: 1, overridesReplaced: 0, failures: 0 })
+    expect(preview.plan.rows.find((r: Item) => r.id === 'inherit').prices).toEqual([
+      expect.objectContaining({ field: 'price', before: expect.objectContaining({ price: 100, tax: 5, total: 105 }), after: expect.objectContaining({ price: 105, tax: 5, total: 105 }) }),
+      expect.objectContaining({ field: 'wholesale', before: expect.objectContaining({ price: 40, total: 42 }), after: expect.objectContaining({ price: 42, total: 42 }) }),
+    ])
+    expect(preview.plan.rows.find((r: Item) => r.id === 'kit').prices[0].after.tax).toBe(0)
+    expect((await request('priceTaxPreview', { ...choices, includeOverrides: true })).plan.overridesReplaced).toBe(1)
+    session.user = 'category-owner-b'
+    expect((await request('priceTaxApply', { ...choices, review: preview.review })).status).not.toBe(200)
+    session.user = owner
+    const liveClient = session.client!
+    session.client = { ...liveClient, query: (sql, params) => {
+      if (sql.startsWith('INSERT INTO activity'))
+        return Promise.reject(new Error('Fixture interrupted the audit after updating products'))
+      return liveClient.query(sql, params)
+    } }
+    try {
+      const interrupted = await request('priceTaxApply', { ...choices, review: preview.review })
+      expect(interrupted.status).not.toBe(200)
+      expect(interrupted.error).toMatch(/0 products updated/)
+    } finally {
+      session.client = liveClient
+    }
+    const rolledBack = (await call(undefined, '')).workspace
+    expect(rolledBack.products).toEqual(w.products)
+    expect(rolledBack.activity).toEqual(w.activity)
+    const applied = await request('priceTaxApply', { ...choices, review: preview.review })
+    expect(applied.status, applied.error).toBe(200)
+    expect(applied.priceTaxResult).toEqual({ updated: 3, failed: 0 })
+    expect(find(applied.workspace, 'inherit')).toMatchObject({ price: 105, wholesale: 42, priceTaxMode: 'inherit' })
+    expect(find(applied.workspace, 'override').priceTaxMode).toBe('before')
+    expect(applied.workspace.sales).toEqual(before.sales)
+    expect(applied.workspace.orders).toEqual(before.orders)
+    expect(applied.workspace.journals).toEqual(before.journals)
+    expect(applied.workspace.activity.find((a: Item) => a.type === 'priceTaxApply').details.changes).toHaveLength(3)
+    expect((await request('priceTaxApply', { ...choices, review: preview.review })).status).not.toBe(200)
+    const reviewedSale = await call({ action: 'simpleSale', table: 'sales', data: {
+      date: '2026-11-23', saleLines: [{ productId: 'inherit', quantity: 1, amount: 100, reviewedTax: saleTaxReviewKey(historical) }],
+    } }, '')
+    expect(reviewedSale.status).not.toBe(200)
+    expect(reviewedSale.error).toMatch(/after this sale was reviewed/)
+    expect((await call(undefined, '')).workspace.sales).toEqual(before.sales)
+  } finally {
+    session.user = 'category-owner-a'
+  }
 })

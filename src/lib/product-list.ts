@@ -1,6 +1,8 @@
 import { handmadeEstimate } from './handmade'
 import {
   packagingLines,
+  applicableTaxes,
+  priceTaxLabel,
   productCosting,
   profitability,
   type Item,
@@ -97,7 +99,11 @@ export function productListMetrics(product: Item, workspace: Workspace) {
       /* Display and sort the same unavailable state. */
     }
   }
-  return { cost, price, pricing, reason: result.reason }
+  let taxLabel = 'Needs tax setup'
+  try {
+    taxLabel = priceTaxLabel(pricing?.snapshot ?? applicableTaxes(product, workspace.settings[0]))
+  } catch { /* A missing setup must not be shown as tax exempt. */ }
+  return { cost, price, pricing, taxLabel, reason: result.reason }
 }
 export function sortProducts(
   products: Item[],

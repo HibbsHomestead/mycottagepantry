@@ -953,11 +953,49 @@ export function saleTaxProduct(product: Item, taxRateIds: unknown): Item {
     ? { ...product, taxSource: undefined, taxRateIds }
     : product
 }
+export type BusinessPriceTaxMode = 'before' | 'includes'
+export const businessPriceTaxMode = (business?: Item): BusinessPriceTaxMode =>
+  business?.defaultPriceTaxMode === 'includes' ? 'includes' : 'before'
+
+export function resolvedPriceTaxMode(product: Item, business: Item) {
+  switch (product.priceTaxMode) {
+    case 'inherit':
+      return businessPriceTaxMode(business)
+    case 'before':
+    case 'saved-before':
+      return 'before'
+    case 'includes':
+    case 'saved-includes':
+      return 'includes'
+    default:
+      return 'configured'
+  }
+}
+
+export function priceTaxLabel(rates: TaxRate[]) {
+  const nonzero = rates.filter((r) => Number(r.ratePercent) > 0)
+  if (!nonzero.length) return 'No applicable tax'
+  if (nonzero.every((r) => r.behavior === 'exclusive')) return 'Tax added at sale'
+  if (nonzero.every((r) => r.behavior === 'inclusive')) return 'Price includes tax'
+  return 'Includes some taxes · others added'
+}
+
+/** Show the stored price basis even when applicable rates cannot be resolved. */
+export function savedPriceTaxLabel(product: Item, business: Item) {
+  const mode = resolvedPriceTaxMode(product, business)
+  return mode === 'includes'
+    ? 'Saved price · includes tax'
+    : mode === 'before'
+      ? 'Saved price · before tax'
+      : 'Saved price · per-rate tax behaviors'
+}
+
 export function applicableTaxes(
   product: Item,
   business: Item,
   date = new Date().toISOString().slice(0, 10),
 ): TaxRate[] {
+  const priceTaxMode = resolvedPriceTaxMode(product, business)
   const inherited =
     product.taxSource === 'category'
       ? categoryTaxState(product, business)
@@ -1008,9 +1046,9 @@ export function applicableTaxes(
         ...r,
         order: assignment?.order ?? r.order,
         behavior:
-          product.priceTaxMode === 'before'
+          priceTaxMode === 'before'
             ? 'exclusive'
-            : product.priceTaxMode === 'includes'
+            : priceTaxMode === 'includes'
               ? 'inclusive'
               : assignment?.behavior || r.behavior,
       }
@@ -1135,6 +1173,15 @@ export function profitability(
     margin,
     suggested: (cost / (1 - target / 100)) * tax.divisor,
   }
+}
+
+export function saleTaxReviewKey(tax: ReturnType<typeof calculateTax>) {
+  return JSON.stringify([
+    tax.enteredPrice, tax.revenue, tax.tax, tax.customerTotal,
+    tax.snapshot.map(({ id, behavior, ratePercent, compound, order, amount }) => [
+      id, behavior, ratePercent, Boolean(compound), order ?? 0, amount,
+    ]),
+  ])
 }
 
 export const money = (n: number) =>

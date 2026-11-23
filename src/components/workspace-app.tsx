@@ -191,6 +191,7 @@ import {
   productCosting,
   profitability,
   applicableTaxes,
+  priceTaxLabel,
   saleTaxProduct,
   ingredientUnits,
   unitLabel,
@@ -213,11 +214,13 @@ import {
 } from '@/components/financial-editors'
 
 import { IngredientDetail } from '@/components/ingredient-detail'
+import { PrepStockSourceSelect } from '@/components/stock-prep'
 import { PantryPhoto } from '@/components/pantry-photo'
 import { PantryInventory, PantrySummary } from '@/components/pantry-inventory'
 import { WorkspaceDashboard } from '@/components/workspace-dashboard'
 import { TaxCenter } from '@/components/tax-center'
 import { SettingsWorkspace } from '@/components/settings-workspace'
+import { ProductPriceTaxField } from '@/components/business-price-tax'
 import {
   defaultAppearance,
   applyAppearance,
@@ -815,6 +818,7 @@ export function WorkspaceApp() {
         throw new Error(
           customerMessage(result.error) + ' Your draft is preserved.',
         )
+      if (action === 'priceTaxPreview') return result
       if (
         action === 'save' &&
         table === 'ingredients' &&
@@ -866,6 +870,8 @@ export function WorkspaceApp() {
           'ingredientUpdate',
           'inventoryMarkReviewed',
           'ingredientOffer',
+          'stockPrepPost',
+          'stockPrepReverse',
           'productRecipeLink',
         ].includes(action) &&
         !keepProductionOpen
@@ -1149,6 +1155,9 @@ export function WorkspaceApp() {
       item
         ? {
             ...item,
+            ...(kind === 'product' && !item.priceTaxMode
+              ? { priceTaxMode: products.some((p) => p.id === item.id) ? 'configured' : 'inherit' }
+              : {}),
             ...(kind === 'ingredient'
               ? { receivedDate: item.receivedDate || ovenToday(business) }
               : {}),
@@ -1189,6 +1198,7 @@ export function WorkspaceApp() {
             ...(kind === 'product'
               ? {
                   workflow: 'food',
+                  priceTaxMode: 'inherit',
                   taxSource: 'category',
                   productCategoryId: '',
                 }
@@ -3356,6 +3366,7 @@ export function WorkspaceApp() {
                       setAppearancePreview(null)
                   }}
                   saveBusiness={(item) => mutate('save', 'settings', item)}
+                  priceTaxRequest={(action, data) => mutate(action, 'settings', data)}
                   onCategoryConfig={(patch) =>
                     setState((w) => ({
                       ...w,
@@ -4734,22 +4745,7 @@ export function WorkspaceApp() {
                       <Field label="Wholesale price ($)">
                         {input('wholesale', 'number')}
                       </Field>
-                      <Field label="Entered prices">
-                        {select('priceTaxMode', [
-                          {
-                            value: 'configured',
-                            label: 'Rate behaviors',
-                          },
-                          {
-                            value: 'before',
-                            label: 'Excludes tax',
-                          },
-                          {
-                            value: 'includes',
-                            label: 'Includes tax',
-                          },
-                        ])}
-                      </Field>
+                      <ProductPriceTaxField product={draft as Item} business={business} change={change} />
                       <Field label="Target margin (%)">
                         {input('targetMargin', 'number')}
                       </Field>
@@ -5061,25 +5057,36 @@ export function WorkspaceApp() {
                   ).map((l: any) => {
                     const i = ingredients.find((i) => i.id === l.ingredientId)!
                     return (
-                      <div className="actual-use-row" key={i.id}>
-                        <span>{i.name}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          aria-label={'Actual ' + i.name}
-                          value={
-                            draft.usage?.[i.id] ??
-                            l.quantity * (selected?.count || 1)
-                          }
-                          onChange={(e) =>
-                            change('usage', {
-                              ...draft.usage,
-                              [i.id]: e.target.value,
-                            })
-                          }
+                      <div key={i.id}>
+                        <div className="actual-use-row">
+                          <span>{i.name}</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            aria-label={'Actual ' + i.name}
+                            value={
+                              draft.usage?.[i.id] ??
+                              l.quantity * (selected?.count || 1)
+                            }
+                            onChange={(e) =>
+                              change('usage', {
+                                ...draft.usage,
+                                [i.id]: e.target.value,
+                              })
+                            }
+                          />
+                          <span>{l.unit}</span>
+                        </div>
+                        <PrepStockSourceSelect
+                          ingredient={i}
+                          lots={state.lots}
+                          value={draft.prepSources?.[i.id]}
+                          change={(source) => change('prepSources', {
+                            ...draft.prepSources,
+                            [i.id]: source,
+                          })}
                         />
-                        <span>{l.unit}</span>
                       </div>
                     )
                   })}
@@ -6572,15 +6579,7 @@ function PricingSummary({
             Retail price <strong>{money(Number(product.price || 0))}</strong>
           </span>
           <span className="status blue">
-            {applicableTaxes(product, business).some(
-              (r) => r.behavior === 'inclusive',
-            )
-              ? applicableTaxes(product, business).some(
-                  (r) => r.behavior === 'exclusive',
-                )
-                ? 'Includes some taxes · others added'
-                : 'Price includes tax'
-              : 'Price before tax'}
+            {priceTaxLabel(p.snapshot)}
           </span>
         </div>
         <div

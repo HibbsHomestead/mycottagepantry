@@ -5,12 +5,11 @@ import { supportAiRequest } from '@/lib/support-client'
 import {
   supportAiPolicySchema,
   supportAiModels,
-  type supportAiDefaults,
 } from '@/lib/support-ai'
 import { supportKnowledge } from '@/lib/support-knowledge'
 import './support-helper.css'
 
-type Policy = typeof supportAiDefaults
+type Policy = ReturnType<typeof supportAiPolicySchema.parse>
 export function SupportAiSuggestion({
   ticketId,
   onDraft,

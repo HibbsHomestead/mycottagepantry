@@ -268,3 +268,7 @@
     width: 44px;
   }
 }
+
+.product-price-tax-label {
+  display: block;
+}

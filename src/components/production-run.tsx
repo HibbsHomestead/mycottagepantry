@@ -1,3 +1,4 @@
+import { PrepStockSourceSelect } from './stock-prep'
 import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState, useEffect, type ComponentProps } from 'react'
 import { type Item, money, units } from '../lib/domain'
@@ -134,6 +135,7 @@ function RunEditor({
       (l.output !== '' && l.output != null) ||
       Number(l.waste) > 0 ||
       Object.keys(l.usage || {}).length > 0 ||
+      Object.values(l.prepSources || {}).some(Boolean) ||
       Object.keys(l.materialWaste || {}).length > 0 ||
       (l.laborMinutes !== '' && l.laborMinutes != null)
     )
@@ -569,6 +571,17 @@ function RunEditor({
                           {r.name}: {Number(r.quantity).toFixed(3)} {r.unit}{' '}
                           required
                         </p>
+                        {r.kind === 'ingredient' && r.tracked && (
+                          <PrepStockSourceSelect
+                            ingredient={state.ingredients.find((i) => i.id === r.itemId)}
+                            lots={state.lots}
+                            value={l.prepSources?.[r.itemId]}
+                            change={(source) => change(l.id, {
+                              prepSources: { ...l.prepSources, [r.itemId]: source },
+                            })}
+                            disabled={!canRecordActuals}
+                          />
+                        )}
                         {r.kind === 'ingredient' &&
                           r.source.ingredientId &&
                           (definition?.bom ||

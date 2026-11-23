@@ -1,3 +1,4 @@
+import { ProductPriceTaxField } from './business-price-tax'
 import { ItemRestocking } from './item-restocking'
 import { minimumOrder } from '@/lib/item-restocking'
 import { convert } from '@/lib/domain'
@@ -225,7 +226,7 @@ export function AddItemDialog({
     ...specific,
     usedAs: type,
     inventoryCreation: true,
-    ...(type === 'resale' ? { workflow: 'resale' } : {}),
+    ...(type === 'resale' ? { workflow: 'resale', priceTaxMode: drafts[draftKey]?.priceTaxMode ?? 'inherit' } : {}),
   } as unknown as Item
   const sharedKeys = [
     'name',
@@ -834,6 +835,7 @@ export function AddItemDialog({
                                       <Field label="Selling price">
                                         {input('price', 'number')}
                                       </Field>
+                                      <ProductPriceTaxField product={value} business={workspace.settings[0]} change={change} />
                                     </>
                                   )}
 

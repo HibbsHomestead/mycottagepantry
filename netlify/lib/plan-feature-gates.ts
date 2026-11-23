@@ -116,6 +116,8 @@ export function requestFeatures({
       break
     case 'receive':
     case 'adjust':
+    case 'stockPrepPost':
+    case 'stockPrepReverse':
       if (wf === 'resale')
         out.add(
           action === 'receive' ? 'resalePackReceiving' : 'resaleMovements',

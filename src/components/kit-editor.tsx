@@ -1,4 +1,5 @@
 import { ProductDescriptionField } from './product-description-field'
+import { ProductPriceTaxField } from './business-price-tax'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemDeleteButton } from './item-deletion'
 import { useState } from 'react'
@@ -41,6 +42,7 @@ export function KitEditor({
           kitComponents: [],
           packagingLines: [],
           price: '',
+          priceTaxMode: 'inherit',
           assemblyMinutes: 0,
           assemblyRate: 0,
         },
@@ -419,6 +421,7 @@ export function KitEditor({
           />
         </label>
       ))}
+      <ProductPriceTaxField product={draft} business={workspace.settings[0]} change={change} disabled={busy} />
       {summary}
     </>
   )

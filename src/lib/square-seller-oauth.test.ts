@@ -2,6 +2,8 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 const session = vi.hoisted(() => ({
+  authFailure: false,
+  schemaFailure: false,
   org: "org-a",
   role: "Owner",
   data: new Map<string, any>(),
@@ -9,6 +11,13 @@ const session = vi.hoisted(() => ({
 const client = {
   query: vi.fn(async (sql: string, args: any[] = []) => {
     const key = args[0] + ":" + args[1];
+    if (
+      sql.startsWith("SELECT data FROM square_seller") &&
+      session.schemaFailure
+    )
+      throw Object.assign(new Error("private database detail"), {
+        code: "42P01",
+      });
     if (sql.startsWith("SELECT data FROM square_seller"))
       return {
         rows: session.data.has(key)
@@ -21,7 +30,22 @@ const client = {
   }),
 };
 vi.mock("../../netlify/lib/registration-core", () => ({
-  registrationActor: async () => ({ id: "owner-fixture" }),
+  RegistrationError: class extends Error {
+    constructor(
+      public status: number,
+      public code: string,
+      message: string,
+    ) {
+      super(message);
+    }
+  },
+  registrationActor: async () => {
+    if (session.authFailure)
+      throw Object.assign(new Error("private identity detail"), {
+        status: 401,
+      });
+    return { id: "owner-fixture" };
+  },
   registrationTransaction: async (_a: any, fn: any) => fn(client),
   currentMembership: async () => ({
     id: session.org,
@@ -47,6 +71,8 @@ async function call(action?: string, extra: any = {}) {
   );
 }
 beforeEach(() => {
+  session.authFailure = false;
+  session.schemaFailure = false;
   session.data.clear();
   session.org = "org-a";
   session.role = "Owner";
@@ -138,7 +164,7 @@ it("rejects wrong-browser/expired OAuth and manager authorization", async () => 
     ).status,
   ).toBe(400);
   session.role = "Manager";
-  expect((await call("connect")).status).toBe(400);
+  expect((await call("connect")).status).toBe(403);
 });
 it("decline returns without connection and disconnect preserves imported-history tables", async () => {
   const started = await call("connect");
@@ -228,7 +254,7 @@ it("rechecks owner permission on callback after role changes without exchanging 
         }),
       )
     ).status,
-  ).toBe(400);
+  ).toBe(403);
   expect(fetcher).not.toHaveBeenCalled();
 });
 
@@ -392,4 +418,41 @@ it("keeps independently authorized merchants separate and preserves locations on
   expect(session.data.get("org-b:sandbox").credential).not.toEqual(
     session.data.get("org-a:sandbox").credential,
   );
+});
+
+it("distinguishes session, owner, configuration and missing-schema failures without leaking private details", async () => {
+  session.authFailure = true;
+  let response = await call();
+  expect(response.status).toBe(401);
+  expect((await response.json()).code).toBe("SIGN_IN_REQUIRED");
+  session.authFailure = false;
+  session.role = "Manager";
+  response = await call();
+  expect(response.status).toBe(403);
+  expect((await response.json()).code).toBe("OWNER_REQUIRED");
+  session.role = "Owner";
+  session.schemaFailure = true;
+  response = await call();
+  expect(response.status).toBe(503);
+  const failure = await response.json();
+  expect(failure.code).toBe("SQUARE_SCHEMA_UNAVAILABLE");
+  expect(JSON.stringify(failure)).not.toContain("private database detail");
+  vi.stubEnv("SQUARE_SANDBOX_APPLICATION_ID", "");
+  response = await call();
+  expect(response.status).toBe(200);
+  expect((await response.json()).view.configured).toBe(false);
+  response = await call("connect");
+  expect(response.status).toBe(503);
+  expect((await response.json()).error).toBe(
+    "Square connection is not available yet. Contact support.",
+  );
+});
+it("validates UTC calendar dates on the server", async () => {
+  const { squareUtcInput } =
+    await import("../../netlify/functions/square-sales.mts");
+  expect(squareUtcInput("2026-11-23T09:30", undefined)).toBe(
+    "2026-11-23T09:30:00.000Z",
+  );
+  expect(() => squareUtcInput("2026-02-30T09:30", undefined)).toThrow();
+  expect(() => squareUtcInput("2026-11-23T09:30-05:00", undefined)).toThrow();
 });

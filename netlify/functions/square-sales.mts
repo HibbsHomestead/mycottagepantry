@@ -1,9 +1,11 @@
+import { tracePattern } from "../../src/lib/access-state";
 import { deploymentRuntime } from "../lib/runtime-environment";
 import { randomBytes, createHash } from "node:crypto";
 import {
   registrationActor,
   registrationTransaction,
   currentMembership,
+  RegistrationError,
 } from "../lib/registration-core";
 import { demoRequested, demoUnavailable } from "../lib/demo-session";
 import {
@@ -29,6 +31,15 @@ export default async (request: Request) => {
   if (demoRequested(request)) return demoUnavailable();
   const url = new URL(request.url),
     callback = url.searchParams.get("callback") === "1";
+  let stage = "request";
+  let sessionVerified = false,
+    ownerVerified = false;
+  const requestId = randomBytes(12).toString("hex");
+  const suppliedTrace = request.headers.get("X-Access-Trace");
+  const accessTrace =
+    suppliedTrace && tracePattern.test(suppliedTrace)
+      ? suppliedTrace
+      : undefined;
   try {
     if (!["GET", "POST"].includes(request.method))
       return new Response(null, { status: 405, headers });
@@ -58,13 +69,32 @@ export default async (request: Request) => {
       throw new Error(
         "Production Square authorization is available only on the production deployment.",
       );
+    stage = "session";
     const actor = await registrationActor(false, request);
+    sessionVerified = true;
+    stage = "database";
     const result = await registrationTransaction(actor, async (client) => {
+      stage = "membership";
       const member = await currentMembership(client, actor);
-      if (!member || !["Owner", "Manager"].includes(member.role))
-        throw new Error(
-          "An Owner or Manager must manage Square for this business.",
+      if (!member || member.role !== "Owner")
+        throw new RegistrationError(
+          403,
+          "OWNER_REQUIRED",
+          "The business Owner must manage the Square connection.",
         );
+      ownerVerified = true;
+      stage = "configuration";
+      const config = sellerConfig(environment);
+      if (!config.ready) {
+        if (request.method === "GET" && !callback)
+          return { view: sellerView({}, environment) };
+        throw new RegistrationError(
+          503,
+          "SQUARE_NOT_CONFIGURED",
+          "Square connection is not available yet. Contact support.",
+        );
+      }
+      stage = "schema";
       await client.query("SELECT id FROM businesses WHERE id=$1 FOR UPDATE", [
         member.id,
       ]);
@@ -75,7 +105,7 @@ export default async (request: Request) => {
         )
       ).rows[0];
       const data: any = row?.data || {};
-      const config = sellerConfig(environment);
+      stage = "management";
       const redirectUri =
         url.origin + "/api/square-sales?callback=1&environment=" + environment;
       if (callback) {
@@ -287,7 +317,11 @@ export default async (request: Request) => {
         const sample = await sellerSample(
           environment,
           token,
-          { start: input.start, end: input.end, locations: input.locations },
+          {
+            start: squareUtcInput(input.startLocal, input.start),
+            end: squareUtcInput(input.endLocal, input.end),
+            locations: input.locations,
+          },
           data.locations,
         );
         data.selectedLocations = input.locations;
@@ -333,20 +367,96 @@ export default async (request: Request) => {
       });
     return Response.json(result, { headers: responseHeaders });
   } catch (e) {
-    // Never return raw transport, database, authorization code, or credential errors.
-    const message = (e as Error).message;
-    const safe =
-      /^(Square |Choose |Select |An Owner|The business Owner|The Owner|Open Square|Connect Square|Production Square)/.test(
-        message,
-      );
+    // Log only fixed stage/category metadata, never the exception or request URL.
+    const failure = squareManagementFailure(e, stage);
+    console.warn("square_management_failure", {
+      requestId,
+      accessTrace,
+      stage,
+      sessionVerified,
+      ownerVerified,
+      code: failure.code,
+      status: failure.status,
+    });
     return Response.json(
-      {
-        error: safe
-          ? message
-          : "Square management is unavailable. Sign in and retry. Contact support if it persists.",
-      },
-      { status: (e as any).status === 401 ? 401 : 400, headers },
+      { error: failure.message, code: failure.code, requestId },
+      { status: failure.status, headers },
     );
   }
 };
 export const config = { path: "/api/square-sales" };
+
+export function squareUtcInput(local: unknown, legacy: unknown): string {
+  if (local === undefined) return typeof legacy === "string" ? legacy : "";
+  if (
+    typeof local !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)
+  )
+    throw new Error("Choose a valid date and time in UTC.");
+  const date = new Date(local + ":00Z");
+  if (
+    !Number.isFinite(date.getTime()) ||
+    date.toISOString().slice(0, 16) !== local
+  )
+    throw new Error("Choose a valid date and time in UTC.");
+  return date.toISOString();
+}
+export function squareManagementFailure(error: unknown, stage: string) {
+  const e = error as { status?: number; code?: string; message?: string };
+  if (stage === "session" && e.status === 401)
+    return {
+      status: 401,
+      code: "SIGN_IN_REQUIRED",
+      message:
+        "Your session is missing or has expired. Sign in to manage Square.",
+    };
+  const known: Record<string, [number, string]> = {
+    OWNER_REQUIRED: [
+      403,
+      "The business Owner must manage the Square connection.",
+    ],
+    EMAIL_UNVERIFIED: [
+      403,
+      "Verify your account email before managing Square.",
+    ],
+    MEMBERSHIP_INACTIVE: [
+      403,
+      "Your business membership is inactive. Contact the business Owner.",
+    ],
+    WORKSPACE_SELECTION_REQUIRED: [
+      409,
+      "Choose your business before managing Square.",
+    ],
+    SQUARE_NOT_CONFIGURED: [
+      503,
+      "Square connection is not available yet. Contact support.",
+    ],
+  };
+  if (e.code && known[e.code]) {
+    const [status, message] = known[e.code];
+    return { status, code: e.code, message };
+  }
+  if (["42P01", "42703"].includes(e.code || ""))
+    return {
+      status: 503,
+      code: "SQUARE_SCHEMA_UNAVAILABLE",
+      message: "Square connection setup is incomplete. Contact support.",
+    };
+  if (
+    ["request", "management"].includes(stage) &&
+    /^(Square |Choose |Select |The business Owner|The Owner|Open Square|Connect Square|Production Square)/.test(
+      e.message || "",
+    )
+  )
+    return {
+      status: 400,
+      code: "SQUARE_REQUEST_REJECTED",
+      message: e.message!,
+    };
+  return {
+    status: 503,
+    code: "SQUARE_TEMPORARILY_UNAVAILABLE",
+    message:
+      "Square management is temporarily unavailable. Retry in a moment. Contact support if it persists.",
+  };
+}

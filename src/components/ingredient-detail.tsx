@@ -1,4 +1,6 @@
 import { ItemRestocking } from './item-restocking'
+import { StockPrepPanel } from './stock-prep'
+import { prepMovementLabels } from '@/lib/stock-prep'
 import { minimumOrder } from '@/lib/item-restocking'
 import { FormErrorNotice } from './form-error-notice'
 import { ItemDeleteButton } from './item-deletion'
@@ -1650,6 +1652,13 @@ export function IngredientDetail({
                       </div>
                     </section>
 
+                    <StockPrepPanel
+                      ingredient={i}
+                      workspace={w}
+                      save={save}
+                      canEdit={canEdit}
+                    />
+
                     {inventoryReviewReasons(i, w).length > 0 && (
                       <div className="ingredient-purchase-notice">
                         {!i.compoundRecipeId && !hasPurchasePackage(i) && (
@@ -1787,7 +1796,10 @@ export function IngredientDetail({
                               {history.map(inventoryMovementView).map((l) => (
                                 <tr key={l.id}>
                                   <td>{l.date}</td>
-                                  <td>{l.type}</td>
+                                  <td>
+                                    {prepMovementLabels[l.type] || l.type}
+                                    {l.prepLotId && l.location ? ` · ${l.location}` : ''}
+                                  </td>
                                   <td>
                                     {inventoryQuantity(l.quantity)} {l.unit}
                                     {l.resultingInventoryQuantity != null &&

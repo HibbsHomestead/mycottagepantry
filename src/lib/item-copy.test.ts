@@ -105,3 +105,14 @@ it.each(['food', 'handmade', 'resale', 'kit'])(
     } else expect(draft.recipeId).toBe('shared-recipe')
   },
 )
+
+it.each(['inherit', 'before', 'includes', 'saved-includes', undefined])(
+  'preserves product price treatment on copy (%s)',
+  (mode) => {
+    const w = demoData()
+    const copy = copyDefinition({ id: 'old', name: 'Original', price: 20, priceTaxMode: mode, priceTaxRevision: 'old-revision' }, 'products', w)
+    expect(copy.priceTaxMode).toBe(mode ?? 'configured')
+    expect(copy.priceTaxRevision).toBeUndefined()
+    expect(copy.price).toBe(20)
+  },
+)

@@ -62,6 +62,8 @@ import {
   ingredientUnits,
   unitLabel,
   calculateTax,
+  priceTaxLabel,
+  saleTaxReviewKey,
   applicableTaxes,
   type Item,
   type Workspace,
@@ -1501,7 +1503,7 @@ export function FinanceWorkspace({
                       })
                     }
                     const product = w.products.find((p) => p.id === l.productId)
-                    let tax: any,
+                    let tax: ReturnType<typeof calculateTax> | undefined,
                       warning = ''
                     try {
                       tax = calculateTax(
@@ -1635,6 +1637,7 @@ export function FinanceWorkspace({
                         </div>
                         {tax && (
                           <div className="finance-calculation">
+                            <p>{priceTaxLabel(tax.snapshot)}</p>
                             <p>
                               Pre-tax revenue {money(tax.revenue)} · tax
                               liability {money(tax.tax)} · customer total{' '}
@@ -2175,7 +2178,27 @@ export function FinanceWorkspace({
                 disabled={
                   busy || !canWrite || (modal === 'consignmentSale' && !math)
                 }
-                onClick={() => setReview(true)}
+                onClick={() => {
+                  if (modal === 'simpleSale') {
+                    try {
+                      const saleLines = (draft.saleLines || []).map((line: Item) => {
+                        const product = w.products.find((p) => p.id === line.productId)
+                        if (!product) throw new Error('Choose a product for every sale line.')
+                        const tax = calculateTax(
+                          Number(line.amount || 0) - Number(line.discounts || 0),
+                          applicableTaxes(product, w.settings[0], draft.date),
+                        )
+                        return { ...line, reviewedTax: saleTaxReviewKey(tax) }
+                      })
+                      setDraft({ ...draft, saleLines })
+                    } catch (e) {
+                      setError((e as Error).message)
+                      return
+                    }
+                  }
+                  setError('')
+                  setReview(true)
+                }}
               >
                 Review <ArrowRight size={17} />
               </button>

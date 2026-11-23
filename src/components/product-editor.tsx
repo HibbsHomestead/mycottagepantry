@@ -1,3 +1,4 @@
+import { ProductPriceTaxField } from './business-price-tax'
 import { ItemRestocking } from './item-restocking'
 import { minimumOrder } from '@/lib/item-restocking'
 import {
@@ -99,6 +100,7 @@ export function ProductEditor({
           workflow: kind === 'trade-product-resale' ? 'resale' : 'handmade',
           recipeId: '',
           price: '',
+          priceTaxMode: 'inherit',
           threshold: 0,
           sku: '',
           barcode: '',
@@ -430,6 +432,7 @@ export function ProductEditor({
     <>
       <div className="form-grid">
         <Field label="Selling price">{input('price', 'number', true)}</Field>
+        <ProductPriceTaxField product={draft} business={workspace.settings[0]} change={change} disabled={working} />
         <ItemRestocking value={draft as Item} change={change} />
       </div>
       {resale && (
