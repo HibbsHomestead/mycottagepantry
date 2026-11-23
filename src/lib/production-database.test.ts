@@ -5,6 +5,7 @@ import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type { Context } from '@netlify/functions'
 import type { Item } from './domain'
+import { planStockPrep, prepReviewKey } from './stock-prep'
 const session = vi.hoisted(() => ({
   client: null as null | {
     query: (sql: string, params?: unknown[]) => Promise<unknown>
@@ -224,6 +225,17 @@ beforeAll(async () => {
   seed.ingredients.push({ id: 'isolated-liner', name: 'Test muffin liner', usedAs: 'supply', unit: 'each', quantity: 100, cost: 0.025, currentCost: 0.025 })
   seed.recipes.push({ id: 'isolated-muffins', name: 'Test muffins', yield: 12, yieldUnit: 'each', laborMinutes: 0, laborRate: 0, lines: [{ ingredientId: 'flour', quantity: 120, unit: 'g' }], productionSupplies: [{ ingredientId: 'isolated-liner', quantity: 12, unit: 'each' }] })
   seed.products.push({ id: 'isolated-muffin', name: 'Test muffin', workflow: 'food', recipeId: 'isolated-muffins', unitsPerPackage: 1, price: 3, quantity: 0, cost: 0 })
+  seed.ingredients.push(
+    { id: 'prep-count', name: 'Bananas by count', unit: 'each', quantity: 20, cost: 0.5 },
+    { id: 'prep-weight', name: 'Bananas by weight', unit: 'g', storageUnit: 'kg', quantity: 2000, cost: 0.01 },
+  )
+  seed.recipes.push({ id: 'prep-recipe', name: 'Existing banana recipe', yield: 1, yieldUnit: 'each', lines: [{ ingredientId: 'prep-count', quantity: 2, unit: 'each' }] })
+  seed.recipes.push({
+    id: 'prep-legacy-recipe', name: 'Existing legacy banana recipe', yield: 1,
+    yieldUnit: 'each', laborMinutes: 0,
+    lines: [{ ingredientId: 'prep-count', quantity: 3, unit: 'each' }],
+  })
+  seed.products.push({ id: 'prep-product', name: 'Test banana loaf', workflow: 'food', recipeId: 'prep-recipe', unitsPerPackage: 1, price: 5, quantity: 0, cost: 0 })
   for (const [table, rows] of Object.entries(seed))
     for (const item of rows) {
       const columns =
@@ -1391,4 +1403,93 @@ it('production supplies persist separately, plan without movements, finalize onc
   const unchanged = await ok()
   expect(unchanged.ledger).toEqual(done.ledger)
   expect(find(unchanged.batches, request.id)).toEqual(find(done.batches, request.id))
+})
+
+it('posts count and weight prep, preserves costs and identity, consumes a partial portion only once, and reverses unused prep', async () => {
+  session.user = 'production-owner-a'
+  const date = '2026-01-01'
+  const quote = <T extends Item>(w: Awaited<ReturnType<typeof ok>>, input: T) => ({
+    ...input,
+    review: prepReviewKey(planStockPrep(find(w.ingredients, input.id), w.lots, input, date)),
+  })
+  const before = await ok()
+  const count = quote(before, {
+    id: 'prep-count', name: '', operationId: '11111111-1111-4111-8111-111111111111',
+    used: 12, portions: 3, perPortion: 4, outputUnit: 'each', method: 'Portioned and frozen',
+    location: 'Freezer', date, note: '4 bananas, approximately 2 cups',
+  })
+  expect((await ok()).ledger).toEqual(before.ledger)
+  const stale = await call('stockPrepPost', 'ingredients', { ...count, used: 9, perPortion: 3 })
+  expect(stale.error).toMatch(/changed since review/)
+  const shortage = await call('stockPrepPost', 'ingredients', { ...count, used: 30, perPortion: 10 })
+  expect(shortage.error).toMatch(/insufficient unportioned/i)
+  const countLot = `prep-${count.operationId}`
+  const posted = await ok('stockPrepPost', 'ingredients', count)
+  expect(find(posted.ingredients, 'prep-count')).toMatchObject({ quantity: 20, cost: 0.5 })
+  expect(find(posted.lots, countLot)).toMatchObject({ ingredientId: 'prep-count', balances: [4, 4, 4], location: 'Freezer', carriedCost: 6, note: count.note })
+  expect(posted.ledger.filter((l: Item) => l.prepLotId === countLot)).toHaveLength(2)
+  expect((await ok('stockPrepPost', 'ingredients', count)).ledger).toEqual(posted.ledger)
+  expect(posted.journals).toEqual(before.journals)
+  expect(posted.sales).toEqual(before.sales)
+  const adjustment = await call('adjust', 'ingredients', { id: 'prep-count', quantity: -10, unit: 'each', reason: 'Fixture correction' })
+  expect(adjustment.error).toMatch(/has prepared stock/)
+
+  const weight = {
+    id: 'prep-weight', name: '', operationId: '22222222-2222-4222-8222-222222222222',
+    used: 1.2, loss: 0.3, lossReason: 'Peels measured separately', portions: 3, perPortion: 300, outputUnit: 'g',
+    method: 'Peeled and frozen', location: 'Freezer drawer', date, expires: '2026-02-01', note: 'About 4 bananas per portion',
+  }
+  expect((await call('stockPrepPost', 'ingredients', { ...weight, outputUnit: 'each' })).error).toMatch(/verified unit conversion/)
+  const weightLot = `prep-${weight.operationId}`
+  const weighed = await ok('stockPrepPost', 'ingredients', quote(posted, weight))
+  expect(find(weighed.lots, weightLot)).toMatchObject({ balances: [300, 300, 300], quantity: 900, expires: weight.expires, carriedCost: 12, sourceUnit: 'kg' })
+  expect(find(weighed.ingredients, 'prep-weight').quantity).toBe(1700)
+  expect(find(weighed.ingredients, 'prep-weight').cost * 1700).toBeCloseTo(20)
+  expect(weighed.ledger.find((l: Item) => l.type === 'prep_loss' && l.prepLotId === weightLot)).toMatchObject({ quantity: -300, amount: 0 })
+  expect(weighed.journals).toEqual(before.journals)
+  const reverse = { id: 'prep-weight', lotId: weightLot, operationId: '33333333-3333-4333-8333-333333333333', reason: 'Mistaken entry; original weight verified', confirmPhysicalStock: true }
+  const reversed = await ok('stockPrepReverse', 'ingredients', reverse)
+  expect(find(reversed.ingredients, 'prep-weight')).toMatchObject({ quantity: 2000, cost: 0.01 })
+  expect(find(reversed.lots, weightLot)).toMatchObject({ quantity: 0, balances: [0, 0, 0], reversalReason: reverse.reason })
+  expect((await ok('stockPrepReverse', 'ingredients', reverse)).ledger).toEqual(reversed.ledger)
+
+  const run = { id: 'prep-fixture-run', name: 'Existing recipe run', status: 'scheduled', date, lines: [{ id: 'prep-fixture-line', productId: 'prep-product', quantity: 1, output: 1, mapping }] }
+  const draft = await ok('productionSave', 'batches', run)
+  expect(draft.ledger).toEqual(reversed.ledger)
+  expect((await call('productionComplete', 'batches', { id: run.id, expectedRevision: 1 })).error).toMatch(/choose unportioned stock or a prepared lot/)
+  await ok('productionRecordActuals', 'batches', { id: run.id, expectedRevision: 1, lines: [{ ...run.lines[0], prepSources: { 'prep-count': countLot } }] })
+  const completion = { id: run.id, expectedRevision: 2 }
+  const cooked = await ok('productionComplete', 'batches', completion)
+  expect(find(cooked.ingredients, 'prep-count')).toMatchObject({ quantity: 18, cost: 0.5 })
+  expect(find(cooked.lots, countLot)).toMatchObject({ balances: [2, 4, 4], quantity: 10 })
+  expect(cooked.ledger.find((l: Item) => l.type === 'batch_consumption' && l.prepLotId === countLot)).toMatchObject({ quantity: -2, amount: -1, location: 'Freezer' })
+  expect((await ok('productionComplete', 'batches', completion)).ledger).toEqual(cooked.ledger)
+  expect((await call('stockPrepReverse', 'ingredients', { ...reverse, id: 'prep-count', lotId: countLot, operationId: '44444444-4444-4444-8444-444444444444' })).error).toMatch(/only untouched/i)
+  expect(cooked.ingredients).toHaveLength(before.ingredients.length)
+  expect(cooked.recipes).toEqual(before.recipes)
+  const received = await ok('receive', 'ingredients', {
+    id: 'prep-count', quantity: 4, unit: 'each', price: 6,
+  })
+  expect(find(received.ingredients, 'prep-count')).toMatchObject({ quantity: 22 })
+  expect(find(received.ingredients, 'prep-count').cost * 22).toBeCloseTo(15)
+  expect(find(received.lots, countLot)).toMatchObject({
+    balances: [2, 4, 4], unitCost: 0.5, quantity: 10,
+  })
+  await ok('save', 'batches', {
+    id: 'prep-legacy-run', name: 'Legacy banana batch', date, count: 1,
+    recipeId: 'prep-legacy-recipe', yield: 1,
+  })
+  const legacy = await ok('complete', 'batches', {
+    id: 'prep-legacy-run', actualYield: 1, prepSources: { 'prep-count': countLot },
+  })
+  expect(find(legacy.ingredients, 'prep-count').quantity).toBe(19)
+  expect(find(legacy.ingredients, 'prep-count').cost * 19).toBeCloseTo(13.5)
+  expect(find(legacy.lots, countLot).balances).toEqual([0, 3, 4])
+  expect(find(legacy.batches, 'prep-legacy-run').usage).toMatchObject([
+    { ingredientId: 'prep-count', cost: 1.5, prepLotId: countLot },
+  ])
+  session.user = 'production-owner-b'
+  try {
+    expect((await call('stockPrepPost', 'ingredients', count)).error).toMatch(/from this business/)
+  } finally { session.user = 'production-owner-a' }
 })

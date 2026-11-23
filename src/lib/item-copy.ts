@@ -93,6 +93,7 @@ export function copyDefinition(
     if (source[key] !== undefined) draft[key] = structuredClone(source[key])
   }
   if (table === 'products') {
+    draft.priceTaxMode = source.priceTaxMode || 'configured'
     draft.quantity = 0
     draft.status = 'draft'
     if (source.workflow === 'handmade') {

@@ -6,10 +6,12 @@ export function RecipeYieldFields({
   recipe,
   onChange,
   linkedOutputUnit,
+  typeLocked,
 }: {
   recipe: { yield?: number | string; yieldUnit?: string; compound?: boolean }
   onChange: (key: string, value: string | boolean) => void
   linkedOutputUnit?: string
+  typeLocked?: boolean
 }) {
   const unit = recipe.yieldUnit || ''
   return (
@@ -60,11 +62,23 @@ export function RecipeYieldFields({
       <label className="check-label">
         <input
           type="checkbox"
-          checked={!!recipe.compound}
+          checked={recipe.compound === true}
+          disabled={typeLocked}
           onChange={(event) => onChange('compound', event.target.checked)}
         />
-        Compound prep — make this recipe available as an ingredient
+        Recipe type: Compound prep
       </label>
+      <p className="form-hint">
+        {recipe.compound
+          ? 'Produces a component that can be used in another recipe.'
+          : 'Recipe — used to make a finished product.'}
+      </p>
+      {typeLocked && (
+        <p className="form-hint">
+          This recipe has a prepared-stock or component link. Its type is
+          protected to keep that link intact.
+        </p>
+      )}
       {recipe.compound && !supportedPrepYieldUnit(unit) && (
         <p role="status">
           Choose a supported weight, volume or count unit. Your draft quantity

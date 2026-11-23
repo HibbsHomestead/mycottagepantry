@@ -7,9 +7,11 @@ import { useSubmissionValidation } from './submission-form'
 export function FormErrorNotice({
   message,
   children,
+  reveal = true,
 }: {
   message?: ReactNode
   children?: ReactNode
+  reveal?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const validation = useSubmissionValidation()
@@ -19,12 +21,12 @@ export function FormErrorNotice({
       ? safeSubmissionMessage(rawContent)
       : rawContent
   useEffect(() => {
-    if (!content || !ref.current) return
+    if (!reveal || !content || !ref.current) return
     const notice = ref.current
     const bounds = notice.getBoundingClientRect()
     if (bounds.bottom > window.innerHeight || bounds.top < 0)
       notice.scrollIntoView({ block: 'nearest', behavior: 'instant' })
-  }, [content])
+  }, [content, reveal])
   if (!content) return null
   return (
     <div

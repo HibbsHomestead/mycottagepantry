@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FormErrorNotice } from "./form-error-notice";
+import { tracePattern } from "@/lib/access-state";
 export function SquareConnection({
   allowed,
   onReview,
@@ -9,12 +10,7 @@ export function SquareConnection({
   onReview: (sample: any, environment: string) => void;
   initiallyOpen?: boolean;
 }) {
-  const [environment, setEnvironment] = useState(() =>
-      typeof window !== "undefined" &&
-      window.location.hash.includes("environment=sandbox")
-        ? "sandbox"
-        : "",
-    ),
+  const [environment, setEnvironment] = useState(""),
     [view, setView] = useState<any>(null),
     [open, setOpen] = useState(initiallyOpen),
     [busy, setBusy] = useState(false),
@@ -27,25 +23,34 @@ export function SquareConnection({
     setBusy(true);
     setError("");
     try {
+      const trace = new URLSearchParams(window.location.search).get(
+        "accessTrace",
+      );
+      const traceHeaders: Record<string, string> =
+        trace && tracePattern.test(trace) ? { "X-Access-Trace": trace } : {};
       const r = await fetch(
         "/api/square-sales" +
           (!action ? (selected ? "?environment=" + selected : "") : ""),
         action
           ? {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { ...traceHeaders, "Content-Type": "application/json" },
               body: JSON.stringify({
                 action,
                 environment: selected,
-                start: start ? new Date(start + "Z").toISOString() : "",
-                end: end ? new Date(end + "Z").toISOString() : "",
+                startLocal: start,
+                endLocal: end,
                 locations,
                 confirm: disconnect,
               }),
             }
-          : undefined,
+          : { headers: traceHeaders },
       );
-      const j = await r.json();
+      const j = await r.json().catch(() => {
+        throw new Error(
+          "Square management is temporarily unavailable. Retry in a moment.",
+        );
+      });
       if (j.view) {
         setView(j.view);
         setEnvironment(j.view.environment);
@@ -64,7 +69,11 @@ export function SquareConnection({
         );
       if (action === "disconnect") setDisconnect(false);
     } catch (e) {
-      setError((e as Error).message);
+      setError(
+        e instanceof TypeError
+          ? "Square could not be reached. Check your connection and retry."
+          : (e as Error).message,
+      );
     } finally {
       setBusy(false);
     }
@@ -74,43 +83,27 @@ export function SquareConnection({
   }, [initiallyOpen, allowed]);
   return (
     <div className="square-connection">
-      <button
-        type="button"
-        className="btn secondary"
-        disabled={!allowed || busy}
-        onClick={() => {
-          setOpen(!open);
-          if (!open) void request();
-        }}
-      >
-        Connect / manage Square
-      </button>
+      {!initiallyOpen && (
+        <button
+          type="button"
+          className="btn secondary"
+          disabled={!allowed || busy}
+          onClick={() => {
+            setOpen(!open);
+            if (!open) void request();
+          }}
+        >
+          Connect / manage Square
+        </button>
+      )}
       {open && (
         <div className="calculation-box">
           <h3>Square</h3>
           {!allowed && <p>The business Owner manages Square connections.</p>}
           <p>
-            Connect your seller account for a bounded, read-only sample.
-            Connecting never starts a backfill or recurring sync. Importing the
-            reviewed sample requires a separate confirmation.
+            Connect your Square account, then choose locations. Connecting does
+            not import sales.
           </p>
-          <label>
-            Environment
-            <select
-              value={environment}
-              disabled={!allowed || busy}
-              onChange={(e) => {
-                setEnvironment(e.target.value);
-                setView(null);
-                setLocations([]);
-                void request(undefined, e.target.value);
-              }}
-            >
-              <option value="">Current deployment</option>
-              <option value="sandbox">Sandbox</option>
-              <option value="production">Production</option>
-            </select>
-          </label>
           {view && (
             <>
               <p role="status">
@@ -119,27 +112,35 @@ export function SquareConnection({
                     not_connected: "Not connected",
                     connected: "Connected · merchant identity verified",
                     reconnect_required: "Needs reconnection",
-                    sync_failed: "Sync failed",
+                    sync_failed: "Last read failed · retry when ready",
                   } as any
-                )[view.status] || "Not connected"}{" "}
-                · {view.environment}
+                )[view.status] || "Not connected"}
               </p>
               <p>
                 Merchant: {view.merchantName || "Not verified"}{" "}
                 {view.merchantId ? `(${view.merchantId})` : ""} · Business:{" "}
                 {view.businessName || "Current workspace"}
               </p>
-              <p>
-                Last successful import: {view.lastSuccessfulSync || "Never"} ·
-                Last successful read: {view.lastSuccessfulRead || "Never"} ·
-                Last attempted read: {view.lastAttemptedSync || "Never"}
-              </p>
-              <p>
-                Required read permissions: merchant profile, orders and
-                payments. No catalog, inventory, payment or refund
-                modifications. Recurring sync: disabled; no seller webhook
-                receiver is enabled.
-              </p>
+              {view.merchantId && (
+                <p>
+                  Last successful import:{" "}
+                  {view.lastSuccessfulSync
+                    ? new Date(view.lastSuccessfulSync).toLocaleString()
+                    : "Never"}
+                </p>
+              )}
+              <details>
+                <summary>About this connection</summary>
+                <p>
+                  Read-only access to merchant profile, orders and payments. No
+                  inventory or payment changes. Recurring sync is disabled.
+                </p>
+                <p>
+                  Last successful read: {view.lastSuccessfulRead || "Never"}.
+                  Connecting never starts a backfill. Import requires a separate
+                  confirmation.
+                </p>
+              </details>
               {!view.configured && (
                 <p>Square connection is not available yet. Contact support.</p>
               )}
@@ -176,32 +177,56 @@ export function SquareConnection({
               Save locations &amp; verify access
             </button>
           )}
-          <div className="square-mapping-grid">
-            <label>
-              Start (UTC, inclusive)
-              <input
-                type="datetime-local"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </label>
-            <label>
-              End (UTC, exclusive)
-              <input
-                type="datetime-local"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-              />
-            </label>
-          </div>
-          <p>
-            At most 31 days, 200 payments and 50 orders per review. Transaction
-            totals only; no product quantities or allocations are inferred.
-            Refund/return, service-charge, cash-rounding and split-payment cases
-            require a reconciled CSV. Fees may be unknown until Square provides
-            them. CSV seller reference must equal the merchant ID above to
-            reconcile shared source IDs.
-          </p>
+          {view?.configured &&
+            ["connected", "sync_failed"].includes(view?.status) &&
+            !!view?.selectedLocations?.length && (
+              <>
+                <div className="square-mapping-grid">
+                  <label>
+                    Start (UTC, inclusive)
+                    <input
+                      type="datetime-local"
+                      value={start}
+                      onChange={(e) => setStart(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    End (UTC, exclusive)
+                    <input
+                      type="datetime-local"
+                      value={end}
+                      onChange={(e) => setEnd(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <details>
+                  <summary>Import limits and duplicate protection</summary>
+                  <p>
+                    At most 31 days, 200 payments and 50 orders per review.
+                    Transaction totals only; no product quantities or
+                    allocations are inferred. Refund/return, service-charge,
+                    cash-rounding and split-payment cases require a reconciled
+                    CSV. Fees may be unknown until Square provides them. CSV
+                    seller reference must equal the merchant ID above to
+                    reconcile shared source IDs.
+                  </p>
+                </details>
+                <p>
+                  Preview sales before importing. Check for overlap with earlier
+                  CSV imports.
+                </p>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  disabled={
+                    !allowed || busy || !start || !end || !locations.length
+                  }
+                  onClick={() => void request("sample")}
+                >
+                  Preview sales
+                </button>
+              </>
+            )}
           {disconnect && (
             <label className="check-label">
               <input
@@ -226,21 +251,6 @@ export function SquareConnection({
                 : view?.merchantId
                   ? "Reconnect Square"
                   : "Connect Square"}
-            </button>
-            <button
-              type="button"
-              className="btn secondary"
-              disabled={
-                !allowed ||
-                busy ||
-                !view?.merchantId ||
-                !start ||
-                !end ||
-                !locations.length
-              }
-              onClick={() => void request("sample")}
-            >
-              Retrieve sample for review
             </button>
             {view?.merchantId && (
               <button

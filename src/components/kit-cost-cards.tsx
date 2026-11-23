@@ -1,4 +1,4 @@
-import { money, type Item, type Workspace } from '@/lib/domain'
+import { money, priceTaxLabel, type Item, type Workspace } from '@/lib/domain'
 import { kitEstimate } from '@/lib/kit-estimate'
 import { CostCard, costMoney } from './cost-cards'
 
@@ -75,9 +75,7 @@ export function KitCostCards({
           }
           note={
             tax
-              ? tax.snapshot.length
-                ? 'Saved price; see tax below'
-                : 'No applicable tax'
+              ? priceTaxLabel(tax.snapshot)
               : 'Tax treatment unavailable'
           }
           tone="blue"

@@ -54,6 +54,7 @@ export function ProductCards({
           reason,
           price: resolvedPrice,
           pricing,
+          taxLabel,
         } = productListMetrics(product, workspace)
         const price = resolvedPrice ?? NaN
         const belowTarget =
@@ -128,6 +129,7 @@ export function ProductCards({
                     ? money(price)
                     : 'Price not set'}{' '}
                   / {sellingUnit}
+                  {Number.isFinite(price) && <small className="product-price-tax-label">{taxLabel}</small>}
                 </dd>
                 {recipe?.yieldUnit && (
                   <>
@@ -334,6 +336,7 @@ function ProductTable({
               cost,
               price: resolvedPrice,
               pricing,
+              taxLabel,
             } = productListMetrics(product, workspace)
             const price = resolvedPrice ?? NaN
             return (
@@ -360,7 +363,7 @@ function ProductTable({
                   {productCategoryName(product, workspace.settings[0]) ||
                     'Uncategorized'}
                 </td>
-                <td>{Number.isFinite(price) ? money(price) : 'Unavailable'}</td>
+                <td>{Number.isFinite(price) ? <>{money(price)}<small className="product-price-tax-label">{taxLabel}</small></> : 'Unavailable'}</td>
                 <td>
                   {cost === undefined ? 'Incomplete' : money(cost)}
                   {product.workflow === 'resale' && (

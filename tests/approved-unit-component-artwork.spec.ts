@@ -97,6 +97,7 @@ for (const width of [1440, 390]) {
     workspace.recipes.push({
       id: 'frosting-review',
       name: 'Prepared frosting',
+      compound: true,
       yield: 100,
       yieldUnit: 'g',
       lines: [{ ingredientId: 'sugar', quantity: 100, unit: 'g' }],
@@ -113,11 +114,11 @@ for (const width of [1440, 390]) {
       .first()
       .click()
     await page
-      .getByRole('button', { name: 'Add recipe component', exact: true })
+      .getByRole('button', { name: 'Add compound / prep', exact: true })
       .click()
     await page
-      .getByRole('dialog', { name: 'Add recipe component', exact: true })
-      .getByLabel('Search recipes', { exact: true })
+      .getByRole('dialog', { name: 'Add compound or prep component', exact: true })
+      .getByLabel('Search compound and prep recipes', { exact: true })
       .fill('Prepared frosting')
     await page.getByRole('button', { name: /Prepared frosting/ }).click()
     const row = page.locator('.recipe-line-editor').last()

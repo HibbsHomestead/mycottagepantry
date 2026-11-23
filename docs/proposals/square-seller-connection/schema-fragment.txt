@@ -1,0 +1,9 @@
+// Seller POS authorization is separate from retired platform subscription billing.
+export const squareSellerConnections = pgTable('square_seller_connections', {
+  businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  environment: text().notNull(),
+  data: jsonb().$type<Record<string, any>>().notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.businessId, t.environment] }),
+  check('square_seller_environment', sql`${t.environment} IN ('sandbox', 'production')`),
+])

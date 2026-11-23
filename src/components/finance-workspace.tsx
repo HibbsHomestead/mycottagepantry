@@ -28,11 +28,17 @@ import { ReceiptDocumentPreview } from './receipt-document-preview'
 import { fabricUnitOptions, isFabric, supportsExpiry } from '@/lib/fabric'
 import {
   receiptReadingLabel,
-  receiptReviewValues,
   receiptFileEndpoint,
 } from '../lib/receipt-document'
 import { CardDisclosure } from './ui/card'
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import {
+  useState,
+  useEffect,
+  useRef,
+  type Dispatch,
+  type SetStateAction,
+  type ReactNode,
+} from 'react'
 import {
   Upload,
   Camera,
@@ -62,6 +68,8 @@ import {
   ingredientUnits,
   unitLabel,
   calculateTax,
+  priceTaxLabel,
+  saleTaxReviewKey,
   applicableTaxes,
   type Item,
   type Workspace,
@@ -153,7 +161,7 @@ export function FinanceWorkspace({
   onNavigate,
 }: {
   workspace: Workspace
-  onWorkspace: (w: Workspace) => void
+  onWorkspace: Dispatch<SetStateAction<Workspace>>
   section: string
   loadError?: string
   ready: boolean
@@ -205,6 +213,7 @@ export function FinanceWorkspace({
   >({})
   const activeType = useRef('')
   const saving = useRef(false)
+  const backgroundDraft = useRef<Promise<Item | undefined> | null>(null)
   useEffect(() => {
     if (initialEntry) {
       if (initialEntry.startsWith('receipt:'))
@@ -254,7 +263,11 @@ export function FinanceWorkspace({
         r.id === transaction.receiptId ||
         r.matchedTransactionId === transaction.id,
     )
-  async function request(action: string, data: Record<string, any> = {}) {
+  async function request(
+    action: string,
+    data: Record<string, any> = {},
+    publish = true,
+  ) {
     const response = await fetch('/api/workspace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -268,10 +281,39 @@ export function FinanceWorkspace({
             error:
               'The server returned an access or error page. Sign in and retry.',
           }
-    if (!response.ok)
+    if (!response.ok || !result.workspace)
       throw new Error(result.error || 'Unable to save. Please try again.')
-    onWorkspace(result.workspace)
+    if (publish) onWorkspace(result.workspace)
     return result.workspace as Workspace
+  }
+  async function saveBackgroundDraft(data: Item) {
+    if (!canWrite || saving.current || backgroundDraft.current) return
+    const before = receipts.find((item) => item.id === data.id)
+    const pending = request('receiptDraft', data, false).then((result) => {
+      const saved = result.receipt_extractions.find(
+        (item) => item.id === data.id,
+      )
+      if (saved && before) {
+        // Merge just this receipt. A delayed draft response must not replace
+        // unrelated workspace changes or the snapshot driving the editor.
+        onWorkspace((current) => {
+          if (!current.receipt_extractions?.includes(before)) return current
+          return {
+            ...current,
+            receipt_extractions: current.receipt_extractions.map((item) =>
+              item === before ? saved : item,
+            ),
+          }
+        })
+      }
+      return saved
+    })
+    backgroundDraft.current = pending
+    try {
+      return await pending
+    } finally {
+      if (backgroundDraft.current === pending) backgroundDraft.current = null
+    }
   }
   async function run(
     action: string,
@@ -284,6 +326,8 @@ export function FinanceWorkspace({
     setError('')
     setMessage('')
     try {
+      // Explicit actions use the current draft and must run after an older write.
+      await backgroundDraft.current?.catch(() => undefined)
       const result = await request(action, data)
       if (close) {
         delete entryDrafts.current[activeType.current]
@@ -1501,7 +1545,7 @@ export function FinanceWorkspace({
                       })
                     }
                     const product = w.products.find((p) => p.id === l.productId)
-                    let tax: any,
+                    let tax: ReturnType<typeof calculateTax> | undefined,
                       warning = ''
                     try {
                       tax = calculateTax(
@@ -1635,6 +1679,7 @@ export function FinanceWorkspace({
                         </div>
                         {tax && (
                           <div className="finance-calculation">
+                            <p>{priceTaxLabel(tax.snapshot)}</p>
                             <p>
                               Pre-tax revenue {money(tax.revenue)} · tax
                               liability {money(tax.tax)} · customer total{' '}
@@ -2175,7 +2220,27 @@ export function FinanceWorkspace({
                 disabled={
                   busy || !canWrite || (modal === 'consignmentSale' && !math)
                 }
-                onClick={() => setReview(true)}
+                onClick={() => {
+                  if (modal === 'simpleSale') {
+                    try {
+                      const saleLines = (draft.saleLines || []).map((line: Item) => {
+                        const product = w.products.find((p) => p.id === line.productId)
+                        if (!product) throw new Error('Choose a product for every sale line.')
+                        const tax = calculateTax(
+                          Number(line.amount || 0) - Number(line.discounts || 0),
+                          applicableTaxes(product, w.settings[0], draft.date),
+                        )
+                        return { ...line, reviewedTax: saleTaxReviewKey(tax) }
+                      })
+                      setDraft({ ...draft, saleLines })
+                    } catch (e) {
+                      setError((e as Error).message)
+                      return
+                    }
+                  }
+                  setError('')
+                  setReview(true)
+                }}
               >
                 Review <ArrowRight size={17} />
               </button>
@@ -2226,6 +2291,7 @@ export function FinanceWorkspace({
               setUploadOpen(false)
             }
           }}
+          onAutosave={saveBackgroundDraft}
           onSave={async (action, data) => {
             if (action === 'receiptExtract') {
               if (saving.current || !canWrite) return
@@ -2234,6 +2300,7 @@ export function FinanceWorkspace({
               setError('')
               const id = data.id
               try {
+                await backgroundDraft.current?.catch(() => undefined)
                 // Commit current corrections before the provider wait. Never replace them silently.
                 await request('receiptDraft', data)
                 setReceipt(
@@ -2273,7 +2340,12 @@ export function FinanceWorkspace({
             )
             if (
               next &&
-              !['receiptPost', 'receiptCancel', 'receiptMatch'].includes(action)
+              ![
+                'receiptDraft',
+                'receiptPost',
+                'receiptCancel',
+                'receiptMatch',
+              ].includes(action)
             )
               setReceipt(next)
             return result
@@ -2424,7 +2496,8 @@ function ReceiptReview({
   canWrite,
   error,
   onClose,
-  onSave,
+  onSave: saveAction,
+  onAutosave,
   onRetryUpload,
 }: {
   receipt: Item
@@ -2439,6 +2512,7 @@ function ReceiptReview({
   error: string
   onClose: () => void
   onSave: (action: string, data: any) => Promise<any>
+  onAutosave: (data: Item) => Promise<Item | undefined>
   onCreatePantryItem?: (kind: 'ingredient' | 'packaging') => void
 }) {
   const createdSelection = useRef<Item | null>(null)
@@ -2462,21 +2536,26 @@ function ReceiptReview({
     [matchId, setMatchId] = useState(''),
     [itemSearch, setItemSearch] = useState<Record<number, string>>({}),
     [importBusy, setImportBusy] = useState(false)
-  // An upload may finish after the review panel opens.
-  const [version, setVersion] = useState(
-    initial.id + ':' + initial.updatedAt + ':' + initial.extractionStatus,
-  )
-  if (
-    initial.id + ':' + initial.updatedAt + ':' + initial.extractionStatus !==
-    version
-  ) {
-    setVersion(
-      initial.id + ':' + initial.updatedAt + ':' + initial.extractionStatus,
-    )
-    setR({
+  // Upload/extraction or an explicit receipt switch can replace the source.
+  // Draft acknowledgements never pass through this rehydration path.
+  const sourceVersion = `${initial.id}:${initial.updatedAt}:${initial.extractionStatus}`
+  const [version, setVersion] = useState(sourceVersion)
+  const draft = useRef({ saved: JSON.stringify(r), failed: '' })
+  const [draftStatus, setDraftStatus] = useState({
+    version,
+    phase: 'idle' as 'idle' | 'saving' | 'failed',
+  })
+  if (sourceVersion !== version) {
+    const next = {
       ...editableReceipt(initial),
       receivedDate: initial.receivedDate || ovenToday(w.settings[0]),
-    })
+    }
+    draft.current = {
+      saved: JSON.stringify(next),
+      failed: '',
+    }
+    setVersion(sourceVersion)
+    setR(next)
   }
   const dialogRef = useRef<HTMLDivElement>(null)
   const previewReturn = useRef<{ top: number; focus: HTMLElement | null }>({
@@ -2513,40 +2592,60 @@ function ReceiptReview({
       window.removeEventListener('resize', fit)
     }
   }, [])
-  const saveCallback = useRef(onSave)
-  saveCallback.current = onSave
-  const savedReview = useRef(JSON.stringify(receiptReviewValues(r)))
-  const initialVersion = useRef(initial)
-  if (initialVersion.current !== initial) {
-    initialVersion.current = initial
-    savedReview.current = JSON.stringify(
-      receiptReviewValues(editableReceipt(initial)),
-    )
-  }
+  const autosaveCallback = useRef(onAutosave)
+  autosaveCallback.current = onAutosave
+  const phase = draftStatus.version === version ? draftStatus.phase : 'idle'
   useEffect(() => {
-    const signature = JSON.stringify(receiptReviewValues(r))
+    const current = draft.current
+    const signature = JSON.stringify(r)
     if (
       r.status !== 'draft' ||
       busy ||
+      importBusy ||
       !canWrite ||
       r.id === 'uploading' ||
       r.extractionStatus === 'processing' ||
-      signature === savedReview.current
+      phase === 'saving' ||
+      signature === current.saved ||
+      signature === current.failed
     )
       return
-    const timer = setTimeout(() => {
-      void saveCallback.current('receiptDraft', r).then((result) => {
-        const saved = result?.receipt_extractions?.find(
-          (item: Item) => item.id === r.id,
-        )
-        if (saved)
-          savedReview.current = JSON.stringify(
-            receiptReviewValues(editableReceipt(saved)),
-          )
-      })
+    const timer = setTimeout(async () => {
+      setDraftStatus({ version, phase: 'saving' })
+      try {
+        const saved = await autosaveCallback.current(r)
+        if (draft.current !== current) return
+        if (saved) {
+          current.saved = signature
+          current.failed = ''
+        }
+        setDraftStatus({ version, phase: 'idle' })
+      } catch {
+        if (draft.current !== current) return
+        current.failed = signature
+        setDraftStatus({ version, phase: 'failed' })
+      }
     }, 1800)
     return () => clearTimeout(timer)
-  }, [r, busy, canWrite])
+  }, [r, busy, importBusy, canWrite, phase, version])
+  const onSave = async (action: string, data: Record<string, any>) => {
+    const current = draft.current
+    const result = await saveAction(action, data)
+    if (action === 'receiptDraft' && result && draft.current === current) {
+      current.saved = JSON.stringify(data)
+      current.failed = ''
+      setDraftStatus({ version, phase: 'idle' })
+    } else if (
+      action === 'receiptDraft' &&
+      !result &&
+      draft.current === current
+    ) {
+      // Leave retry to the user (or their next edit), rather than immediately
+      // resending the snapshot that just failed.
+      current.failed = JSON.stringify(data)
+    }
+    return result
+  }
   const inventoryItems = purchasableInventory(w)
   const matchedItem = (l: any) =>
     inventoryItems.find(
@@ -2665,10 +2764,10 @@ function ReceiptReview({
       Number(t.amount) === totals.total,
   )
   const navigateReceipt = async (navigate?: () => void) => {
-    if (!navigate || busy) return
+    if (!navigate || busy || importBusy) return
     if (
       !closed &&
-      JSON.stringify(receiptReviewValues(r)) !== savedReview.current
+      (phase !== 'idle' || JSON.stringify(r) !== draft.current.saved)
     ) {
       const saved = await onSave('receiptDraft', r)
       if (!saved) return
@@ -2686,6 +2785,9 @@ function ReceiptReview({
     }
     setPreviewOpen(true)
   }
+  const lastSaved =
+    w.receipt_extractions.find((item) => item.id === r.id)?.updatedAt ||
+    r.updatedAt
   const pdf = r.previewMime === 'application/pdf',
     heic = r.previewMime === 'image/heic'
   return (
@@ -2723,8 +2825,8 @@ function ReceiptReview({
                   ? 'Ready to post'
                   : 'Needs review'}
             </span>{' '}
-            {r.updatedAt
-              ? `Last saved ${ovenTimestamp(r.updatedAt, w.settings[0])}`
+            {lastSaved
+              ? `Last saved ${ovenTimestamp(lastSaved, w.settings[0])}`
               : 'Unsaved draft'}
           </DialogDescription>
           <div className="receipt-header-actions">
@@ -4412,6 +4514,7 @@ function ReceiptReview({
                       enterKeyHint="next"
                       step={type === 'number' ? '.01' : undefined}
                       value={r[key] ?? ''}
+                      disabled={closed || busy}
                       onChange={(e) => update(key, e.target.value)}
                     />
                   </Field>
@@ -4587,7 +4690,6 @@ function ReceiptReview({
           </section>
         )}
         <div className="finance-sticky-actions">
-          <FormErrorNotice message={error} />
           <span className="receipt-footer-status" role="status">
             {closed
               ? 'Original receipt preserved'
@@ -4601,7 +4703,17 @@ function ReceiptReview({
                       (unresolved
                         ? 'Review line details to finish.'
                         : 'Check merchant, date and receipt total.')}
+            {phase === 'saving' && ' Saving draft…'}
           </span>
+          <FormErrorNotice
+            reveal={!!error}
+            message={
+              error ||
+              (phase === 'failed'
+                ? 'Draft could not be saved. Your edits are still here. Use Save as draft to retry.'
+                : '')
+            }
+          />
           <button
             className="btn secondary"
             disabled={busy}

@@ -3,6 +3,7 @@ import { FormErrorNotice } from "./form-error-notice";
 import { SectionNavigation } from "./section-navigation";
 import { billingRequest } from "@/lib/billing-client";
 import { CategoryTaxSettings } from "./product-categories";
+import { BusinessPriceTaxSettings, type PriceTaxRequest } from "./business-price-tax";
 import { StripeOwnerBilling } from "./stripe-owner-billing";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
@@ -77,6 +78,7 @@ export function SettingsWorkspace({
   preview,
   saveAppearance,
   saveBusiness,
+  priceTaxRequest,
   onCategoryConfig,
   exportData,
   backup,
@@ -97,6 +99,7 @@ export function SettingsWorkspace({
   preview: (a: Appearance) => void;
   saveAppearance: () => Promise<void>;
   saveBusiness: (item: Item) => Promise<void>;
+  priceTaxRequest?: PriceTaxRequest;
   onCategoryConfig?: (patch: Partial<Item>) => void;
   exportData: (type: string, template?: boolean) => void;
   backup: () => void;
@@ -440,6 +443,7 @@ export function SettingsWorkspace({
           )}
           {selected === "Taxes" && (
             <>
+              <BusinessPriceTaxSettings business={business} request={priceTaxRequest} disabled={busy || saving || !canSave} />
               <CategoryTaxSettings
                 business={business}
                 products={w.products}

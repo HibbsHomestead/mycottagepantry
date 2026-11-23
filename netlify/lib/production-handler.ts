@@ -18,6 +18,8 @@ import {
 } from '../../src/lib/production-run'
 import { workflowOf } from '../../src/lib/product-workflows'
 import { finishedMovement } from './product-workflow-handler'
+import { planPrepUsage } from '../../src/lib/stock-prep'
+import { applyPrepUsage } from './stock-prep-handler'
 
 type Context = {
   state: Workspace
@@ -26,6 +28,7 @@ type Context = {
   actor: string
   audit: (name: string, detail: string) => Promise<void>
   assertProductAccess?: (product: Item) => void
+  authorizePreparedWrite?: (id: string) => void
 }
 const digest = (data: unknown) =>
   createHash('sha256').update(JSON.stringify(data)).digest('hex')
@@ -59,6 +62,8 @@ async function handleSingleProduction(
       existing.definition?.product?.workflow !== 'handmade'
     )
       throw new Error('Choose a completed handmade production run.')
+    if (existing.usage?.some((line: Item) => line.prepLotId))
+      throw new Error('This run used prepared stock. Review the linked stock correction before reversing it.')
     const reversalId = 'production-reversal-' + existing.id
     if (state.ledger.some((l) => l.id === reversalId)) return true
     const reason = String(data.reason || '').trim()
@@ -327,11 +332,15 @@ async function handleSingleProduction(
       )
     if (item.needsCostSetup || item.cost == null)
       throw new Error(`${line.name}: stock cost is incomplete.`)
-    const amount = quantity * number(item.cost, 'Stock unit cost')
-    const supplyAmount = Number(line.supplyQuantity || 0) * Number(item.cost)
+    const prepared = line.tracked && line.kind === 'ingredient'
+      ? planPrepUsage(item, state.lots, quantity, data.prepSources?.[item.id])
+      : undefined
+    const unitCost = prepared?.unitCost ?? number(item.cost, 'Stock unit cost')
+    const amount = prepared?.cost ?? quantity * unitCost
+    const supplyAmount = Number(line.supplyQuantity || 0) * unitCost
     const hasAllocations = ['supplyQuantity', 'packagingQuantity', 'ingredientQuantity'].some(key => Object.hasOwn(line, key))
     const packageAmount =
-      (hasAllocations ? Number(line.packagingQuantity || 0) : line.kind === 'ingredient' && item.usedAs === 'packaging' ? quantity : 0) * Number(item.cost)
+      (hasAllocations ? Number(line.packagingQuantity || 0) : line.kind === 'ingredient' && item.usedAs === 'packaging' ? quantity : 0) * unitCost
     suppliesCost += supplyAmount
     packagingCost += packageAmount
     ingredient += amount - supplyAmount - packageAmount
@@ -344,8 +353,9 @@ async function handleSingleProduction(
       enteredUnit: line.unit,
       quantity,
       unit: line.kind === 'product' ? 'package' : item.unit,
-      unitCost: item.cost,
+      unitCost,
       cost: amount,
+      ...(prepared?.lot ? { prepLotId: prepared.lot.id, prepLocation: prepared.lot.location } : {}),
     }
     usage.push(actualLine)
     await save('batch_usage', {
@@ -354,7 +364,7 @@ async function handleSingleProduction(
       batchId: existing.id,
       ingredientId: line.kind === 'ingredient' ? line.itemId : undefined,
       productId: line.kind === 'product' ? line.itemId : undefined,
-      unitCost: item.cost,
+      unitCost,
       cost: amount,
     })
     if (!line.tracked) continue
@@ -366,8 +376,11 @@ async function handleSingleProduction(
         reason: reason || 'Kit assembly',
       })
     else {
-      item.quantity = Math.max(0, item.quantity - quantity)
-      await save('ingredients', item)
+      if (prepared) await applyPrepUsage(ctx, item, prepared)
+      else {
+        item.quantity = Math.max(0, item.quantity - quantity)
+        await save('ingredients', item)
+      }
       await save('ledger', {
         id: movementId,
         name: item.name,
@@ -376,6 +389,7 @@ async function handleSingleProduction(
         unit: item.unit,
         amount: -amount,
         type: 'batch_consumption',
+        ...(prepared?.lot ? { prepLotId: prepared.lot.id, location: prepared.lot.location } : {}),
         batchId: existing.id,
         sourceId: existing.id,
         date: ctx.today,
@@ -575,6 +589,7 @@ export async function handleProduction(
         wasteReason: input.wasteReason,
         laborMinutes: input.laborMinutes,
         usage: input.usage,
+        prepSources: input.prepSources,
         materialWaste: input.materialWaste,
       }
     })
@@ -657,6 +672,7 @@ export async function handleProduction(
           ? { laborMinutes: number(input.laborMinutes, 'Actual labor minutes') }
           : {}),
         usage: input.usage || {},
+        prepSources: input.prepSources || {},
         materialWaste: input.materialWaste || {},
       }
       if (definition)

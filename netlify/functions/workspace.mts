@@ -37,6 +37,12 @@ import {
 } from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
+import { applyPrepUsage, handleStockPrep } from '../lib/stock-prep-handler'
+import {
+  activePrepLots,
+  planPrepUsage,
+  prepStockBalance,
+} from '../../src/lib/stock-prep'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
 import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
 import {
@@ -208,6 +214,7 @@ import { validateAppearance } from '../../src/lib/appearance'
 import { getDatabase } from '@netlify/database'
 import type { Context } from '@netlify/functions'
 import { randomBytes, createHash, randomUUID } from 'node:crypto'
+import { planPriceTaxChange, priceTaxChoiceLabel, priceTaxModes } from '../../src/lib/business-price-tax'
 import { rollup } from '../../src/lib/demo'
 import { openingStockEntry } from '../../src/lib/ingredient-opening-stock'
 import { ingredientHasStockHistory } from '../../src/lib/ingredient-stock-unit'
@@ -226,6 +233,9 @@ import {
   productCosting,
   packagingLines,
   applicableTaxes,
+  businessPriceTaxMode,
+  resolvedPriceTaxMode,
+  saleTaxReviewKey,
   calculateTax,
   validateTaxRates,
   roundMoney,
@@ -767,6 +777,11 @@ export default async (req: Request, context: Context) => {
       })
     }
     const state: Workspace = {}
+    const lastIngredientStock = new Map<string, { unit: string; quantity: number }>()
+    const preparedWrites = new Set<string>()
+    const authorizePreparedWrite = (id: string) => {
+      preparedWrites.add(id)
+    }
     async function save(
       table: string,
       item: Item,
@@ -817,6 +832,10 @@ export default async (req: Request, context: Context) => {
       }
       if (table === 'products') {
         const stored = state.products.find((p) => p.id === item.id)
+        item.priceTaxMode ??= stored ? stored.priceTaxMode || 'configured' : 'inherit'
+        if (!priceTaxModes.includes(item.priceTaxMode))
+          throw new Error('Choose a valid price tax behavior.')
+        item.priceTaxRevision = stored?.priceTaxRevision
         if (item.labelAssignmentEdited === true)
           throw new Error(
             'Manage labels in Labels; existing design links are preserved.',
@@ -926,10 +945,28 @@ export default async (req: Request, context: Context) => {
           ],
         )
       } else if (table === 'ingredients') {
+        const authorized = preparedWrites.delete(item.id)
+        const previous = lastIngredientStock.get(item.id)
+        if (activePrepLots(state.lots, item.id).length) {
+          if (
+            !previous ||
+            item.unit !== previous.unit ||
+            item.trackInventory === false ||
+            item.compoundRecipeId ||
+            (item.usedAs && item.usedAs !== 'ingredient')
+          )
+            throw new Error(
+              'Use the existing prepared stock before changing its ingredient unit, inventory tracking, or use.',
+            )
+          if (!authorized && Number(item.quantity) < previous.quantity - 1e-8)
+            throw new Error('This ingredient has prepared stock. Select a stock source in production, or reverse untouched prep before reducing its stock here.')
+          prepStockBalance(item, state.lots)
+        }
         await client.query(
           `INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5) ON CONFLICT(business_id,id) DO UPDATE SET data=$3,quantity=$4,cost=$5,updated_at=NOW()`,
           [item.id, org, JSON.stringify(item), item.quantity, item.cost],
         )
+        lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity) })
         await saveCatalogAcceptance(client, org, item)
       } else if (
         ['label_elements', 'label_versions', 'label_print_jobs'].includes(table)
@@ -1200,6 +1237,8 @@ export default async (req: Request, context: Context) => {
         r.added_at ? { ...r.data, addedAt: r.added_at } : r.data,
       )
     }
+    for (const item of state.ingredients)
+      lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity) })
     if (sandbox && !state.settings.length) {
       // Provision once under the workspace lock, in the same transaction. A
       // failed seed rolls back completely; normal page loads never reseed it.
@@ -2597,13 +2636,14 @@ export default async (req: Request, context: Context) => {
       })
     }
     const stockContext = () => ({
+      authorizePreparedWrite,
       state,
       save: (table: string, item: Item) => save(table, item, true),
       actor: user?.id || 'demo-owner',
       today: ovenToday(state.settings[0]),
       audit: async (_name: string, _detail: string) => {},
     })
-    async function recordSale(item: Item) {
+    async function recordSale(item: Item, reviewedTax?: unknown) {
       if (item.externalSource) throw new Error('External sales must use their import workflow.')
       item.paymentAccount = businessMoneyAccount(state, item.paymentAccount)
       delete item.stockDeducted
@@ -2637,6 +2677,8 @@ export default async (req: Request, context: Context) => {
         entered,
         applicableTaxes(taxProduct, state.settings[0], item.date),
       )
+      if (reviewedTax !== undefined && reviewedTax !== saleTaxReviewKey(tax))
+        throw new Error('Tax treatment changed after this sale was reviewed. Refresh the workspace, then review and confirm the sale again. No sale was posted.')
       item.enteredAmount = entered
       item.amount = tax.revenue
       item.tax = tax.tax
@@ -2654,7 +2696,7 @@ export default async (req: Request, context: Context) => {
           manualOverride: Array.isArray(item.taxRateIds),
         }
       }
-      item.priceTaxMode = p.priceTaxMode || 'configured'
+      item.priceTaxMode = resolvedPriceTaxMode(p, state.settings[0])
       item.fees = number(item.fees || 0, 'Fees')
       // An explicit completed run preserves its actual production costs.
       const batch = item.batchId
@@ -2740,6 +2782,7 @@ export default async (req: Request, context: Context) => {
           ],
         })
     }
+    let priceTaxResult: { updated: number; failed: number } | undefined
     if (req.method === 'POST') {
       const { action, table, data } = await req.json()
       if (eventTables.includes(table) && !String(action).startsWith('event'))
@@ -2787,15 +2830,96 @@ export default async (req: Request, context: Context) => {
       )
         throw new Error('This action requires an Owner or Manager.')
       const today = ovenToday(state.settings[0])
-      const audit = async (name: string, detail: string) =>
+      if (action === 'save' && table === 'products') {
+        const stored = state.products.find((p) => p.id === data?.id)
+        if (stored?.priceTaxRevision && data.priceTaxRevision !== stored.priceTaxRevision)
+          throw new Error('This product’s price tax treatment changed. Reopen the product to review it before saving.')
+      }
+      const audit = async (name: string, detail: string, details?: Record<string, unknown>) =>
         save('activity', {
           id: randomUUID(),
           name,
           detail,
+          details,
           date: today,
           type: action,
           actor: user?.id || 'Demo owner',
         })
+      if (['priceTaxDefault', 'priceTaxPreview', 'priceTaxApply'].includes(action)) {
+        if (table !== 'settings' || !['Owner', 'Manager'].includes(role))
+          throw new Error('Only an Owner or Manager can manage price tax treatment.')
+        const business = state.settings[0]
+        if (action === 'priceTaxDefault') {
+          const next = data?.mode
+          if (next !== 'before' && next !== 'includes')
+            throw new Error('Choose how your product prices are entered.')
+          const previous = businessPriceTaxMode(business)
+          if (data.expected !== previous)
+            throw new Error('The business default changed. Refresh Settings before saving.')
+          let retained: string[] = []
+          if (next !== previous) {
+            const pinned = await client.query(
+              "UPDATE products SET data=data || $2::jsonb, updated_at=NOW() WHERE business_id=$1 AND data->>'priceTaxMode'='inherit' RETURNING id",
+              [org, JSON.stringify({ priceTaxMode: `saved-${previous}`, priceTaxRevision: randomUUID() })],
+            )
+            retained = pinned.rows.map((row: { id: string }) => row.id)
+          }
+          if (business.defaultPriceTaxMode !== next) {
+            await save('settings', { ...business, defaultPriceTaxMode: next })
+            await audit('Business price tax treatment saved', `New products: ${priceTaxChoiceLabel(next)}. Existing price treatment preserved.`, {
+              previous, next, retainedProductIds: retained,
+            })
+          }
+          priceTaxResult = { updated: 0, failed: 0 }
+        } else {
+          if (!['entered', 'total'].includes(data?.strategy) || typeof data?.includeOverrides !== 'boolean')
+            throw new Error('Choose a price strategy and whether to replace existing overrides.')
+          const plan = planPriceTaxChange(state, today, data.strategy, data.includeOverrides)
+          if (moduleAccess) {
+            const { assertPlanRecordWrite } = await import('../lib/plan-feature-gates')
+            const products = new Map(state.products.map((p) => [p.id, p]))
+            for (const row of plan.rows) {
+              if (row.error) continue
+              try {
+                assertPlanRecordWrite(moduleAccess, 'products', products.get(row.id)!, state)
+              } catch {
+                row.error = 'Your current plan does not allow changes to this product.'
+                plan.failures++
+              }
+            }
+          }
+          const review = createHash('sha256').update(JSON.stringify([org, plan])).digest('hex')
+          if (action === 'priceTaxPreview') {
+            await client.query('COMMIT')
+            return Response.json({ plan, review }, { headers: { 'Cache-Control': 'no-store' } })
+          }
+          if (review !== data.review)
+            throw new Error('No products updated. Prices, tax treatment, or the product list changed. Review a fresh preview before applying.')
+          if (plan.failures)
+            throw new Error(`0 products updated. ${plan.failures} of ${plan.rows.length} products failed validation. Review the plan before applying.`)
+          if (plan.rows.length) {
+            try {
+              const metadata = { priceTaxRevision: randomUUID(), updatedBy: user?.id || 'demo-owner', updatedAt: new Date().toISOString() }
+              const changes = plan.rows.map(({ id, patch }) => ({ id, patch: { ...patch, ...metadata } }))
+              const updated = await client.query(
+                'UPDATE products AS p SET data=p.data || changes.patch, updated_at=NOW() FROM jsonb_to_recordset($2::jsonb) AS changes(id text, patch jsonb) WHERE p.business_id=$1 AND p.id=changes.id RETURNING p.id',
+                [org, JSON.stringify(changes)],
+              )
+              if (updated.rows.length !== plan.rows.length) throw new Error('Product list changed.')
+              await audit('Product price tax treatment applied', `${plan.rows.length} products updated. ${plan.overridesReplaced} overrides replaced.`, {
+                strategy: plan.strategy, newMode: plan.defaultMode, date: plan.date,
+                changes: plan.rows.map((row) => ({
+                  productId: row.id, previousMode: row.existingMode,
+                  overrideReplaced: row.override, prices: row.prices,
+                })),
+              })
+            } catch {
+              throw new Error(`0 products updated. All ${plan.rows.length} products in this review were left unchanged. Try again.`)
+            }
+          }
+          priceTaxResult = { updated: plan.rows.length, failed: 0 }
+        }
+      }
       if (
         String(action).startsWith('financeBook') &&
         !['Owner', 'Manager'].includes(role)
@@ -2870,6 +2994,12 @@ export default async (req: Request, context: Context) => {
         }
       } else if (String(action).startsWith('event')) {
         await handleEvent(action, data, { client, org, role, state, audit })
+      } else if (priceTaxResult) {
+        // Price treatment changes were validated and written under the business lock.
+      } else if (['stockPrepPost', 'stockPrepReverse'].includes(action)) {
+        if (table !== 'ingredients' || !['Owner', 'Manager'].includes(role))
+          throw new Error('Only an Owner or Manager can prepare or reverse ingredient stock.')
+        await handleStockPrep(action, data, { ...stockContext(), audit })
       } else if (action === 'inventoryMarkReviewed') {
         if (table !== 'ingredients')
           throw new Error('Choose an inventory item from this oven.')
@@ -3260,7 +3390,7 @@ export default async (req: Request, context: Context) => {
             receiptId,
             transactionId: groupId,
           }
-          await recordSale(sale)
+          await recordSale(sale, l.reviewedTax)
           totalRevenue += sale.amount
           totalTax += sale.tax
           totalCustomer += sale.customerTotal
@@ -4339,11 +4469,21 @@ export default async (req: Request, context: Context) => {
             throw new Error(
               'A recipe supplying prepared stock must retain its yield unit. An explicit stock migration is required.',
             )
-          if (existingPrep && item.compound === false)
+          const previousRecipe = state.recipes.find((r) => r.id === item.id)
+          if (item.compound === undefined && previousRecipe?.compound === true)
+            item.compound = true
+          const linkedComponent = state.recipes.some(
+            (r) => r.id !== item.id &&
+              r.lines?.some((line: Item) => line.componentRecipeId === item.id),
+          )
+          if (
+            (existingPrep || linkedComponent) &&
+            previousRecipe?.compound === true &&
+            item.compound !== true
+          )
             throw new Error(
               'This recipe supplies prepared stock. Keep compound prep enabled to preserve its production link.',
             )
-          if (existingPrep) item.compound = true
           if (
             (item.lines || []).some(
               (l: Item) =>
@@ -4388,10 +4528,11 @@ export default async (req: Request, context: Context) => {
             const source = state.recipes.find(
               (r) => r.id === stock.compoundRecipeId,
             )!
-            if (!source.compound) {
-              source.compound = true
-              await save('recipes', source)
-            }
+            if (
+              source.compound !== true &&
+              !state.ingredients.some((i) => i.id === stock.id && i.compoundRecipeId === source.id)
+            )
+              throw new Error(`Set ${source.name} to Compound prep before adding it as a component.`)
             await save('ingredients', stock)
             const at = state.ingredients.findIndex((i) => i.id === stock.id)
             if (at < 0) state.ingredients.push(stock)
@@ -4465,7 +4606,7 @@ export default async (req: Request, context: Context) => {
             throw new Error('Choose tax rates from this business.')
           if (
             item.priceTaxMode &&
-            !['before', 'includes', 'configured'].includes(item.priceTaxMode)
+            !priceTaxModes.includes(item.priceTaxMode)
           )
             throw new Error('Choose a valid price tax behavior.')
           if (
@@ -4561,6 +4702,7 @@ export default async (req: Request, context: Context) => {
           })
         }
         if (table === 'settings') {
+          item.defaultPriceTaxMode = state.settings[0]?.defaultPriceTaxMode
           if (
             item.logoAssetId &&
             !state.graphic_assets.some((a) => a.id === item.logoAssetId)
@@ -5274,21 +5416,28 @@ export default async (req: Request, context: Context) => {
           usage.set(i.id, (usage.get(i.id) || 0) + q)
         }
         const lockedUsage = []
+        const usedCost = new Map<string, number>()
         for (const [id, q] of usage) {
           const i = state.ingredients.find((i) => i.id === id)!
           if (i.quantity < q)
             throw new Error(
               `${i.name} is short by ${(q - i.quantity).toFixed(2)} ${i.unit}. Receive stock before completing.`,
             )
-          const cost = q * i.cost
+          const prepared = planPrepUsage(i, state.lots, q, data.prepSources?.[id])
+          const cost = prepared?.cost ?? q * i.cost
+          if (prepared) usedCost.set(id, prepared.unitCost)
           lockedUsage.push({
             ingredientId: id,
             quantity: q,
             unit: i.unit,
             cost,
+            ...(prepared?.lot ? { prepLotId: prepared.lot.id, prepLocation: prepared.lot.location } : {}),
           })
-          i.quantity -= q
-          await save('ingredients', i)
+          if (prepared) await applyPrepUsage(stockContext(), i, prepared)
+          else {
+            i.quantity -= q
+            await save('ingredients', i)
+          }
           await save('ledger', {
             id: randomUUID(),
             name: i.name,
@@ -5298,6 +5447,7 @@ export default async (req: Request, context: Context) => {
             amount: -cost,
             date: today,
             type: 'batch_consumption',
+            ...(prepared?.lot ? { prepLotId: prepared.lot.id, location: prepared.lot.location } : {}),
             batchId: b.id,
             reason: `Completed ${b.name}`,
           })
@@ -5328,7 +5478,8 @@ export default async (req: Request, context: Context) => {
               ) / count,
           })),
         }
-        b.costSnapshot = costBreakdown(actualRecipe, state.ingredients, {
+        const snapshotIngredients = state.ingredients.map((i) => usedCost.has(i.id) ? { ...i, cost: usedCost.get(i.id) } : i)
+        b.costSnapshot = costBreakdown(actualRecipe, snapshotIngredients, {
           multiplier: count,
           actualYield: yieldActual,
           product,
@@ -5338,7 +5489,7 @@ export default async (req: Request, context: Context) => {
           baseCostOverride: r.baseRecipeId
             ? costBreakdown(
                 state.recipes.find((source) => source.id === r.baseRecipeId)!,
-                state.ingredients,
+                snapshotIngredients,
                 {
                   recipes: state.recipes,
                   reusableBase: true,
@@ -5607,7 +5758,7 @@ export default async (req: Request, context: Context) => {
           )
       }
     if (!metadataOnly) rollup(result)
-    if (!metadataOnly)
+    if (!metadataOnly && !priceTaxResult)
       for (const i of result.ingredients.filter((i) => i.compoundRecipeId))
         await save('ingredients', i)
     if (result.settings[0]) {
@@ -5658,7 +5809,7 @@ export default async (req: Request, context: Context) => {
         }),
       )
     return Response.json(
-      { workspace: workspaceForDevice(result), role, demo: !!sandbox },
+      { workspace: workspaceForDevice(result), role, demo: !!sandbox, priceTaxResult },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (error) {

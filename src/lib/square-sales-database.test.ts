@@ -69,6 +69,17 @@ beforeAll(async () => {
     await db.exec(
       await readFile(new URL(`${name}/migration.sql`, root), "utf8"),
     );
+  // Validate the exact proposed additive migration in the isolated fixture only.
+  // Production preflight is blocked; this file is outside automatic deployment.
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../docs/proposals/square-seller-connection/20261222010000_add_square_seller_connections/migration.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   for (const [org, user] of [
     [a, "square-owner-a"],
     [b, "square-owner-b"],
@@ -388,4 +399,37 @@ it("imports a signed, explicitly confirmed API review through shared CSV persist
     vi.unstubAllEnvs();
     await db.query("SELECT set_config('app.business_id','',false)");
   }
+});
+
+it("isolates seller credentials with the proposed migration policies and permits only known environments", async () => {
+  await db.query("SELECT set_config('app.business_id',$1,false)", [b]);
+  await db.query(
+    "INSERT INTO square_seller_connections(business_id,environment,data) VALUES($1,'production',$2)",
+    [b, JSON.stringify({ credential: "fictional-ciphertext" })],
+  );
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a]);
+  expect(
+    (
+      await db.query(
+        "SELECT data FROM square_seller_connections WHERE business_id=$1",
+        [b],
+      )
+    ).rows,
+  ).toHaveLength(0);
+  await expect(
+    db.query(
+      "INSERT INTO square_seller_connections(business_id,environment,data) VALUES($1,'production','{}')",
+      [b],
+    ),
+  ).rejects.toThrow(/row-level security/);
+  await expect(
+    db.query(
+      "INSERT INTO square_seller_connections(business_id,environment,data) VALUES($1,'invalid','{}')",
+      [a],
+    ),
+  ).rejects.toThrow(/square_seller_environment/);
+  await db.query("SELECT set_config('app.business_id','',false)");
+  expect(
+    (await db.query("SELECT data FROM square_seller_connections")).rows,
+  ).toHaveLength(0);
 });

@@ -20,6 +20,7 @@ import {
   type TaxRate,
   calculateTax,
   applicableTaxes,
+  priceTaxLabel,
   money,
 } from '@/lib/domain'
 
@@ -753,11 +754,7 @@ export function TaxPreview({
         <summary>View calculation · tax and customer price</summary>
         <p>
           Entered amount: {money(amount)} ·{' '}
-          {product.priceTaxMode === 'before'
-            ? 'before tax'
-            : product.priceTaxMode === 'includes'
-              ? 'includes tax'
-              : 'configured rate behaviors'}
+          {priceTaxLabel(t.snapshot)}
         </p>
         <p>
           Pre-tax revenue = {amount || 0} ÷ {t.divisor.toFixed(8)} ={' '}

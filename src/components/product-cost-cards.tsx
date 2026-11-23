@@ -2,6 +2,8 @@ import { resaleCostBasis } from '@/lib/resale-cost'
 import { ResaleCostBreakdown } from './resale-purchase-cost'
 import {
   applicableTaxes,
+  priceTaxLabel,
+  savedPriceTaxLabel,
   money,
   productCosting,
   profitability,
@@ -33,7 +35,6 @@ function productCostCardData({
     const target = Number(product.targetMargin ?? 65)
     const taxes = applicableTaxes(product, business)
     const inclusive = taxes.some((r) => r.behavior === 'inclusive')
-    const exclusive = taxes.some((r) => r.behavior === 'exclusive')
     const breakdown =
       product.workflow === 'resale'
         ? [
@@ -61,7 +62,7 @@ function productCostCardData({
               ? [{ label: 'Waste', value: c.waste, tone: 'rose' as const }]
               : []),
           ]
-    return { c, p, wholesale, target, taxes, inclusive, exclusive, breakdown }
+    return { c, p, wholesale, target, taxes, inclusive, breakdown }
   } catch (error) {
     return { error: (error as Error).message }
   }
@@ -84,8 +85,9 @@ export function ProductCostCards({
     let costs: ReturnType<typeof productCosting> | undefined
     let costIssue = ''
     let taxIssue = false
+    let taxLabel = savedPriceTaxLabel(product, workspace.settings[0])
     try {
-      applicableTaxes(product, workspace.settings[0])
+      taxLabel = priceTaxLabel(applicableTaxes(product, workspace.settings[0]))
     } catch {
       taxIssue = true
     }
@@ -137,13 +139,7 @@ export function ProductCostCards({
             value={
               product.price == null ? 'Not set' : money(Number(product.price))
             }
-            note={
-              product.priceTaxMode === 'includes'
-                ? 'Saved price · includes tax'
-                : product.priceTaxMode === 'before'
-                  ? 'Saved price · before tax'
-                  : 'Saved price · per-rate tax behaviors'
-            }
+            note={taxLabel}
             tone="blue"
           />
         </div>
@@ -195,7 +191,7 @@ export function ProductCostCards({
       </div>
     )
   }
-  const { c, p, wholesale, target, taxes, inclusive, exclusive, breakdown } =
+  const { c, p, wholesale, target, taxes, inclusive, breakdown } =
     data
   return (
     <div className="pricing-summary cost-summary">
@@ -212,15 +208,7 @@ export function ProductCostCards({
         <CostCard
           label="Selling price"
           value={money(Number(product.price || 0))}
-          note={
-            inclusive
-              ? exclusive
-                ? 'Some tax included; some added'
-                : 'Includes tax'
-              : taxes.length
-                ? 'Before tax'
-                : 'No applicable tax'
-          }
+          note={priceTaxLabel(taxes)}
           tone="blue"
         />
         <CostCard

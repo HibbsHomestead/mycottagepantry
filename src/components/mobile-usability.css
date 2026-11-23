@@ -20,7 +20,7 @@
 @media (max-width: 1024px) {
   [data-slot='dialog-content'][data-mobile-overlay='true']:not(
       [data-presentation='inventory']
-    ):not([data-presentation='scanner']) {
+    ):not([data-presentation='scanner']):not(.url-import-modal) {
     --mobile-left: max(12px, env(safe-area-inset-left, 0px));
     --mobile-right: max(12px, env(safe-area-inset-right, 0px));
     --mobile-top: max(12px, env(safe-area-inset-top, 0px));
@@ -55,7 +55,7 @@
   }
   [data-mobile-overlay='true'][data-presentation='modal']:not(
       .item-editor-dialog
-    ) {
+    ):not(.url-import-modal) {
     overflow-y: auto;
   }
   [data-mobile-overlay='true'] > * {

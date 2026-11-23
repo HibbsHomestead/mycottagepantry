@@ -1373,6 +1373,9 @@
   background: var(--card, #fff);
   border-top: 1px solid var(--border);
 }
+.receipt-review-dialog .finance-sticky-actions:has(> .form-error-notice) {
+  flex-wrap: wrap;
+}
 .receipt-footer-status {
   margin-right: auto;
   font-size: var(--text-caption, 14px);

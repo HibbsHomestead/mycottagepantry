@@ -1,3 +1,4 @@
+import { ProductPriceTaxField } from './business-price-tax'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { ProductDescriptionField } from './product-description-field'
@@ -706,6 +707,7 @@ export function HandmadeProductEditor({
     price: '',
     workflow: 'handmade',
     ...item,
+    priceTaxMode: item?.priceTaxMode || (w.products.some((p) => p.id === item?.id) ? 'configured' : 'inherit'),
   }))
   const [bom, setBom] = useState<Item>(() => {
     const old = item && handmadeBom(item, w)
@@ -850,6 +852,7 @@ export function HandmadeProductEditor({
               <div className="form-grid">
                 {field('Product name', 'name')}
                 {field('Selling price', 'price', 'number')}
+                <ProductPriceTaxField product={d} business={w.settings[0]} change={change} />
                 {field('SKU', 'sku')}
                 {field('Variant group (optional)', 'variantGroup')}
                 {field('Variant / size / color (optional)', 'variant')}
@@ -1129,7 +1132,7 @@ export function HandmadeProductEditor({
   )
 }
 
-import { profitability, applicableTaxes } from '../lib/domain'
+import { profitability, applicableTaxes, priceTaxLabel, savedPriceTaxLabel } from '../lib/domain'
 function HandmadeMargin({
   product,
   unitCost,
@@ -1516,8 +1519,9 @@ function HandmadeCostCards({
     }
   }
   let taxIssue = false
+  let taxLabel = savedPriceTaxLabel(product, w.settings[0])
   try {
-    applicableTaxes(product, w.settings[0])
+    taxLabel = priceTaxLabel(applicableTaxes(product, w.settings[0]))
   } catch {
     taxIssue = true
   }
@@ -1585,13 +1589,7 @@ function HandmadeCostCards({
         <CostCard
           label="Selling price"
           value={missingPrice ? 'Price missing' : money(product.price)}
-          note={
-            product.priceTaxMode === 'includes'
-              ? 'Saved price · includes tax'
-              : product.priceTaxMode === 'before'
-                ? 'Saved price · before tax'
-                : 'Saved price · per-rate tax behaviors'
-          }
+          note={taxLabel}
           tone="blue"
         />
         <CostCard
