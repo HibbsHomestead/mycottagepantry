@@ -136,6 +136,7 @@ export function requestFeatures({
     case 'ingredientBarcode':
       out.add(specialized ? 'craftResaleEntryAssist' : 'inventory')
       break
+    case 'squareApiImport':
     case 'squareStage':
     case 'squareReview':
     case 'squareCommit':

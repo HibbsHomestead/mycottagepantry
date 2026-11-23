@@ -271,8 +271,13 @@ export function IngredientDetail({
   }
   const applyImport = (patch: Record<string, Item[string]>) => {
     setDraft((old: Item) => {
-      const next = { ...old, ...patch }
+      const stockChange =
+        patch.storageUnit && patch.storageUnit !== (old.storageUnit || old.unit)
+          ? changeStockShelfUnit(old, patch.storageUnit)
+          : {}
+      const next: Item = { ...old, ...stockChange, ...patch }
       if (
+        !patch.purchaseSetup &&
         ['purchaseQuantity', 'purchaseUnit', 'packagePrice'].some((key) =>
           Object.hasOwn(patch, key),
         )

@@ -22,7 +22,14 @@ export default async (request: Request) => {
           face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm,
         ]),
       )
-      return Response.json(widths, { headers })
+      return Response.json(
+        {
+          ...widths,
+          __ascent: Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm,
+          __descent: Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm,
+        },
+        { headers },
+      )
     }
     return new Response(bytes as BodyInit, {
       headers: { ...headers, 'Content-Type': 'font/ttf' },

@@ -1,3 +1,5 @@
+import { ingredientOverflowMessage } from '@/lib/label-studio'
+import { FormErrorNotice } from './form-error-notice'
 import { checkLabelSet } from '@/lib/label-check'
 import {
   labelSide,
@@ -9,7 +11,7 @@ import { LabelSetControls } from './label-set-controls'
 import { withLibraryArtwork } from '@/lib/artwork-library'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { inlineLabelSvg } from '@/lib/label-client-export'
+import { inlineLabelSvg, loadLabelFitMetrics } from '@/lib/label-client-export'
 import {
   Minus,
   Pencil,
@@ -104,6 +106,7 @@ export function LabelPreviewDialog({
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [fontMetricsVersion, setFontMetricsVersion] = useState(0)
   const [rendered, setRendered] = useState({ key: '', url: '', error: '' })
   const stage = useRef<HTMLDivElement>(null)
   const latest = useRef(w)
@@ -177,13 +180,19 @@ export function LabelPreviewDialog({
           (failure as Error).message || 'The saved label design is incomplete.',
       }
     }
-  }, [doc, data, assets, customFonts])
+  }, [doc, data, assets, customFonts, fontMetricsVersion])
   const { issues, missing } = validation
   const { printerProfiles, selectedPrinter } = printerSelection(
     w,
     printingMethod,
   )
-  const renderKey = JSON.stringify([doc, data, assets, customFonts])
+  const renderKey = JSON.stringify([
+    doc,
+    data,
+    assets,
+    customFonts,
+    fontMetricsVersion,
+  ])
   const rendering =
     rendered.key !== renderKey || (!rendered.url && !rendered.error)
   const renderError =
@@ -247,6 +256,10 @@ export function LabelPreviewDialog({
     }, 25000)
     async function prepare() {
       try {
+        if (await loadLabelFitMetrics(document!, fonts)) {
+          if (!cancelled) setFontMetricsVersion((n) => n + 1)
+          return
+        }
         const markup = renderToStaticMarkup(
           <LabelCanvas
             document={labelSide(document!, 'front')}
@@ -626,6 +639,13 @@ export function LabelPreviewDialog({
                 setOrder={setOrder}
                 runIndex={runIndex}
                 setRunIndex={setRunIndex}
+              />
+              <FormErrorNotice
+                message={
+                  issues.some((i) => i.includes(ingredientOverflowMessage))
+                    ? ingredientOverflowMessage
+                    : ''
+                }
               />
               <LabelPrintOptions
                 doc={doc}

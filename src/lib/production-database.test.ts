@@ -221,6 +221,9 @@ beforeAll(async () => {
       },
     ],
   }
+  seed.ingredients.push({ id: 'isolated-liner', name: 'Test muffin liner', usedAs: 'supply', unit: 'each', quantity: 100, cost: 0.025, currentCost: 0.025 })
+  seed.recipes.push({ id: 'isolated-muffins', name: 'Test muffins', yield: 12, yieldUnit: 'each', laborMinutes: 0, laborRate: 0, lines: [{ ingredientId: 'flour', quantity: 120, unit: 'g' }], productionSupplies: [{ ingredientId: 'isolated-liner', quantity: 12, unit: 'each' }] })
+  seed.products.push({ id: 'isolated-muffin', name: 'Test muffin', workflow: 'food', recipeId: 'isolated-muffins', unitsPerPackage: 1, price: 3, quantity: 0, cost: 0 })
   for (const [table, rows] of Object.entries(seed))
     for (const item of rows) {
       const columns =
@@ -1362,4 +1365,30 @@ it('connects events to existing production and separates sales attribution from 
     ).status,
   ).toBe(400)
   session.user = 'production-owner-a'
+})
+
+it('production supplies persist separately, plan without movements, finalize once and preserve existing correction restrictions', async () => {
+  session.user = 'production-owner-a'
+  let w = await ok()
+  const recipe = find(w.recipes, 'isolated-muffins')
+  const before = find(w.ingredients, 'isolated-liner').quantity
+  const ledgerBefore = w.ledger.length
+  w = await ok('save', 'recipes', recipe)
+  expect(find(w.recipes, recipe.id).productionSupplies).toEqual(recipe.productionSupplies)
+  expect(find(w.ingredients, 'isolated-liner').quantity).toBe(before)
+  expect(w.ledger.length).toBe(ledgerBefore)
+  w = await ok('productionSave', 'batches', plan('isolated-supply-run', 'isolated-muffin', 24))
+  expect(find(w.ingredients, 'isolated-liner').quantity).toBe(before)
+  const request = { id: 'isolated-supply-run', output: 24, waste: 0 }
+  const done = await ok('productionComplete', 'batches', request)
+  expect(find(done.ingredients, 'isolated-liner').quantity).toBe(before - 24)
+  const movements = done.ledger.filter((l: Item) => l.batchId === request.id && l.ingredientId === 'isolated-liner')
+  expect(movements).toHaveLength(1)
+  expect(movements[0].quantity).toBe(-24)
+  expect(find(done.batches, request.id).costSnapshot.suppliesCost).toBeCloseTo(.6)
+  expect((await ok('productionComplete', 'batches', request)).ledger).toEqual(done.ledger)
+  expect((await call('productionReverse', 'batches', { id: request.id, reason: 'Isolated test correction' })).status).toBe(400)
+  const unchanged = await ok()
+  expect(unchanged.ledger).toEqual(done.ledger)
+  expect(find(unchanged.batches, request.id)).toEqual(find(done.batches, request.id))
 })

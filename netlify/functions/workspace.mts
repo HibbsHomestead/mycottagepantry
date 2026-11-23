@@ -1,3 +1,4 @@
+import { labelFontMetrics } from '../../src/lib/label-font-metrics'
 import { squareSalesAction } from '../lib/square-sales-import'
 import { demoBusiness, demoRequested, demoWorkspaceBlocked, demoUnavailable } from '../lib/demo-session'
 import { demoWorkspaceSeed } from '../lib/demo-workspace-seed'
@@ -197,6 +198,8 @@ import {
   validateLabelDocument,
   resolveLabelData,
   labelFonts,
+  assertIngredientFit,
+  labelTextRuns,
   imageBindings,
   labelArtworkAssignment,
   type LabelDocument,
@@ -1038,7 +1041,7 @@ export default async (req: Request, context: Context) => {
           'DELETE FROM recipe_lines WHERE business_id=$1 AND recipe_id=$2',
           [org, item.id],
         )
-        for (const [index, line] of (item.lines || []).entries())
+        for (const [index, line] of [...(item.lines || []), ...(item.productionSupplies || []).map((l: Item) => ({ ...l, productionSupply: true }))].entries())
           await client.query(
             'INSERT INTO recipe_lines(id,business_id,data,recipe_id,ingredient_id,quantity,unit) VALUES($1,$2,$3,$4,$5,$6,$7)',
             [
@@ -1863,6 +1866,54 @@ export default async (req: Request, context: Context) => {
         )
       return new Uint8Array(bytes)
     }
+    async function validateAutoFitOutput(
+      document: LabelDocument,
+      snapshot: ReturnType<typeof resolveLabelData>,
+    ) {
+      for (const side of labelSides(document)) {
+        const layout = labelSide(document, side)
+        for (const element of layout.elements.filter((e) => e.autoFit)) {
+          const names = new Set(
+            labelTextRuns(element, snapshot).map((run) => run.font),
+          )
+          for (const name of names) {
+            const font = [...labelFonts, ...customFonts].find(
+              (f) => f.name === name,
+            )
+            if (!font)
+              throw new Error(
+                'Load the ingredient font before printing or exporting.',
+              )
+            for (const bold of [false, true]) {
+              const key =
+                font.file + (bold && font.weights.includes(700) ? '-bold' : '')
+              if (labelFontMetrics[key]) continue
+              const bytes = key.startsWith('custom-')
+                ? await loadCustomFont(key)
+                : key.startsWith('google-')
+                  ? await loadGoogleFontFace(key)
+                  : new Uint8Array(
+                      await readFile(resolve('public/label-fonts', key + '.ttf')),
+                    )
+              const face = fontkit.create(bytes)
+              const metrics = Object.fromEntries(
+                face.characterSet.map((code) => [
+                  String(code),
+                  face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm,
+                ]),
+              )
+              metrics.__ascent =
+                Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm
+              metrics.__descent =
+                Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm
+              labelFontMetrics[key] = metrics
+              labelFontMetrics[font.name + (bold ? '-bold' : '')] = metrics
+            }
+          }
+        }
+        assertIngredientFit(layout, snapshot)
+      }
+    }
     if (req.method === 'GET' && requestUrl.searchParams.has('font')) {
       const id = requestUrl.searchParams.get('font') || ''
       const asset = state.font_assets.find((a) => a.id === id)
@@ -1876,12 +1927,16 @@ export default async (req: Request, context: Context) => {
       if (requestUrl.searchParams.get('metrics') === '1') {
         const face = fontkit.create(bytes)
         return Response.json(
-          Object.fromEntries(
-            face.characterSet.map((code) => [
-              code,
-              face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm,
-            ]),
-          ),
+          {
+            __ascent: Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm,
+            __descent: Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm,
+            ...Object.fromEntries(
+              face.characterSet.map((code) => [
+                code,
+                face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm,
+              ]),
+            ),
+          },
           { headers },
         )
       }
@@ -2444,6 +2499,7 @@ export default async (req: Request, context: Context) => {
       const sequence =
         selectedRun?.sequence ||
         Array.from({ length: copies }, () => 'front' as const)
+      await validateAutoFitOutput(masterDocument, snapshot)
       validateLabelRunContent(masterDocument, snapshot, sequence)
       const printerProfile = data.printerProfileId
         ? (state.settings[0].printerProfilesByDevice?.[deviceKey] || []).find(
@@ -2803,7 +2859,7 @@ export default async (req: Request, context: Context) => {
         throw new Error(
           'Produce component products separately; kit production is unavailable.',
         )
-      if (['squareStage','squareReview','squareCommit','squareUndo'].includes(action)) {
+      if (['squareApiImport','squareStage','squareReview','squareCommit','squareUndo'].includes(action)) {
         if (!['Owner','Manager'].includes(role)) throw new Error('Only an Owner or Manager can import or undo sales.')
         await squareSalesAction(action, data, { state, client, org, save, audit, actor: user?.id || 'Demo owner' })
       } else if (['itemDeleteCheck', 'itemDelete', 'itemArchive'].includes(action)) {
@@ -4069,6 +4125,7 @@ export default async (req: Request, context: Context) => {
         )
         const brand = state.brand_kits.find((b) => b.id === data.brandId),
           snapshot = resolveLabelData(state, source, brand)
+        await validateAutoFitOutput(document, snapshot)
         validateLabelRunContent(
           document,
           snapshot,
@@ -4291,11 +4348,11 @@ export default async (req: Request, context: Context) => {
             (item.lines || []).some(
               (l: Item) =>
                 state.ingredients.find((i) => i.id === l.ingredientId)
-                  ?.usedAs === 'material',
+                  ?.usedAs && ['supply', 'material', 'packaging'].includes(state.ingredients.find(i => i.id === l.ingredientId)?.usedAs),
             )
           )
             throw new Error(
-              'Craft materials belong in a handmade design, not a food recipe.',
+              'Non-edible items belong in Production supplies, not edible ingredient lines.',
             )
           if (
             item.compound &&
@@ -4319,6 +4376,13 @@ export default async (req: Request, context: Context) => {
             throw new Error('Combine duplicate ingredient lines before saving.')
           for (const l of item.lines)
             l.quantity = number(l.quantity, 'Ingredient quantity', 0.000001)
+          if (!Array.isArray(item.productionSupplies ?? [])) throw new Error('Invalid production supplies.')
+          for (const line of item.productionSupplies || []) {
+            const supply = state.ingredients.find(i => i.id === line.ingredientId)
+            if (!supply || !['supply', 'material', 'packaging'].includes(supply.usedAs)) throw new Error('Choose an available non-edible production supply.')
+            line.quantity = number(line.quantity, 'Supply quantity', 0.000001)
+            convert(line.quantity, line.unit, supply.unit, supply.conversions)
+          }
           const componentStocks = validateRecipeComponents(item, state)
           for (const stock of componentStocks) {
             const source = state.recipes.find(
@@ -5168,6 +5232,7 @@ export default async (req: Request, context: Context) => {
         )
         for (const line of productionLines) {
           const i = state.ingredients.find((i) => i.id === line.ingredientId)!
+          if (line.productionSupply && i.trackInventory === false) continue
           const actual = data.usage?.[i.id] ?? line.quantity * count
           const q = convert(
             number(actual, 'Actual ingredient use'),
@@ -5253,7 +5318,8 @@ export default async (req: Request, context: Context) => {
           // charged and deducted once and later base edits cannot rewrite it.
           baseRecipeId: undefined,
           baseRecipe: undefined,
-          lines: productionLines.map((l: any) => ({
+          productionSupplies: productionLines.filter((l: Item) => l.productionSupply).map((l: Item) => ({ ...l, quantity: number(data.usage?.[l.ingredientId] ?? l.quantity * count, 'Actual supply use') / count })),
+          lines: productionLines.filter((l: Item) => !l.productionSupply).map((l: any) => ({
             ...l,
             quantity:
               number(

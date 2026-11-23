@@ -24,7 +24,9 @@ export function ProductVendorReview({
   choice,
   onChoose,
   onVendorsChange,
+  allowCreate = true,
 }: {
+  allowCreate?: boolean
   name: string
   sourceUrl: string
   choice: Item | null
@@ -168,14 +170,16 @@ export function ProductVendorReview({
               </optgroup>
             </select>
           </label>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={saving}
-            onClick={() => setAdding(!adding)}
-          >
-            Add new vendor
-          </button>
+          {allowCreate && (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={saving}
+              onClick={() => setAdding(!adding)}
+            >
+              Add new vendor
+            </button>
+          )}
           {adding && (
             <div className="product-vendor-add">
               <label className="field">

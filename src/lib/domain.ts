@@ -1,7 +1,12 @@
 import { resaleCostBasis } from './resale-cost'
 import { handmadeEstimate } from './handmade'
 import { configuredTaxRates } from './tax-configuration'
-import { categoryTaxState, businessClassifications, classificationIds, productClassification } from './product-categories'
+import {
+  categoryTaxState,
+  businessClassifications,
+  classificationIds,
+  productClassification,
+} from './product-categories'
 export type Item = { id: string; name: string; [key: string]: any }
 export type Workspace = { [key: string]: Item[] }
 export const units: Record<string, { category: string; factor: number }> = {
@@ -338,19 +343,54 @@ export function baseIngredientOverlap(recipe: Item, recipes: Item[]) {
     : null
 }
 
-/** Aggregate shared raw inputs before an actual-use override or stock deduction. */
+/** Non-edible usage stays separate from recipe.lines and all food declarations. */
+export function effectiveProductionSupplies(
+  recipe: Item,
+  recipes?: Item[],
+  path: string[] = [],
+): Item[] {
+  if (path.includes(recipe.id))
+    throw new Error('Recipe base cycle requires review.')
+  const own = (recipe.productionSupplies || []).map((line: Item) => ({
+    ...line,
+    productionSupply: true,
+  }))
+  if (!recipe.baseRecipeId) return own
+  const base =
+    recipes?.find((r) => r.id === recipe.baseRecipeId) || recipe.baseRecipe
+  if (!base) throw new Error('Linked base recipe is unavailable.')
+  const scale = number(recipe.baseMultiplier, 'Base batch multiplier', 0.000001)
+  return [
+    ...effectiveProductionSupplies(base, recipes, [...path, recipe.id]).map(
+      (line) => ({
+        ...line,
+        quantity: number(line.quantity, 'Supply quantity') * scale,
+      }),
+    ),
+    ...own,
+  ]
+}
+
+export function isProductionSupply(item: Item) {
+  return ['supply', 'material', 'packaging'].includes(item.usedAs)
+}
+
+/** Aggregate production inputs before an actual-use override or stock deduction. */
 export function recipeProductionLines(
   recipe: Item,
   ingredients: Item[],
   recipes?: Item[],
 ): any[] {
-  if (!recipe.baseRecipeId)
+  if (!recipe.baseRecipeId && !(recipe.productionSupplies || []).length)
     return (recipe.lines || []).map((line: any) => ({
       ...line,
       sources: [line],
     }))
   const result = new Map<string, any>()
-  for (const line of effectiveRecipeLines(recipe, recipes)) {
+  for (const line of [
+    ...effectiveRecipeLines(recipe, recipes),
+    ...effectiveProductionSupplies(recipe, recipes),
+  ]) {
     const item = ingredients.find((i) => i.id === line.ingredientId)
     if (!item) throw new Error('Ingredient is unavailable.')
     const quantity = convert(
@@ -366,6 +406,7 @@ export function recipeProductionLines(
     } else
       result.set(item.id, {
         ingredientId: item.id,
+        productionSupply: line.productionSupply === true,
         quantity,
         unit: item.unit,
         sources: [line],
@@ -396,6 +437,8 @@ export function costBreakdown(
 ): {
   lines: any[]
   packaging: any[]
+  supplies: any[]
+  suppliesCost: number
   ingredient: number
   packagingCost: number
   laborMinutes: number
@@ -493,6 +536,47 @@ export function costBreakdown(
     }
   })
   const ingredient = lines.reduce((s: number, l: any) => s + l.cost, 0)
+  const supplies = effectiveProductionSupplies(recipe, options.recipes).map(
+    (line: Item) => {
+      const item = ingredients.find((i) => i.id === line.ingredientId)
+      if (!item || !isProductionSupply(item))
+        throw new Error('Choose an available non-edible production supply.')
+      const price = options.historical
+        ? item.cost
+        : (item.currentCost ?? item.cost)
+      if (
+        item.needsCostSetup ||
+        price == null ||
+        price === '' ||
+        !Number.isFinite(Number(price)) ||
+        Number(price) < 0
+      )
+        throw new Error(`${item.name}: production supply cost is missing.`)
+      const quantity =
+        number(line.quantity, 'Supply quantity', 0.000001) * multiplier
+      const normalized = convert(
+        quantity,
+        line.unit,
+        item.unit,
+        item.conversions,
+      )
+      const unitCost = number(price, 'Supply cost')
+      return {
+        ...line,
+        name: item.name,
+        quantity,
+        normalized,
+        storageUnit: item.unit,
+        unitCost,
+        cost: normalized * unitCost,
+      }
+    },
+  )
+  const suppliesCost = supplies.reduce(
+    (sum: number, line: Item) => sum + line.cost,
+    0,
+  )
+
   const laborMinutes = number(
     options.laborMinutes ?? Number(recipe.laborMinutes || 0) * multiplier,
     'Labor minutes',
@@ -543,7 +627,8 @@ export function costBreakdown(
     throw new Error('Choose a valid overhead method.')
   const ownOverhead =
     overheadMode === 'percent'
-      ? ((ingredient + packagingCost + labor) * overheadValue) / 100
+      ? ((ingredient + suppliesCost + packagingCost + labor) * overheadValue) /
+        100
       : overheadMode === 'unit'
         ? overheadValue * actualYield
         : overheadValue * multiplier
@@ -560,10 +645,13 @@ export function costBreakdown(
           'Actual waste cost',
         ) * (options.wasteCost === undefined ? multiplier : 1)
       : (subtotal * wastePercent) / 100)
-  const total = subtotal + waste
+  // Normal discarded consumables are already costed; do not add food waste to their usage.
+  const total = subtotal + suppliesCost + waste
   return {
     lines,
     packaging,
+    supplies,
+    suppliesCost,
     ingredient,
     packagingCost,
     laborMinutes,
@@ -706,6 +794,8 @@ export function kitCosting(
   return {
     lines,
     packaging,
+    supplies: [],
+    suppliesCost: 0,
     ingredient,
     packagingCost,
     laborMinutes,
@@ -722,7 +812,11 @@ export function kitCosting(
     perPackage: total,
   }
 }
-export function productCosting(product: Item, workspace: Workspace, options: { allowResaleEstimate?: boolean } = {}) {
+export function productCosting(
+  product: Item,
+  workspace: Workspace,
+  options: { allowResaleEstimate?: boolean } = {},
+) {
   if (product.workflow === 'handmade' && product.bom) {
     const c = handmadeEstimate(product, workspace)
     const bom = product.bom
@@ -743,6 +837,8 @@ export function productCosting(product: Item, workspace: Workspace, options: { a
         (l) => !packaging.some((p) => p.itemId === l.itemId),
       ),
       packaging,
+      supplies: [],
+      suppliesCost: 0,
       ingredient: c.materials,
       packagingCost: c.packaging,
       laborMinutes: Number(bom.laborMinutes),
@@ -761,9 +857,15 @@ export function productCosting(product: Item, workspace: Workspace, options: { a
   }
   if (product.workflow === 'kit') return kitCosting(product, workspace)
   if (product.workflow === 'resale') {
-    const basis = resaleCostBasis(options.allowResaleEstimate ? product : { ...product, purchaseDefaults: undefined })
+    const basis = resaleCostBasis(
+      options.allowResaleEstimate
+        ? product
+        : { ...product, purchaseDefaults: undefined },
+    )
     if (basis.cost === undefined)
-      throw new Error('Purchase cost not recorded. Receive resale stock or configure an estimate.')
+      throw new Error(
+        'Purchase cost not recorded. Receive resale stock or configure an estimate.',
+      )
     return costBreakdown(
       {
         id: 'resale-basis',
@@ -796,7 +898,8 @@ export type TaxRate = {
   active?: boolean
   start?: string
   end?: string
-  appliesTo?: 'all_products' | 'product_category' | 'selected_products' | 'classification'
+  appliesTo?:
+    'all_products' | 'product_category' | 'selected_products' | 'classification'
   category?: string
   classification?: 'food' | 'non_food'
   productIds?: string[]
@@ -821,15 +924,22 @@ export function validateTaxRates(rates: TaxRate[], business?: Item) {
   for (const r of rates) {
     if (!r.id || !r.name || !r.jurisdiction)
       throw new Error('Tax name and jurisdiction are required.')
-    if (r.ratePercent == null || String(r.ratePercent).trim() === '') throw new Error('Enter a tax percentage; enter 0 explicitly for a zero-percent rate.')
+    if (r.ratePercent == null || String(r.ratePercent).trim() === '')
+      throw new Error(
+        'Enter a tax percentage; enter 0 explicitly for a zero-percent rate.',
+      )
     if (number(r.ratePercent, 'Tax rate') > 100)
       throw new Error('Tax rate must not exceed 100%.')
     if (!['inclusive', 'exclusive'].includes(r.behavior))
       throw new Error('Choose a tax behavior.')
-    if (r.appliesTo === 'classification' && (
-      !r.classification || !classificationIds.includes(r.classification) ||
-      (business && !businessClassifications(business).includes(r.classification))
-    )) throw new Error('Choose a classification from this business.')
+    if (
+      r.appliesTo === 'classification' &&
+      (!r.classification ||
+        !classificationIds.includes(r.classification) ||
+        (business &&
+          !businessClassifications(business).includes(r.classification)))
+    )
+      throw new Error('Choose a classification from this business.')
     number(r.order ?? 0, 'Tax calculation order')
     for (const date of [r.start, r.end]) if (date) validateDate(date)
     if (r.start && r.end && r.start > r.end)
@@ -917,12 +1027,27 @@ export function categoryTaxDescription(category: Item, business: Item) {
   const id = category.id || 'category-tax-preview'
   try {
     return applicableTaxes(
-      { id: 'category-tax-preview', name: 'Category tax preview', productCategoryId: id, taxSource: 'category' },
-      { ...business, productCategories: [
-        ...(business.productCategories || []).filter((c: Item) => c.id !== id),
-        { ...category, id },
-      ] },
-    ).map((r) => `${r.name} · ${r.jurisdiction} · ${r.ratePercent}% · ${r.behavior}`).join('; ')
+      {
+        id: 'category-tax-preview',
+        name: 'Category tax preview',
+        productCategoryId: id,
+        taxSource: 'category',
+      },
+      {
+        ...business,
+        productCategories: [
+          ...(business.productCategories || []).filter(
+            (c: Item) => c.id !== id,
+          ),
+          { ...category, id },
+        ],
+      },
+    )
+      .map(
+        (r) =>
+          `${r.name} · ${r.jurisdiction} · ${r.ratePercent}% · ${r.behavior}`,
+      )
+      .join('; ')
   } catch (error) {
     return (error as Error).message
   }

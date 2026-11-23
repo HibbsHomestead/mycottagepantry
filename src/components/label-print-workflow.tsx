@@ -1,3 +1,4 @@
+import { ingredientOverflowMessage } from '@/lib/label-studio'
 import {
   labelSetPlan,
   labelSide,
@@ -70,6 +71,8 @@ export function labelOutputBlocker({
   | 'reviewed'
 >): string | null {
   try {
+    if (issues.some((issue) => issue.includes(ingredientOverflowMessage)))
+      throw new Error(ingredientOverflowMessage)
     if (
       issues.some((issue) =>
         /Missing information: (Label main name|Label product type|font)/.test(

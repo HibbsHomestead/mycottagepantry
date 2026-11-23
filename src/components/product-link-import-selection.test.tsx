@@ -76,7 +76,9 @@ it('defaults to Pickup, keeps club context and preserves an explicit Shipping se
     10.98,
   )
   expect(screen.getByLabelText(/I approve changing/)).not.toBeChecked()
-  expect(screen.getByLabelText(/Import product photo/)).not.toBeChecked()
+  expect(
+    screen.queryByLabelText(/Import product photo/),
+  ).not.toBeInTheDocument()
   expect(apply).not.toHaveBeenCalled()
   await userEvent.selectOptions(choice, '0')
   rerender(
@@ -97,15 +99,13 @@ it('defaults to Pickup, keeps club context and preserves an explicit Shipping se
   expect(apply).not.toHaveBeenCalled()
 })
 
-it('Select all checks fields, photo and package approval without applying; Clear selection unchecks all', async () => {
+it('Select all checks fields and package approval without applying; Clear selection unchecks all', async () => {
   const { apply, fetcher } = await review()
   const approve = screen.getByLabelText(/I approve changing/)
-  const photo = screen.getByLabelText(/Import product photo/)
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
   for (const checkbox of screen.getAllByRole('checkbox'))
-    expect(checkbox).toBeChecked()
+    if (!(checkbox as HTMLInputElement).disabled) expect(checkbox).toBeChecked()
   expect(approve).toBeChecked()
-  expect(photo).toBeChecked()
   expect(screen.getByText(/^Package: 25 lb$/)).toBeVisible()
   expect(apply).not.toHaveBeenCalled()
   expect(fetcher).toHaveBeenCalledTimes(1)
@@ -114,17 +114,17 @@ it('Select all checks fields, photo and package approval without applying; Clear
     expect(checkbox).not.toBeChecked()
   expect(approve).toBeVisible()
   expect(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   ).toBeDisabled()
   expect(apply).not.toHaveBeenCalled()
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 
-it('applies the selected Pickup price/package and photo to the draft only after explicit Select all and Apply', async () => {
+it('applies the selected Pickup price/package to the draft only after explicit Select all and Apply', async () => {
   const { apply, fetcher } = await review()
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply).toHaveBeenCalledExactlyOnceWith(
     expect.objectContaining({
@@ -132,14 +132,12 @@ it('applies the selected Pickup price/package and photo to the draft only after 
       packagePrice: 10.98,
       purchaseQuantity: 25,
       purchaseUnit: 'lb',
-      imageAssetId: 'imported-photo',
       productSourceUrl: sourceUrl,
     }),
   )
   expect(apply.mock.calls[0][0]).not.toHaveProperty('quantity')
   expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
     '/api/workspace?productImport=1',
-    '/api/workspace?productImage=1',
   ])
 })
 
@@ -148,7 +146,7 @@ it('keeps checkboxes individually editable after Select all and preserves unchec
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
   await userEvent.click(screen.getByLabelText(/I approve changing/))
   expect(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   ).toBeDisabled()
   for (const name of [
     'Package price',
@@ -156,9 +154,8 @@ it('keeps checkboxes individually editable after Select all and preserves unchec
     'Purchase unit',
   ])
     await userEvent.click(screen.getByRole('checkbox', { name }))
-  await userEvent.click(screen.getByLabelText(/Import product photo/))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   const patch = apply.mock.calls[0][0]
   expect(patch).toMatchObject({ name: 'Bread flour', currency: 'USD' })
@@ -189,7 +186,7 @@ it.each(['', 'not-an-image-url', 'javascript:alert(1)'])(
       screen.queryByLabelText(/Import product photo/),
     ).not.toBeInTheDocument()
     await userEvent.click(
-      screen.getByRole('button', { name: 'Apply selected values' }),
+      screen.getByRole('button', { name: 'Accept & use information' }),
     )
     expect(apply.mock.calls[0][0]).not.toHaveProperty('imageAssetId')
     expect(fetcher).toHaveBeenCalledTimes(1)
@@ -202,9 +199,8 @@ it('includes mapped package approval in Select all for the package setup form', 
   expect(screen.getByText(/Source package: 25 lb/)).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
   expect(screen.getByLabelText(/I approve changing/)).toBeChecked()
-  await userEvent.click(screen.getByLabelText(/Import product photo/))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply.mock.calls[0][0]).toMatchObject({
     amountPerPackage: 25,
@@ -213,7 +209,7 @@ it('includes mapped package approval in Select all for the package setup form', 
   })
 })
 
-it('clears photo and package approval when the user changes offers', async () => {
+it('clears package approval when the user changes offers', async () => {
   await review()
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
   await userEvent.selectOptions(
@@ -221,7 +217,9 @@ it('clears photo and package approval when the user changes offers', async () =>
     '0',
   )
   expect(screen.getByLabelText(/I approve changing/)).not.toBeChecked()
-  expect(screen.getByLabelText(/Import product photo/)).not.toBeChecked()
+  expect(
+    screen.queryByLabelText(/Import product photo/),
+  ).not.toBeInTheDocument()
 })
 
 it('keeps an ambiguous Pickup choice visible and applies only the chosen offerâ€™s package and price', async () => {
@@ -258,9 +256,8 @@ it('keeps an ambiguous Pickup choice visible and applies only the chosen offerâ€
   expect(apply).not.toHaveBeenCalled()
   await userEvent.selectOptions(choice, '2')
   await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
-  await userEvent.click(screen.getByLabelText(/Import product photo/))
   await userEvent.click(
-    screen.getByRole('button', { name: 'Apply selected values' }),
+    screen.getByRole('button', { name: 'Accept & use information' }),
   )
   expect(apply.mock.calls[0][0]).toMatchObject({
     purchaseQuantity: 10,

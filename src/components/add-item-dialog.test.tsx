@@ -270,7 +270,7 @@ it.each(itemTypes)(
     )
       await user.click(screen.getByRole('checkbox', { name: 'Brand' }))
     await user.click(
-      screen.getByRole('button', { name: 'Apply selected values' }),
+      screen.getByRole('button', { name: 'Accept & use information' }),
     )
     expect(screen.getByLabelText('Brand')).toHaveValue('Supplier brand')
     expect(screen.getByLabelText('Item name')).toHaveValue('Manual name')

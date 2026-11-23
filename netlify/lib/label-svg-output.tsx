@@ -1,3 +1,4 @@
+import { labelFontMetrics } from '../../src/lib/label-font-metrics'
 import fontkit from '@pdf-lib/fontkit'
 import { load } from 'cheerio'
 import { createElement } from 'react'
@@ -13,6 +14,7 @@ import {
   elementAssetId,
   elementVisible,
   labelTextRuns,
+  assertIngredientFit,
   type LabelData,
   type LabelDocument,
 } from '../../src/lib/label-studio'
@@ -96,10 +98,23 @@ export async function exportSvgLabelPdf(
         )?.name
         if (!face.familyName)
           throw new Error('The selected font has no usable family metadata.')
-        if (alias) fontNames.set(alias, face.familyName)
+        if (alias) {
+          fontNames.set(alias, face.familyName)
+          const metrics: Record<string, number> = {}
+          for (const code of face.characterSet)
+            metrics[String(code)] =
+              face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm
+          metrics.__ascent =
+            Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm
+          metrics.__descent =
+            Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm
+          labelFontMetrics[alias + (key.endsWith('-bold') ? '-bold' : '')] ||=
+            metrics
+        }
         return bytes
       }),
     )
+    assertIngredientFit(document, data)
     const inlined: Item[] = []
     for (const id of new Set(
       document.elements

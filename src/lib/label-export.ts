@@ -1,3 +1,4 @@
+import { labelFontMetrics } from './label-font-metrics'
 import { withLibraryArtwork } from './artwork-library'
 import { effectiveFill } from './label-colors'
 import { assetPng } from './label-client-export'
@@ -29,6 +30,9 @@ import {
   elementVisible,
   labelFonts,
   labelTextLines,
+  labelTextBaseline,
+  fitIngredientText,
+  assertIngredientFit,
   labelTextRuns,
   type LabelDocument,
   type LabelData,
@@ -95,6 +99,18 @@ export async function exportLabelPdf(
                   )
                 return new Uint8Array(await r.arrayBuffer())
               })()
+          const face = fontkit.create(bytes)
+          const metrics = Object.fromEntries(
+            face.characterSet.map((code) => [
+              String(code),
+              face.glyphForCodePoint(code).advanceWidth / face.unitsPerEm,
+            ]),
+          )
+          metrics.__ascent =
+            Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm
+          metrics.__descent =
+            Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm
+          labelFontMetrics[name + (suffix ? '-bold' : '')] ||= metrics
           fonts.set(key, await pdf.embedFont(bytes, { subset: true }))
         }
       }
@@ -113,6 +129,7 @@ export async function exportLabelPdf(
         )
     }
   }
+  assertIngredientFit(d, data)
   const capacity = layout.mode === 'sheet' ? layout.rows * layout.columns : 1
   for (let first = 0; first < copies; first += capacity) {
     const page = pdf.addPage(
@@ -202,7 +219,8 @@ export async function exportLabelPdf(
           opacity:
             d.background === 'transparent' ? 0 : (d.backgroundOpacity ?? 1),
         })
-      for (const e of d.elements.filter((e) => elementVisible(e, data))) {
+      for (const source of d.elements.filter((e) => elementVisible(e, data))) {
+        const e = fitIngredientText(source, data).element
         if (e.type === 'image' && e.binding && !elementAssetId(e, data))
           continue
         const rad = (e.rotation * Math.PI) / 180
@@ -230,13 +248,16 @@ export async function exportLabelPdf(
           const lines = labelTextLines(
               e,
               data,
-              (text, name, bold) =>
-                Array.from(text).reduce(
-                  (sum, char) =>
-                    sum + face(name, bold).widthOfTextAtSize(char, e.fontSize),
-                  0,
-                ) +
-                Math.max(0, Array.from(text).length - 1) * e.letterSpacing,
+              source.autoFit
+                ? undefined
+                : (text, name, bold) =>
+                    Array.from(text).reduce(
+                      (sum, char) =>
+                        sum +
+                        face(name, bold).widthOfTextAtSize(char, e.fontSize),
+                      0,
+                    ) +
+                    Math.max(0, Array.from(text).length - 1) * e.letterSpacing,
             ),
             lineHeight = e.fontSize * e.lineHeight,
             total = lines.length * lineHeight
@@ -283,7 +304,7 @@ export async function exportLabelPdf(
                   : e.align === 'right'
                     ? e.width - width
                     : 0,
-              y = -start - e.fontSize - i * lineHeight
+              y = -start - labelTextBaseline(e) - i * lineHeight
             // Per-character positioning preserves explicit letter spacing in vector text.
             let cursor = x
             for (const run of line) {

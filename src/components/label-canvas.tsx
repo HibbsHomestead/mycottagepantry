@@ -7,6 +7,9 @@ import {
   elementAssetId,
   elementVisible,
   labelTextLines,
+  labelTextBaseline,
+  fitIngredientText,
+  ingredientTextOverflow,
   labelFonts,
   type LabelDocument,
   type LabelElement,
@@ -256,7 +259,9 @@ export function LabelCanvas({
         )}
         {d.elements
           .filter((e) => elementVisible(e, data))
-          .map((e) => {
+          .map((source) => {
+            const fitted = fitIngredientText(source, data)
+            const e = fitted.element
             const lines = labelTextLines(e, data),
               total = lines.length * e.fontSize * e.lineHeight,
               offset =
@@ -283,6 +288,24 @@ export function LabelCanvas({
                     height={e.height}
                     fill="transparent"
                   />
+                )}
+                {editor && ingredientTextOverflow(d, source, data) && (
+                  <rect
+                    data-editor-only="true"
+                    data-ingredient-overflow="true"
+                    width={source.width}
+                    height={source.height}
+                    x={-Math.max(1, e.fontSize * 0.5)}
+                    y={-1}
+                    fill="#fff0f0"
+                    fillOpacity={0.35}
+                    stroke="#b42318"
+                    strokeWidth={1}
+                  >
+                    <title>
+                      Ingredient list does not fit at the minimum text size.
+                    </title>
+                  </rect>
                 )}
                 {e.type === 'text' && (
                   <>
@@ -311,7 +334,7 @@ export function LabelCanvas({
                             : 400
                       }
                       xmlSpace={
-                        e.binding === 'recipe.ingredients'
+                        e.binding === 'recipe.ingredients' || e.autoFit
                           ? 'preserve'
                           : undefined
                       }
@@ -337,7 +360,9 @@ export function LabelCanvas({
                                 : 0
                           }
                           y={
-                            offset + e.fontSize + i * e.fontSize * e.lineHeight
+                            offset +
+                            labelTextBaseline(e) +
+                            i * e.fontSize * e.lineHeight
                           }
                         >
                           {line.map((run, index) => (
