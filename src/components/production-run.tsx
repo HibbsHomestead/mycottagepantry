@@ -7,6 +7,8 @@ import { workflowOf } from '../lib/product-workflows'
 import { productionDefinition } from '../lib/production'
 import {
   combinedProductionRequirements,
+  productionOutputIssue,
+  productionReviewIssues,
   productionRunLines,
 } from '../lib/production-run'
 import { LegacyProductionRun } from './legacy-production-run'
@@ -14,6 +16,7 @@ import './production-run.css'
 
 type Props = ComponentProps<typeof LegacyProductionRun> & {
   onDirtyChange?: (dirty: boolean) => void
+  initialReview?: boolean
 }
 const blank = (productId = ''): Item => ({
   id: crypto.randomUUID(),
@@ -77,6 +80,7 @@ function RunEditor({
   edit,
   busy,
   onDirtyChange,
+  initialReview,
   role = 'Owner',
 }: Props) {
   const [id, setId] = useState(run?.id || crypto.randomUUID())
@@ -88,7 +92,8 @@ function RunEditor({
   const [lines, setLines] = useState<Item[]>(() =>
     run ? structuredClone(productionRunLines(run)) : [blank(productId)],
   )
-  const [review, setReview] = useState(false)
+  const [review, setReview] = useState(!!initialReview)
+  const [savedPlan, setSavedPlan] = useState(!!run && !legacyRunId && Number(run.revision) > 0)
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState('')
   const [reversalReason, setReversalReason] = useState('')
@@ -97,6 +102,9 @@ function RunEditor({
   }, [dirty, onDirtyChange])
   const saving = useRef(false)
   const terminal = ['completed', 'canceled'].includes(status)
+  const started = status === 'scheduled'
+  const editorRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   const canEdit = ['Owner', 'Manager'].includes(role) && !terminal
   const canRecordActuals =
     ['Owner', 'Manager', 'Production Staff'].includes(role) && !terminal
@@ -130,6 +138,37 @@ function RunEditor({
   } catch (e) {
     setupError ||= (e as Error).message
   }
+  const outputMissing = lines.some((line) => !!productionOutputIssue(line))
+  const reviewIssues = productionReviewIssues(prepared.map((line, index) => ({
+    ...line, name: line.name || state.products.find((product) => product.id === line.productId)?.name || `Product ${index + 1}`,
+  })), outputMissing ? undefined : calculation)
+  const startIssues = [...new Set([
+    setupError,
+    ...(!lines.length ? ['Add at least one product.'] : []),
+    ...prepared.flatMap((line, index) => !line.definition
+      ? [`Product ${index + 1}: select a product and verify its recipe output or materials setup.`]
+      : calculation?.products[index]?.error ? [calculation.products[index].error] : []),
+  ].filter(Boolean))]
+  const blockers = [...new Set([...startIssues, ...reviewIssues])]
+  const reviewing = started && review
+  const currentStep = status === 'completed' || reviewing ? 4 : started ? 3 : savedPlan && !dirty ? 2 : 1
+  function focusOutput() {
+    setReview(false)
+    requestAnimationFrame(() => {
+      const field = editorRef.current?.querySelector<HTMLInputElement>('[data-output-input][aria-invalid="true"], [data-output-input]')
+      const invalid = editorRef.current?.querySelector<HTMLInputElement>('[data-output-input][aria-invalid="true"]')
+      ;(invalid || field)?.focus()
+    })
+  }
+  function focusMaterials() {
+    setReview(false)
+    requestAnimationFrame(() => {
+      const details = editorRef.current?.querySelector<HTMLDetailsElement>('[data-material-fields]')
+      if (!details) return
+      details.open = true
+      details.querySelector<HTMLElement>('select, input, summary')?.focus()
+    })
+  }
   function hasActuals(l: Item) {
     return (
       (l.output !== '' && l.output != null) ||
@@ -158,6 +197,7 @@ function RunEditor({
           run && id !== run.id ? undefined : run?.legacyRunId || legacyRunId,
       })
       setRevision(revision + 1)
+      setSavedPlan(true)
       setDirty(false)
       setReview(false)
       setStatus(
@@ -167,6 +207,8 @@ function RunEditor({
             ? 'canceled'
             : nextStatus,
       )
+      if (action === 'productionComplete' || (!started && nextStatus === 'scheduled'))
+        requestAnimationFrame(() => headingRef.current?.focus())
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -177,6 +219,7 @@ function RunEditor({
     setId(crypto.randomUUID())
     setRevision(0)
     setStatus('draft')
+    setSavedPlan(false)
     setName(name + ' — copy')
     setLines(
       lines.map((l) => ({
@@ -193,19 +236,29 @@ function RunEditor({
   const finalRun =
     state.batches.find((b) => b.id === id) || (run?.id === id ? run : undefined)
   return (
-    <div className="production-run multi-production-run">
+    <div className="production-run multi-production-run" ref={editorRef}>
+      {status !== 'canceled' && <ol className="production-steps" aria-label="Production steps">
+        {['Plan', 'Start', 'Record output', 'Review & finalize'].map((step, index) => <li key={step} aria-current={currentStep === index + 1 && status !== 'completed' ? 'step' : undefined}>
+          <strong>{index + 1} — {step}</strong>
+          <small>{status === 'completed' || currentStep > index + 1 ? 'Complete' : currentStep === index + 1 ? 'Current step' : 'Upcoming'}</small>
+        </li>)}
+      </ol>}
+      <h3 tabIndex={-1} ref={headingRef}>{status === 'completed' ? 'Recorded result' : status === 'canceled' ? 'Cancelled run' : reviewing ? 'Review & finalize' : started ? 'Record output' : currentStep === 2 ? 'Start the saved plan' : 'Plan production'}</h3>
+      {!terminal && !reviewing && <p>{started ? 'Enter actual good and rejected output for every product. Saving output does not post stock.' : 'Save the plan first. Starting the run does not finalize it, reserve materials or move stock.'}</p>}
       <p>
         <strong>
           {status === 'completed'
             ? 'Finalized'
             : status === 'scheduled'
-              ? 'In progress'
+              ? (!dirty && !blockers.length ? 'Ready to finalize' : 'In progress')
               : status === 'canceled'
                 ? 'Cancelled'
                 : 'Draft'}
         </strong>{' '}
         · {lines.length} product {lines.length === 1 ? 'line' : 'lines'}
       </p>
+      <details open={!started && !terminal} hidden={reviewing}>
+      <summary>Run name, date & notes</summary>
       <div className="form-grid">
         <label>
           Run name / reference
@@ -248,14 +301,15 @@ function RunEditor({
           />
         </label>
       </details>
-      {(legacyRunId || run?.legacyRunId) && (
+      </details>
+      {!started && (legacyRunId || run?.legacyRunId) && (
         <p>
           Starting this replacement cancels the original recipe plan. Saving a
           draft leaves the original unchanged. No stock moves until
           finalization.
         </p>
       )}
-      {lines.map((l, index) => {
+      {!reviewing && lines.map((l, index) => {
         const product = state.products.find((p) => p.id === l.productId)
         const definition = prepared[index].definition
         const result = calculation?.products[index]
@@ -268,9 +322,10 @@ function RunEditor({
         return (
           <fieldset key={l.id} className="production-product-line">
             <legend>
-              Product {index + 1}
-              {terminal ? ` · ${l.name}` : ''}
+              {product?.name || l.name || `Product ${index + 1}`}
             </legend>
+            <details open={!started && !terminal}>
+              <summary>Product plan · {l.quantity} {definition?.bom ? 'finished units' : 'selling packages'}</summary>
             <div className="form-grid">
               <label>
                 Product
@@ -465,16 +520,15 @@ function RunEditor({
                 </label>
               </details>
             )}
-            <details>
-              <summary>
-                Output, waste and notes ·{' '}
-                {terminal ? (l.actualYield ?? '—') : l.output || 'Not recorded'}{' '}
-                good · {l.waste || 0} rejected
-              </summary>
+            </details>
+            {(started || terminal) && <section className="production-actual-fields" aria-label={`${product?.name || l.name || 'Product'} output`}>
               <div className="form-grid">
-                <label>
-                  Actual good output (selling packages / finished units)
+                <div><label>
+                  Actual good output ({definition?.bom ? 'finished units' : 'selling packages'})
                   <input
+                    data-output-input
+                    aria-invalid={!terminal && !!productionOutputIssue(l)}
+                    aria-describedby={!terminal && productionOutputIssue(l) ? `output-${l.id}` : undefined}
                     type="number"
                     min="1"
                     step="1"
@@ -483,8 +537,10 @@ function RunEditor({
                     onChange={(e) => change(l.id, { output: e.target.value })}
                   />
                 </label>
+                {!terminal && productionOutputIssue(l) && <small className="warning-text" id={`output-${l.id}`}>{productionOutputIssue(l)}</small>}
+                </div>
                 <label>
-                  Waste / rejected output
+                  Rejected output ({definition?.bom ? 'finished units' : 'selling packages'})
                   <input
                     type="number"
                     min="0"
@@ -531,7 +587,7 @@ function RunEditor({
                   onChange={(e) => change(l.id, { note: e.target.value })}
                 />
               </label>
-            </details>
+            </section>}
             {terminal ? (
               <>
                 <p>
@@ -548,7 +604,7 @@ function RunEditor({
               </>
             ) : (
               <>
-                <p>
+                <details><summary>Cost estimate and calculation</summary><p>
                   Estimated cost:{' '}
                   {result
                     ? result.costKnown
@@ -559,9 +615,9 @@ function RunEditor({
                     ` · labor ${money(result.cost.labor)} · overhead ${money(result.cost.overhead)}`}
                   {result?.error && <span role="status">{result.error}</span>}.
                   Actual costs lock at finalization.
-                </p>
+                </p></details>
                 {result?.requirements && (
-                  <details>
+                  <details data-material-fields open={started && result.requirements.some((requirement: Item) => requirement.source?.prepared)}>
                     <summary>
                       Product requirements and actual material usage
                     </summary>
@@ -575,6 +631,8 @@ function RunEditor({
                           <PrepStockSourceSelect
                             ingredient={state.ingredients.find((i) => i.id === r.itemId)}
                             lots={state.lots}
+                            requirement={r.source.prepared}
+                            requiredQuantity={r.quantity}
                             value={l.prepSources?.[r.itemId]}
                             change={(source) => change(l.id, {
                               prepSources: { ...l.prepSources, [r.itemId]: source },
@@ -639,7 +697,7 @@ function RunEditor({
                   </details>
                 )}
                 {canEdit && (
-                  <div className="button-row">
+                  <details open={!started}><summary>Product setup actions</summary><div className="button-row">
                     <button
                       type="button"
                       className="btn secondary"
@@ -676,17 +734,17 @@ function RunEditor({
                         Edit product setup
                       </button>
                     )}
-                  </div>
+                  </div></details>
                 )}
               </>
             )}
           </fieldset>
         )
       })}
-      {canEdit && (
+      {canEdit && !reviewing && (
         <button
           type="button"
-          className="btn secondary"
+          className={started ? 'text-button' : 'btn secondary'}
           onClick={() => {
             setLines([...lines, blank()])
             setDirty(true)
@@ -696,11 +754,11 @@ function RunEditor({
           Add product
         </button>
       )}
-      {!terminal && (
-        <section aria-label="Combined material requirements">
-          <h3>Combined material requirements</h3>
+      {!terminal && !reviewing && (
+        <details open={!started}>
+          <summary>Combined material requirements</summary>
           <p>
-            Planned only: no stock reserved, consumed or received before
+            Preview only: no stock reserved, consumed or received before
             finalization. Current stock is shared with other work.
           </p>
           {setupError && <p role="status">{setupError}</p>}
@@ -791,15 +849,15 @@ function RunEditor({
             product’s portion of shared labor in its actual minutes; do not
             repeat the full run time on every line.
           </p>
-        </section>
+        </details>
       )}
-      {review && (
+      {reviewing && (
         <section className="calculation-box" aria-label="Finalization review">
           <h3>Finalization review</h3>
           {lines.map((l) => (
             <p key={l.id}>
               {state.products.find((p) => p.id === l.productId)?.name}:{' '}
-              {l.output} good selling packages / finished units added ·{' '}
+              {l.output} good {l.definition?.bom ? 'finished units' : 'selling packages'} to receive ·{' '}
               {l.waste || 0} rejected · estimated cost{' '}
               {money(
                 calculation?.products.find((p) => p.line.id === l.id)
@@ -807,20 +865,14 @@ function RunEditor({
               )}
             </p>
           ))}
+          <h4>Materials to consume</h4>
+          <ul>{calculation?.requirements.map((requirement) => <li key={requirement.id}>
+            {requirement.name}: {requirement.quantity} {requirement.unit}{requirement.source?.prepared ? ' from prepared stock' : ''} · {requirement.costKnown ? money(requirement.cost) : 'Cost needs review'}
+          </li>)}</ul>
+          <p><strong>Estimated at recorded costs: {calculation?.costKnown ? money(calculation.total) : 'Incomplete'}</strong></p>
           <p>
-            The combined materials above are consumed once. No earlier inventory
-            movements exist for this run. Actual stock costs and the existing
-            line allocations lock together. Finalization records your identity
-            and time and makes this run read-only.
+            Finalization rechecks stock, receives good output, consumes the materials once and locks the actual costs and usage.
           </p>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy}
-            onClick={() => act('productionComplete')}
-          >
-            Finalize run
-          </button>
         </section>
       )}
       {terminal && (
@@ -879,64 +931,70 @@ function RunEditor({
           ))}
         </details>
       )}
-      {error && <FormErrorNotice message={error} />}
+      {terminal && error && <FormErrorNotice message={error} />}
       {!terminal && (
-        <div className="button-row">
-          {canEdit && (
+        <div className="production-step-actions">
+          {started && blockers.length > 0 && <div className="calculation-box" aria-label="Requirements before finalization">
+            <strong>Before you can finalize</strong><ul>{blockers.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+            {outputMissing && <button type="button" className="text-button" onClick={focusOutput}>Enter output</button>}
+            {!outputMissing && calculation?.requirements.length ? <button type="button" className="text-button" onClick={focusMaterials}>Review material usage or allocation</button> : null}
+          </div>}
+          {!started && startIssues.length > 0 && <div className="calculation-box"><strong>Before you can start</strong><ul>{startIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
+          <FormErrorNotice message={error} />
+          <div className="button-row">
+          {!started && canEdit && (
             <>
               <button
                 type="button"
-                className="btn secondary"
-                disabled={busy || !lines.length}
-                onClick={() =>
-                  act(
-                    'productionSave',
-                    status === 'scheduled' ? 'scheduled' : 'draft',
-                  )
-                }
+                className={currentStep === 1 ? 'btn' : 'btn secondary'}
+                disabled={busy}
+                onClick={() => lines.length ? act('productionSave', 'draft') : setError('Add a product before saving the plan.')}
               >
-                {status === 'scheduled' ? 'Save changes' : 'Save draft'}
+                Save plan
               </button>
-              <button
+              {currentStep === 2 && !startIssues.length && <button
                 type="button"
-                className="btn secondary"
-                disabled={busy || !!setupError || !lines.length}
+                className="btn"
+                disabled={busy}
                 onClick={() => act('productionSave', 'scheduled')}
               >
                 Start run
-              </button>
+              </button>}
             </>
           )}
-          {role === 'Production Staff' && canRecordActuals && (
-            <button
-              type="button"
-              className="btn secondary"
-              disabled={busy}
-              onClick={() => act('productionRecordActuals')}
-            >
-              Save actuals
-            </button>
-          )}
-          {canFinalize && (
+          {started && !reviewing && canRecordActuals && (dirty || blockers.length > 0) && (
             <button
               type="button"
               className="btn"
-              disabled={
-                busy ||
-                dirty ||
-                !state.batches.some((b) => b.id === id) ||
-                !!setupError ||
-                !calculation?.costKnown ||
-                calculation.requirements.some((r) => !r.inventoryCostKnown) ||
-                !!calculation.shortages.length ||
-                lines.some((l) => l.output == null || l.output === '')
-              }
-              onClick={() => setReview(true)}
+              disabled={busy}
+              onClick={() => {
+                if (outputMissing) {
+                  setError('Enter actual good output for each product before saving output.')
+                  focusOutput()
+                } else void act(canEdit ? 'productionSave' : 'productionRecordActuals')
+              }}
             >
-              Review finalization
+              Save output
             </button>
           )}
-          {canEdit && run && (
+          {started && canFinalize && !blockers.length && !dirty && (
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => {
+                if (reviewing) void act('productionComplete')
+                else {
+                  setReview(true)
+                  requestAnimationFrame(() => headingRef.current?.focus())
+                }
+              }}
+            >
+              {reviewing ? 'Finalize production' : 'Review & finalize'}
+            </button>
+          )}
+          {reviewing && <button type="button" className="btn secondary" disabled={busy} onClick={() => setReview(false)}>Back to output</button>}
+          {canEdit && !reviewing && savedPlan && (
             <button
               type="button"
               className="btn secondary"
@@ -951,13 +1009,14 @@ function RunEditor({
               Cancel run
             </button>
           )}
+          </div>
         </div>
       )}
       {!terminal && (
         <p>
           {dirty
             ? 'Unsaved changes. Save before closing or reviewing finalization.'
-            : 'Save and close to continue editing later. Start run does not finalize or move stock.'}
+            : 'Saved runs can be reopened from the board.'}
         </p>
       )}
     </div>

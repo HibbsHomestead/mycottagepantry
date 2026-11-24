@@ -9,7 +9,7 @@ it('keeps independent secondary details and assignments while editing compact ro
   const user = userEvent.setup(),
     changes = vi.fn()
   const items = [
-    { id: 'bag', name: 'Window bag', usedAs: 'packaging', unit: 'each' },
+    { id: 'bag', name: 'Window bag', usedAs: 'packaging', unit: 'each', cost: 0.003 },
     { id: 'seal', name: 'Olive seal', usedAs: 'packaging', unit: 'each' },
   ] as Item[]
   const initial = [
@@ -39,6 +39,9 @@ it('keeps independent secondary details and assignments while editing compact ro
   const rows = () =>
     [...app.container.querySelectorAll('.packaging-editor')] as HTMLElement[]
   expect(rows()).toHaveLength(2)
+  expect(within(rows()[0]).getByText('$0.003 / each')).toBeVisible()
+  expect(within(rows()[1]).getByText('Missing cost for Olive seal.')).toBeVisible()
+  expect(screen.getByText(/Total packaging per sellable package: Incomplete/)).toBeVisible()
   expect(rows()[0].querySelector('details')).not.toHaveAttribute('open')
   expect(rows()[1].querySelector('details')).not.toHaveAttribute('open')
   expect(changes).not.toHaveBeenCalled()
@@ -60,6 +63,7 @@ it('keeps independent secondary details and assignments while editing compact ro
     screen.getByRole('button', { name: 'Window bag' }),
   )
   expect(changes.mock.lastCall![0][1].ingredientId).toBe('bag')
+  expect(screen.getByText(/Total packaging per sellable package: \$0\.01/)).toBeVisible()
   await user.click(screen.getByRole('button', { name: '+ Add packaging item' }))
   expect(rows()).toHaveLength(3)
   expect(

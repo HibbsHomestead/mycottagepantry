@@ -3,6 +3,35 @@
   gap: 1rem;
   min-width: 0;
 }
+.production-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .4rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.production-steps li {
+  display: grid;
+  gap: .25rem;
+  padding: .55rem;
+  border: 1px solid var(--border);
+  border-radius: .55rem;
+}
+.production-steps li[aria-current='step'] {
+  background: var(--accent-soft);
+  border-color: var(--primary);
+}
+.production-steps small { color: var(--muted); }
+.production-actual-fields [aria-invalid='true']:focus {
+  outline: 2px solid #b42336;
+  outline-offset: 2px;
+}
+.production-step-actions { display: grid; gap: .75rem; }
+.production-step-actions button { min-height: 44px; }
+@media (max-width: 640px) {
+  .production-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .production-run label {
   display: grid;
   gap: 0.35rem;

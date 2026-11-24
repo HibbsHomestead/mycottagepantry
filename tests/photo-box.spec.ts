@@ -432,7 +432,7 @@ for (const width of [390, 1440]) {
       await expect(modal).toHaveCount(0)
     }
     await page
-      .getByRole('button', { name: 'Create kit', exact: true })
+      .getByRole('button', { name: 'Create basket', exact: true })
       .first()
       .click()
     await modal.getByRole('tab', { name: 'Photo', exact: true }).click()

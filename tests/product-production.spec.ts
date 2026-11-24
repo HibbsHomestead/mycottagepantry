@@ -45,7 +45,7 @@ for (const width of [390, 820, 1440])
       .click()
     const dialog = page.getByRole('dialog')
     await expect(
-      dialog.getByRole('heading', { name: 'Start production' }),
+      dialog.getByRole('heading', { name: 'Plan production' }),
     ).toBeVisible()
     await dialog
       .getByRole('combobox', { name: 'Product', exact: true })
@@ -61,7 +61,7 @@ for (const width of [390, 820, 1440])
       .selectOption('each')
     await dialog.getByRole('checkbox').check()
     await expect(
-      dialog.getByRole('heading', { name: 'Combined material requirements' }),
+      dialog.getByText('Combined material requirements', { exact: true }),
     ).toBeVisible()
     await dialog
       .getByRole('combobox', { name: 'Product', exact: true })
@@ -142,7 +142,7 @@ test('all production entry points use the shared product workflow', async ({
     .click()
   await page.goto(workspaceFixtureUrl('Production/Overview'))
   await page
-    .getByRole('button', { name: 'Start production', exact: true })
+    .getByRole('button', { name: 'Plan production', exact: true })
     .first()
     .click()
   await expect(
@@ -210,12 +210,13 @@ test('confirmed plan stays open for actual-output review and final production', 
       const product = workspace.products.find(
         (p) => p.id === body.data.lines[0].productId,
       )!
+      const previous = workspace.batches.find((run) => run.id === body.data.id)
+      workspace.batches = workspace.batches.filter((run) => run.id !== body.data.id)
       workspace.batches.push({
         ...body.data,
         name: product.name,
-        status: 'scheduled',
         productionVersion: 2,
-        revision: 1,
+        revision: Number(previous?.revision || 0) + 1,
         recipeId: product.recipeId,
         lines: body.data.lines.map((l: Item) => ({
           ...l,
@@ -244,22 +245,17 @@ test('confirmed plan stays open for actual-output review and final production', 
     .getByRole('combobox', { name: 'Output unit', exact: true })
     .selectOption('each')
   await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button', { name: 'Save plan', exact: true }).click()
+  await expect.poll(() => workspace.batches.find((run) => run.productionVersion === 2)?.status).toBe('draft')
   await dialog.getByRole('button', { name: 'Start run', exact: true }).click()
-  await dialog
-    .locator('summary')
-    .filter({ hasText: 'Output, waste and notes' })
-    .first()
-    .click()
   await expect(
     dialog.getByRole('spinbutton', {
-      name: 'Actual good output (selling packages / finished units)',
+      name: 'Actual good output (selling packages)',
       exact: true,
     }),
-  ).toBeVisible()
+  ).toHaveValue('')
   await expect(
-    dialog.getByRole('button', { name: 'Review finalization', exact: true }),
+    dialog.getByRole('button', { name: 'Enter output', exact: true }),
   ).toBeVisible()
-  await expect(
-    dialog.getByRole('combobox', { name: 'Product', exact: true }),
-  ).toBeEnabled()
+  await expect(dialog.getByRole('button', { name: 'Review & finalize', exact: true })).toHaveCount(0)
 })

@@ -1,5 +1,6 @@
 import { checkFabricWidth, fabricConvert, isFabric } from './fabric'
 import { convert, number, type Item, type Workspace } from './domain'
+import { preparedEstimateRate } from './prepared-requirement'
 
 export const handmadeUnits = [
   'each',
@@ -129,7 +130,7 @@ export function handmadeEstimate(product: Item, state: Workspace) {
     const i = state.ingredients.find((i) => i.id === line.itemId)!
     if (i.needsCostSetup || i.cost == null || i.cost === '')
       throw new Error(`${i.name}: cost missing.`)
-    const cost = line.quantity * number(i.cost, 'Material cost')
+    const cost = line.quantity * (line.source.prepared ? preparedEstimateRate(line.source, i) : number(i.cost, 'Material cost'))
     if (i.usedAs === 'packaging') packaging += cost
     else materials += cost
     return { ...line, cost }

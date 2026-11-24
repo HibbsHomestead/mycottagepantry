@@ -1,11 +1,13 @@
 import type { Page } from '@playwright/test'
 
+const directVite = process.env.WORKSPACE_FIXTURE_DIRECT === '1'
+
 /** Browser-only mount of the real application; no production route/auth bypass.
  * Callers must intercept /api/workspace with synthetic records before navigating. */
 export async function installWorkspaceFixture(page: Page) {
   // Netlify's framework handler can consume Vite's module URLs. Keep the
   // browser on the Netlify origin while loading development resources from Vite.
-  await page.route('http://localhost:8889/**', async (route) => {
+  if (!directVite) await page.route('http://localhost:8889/**', async (route) => {
     const response = await route.fetch({
       url: route.request().url().replace('localhost:8889', 'localhost:3000'),
     })

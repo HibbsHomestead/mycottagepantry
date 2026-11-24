@@ -18,6 +18,7 @@ import {
   productionYieldConvert,
 } from './production'
 import { productionRunLines } from './production-run'
+import { matchingPreparedLots } from './prepared-requirement'
 import {
   assertRecipeComponentGraph,
   componentSourceId,
@@ -190,6 +191,7 @@ export function generateGroceryList(
   const rows = new Map<string, GroceryLine>()
   const prepRows = new Map<string, GroceryPrep>()
   const prepRemaining = new Map<string, number>()
+  const directPrepRemaining = new Map<string, number>()
   const ingredients = state.ingredients || []
   const recipes = state.recipes || []
   const products = state.products || []
@@ -327,6 +329,13 @@ export function generateGroceryList(
         `Needs unit review (${input.unit || 'missing unit'} → ${item.unit})`,
         true,
       )
+      return
+    }
+    if (input.prepared) {
+      const eligible = matchingPreparedLots(item, state.lots || [], input.prepared)
+      const selected = eligible.find((lot) => (directPrepRemaining.get(lot.id) ?? lot.quantity) >= normalized - 1e-8)
+      if (selected) directPrepRemaining.set(selected.id, (directPrepRemaining.get(selected.id) ?? selected.quantity) - normalized)
+      else warn(source, `${item.name}: prepare more ${input.prepared.method} stock or review allocation. Unportioned stock is not a substitute.`)
       return
     }
     const componentId = componentSourceId(
@@ -552,6 +561,7 @@ export function generateGroceryList(
                 {
                   ...input,
                   ingredientId: input.itemId,
+                  prepared: input.source?.prepared,
                   productionSupply: !!input.supplyQuantity,
                 },
                 share,

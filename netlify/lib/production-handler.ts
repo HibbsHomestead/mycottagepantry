@@ -333,7 +333,7 @@ async function handleSingleProduction(
     if (item.needsCostSetup || item.cost == null)
       throw new Error(`${line.name}: stock cost is incomplete.`)
     const prepared = line.tracked && line.kind === 'ingredient'
-      ? planPrepUsage(item, state.lots, quantity, data.prepSources?.[item.id])
+      ? planPrepUsage(item, state.lots, quantity, data.prepSources?.[item.id], line.source.prepared)
       : undefined
     const unitCost = prepared?.unitCost ?? number(item.cost, 'Stock unit cost')
     const amount = prepared?.cost ?? quantity * unitCost
@@ -579,6 +579,7 @@ export async function handleProduction(
   if (action === 'productionRecordActuals') {
     if (!existing || !Array.isArray(data.lines))
       throw new Error('Choose a saved production run.')
+    if (existing.status !== 'scheduled') throw new Error('Start the run before recording output.')
     const lines = productionRunLines(existing).map((line) => {
       const input = data.lines.find((l: Item) => l.id === line.id)
       if (!input) throw new Error('Reopen this run before recording actuals.')
@@ -769,6 +770,7 @@ export async function handleProduction(
     return true
   }
   if (!existing) throw new Error('Save this run before finalizing.')
+  if (existing.status !== 'scheduled') throw new Error('Start the run before finalizing production.')
   const lines = productionRunLines(existing)
   for (const line of lines) {
     const currentProduct = ctx.state.products.find(

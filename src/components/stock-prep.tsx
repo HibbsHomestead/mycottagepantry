@@ -24,6 +24,7 @@ import {
   type StockPrepPlan,
 } from '@/lib/stock-prep'
 import { FormErrorNotice } from './form-error-notice'
+import { matchingPreparedLots, preparedLabel, preparedMeasureUnit, type PreparedRequirement } from '@/lib/prepared-requirement'
 import {
   Dialog,
   DialogContent,
@@ -39,26 +40,35 @@ export function PrepStockSourceSelect({
   value,
   change,
   disabled,
+  requirement,
+  requiredQuantity,
 }: {
   ingredient?: Item
   lots: Item[]
   value?: string
   change: (source: string) => void
   disabled?: boolean
+  requirement?: PreparedRequirement
+  requiredQuantity?: number
 }) {
   const labelId = useId()
   if (!ingredient) return null
-  const available = activePrepLots(lots, ingredient.id)
-  if (!available.length && !value) return null
+  const active = activePrepLots(lots, ingredient.id)
+  const available = requirement ? matchingPreparedLots(ingredient, active, requirement) : active
+  if (!available.length && !value && !requirement) return null
   let fresh: number | undefined
+  let requiredPortions: number | undefined
   try {
     fresh = prepStockBalance(ingredient, lots).available
+    if (requirement && requiredQuantity != null)
+      requiredPortions = requiredQuantity / convert(requirement.perPortion, requirement.outputUnit, ingredient.unit, ingredient.conversions)
   } catch {
     /* The posted check reports inconsistent balances. */
   }
   return (
     <label className="field stock-prep-source">
-      <span id={labelId}>Stock source · {ingredient.name}</span>
+      <span id={labelId}>{requirement ? `Prepared stock · ${preparedLabel(ingredient, requirement)}` : `Stock source · ${ingredient.name}`}</span>
+      {requiredPortions !== undefined && <small>{inventoryQuantity(requiredPortions)} portion equivalents needed ({inventoryQuantity(requiredQuantity)} {preparedMeasureUnit(ingredient.unit)})</small>}
       <select
         aria-labelledby={labelId}
         aria-describedby={`${labelId}-help`}
@@ -67,20 +77,23 @@ export function PrepStockSourceSelect({
         disabled={disabled}
       >
         <option value="">Choose stock source…</option>
-        <option value={UNPORTIONED}>
+        {!requirement && <option value={UNPORTIONED}>
           Unportioned ·{' '}
           {fresh === undefined
             ? 'review balance'
             : `${inventoryQuantity(fresh)} ${ingredient.unit}`}
-        </option>
+        </option>}
         {available.map((lot) => (
           <option key={lot.id} value={lot.id}>
             {lot.location} · {lot.date} · {inventoryQuantity(lot.quantity)}{' '}
-            {lot.unit} remaining · Ref {lot.id.slice(-6)}
+            {requirement ? preparedMeasureUnit(lot.unit) : lot.unit} remaining · Ref {lot.id.slice(-6)}
+            {lot.expires && ` · Best before ${lot.expires}`}
+            {requirement && ` · ${inventoryQuantity(lot.quantity / (lot.usable / lot.portions))} portion equivalents`}
+            {requiredQuantity != null && lot.quantity + 1e-8 < requiredQuantity && ' · Insufficient'}
           </option>
         ))}
         {value &&
-          value !== UNPORTIONED &&
+          (value !== UNPORTIONED || requirement) &&
           !available.some((l) => l.id === value) && (
             <option value={value}>
               Previously selected prepared lot is unavailable
@@ -88,8 +101,9 @@ export function PrepStockSourceSelect({
           )}
       </select>
       <small id={`${labelId}-help`}>
-        Choose one source for this line. Enter actual use in the line’s unit. A
-        selected lot uses the first open portion before opening another.
+        {requirement && !available.some((lot) => lot.quantity + 1e-8 >= (requiredQuantity || 0))
+          ? 'Not enough matching prepared stock in one lot. Use Prep / Portion Stock in inventory to prepare more, or change the allocation. Unportioned stock is not used.'
+          : 'Choose one source for this line. Enter actual use in the line’s unit. A selected lot uses the first open portion before opening another.'}
       </small>
     </label>
   )

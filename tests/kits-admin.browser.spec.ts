@@ -33,8 +33,8 @@ for (const width of [1440, 390]) {
     await page.goto(workspaceFixtureUrl('Products & Pricing'), {
       waitUntil: 'networkidle',
     })
-    await page.getByRole('button', { name: 'Create kit', exact: true }).click()
-    await page.getByLabel('Kit name', { exact: true }).fill('Holiday bake drop')
+    await page.getByRole('button', { name: 'Create basket', exact: true }).click()
+    await page.getByLabel('Basket name', { exact: true }).fill('Holiday bake drop')
     await page.getByLabel('Add existing product').selectOption(w.products[0].id)
     await page.getByLabel('Add existing product').selectOption(w.products[1].id)
     await page.getByLabel('Whole selling packages').first().fill('2')
@@ -48,7 +48,7 @@ for (const width of [1440, 390]) {
     await page.getByLabel('Add kit packaging').selectOption(packaging.id)
     await page.getByLabel('Additional assembly minutes').fill('12')
     await page.getByLabel('Assembly hourly rate').fill('18')
-    await page.getByLabel('Kit selling price').fill('45')
+    await page.getByLabel('Basket selling price').fill('45')
     await expect(
       page.getByText('Total / sellable kit:', { exact: false }).first(),
     ).toBeVisible()
@@ -56,7 +56,7 @@ for (const width of [1440, 390]) {
       path: `.netlify/screenshots/kit-editor-${width}.png`,
       fullPage: true,
     })
-    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+    await page.getByRole('button', { name: 'Save basket', exact: true }).click()
     await expect(
       page
         .getByRole('dialog')
@@ -79,7 +79,7 @@ for (const width of [1440, 390]) {
     })
     await page
       .getByRole('dialog')
-      .getByRole('button', { name: 'Edit kit', exact: true })
+      .getByRole('button', { name: 'Edit basket', exact: true })
       .click()
     await expect(page.getByLabel('Whole selling packages').first()).toHaveValue(
       '2',

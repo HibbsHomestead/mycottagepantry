@@ -319,12 +319,7 @@ export function IngredientDetail({
       storageUnit: storage,
       currency: i.currency || 'USD',
       threshold: convert(i.threshold ?? 0, i.unit, display.unit, i.conversions),
-      reorderQuantity: convert(
-        i.reorderQuantity ?? 0,
-        i.unit,
-        display.unit,
-        i.conversions,
-      ),
+      reorderQuantity: undefined,
     })
     setEditing(true)
     setOfferEdit(null)
@@ -781,20 +776,14 @@ export function IngredientDetail({
                     )
                     applyPurchaseSetup(i, basis.input)
                     minimumOrder(draft, i)
-                    if (draft.threshold === '' || draft.reorderQuantity === '')
+                    if (draft.threshold === '')
                       throw new Error(
-                        'Re-enter reorder threshold and quantity in their labeled unit.',
+                        'Re-enter the reorder threshold in its labeled unit.',
                       )
                     submitted = {
                       ...draft,
                       threshold: convert(
                         draft.threshold,
-                        reorderUnit,
-                        draft.storageUnit,
-                        draft.conversions,
-                      ),
-                      reorderQuantity: convert(
-                        draft.reorderQuantity,
                         reorderUnit,
                         draft.storageUnit,
                         draft.conversions,
@@ -1101,9 +1090,7 @@ export function IngredientDetail({
                                 ...changeStockShelfUnit(current, u),
                                 threshold:
                                   amounts.threshold ?? current.threshold,
-                                reorderQuantity:
-                                  amounts.reorderQuantity ??
-                                  current.reorderQuantity,
+                                reorderQuantity: undefined,
                               }
                             })
                             setReorderUnit(u)
@@ -1116,13 +1103,10 @@ export function IngredientDetail({
                             {draft.stockUnitChangeNotice}
                           </p>
                         )}
-                        {(draft.threshold === '' ||
-                          draft.reorderQuantity === '') && (
+                        {draft.threshold === '' && (
                           <p className="form-hint warning-text">
-                            Re-enter the reorder threshold and reorder quantity
-                            in {unitLabel(draft.storageUnit)} under Stock &
-                            Other Details. Their previous amounts could not be
-                            converted.
+                            Re-enter the reorder threshold in {unitLabel(draft.storageUnit)}
+                            {' '}under Stock & Other Details. The previous amount could not be converted.
                           </p>
                         )}
                         {needsStockBasis &&
@@ -1362,9 +1346,6 @@ export function IngredientDetail({
                           change={change}
                           stockUnit={reorderUnit}
                         />
-                        <Field label={`Reorder quantity (${reorderUnit})`}>
-                          {input('reorderQuantity', 'number')}
-                        </Field>
                         <Field label="Where it’s stored">
                           {input('storageLocation')}
                         </Field>

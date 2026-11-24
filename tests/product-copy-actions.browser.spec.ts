@@ -79,7 +79,7 @@ for (const width of [1440, 820, 390])
       const dialog = page.getByRole('dialog')
       await expect(
         dialog.getByRole('textbox', {
-          name: product.workflow === 'kit' ? 'Kit name' : 'Product name',
+          name: product.workflow === 'kit' ? 'Basket name' : 'Product name',
           exact: true,
         }),
       ).toHaveValue(`${product.name} — Copy`)

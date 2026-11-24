@@ -6,20 +6,26 @@ import {
   type Item,
 } from '@/lib/domain'
 import { precise } from '@/lib/ingredients'
+import { useState } from 'react'
+import { preparedEstimateRate, preparedLabel } from '@/lib/prepared-requirement'
+import { PreparedPortionQuantity, PreparedStockPicker } from './prepared-stock-picker'
 
 export function ProductionSupplies({
   recipe,
   items,
   change,
   recipes,
+  lots,
 }: {
   recipe: Item
   recipes?: Item[]
   items: Item[]
+  lots?: Item[]
   change?: (lines: Item[]) => void
 }) {
   const available = items.filter(isProductionSupply)
   const own: Item[] = recipe.productionSupplies || []
+  const [picker, setPicker] = useState(false)
   let lines = own
   try {
     lines = effectiveProductionSupplies(recipe, recipes)
@@ -30,8 +36,11 @@ export function ProductionSupplies({
     change?.(own.map((line, n) => (n === index ? { ...line, ...patch } : line)))
   return (
     <section className="production-supplies">
+      {change && lots && picker && <PreparedStockPicker items={available} lots={lots}
+        close={() => setPicker(false)} select={(line) => { change([...own, line]); setPicker(false) }} />}
       <div className="form-section-title">
         <h3>Production supplies</h3>
+        {change && lots && <button type="button" className="text-button" onClick={() => setPicker(true)}>Add prepared supply</button>}
         {change && (
           <button
             type="button"
@@ -83,8 +92,9 @@ export function ProductionSupplies({
       {(change ? own : lines).map((line, index) => {
         const item = items.find((i) => i.id === line.ingredientId)
         let extension: number | undefined
-        const cost = item?.currentCost ?? item?.cost
+        let cost = item?.currentCost ?? item?.cost
         try {
+          if (item && line.prepared) cost = preparedEstimateRate(line, item)
           if (
             item &&
             !item.needsCostSetup &&
@@ -100,7 +110,13 @@ export function ProductionSupplies({
         }
         return (
           <div className="production-supply-line" key={index}>
-            {change ? (
+            {change && line.prepared && item ? (
+              <>
+                <strong>{preparedLabel(item, line.prepared)}</strong>
+                <PreparedPortionQuantity line={line} change={(quantity) => update(index, { quantity })} />
+                <button className="text-button" type="button" onClick={() => change(own.filter((_, position) => position !== index))}>Remove supply</button>
+              </>
+            ) : change ? (
               <>
                 <label className="field">
                   <span>Supply item</span>
@@ -148,8 +164,7 @@ export function ProductionSupplies({
               </>
             ) : (
               <strong>
-                {item?.name || 'Unavailable supply'} · {line.quantity}{' '}
-                {line.unit} per batch
+                {item && line.prepared ? preparedLabel(item, line.prepared) : item?.name || 'Unavailable supply'} · {line.prepared ? `${Number((line.quantity / line.prepared.perPortion).toPrecision(8))} portions` : `${line.quantity} ${line.unit}`} per batch
               </strong>
             )}
             <p className="form-hint">

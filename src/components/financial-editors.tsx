@@ -22,7 +22,9 @@ import {
   applicableTaxes,
   priceTaxLabel,
   money,
+  resolvePackagingCost,
 } from '@/lib/domain'
+import { planPrepUsage } from '@/lib/stock-prep'
 
 export function ConversionEditor({
   ingredient,
@@ -304,6 +306,34 @@ function PackagingItemPicker({
   )
 }
 
+function packagingEstimate(line: Item, ingredients: Item[], basket: boolean) {
+  try {
+    return { value: resolvePackagingCost(line, ingredients, { basket }) }
+  } catch (error) {
+    return { error: (error as Error).message }
+  }
+}
+
+export function PackagingLineCost({ line, ingredients, basket = false }: { line: Item; ingredients: Item[]; basket?: boolean }) {
+  const { value, error } = packagingEstimate(line, ingredients, basket)
+  const price = value?.matchingUnitCost ?? 0
+  const display = price > 0 && price < 0.1
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumSignificantDigits: 4 }).format(price)
+    : money(price)
+  return <div className="packaging-line-cost">
+    <small>Line cost</small>
+    {value ? <><strong>{money(value.cost)}</strong><small>{display} / {unitLabel(value.unit)}</small></> : <span className="warning-text">{error}</span>}
+  </div>
+}
+
+export function PackagingCostTotal({ lines, ingredients, basket = false }: { lines: Item[]; ingredients: Item[]; basket?: boolean }) {
+  const estimates = lines.map((line) => packagingEstimate(line, ingredients, basket).value)
+  return <p className="packaging-cost-total"><strong>
+    {basket ? 'Total additional packaging per basket' : 'Total packaging per sellable package'}:{' '}
+    {estimates.some((value) => !value) ? 'Incomplete' : money(estimates.reduce((sum, value) => sum + (value?.cost ?? 0), 0))}
+  </strong></p>
+}
+
 export function PackagingEditor({
   product,
   ingredients,
@@ -405,6 +435,7 @@ export function PackagingEditor({
               ))}
             </select>
           </label>
+          <PackagingLineCost line={line} ingredients={ingredients} />
           <details className="packaging-row-details">
             <summary>
               Details{' '}
@@ -475,6 +506,7 @@ export function PackagingEditor({
       >
         + Add packaging item
       </button>
+      <PackagingCostTotal lines={lines} ingredients={ingredients} />
       {!lines.length && !product.unpacked && (
         <p className="warning-text">
           No packaging assigned. Add packaging or confirm this product is sold
@@ -955,6 +987,8 @@ export function BatchCostPreview({
   laborMinutes,
   usage,
   wasteCost,
+  lots,
+  prepSources,
 }: {
   recipe?: Item
   product?: Item
@@ -964,28 +998,36 @@ export function BatchCostPreview({
   laborMinutes?: number
   usage?: Record<string, number>
   wasteCost?: number
+  lots?: Item[]
+  prepSources?: Record<string, string>
 }) {
   try {
     if (!recipe) return null
+    const inputs: Item[] = recipeProductionLines(recipe, ingredients).map((line: Item) => ({
+      ...line,
+      quantity: usage?.[line.ingredientId] !== undefined ? Number(usage[line.ingredientId]) / multiplier : line.quantity,
+    }))
+    const costItems = lots ? ingredients.map((item) => {
+      const line = inputs.find((entry) => entry.ingredientId === item.id)
+      if (!line || item.trackInventory === false || (!line.prepared && !prepSources?.[item.id])) return item
+      const quantity = convert(line.quantity * multiplier, line.unit, item.unit, item.conversions)
+      const allocation = planPrepUsage(item, lots, quantity, prepSources?.[item.id], line.prepared)
+      return allocation ? { ...item, cost: allocation.unitCost } : item
+    }) : ingredients
     const adjusted = {
       ...recipe,
       baseRecipeId: undefined,
       baseRecipe: undefined,
-      lines: recipeProductionLines(recipe, ingredients).map((l: any) => ({
-        ...l,
-        quantity:
-          usage?.[l.ingredientId] !== undefined
-            ? Number(usage[l.ingredientId]) / multiplier
-            : l.quantity,
-      })),
+      lines: inputs.filter((line) => !line.productionSupply),
+      productionSupplies: inputs.filter((line) => line.productionSupply),
     }
-    const c = costBreakdown(adjusted, ingredients, {
+    const c = costBreakdown(adjusted, costItems, {
       product,
       multiplier,
       actualYield,
       laborMinutes,
       wasteCost,
-      historical: true,
+      historical: !!lots || !inputs.some((line) => line.prepared),
       baseCostOverride: recipe.baseRecipeId
         ? costBreakdown(recipe.baseRecipe, ingredients, {
             multiplier: multiplier * recipe.baseMultiplier,
@@ -999,7 +1041,7 @@ export function BatchCostPreview({
         <summary>View calculation · run cost preview</summary>
         <p>
           Planned yield {c.plannedYield} → actual yield {c.actualYield}.
-          Inventory costs use weighted averages.
+          Prepared stock uses its recorded lot cost when allocated; other inventory costs use weighted averages.
         </p>
         <p>
           Ingredients {money(c.ingredient)} + packaging {money(c.packagingCost)}{' '}

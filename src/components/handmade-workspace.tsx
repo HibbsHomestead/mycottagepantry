@@ -41,6 +41,8 @@ import {
 } from './ui/dialog'
 import { ItemImagesPanel } from './item-images-panel'
 import { ProductCategorySelector } from './product-categories'
+import { PreparedPortionQuantity, PreparedStockPicker } from './prepared-stock-picker'
+import { preparedEstimateRate, preparedLabel } from '@/lib/prepared-requirement'
 import './handmade-workspace.css'
 
 type Mutate = (action: string, table: string, data: Item) => Promise<unknown>
@@ -681,6 +683,7 @@ export function HandmadeProductEditor({
   const [activeTab, setActiveTab] = useState(
     ['product', 'bom', 'costing'].includes(initialTab) ? initialTab : 'product',
   )
+  const [preparedPicker, setPreparedPicker] = useState(false)
   const [dirty, setDirty] = useState(false)
   const dismiss = () => {
     if (
@@ -916,6 +919,11 @@ export function HandmadeProductEditor({
               className="product-editor-panel"
             >
               <h3>Bill of materials</h3>
+              {preparedPicker && <PreparedStockPicker items={inputs} lots={w.lots || []}
+                close={() => setPreparedPicker(false)} select={(line) => {
+                  changeBom('lines', [...lines.filter((entry) => entry.ingredientId), line])
+                  setPreparedPicker(false)
+                }} />}
               {!item?.bom && item?.recipeId && (
                 <p>
                   Legacy design retained. Saving creates a product-owned BOM;
@@ -946,7 +954,11 @@ export function HandmadeProductEditor({
               </div>
               {lines.map((l, index) => (
                 <div className="handmade-bom-line" key={index}>
-                  <label>
+                  {l.prepared ? <>
+                    <strong>{preparedLabel(inputs.find((entry) => entry.id === l.ingredientId) || l, l.prepared)}</strong>
+                    <PreparedPortionQuantity line={l} change={(quantity) => updateLine(index, { quantity })} />
+                    <span />
+                  </> : <><label>
                     Material or shared packaging
                     <select
                       required
@@ -995,11 +1007,14 @@ export function HandmadeProductEditor({
                         <option key={u}>{u}</option>
                       ))}
                     </select>
-                  </label>
+                  </label></>}
                   <span className="handmade-calculated">
                     <small>Stock unit cost</small>
                     {(() => {
                       const i = inputs.find((i) => i.id === l.ingredientId)
+                      if (i && l.prepared) {
+                        try { return money(preparedEstimateRate(l, i)) + '/' + i.unit } catch { return 'Needs review' }
+                      }
                       return i && !i.needsCostSetup && i.cost != null
                         ? money(i.cost) + '/' + i.unit
                         : 'Cost missing'
@@ -1034,6 +1049,7 @@ export function HandmadeProductEditor({
               >
                 Add material
               </button>
+              <button type="button" className="btn secondary" onClick={() => setPreparedPicker(true)}>Add prepared material</button>
               <label>
                 Production instructions & notes
                 <textarea

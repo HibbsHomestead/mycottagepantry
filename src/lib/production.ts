@@ -17,6 +17,7 @@ import {
   type Workspace,
 } from './domain'
 import { workflowOf } from './product-workflows'
+import { assertSamePreparedSource } from './prepared-requirement'
 
 /** Yield labels such as “loaves” remain explicit recipe output bases, not generic each conversions. */
 export function productionYieldConvert(
@@ -56,7 +57,10 @@ function normalizedProductionLines(
     if (!i) throw new Error('Ingredient unavailable. Review the recipe inputs.')
     const quantity = convert(line.quantity, line.unit, i.unit, i.conversions)
     const prior = merged.get(i.id)
-    if (prior) prior.quantity += quantity
+    if (prior) {
+      assertSamePreparedSource(prior, line, i.name)
+      prior.quantity += quantity
+    }
     else
       merged.set(i.id, {
         ...line,
@@ -198,6 +202,8 @@ export function productionRequirements(
   const inputs = definition.ingredients as Item[]
   const requirements: Item[] = []
   const add = (kind: string, item: Item, q: number, source: Item) => {
+    if (source.prepared && item.trackInventory === false)
+      throw new Error(`${item.name}: a prepared portion requirement needs tracked inventory.`)
     const key = kind + ':' + item.id
     const prior = requirements.find((r) => r.id === key)
     const allocation = source.productionSupply
@@ -206,6 +212,7 @@ export function productionRequirements(
         ? 'packagingQuantity'
         : 'ingredientQuantity'
     if (prior) {
+      assertSamePreparedSource(prior.source, source, item.name)
       prior.quantity += q
       prior[allocation] = Number(prior[allocation] || 0) + q
     } else

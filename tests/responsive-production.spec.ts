@@ -228,7 +228,7 @@ test('multi-product draft, material summary, saved review and finalized details'
     return r.fulfill({ json: { workspace, role: 'Owner', demo: false } })
   })
   await page.goto(workspaceFixtureUrl('Production/Batch runs'))
-  await page.getByRole('button', { name: 'Review draft', exact: true }).click()
+  await page.getByRole('button', { name: 'Review & start', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(
     dialog.getByRole('combobox', { name: 'Product', exact: true }),
@@ -241,9 +241,9 @@ test('multi-product draft, material summary, saved review and finalized details'
     })
     .first()
     .fill('3')
-  await dialog.getByRole('button', { name: 'Save draft', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Save plan', exact: true }).click()
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
-  await page.getByRole('button', { name: 'Review draft', exact: true }).click()
+  await page.getByRole('button', { name: 'Review & start', exact: true }).click()
   await expect(
     dialog
       .getByRole('spinbutton', {
@@ -260,22 +260,18 @@ test('multi-product draft, material summary, saved review and finalized details'
     .getByRole('button', { name: 'Remove product', exact: true })
     .last()
     .click()
-  await dialog.getByRole('button', { name: 'Save draft', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Save plan', exact: true }).click()
   await dialog.evaluate((el) => {
     el.scrollTop = 0
   })
   await page.screenshot({ path: `${dir}/multi-product-draft.png` })
   await dialog
-    .getByRole('heading', { name: 'Combined material requirements' })
+    .getByText('Combined material requirements', { exact: true })
     .scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${dir}/combined-materials.png` })
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await dialog
-    .locator('.production-product-line summary')
-    .filter({ hasText: 'Output, waste and notes' })
-    .first()
-    .click()
+  await dialog.getByRole('button', { name: 'Start run', exact: true }).click()
   for (const control of await dialog
     .locator('input:visible, select:visible, textarea:visible, button:visible')
     .all()) {
@@ -290,18 +286,14 @@ test('multi-product draft, material summary, saved review and finalized details'
   await page.screenshot({ path: `${dir}/draft-mobile.png` })
   await page.setViewportSize({ width: 1440, height: 1100 })
   await dialog
-    .getByRole('button', { name: 'Review finalization', exact: true })
+    .getByRole('button', { name: 'Review & finalize', exact: true })
     .click()
   await dialog
     .getByRole('heading', { name: 'Finalization review' })
     .scrollIntoViewIfNeeded()
   await page.screenshot({ path: `${dir}/finalization-review.png` })
   await dialog
-    .getByRole('button', { name: 'Finalize run', exact: true })
-    .click()
-  await page
-    .getByRole('button', { name: 'View run', exact: true })
-    .last()
+    .getByRole('button', { name: 'Finalize production', exact: true })
     .click()
   await expect(
     page.getByRole('dialog').getByText(/Actual run cost/),

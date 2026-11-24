@@ -2,6 +2,8 @@ import { convert, knownCurrentIngredientCost, type Item, type Workspace } from '
 import { productionRequirements } from './production'
 import { cardCost } from './product-list'
 import { resaleCostBasis } from './resale-cost'
+import { matchingPreparedLots, preparedEstimateRate, preparedSpecKey } from './prepared-requirement'
+import { planPrepUsage } from './stock-prep'
 
 /** Read-through migration: old product-run IDs, snapshots and movements remain
  * untouched, including immutable finalized records. Repeated reads are stable. */
@@ -20,12 +22,39 @@ export function productionRunLines(run?: Item): Item[] {
   ]
 }
 
+export function productionOutputIssue(line: Item) {
+  const output = Number(line.output)
+  return !Number.isSafeInteger(output) || output < 1
+    ? 'Enter a whole number of good units greater than zero.'
+    : ''
+}
+
+export function productionReviewIssues(lines: Item[], calculation?: ReturnType<typeof combinedProductionRequirements>) {
+  const issues = lines.flatMap((line, index) => {
+    const issue = productionOutputIssue(line)
+    return issue ? [`${line.name || `Product ${index + 1}`}: ${issue}`] : []
+  })
+  if (!lines.length) issues.push('Add at least one product to the run.')
+  if (calculation) {
+    for (const product of calculation.products) if (product.error) issues.push(product.error)
+    for (const requirement of calculation.requirements) {
+      if (!requirement.inventoryCostKnown)
+        issues.push(`${requirement.name}: ${requirement.costReason || 'record a verified inventory cost.'}`)
+    }
+    for (const shortage of calculation.shortages)
+      issues.push(`${shortage.name}: need ${shortage.quantity} ${shortage.unit}, only ${shortage.available} available.`)
+    issues.push(...calculation.allocationIssues)
+  }
+  return [...new Set(issues)]
+}
+
 export function combinedProductionRequirements(
   lines: Item[],
   state: Workspace,
   validateStock = false,
 ) {
   const merged = new Map<string, Item>()
+  const allocationIssues: string[] = []
   let total = 0
   const products = lines.map((line) => {
     let result: ReturnType<typeof productionRequirements>
@@ -115,6 +144,8 @@ export function combinedProductionRequirements(
             : 'Average inventory cost'
           : 'Inventory cost'
       let costReason = 'Inventory valuation is not recorded.'
+      let available = Number(item.quantity || 0)
+      let preparedKey = ''
       if (!validateStock) {
         if (r.kind === 'product' && !recorded) {
           const planned = cardCost(item, state)
@@ -133,11 +164,26 @@ export function combinedProductionRequirements(
           costReason = 'Material cost is missing or marked incomplete.'
         }
       }
+      if (r.kind === 'ingredient' && r.source?.prepared) {
+        const requirement = r.source.prepared
+        const eligible = matchingPreparedLots(item, state.lots || [], requirement)
+        const chosen = eligible.find((lot) => lot.id === line.prepSources?.[item.id])
+        available = chosen ? Number(chosen.quantity) : Math.max(0, ...eligible.map((lot) => Number(lot.quantity)))
+        preparedKey = `:prepared:${chosen?.id || preparedSpecKey(requirement)}`
+        unitCost = chosen ? Number(chosen.unitCost) : preparedEstimateRate(r.source, item)
+        costBasis = chosen ? 'Recorded prepared lot cost' : 'Saved prepared portion cost estimate'
+        try {
+          planPrepUsage(item, state.lots || [], quantity, line.prepSources?.[item.id], requirement)
+        } catch (error) {
+          if (validateStock) throw error
+          allocationIssues.push((error as Error).message)
+        }
+      }
       const costKnown = unitCost !== undefined
       lineCostKnown &&= costKnown
       const cost = costKnown ? quantity * unitCost! : 0
       materialCost += cost
-      const key = r.kind + ':' + item.id
+      const key = r.kind + ':' + item.id + preparedKey
       const previous = merged.get(key)
       if (previous) {
         previous.quantity += quantity
@@ -150,7 +196,7 @@ export function combinedProductionRequirements(
           id: key,
           quantity,
           unit: r.kind === 'product' ? 'package' : item.unit,
-          available: Number(item.quantity || 0),
+          available,
           cost,
           costKnown,
           unitCost,
@@ -185,6 +231,7 @@ export function combinedProductionRequirements(
     products,
     requirements,
     total,
+    allocationIssues: [...new Set(allocationIssues)],
     costKnown:
       products.every((p) => p.costKnown) &&
       requirements.every((r) => r.costKnown),

@@ -489,7 +489,7 @@ it('opens Edit Item with incomplete units, preserves saved fields and cancels wi
   expect(screen.getByText(/Conversion required\./)).toBeVisible()
   await user.click(screen.getByRole('tab', { name: 'Stock & Other Details' }))
   expect(screen.getByLabelText('Reorder when stock reaches')).toHaveValue(2)
-  expect(screen.getByLabelText('Reorder quantity (each)')).toHaveValue('3')
+  expect(screen.queryByLabelText('Reorder quantity (each)')).not.toBeInTheDocument()
   expect(screen.getByText(/Current balance: 7 each/)).toBeVisible()
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   expect(p.save).not.toHaveBeenCalled()
@@ -517,7 +517,8 @@ it('saves an explicitly verified fixture correction while preserving saved stock
   await user.click(screen.getByRole('button', { name: 'Save changes' }))
   expect(p.save).toHaveBeenCalledOnce()
   const input = p.save.mock.calls[0][1]
-  expect(input).toMatchObject({ threshold: 1, reorderQuantity: 1.5 })
+  expect(input).toMatchObject({ threshold: 1 })
+  expect(input.reorderQuantity).toBeUndefined()
   const result = updateIngredient(ingredient, input, { hasStockHistory: true })
   expect(result).toMatchObject({
     quantity: 7,

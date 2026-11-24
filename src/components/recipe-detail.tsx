@@ -16,6 +16,7 @@ import {
 } from '@/lib/domain'
 import { singularYield } from '@/lib/product-recipe-links'
 import { precise } from '@/lib/ingredients'
+import { preparedEstimateRate, preparedLabel } from '@/lib/prepared-requirement'
 import { recipeComponentUsage } from '@/lib/recipe-type'
 import { RecipeTypeBadge } from './recipe-type-badge'
 import { PantryPhoto } from './pantry-photo'
@@ -240,7 +241,8 @@ export function RecipeDetail({
                         i.unit,
                         i.conversions,
                       )
-                      text = `${precise(l.quantity)} ${l.unit} = ${precise(normalized)} ${i.unit} × ${precise(i.currentCost ?? i.cost)} = ${money(normalized * (i.currentCost ?? i.cost))}`
+                      const rate = l.prepared ? preparedEstimateRate(l, i) : (i.currentCost ?? i.cost)
+                      text = `${precise(l.quantity)} ${l.unit} = ${precise(normalized)} ${i.unit} × ${precise(rate)} = ${money(normalized * rate)}`
                     } catch (e) {
                       text = (e as Error).message
                       needs = true
@@ -306,12 +308,12 @@ export function RecipeDetail({
                         if (
                           !i ||
                           i.needsCostSetup ||
-                          !Number.isFinite(i.currentCost ?? i.cost)
+                          (!l.prepared && !Number.isFinite(i.currentCost ?? i.cost))
                         )
                           throw new Error('Cost needs setup')
                         amount =
                           convert(l.quantity, l.unit, i.unit, i.conversions) *
-                          (i.currentCost ?? i.cost)
+                          (l.prepared ? preparedEstimateRate(l, i) : (i.currentCost ?? i.cost))
                       } catch (e) {
                         issue = (e as Error).message
                       }
@@ -323,7 +325,7 @@ export function RecipeDetail({
                                 className="text-button"
                                 onClick={() => open('ingredient-detail', i)}
                               >
-                                {i.name}
+                                {l.prepared ? preparedLabel(i, l.prepared) : i.name}
                               </button>
                             ) : (
                               l.originalText || 'Unresolved ingredient'
@@ -335,7 +337,7 @@ export function RecipeDetail({
                             )}
                           </td>
                           <td>
-                            {precise(l.quantity)} {l.unit}
+                            {l.prepared ? `${precise(l.quantity / l.prepared.perPortion)} portions` : `${precise(l.quantity)} ${l.unit}`}
                           </td>
                           <td>
                             {amount == null ? 'Needs setup' : money(amount)}

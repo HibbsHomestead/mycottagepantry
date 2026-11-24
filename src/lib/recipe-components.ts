@@ -3,10 +3,13 @@ import {
   baseIngredientOverlap,
   parseQuantity,
   recipeCost,
+  recipeProductionLines,
+  recipeInputLines,
   units,
   type Item,
   type Workspace,
 } from './domain'
+import { validatePreparedLine } from './prepared-requirement'
 
 export function componentStock(source: Item, ingredients: Item[]): Item {
   if (!(Number(source.yield) > 0) || !units[source.yieldUnit]?.factor)
@@ -105,6 +108,14 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
       'Some inclusions also occur in the base. Review and approve keeping both quantities before saving. No ingredients were removed.',
     )
   const stocks: Item[] = []
+  const previous = state.recipes.find((entry) => entry.id === recipe.id)
+  const ownInputs = [...(recipe.lines || []), ...(recipe.productionSupplies || [])]
+  for (const line of ownInputs) {
+    if (!line.prepared) continue
+    const item = state.ingredients.find((entry) => entry.id === line.ingredientId)
+    if (!item) throw new Error('Prepared stock item is unavailable.')
+    validatePreparedLine(line, item, state.lots, [...(previous?.lines || []), ...(previous?.productionSupplies || [])])
+  }
   for (const line of recipe.lines || []) {
     const id = componentSourceId(line, state.ingredients)
     if (!id) continue
@@ -136,5 +147,7 @@ export function validateRecipeComponents(recipe: Item, state: Workspace) {
     })
     if (!stocks.some((i) => i.id === stock.id)) stocks.push(stock)
   }
+  if (recipeInputLines(recipe, recipes).some((line) => line.prepared))
+    recipeProductionLines(recipe, [...state.ingredients, ...stocks], recipes)
   return stocks
 }

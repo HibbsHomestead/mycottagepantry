@@ -3484,6 +3484,12 @@ main > .recipe-grid {
 .component-search-results small {
   font-size: max(var(--interface-text-min, 0px), 11px);
 }
+.prepared-stock-choices .btn {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.2rem;
+  white-space: normal;
+}
 
 .artwork-picker {
   max-width: 560px;
@@ -3702,6 +3708,7 @@ main > .recipe-grid {
 .recipe-editor-components .recipe-line-editor {
   grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) 44px;
 }
+.recipe-line-editor .prepared-portion-quantity { grid-column: span 2; }
 @media (max-width: 1023px) {
   .recipe-editor-components .recipe-line-editor { grid-template-columns: minmax(0, 1fr) 75px 65px 44px; }
   .recipe-editor-components .recipe-line-cost { grid-column: 1 / -1; grid-row: 2; }
@@ -3786,6 +3793,23 @@ main > .recipe-grid {
 .packaging-row-details {
   display: contents;
 }
+.packaging-line-cost {
+  display: grid;
+  align-content: end;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.packaging-line-cost small {
+  color: var(--muted);
+}
+.compact-packaging .packaging-editor {
+  grid-template-columns: minmax(0, 1fr) minmax(45px, 64px) minmax(65px, 88px) minmax(75px, .65fr) 70px 40px;
+}
+.compact-packaging .packaging-line-cost { grid-column: 4; grid-row: 1; }
+.compact-packaging .packaging-row-details summary { grid-column: 5; }
+.compact-packaging .packaging-editor .packaging-remove { grid-column: 6; }
+.packaging-cost-total { border-top: 1px solid var(--border); padding-top: 10px; }
 .packaging-row-details summary {
   grid-column: 4;
   grid-row: 1;
@@ -3820,7 +3844,7 @@ main > .recipe-grid {
 @media (max-width: 700px) {
   .editor-product .calculation-box.compact-packaging > .packaging-editor,
   .compact-packaging .packaging-editor {
-    grid-template-columns: 68px minmax(75px, 1fr) 72px 44px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1.4fr) 36px;
     gap: 8px;
   }
   .packaging-item-field {
@@ -3831,15 +3855,19 @@ main > .recipe-grid {
     grid-column: auto;
   }
   .compact-packaging .packaging-row-details summary {
+    grid-column: 1 / 4;
+    grid-row: 3;
+  }
+  .compact-packaging .packaging-line-cost {
     grid-column: 3;
     grid-row: 2;
   }
-  .compact-packaging .packaging-remove {
+  .compact-packaging .packaging-editor .packaging-remove {
     grid-column: 4;
     grid-row: 2;
   }
   .packaging-secondary {
-    grid-row: 3;
+    grid-row: 4;
     flex-wrap: wrap;
   }
 }

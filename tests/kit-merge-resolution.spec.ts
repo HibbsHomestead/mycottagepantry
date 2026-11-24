@@ -38,14 +38,14 @@ for (const width of [1440, 390]) {
     })
     await page
       .getByRole('article', { name: 'Merge review kit' })
-      .getByRole('button', { name: 'Edit kit', exact: true })
+      .getByRole('button', { name: 'Edit basket', exact: true })
       .click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('Whole selling packages').first().fill('2')
     await dialog
       .getByRole('tab', { name: 'Packaging & cost', exact: true })
       .click()
-    await dialog.getByLabel('Kit selling price').fill('19.25')
+    await dialog.getByLabel('Basket selling price').fill('19.25')
     await dialog
       .getByRole('button', { name: 'Review contents & details', exact: true })
       .first()
@@ -59,7 +59,7 @@ for (const width of [1440, 390]) {
     await dialog
       .getByRole('tab', { name: 'Packaging & cost', exact: true })
       .click()
-    await expect(dialog.getByLabel('Kit selling price')).toHaveValue('19.25')
+    await expect(dialog.getByLabel('Basket selling price')).toHaveValue('19.25')
     await expect(dialog.getByRole('status').first()).toContainText(
       'Product category not configured.',
     )
