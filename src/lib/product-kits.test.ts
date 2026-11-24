@@ -1,7 +1,29 @@
 // @vitest-environment node
 import { expect, it } from 'vitest'
 import { demoData } from './demo'
-import { productCosting, profitability, validateKit, type Item } from './domain'
+import { costBreakdown, productCosting, profitability, resolvePackagingCost, validateKit, type Item } from './domain'
+
+it('shares packaging line precision and verified units with product and basket totals', () => {
+  const workspace = demoData()
+  const tape: Item = { id: 'fixture-tape', name: 'Cut tape', unit: 'in', usedAs: 'packaging', currentCost: 0.00031 }
+  const seal: Item = { id: 'fixture-seal', name: 'Seal', unit: 'each', usedAs: 'packaging', cost: 0 }
+  const lines = [
+    { ingredientId: tape.id, quantity: 2, unit: 'ft' },
+    { ingredientId: seal.id, quantity: 1, unit: 'each' },
+  ]
+  workspace.ingredients.push(tape, seal)
+  const cost = resolvePackagingCost(lines[0], workspace.ingredients)
+  expect(cost.matchingUnitCost).toBeCloseTo(0.00372, 9)
+  expect(cost.cost).toBeCloseTo(0.00744, 9)
+  expect(resolvePackagingCost(lines[1], workspace.ingredients).cost).toBe(0)
+  const product: Item = { ...workspace.products[0], packagingLines: lines, unitsPerPackage: 1 }
+  const recipe = { ...workspace.recipes.find((item) => item.id === product.recipeId)!, packagingCost: 0 }
+  const estimate = costBreakdown(recipe, workspace.ingredients, { product, recipes: workspace.recipes })
+  expect(estimate.packagingCost / estimate.packages).toBeCloseTo(cost.cost, 9)
+  expect(productCosting({ id: 'basket-cost', name: 'Basket', workflow: 'kit', kitComponents: [{ productId: product.id, quantity: 1, basis: 'package' }], packagingLines: lines }, workspace).packagingCost).toBeCloseTo(cost.cost, 9)
+  expect(() => resolvePackagingCost({ ...lines[0], unit: 'each' }, workspace.ingredients)).toThrow(/needs unit conversion/i)
+  expect(() => resolvePackagingCost(lines[1], [{ ...seal, cost: undefined }])).toThrow(/missing cost/i)
+})
 
 it('costs two products with multiple packages, additional packaging and assembly; tracks changes without changing stock', () => {
   const workspace = demoData()

@@ -5367,12 +5367,13 @@ export default async (req: Request, context: Context) => {
         if (managedBilling?.plan_id === 'free')
           assertFullFreeStockCoverage(state, data.id)
         const b = state.batches.find((b) => b.id === data.id)
-        if (!b || b.status === 'completed')
+        if (!b || ['completed', 'canceled'].includes(b.status))
           throw new Error('Batch is already completed or unavailable.')
         const r = state.recipes.find((r) => r.id === b.recipeId)!
         const count = number(b.count, 'Batch count', 0.000001)
         const yieldActual = number(data.actualYield, 'Actual yield', 0.000001)
         const usage = new Map<string, number>()
+        const preparedRequirements = new Map<string, Item['prepared']>()
         const productionLines = recipeProductionLines(
           r,
           state.ingredients,
@@ -5380,7 +5381,11 @@ export default async (req: Request, context: Context) => {
         )
         for (const line of productionLines) {
           const i = state.ingredients.find((i) => i.id === line.ingredientId)!
-          if (line.productionSupply && i.trackInventory === false) continue
+          if (line.productionSupply && i.trackInventory === false) {
+            if (line.prepared)
+              throw new Error(`${i.name}: a prepared portion requirement needs tracked inventory.`)
+            continue
+          }
           const actual = data.usage?.[i.id] ?? line.quantity * count
           const q = convert(
             number(actual, 'Actual ingredient use'),
@@ -5389,6 +5394,7 @@ export default async (req: Request, context: Context) => {
             i.conversions,
           )
           usage.set(i.id, (usage.get(i.id) || 0) + q)
+          if (line.prepared) preparedRequirements.set(i.id, line.prepared)
         }
         const candidates = state.products.filter((p) => p.recipeId === r.id)
         const product =
@@ -5410,6 +5416,8 @@ export default async (req: Request, context: Context) => {
           )
           if (!i) throw new Error('Packaging item is unavailable.')
           if (i.trackInventory === false) continue
+          if (preparedRequirements.has(i.id))
+            throw new Error(`${i.name}: use separate items for per-package packaging and prepared recipe supply usage in this run.`)
           const q =
             (convert(
               number(line.quantity, 'Packaging quantity'),
@@ -5429,7 +5437,7 @@ export default async (req: Request, context: Context) => {
             throw new Error(
               `${i.name} is short by ${(q - i.quantity).toFixed(2)} ${i.unit}. Receive stock before completing.`,
             )
-          const prepared = planPrepUsage(i, state.lots, q, data.prepSources?.[id])
+          const prepared = planPrepUsage(i, state.lots, q, data.prepSources?.[id], preparedRequirements.get(id))
           const cost = prepared?.cost ?? q * i.cost
           if (prepared) usedCost.set(id, prepared.unitCost)
           lockedUsage.push({

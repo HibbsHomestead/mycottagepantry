@@ -812,6 +812,7 @@ function WorkflowDialog({
                     <PrepStockSourceSelect
                       ingredient={workspace.ingredients.find((input) => input.id === line.ingredientId)}
                       lots={workspace.lots}
+                      requirement={line.prepared}
                       value={draft.prepSources?.[line.ingredientId]}
                       change={(source) => change('prepSources', { ...draft.prepSources, [line.ingredientId]: source })}
                       disabled={busy}

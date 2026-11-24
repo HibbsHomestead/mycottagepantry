@@ -47,11 +47,11 @@ export function kitEstimate(product: Item, workspace: Workspace) {
     : 'kit'
   const explanation = category?.issue
     ? configuration === 'kit'
-      ? `${product.name}: choose an active category in Edit kit → Contents & details.`
+      ? `${product.name}: choose an active category in Edit basket → Contents & details.`
       : configuration === 'Categories'
         ? `${product.name}: review the classification of category “${category.category!.name}” in Products → Categories.`
         : `${product.name}: configure the tax treatment for category “${category.category!.name}” in Settings → Taxes. Missing configuration does not mean tax exempt.`
-    : `${product.name}: review the affected product or packaging costs below, or update the saved price and pricing settings in Edit kit.`
+    : `${product.name}: review the affected product or packaging costs below, or update the saved price and pricing settings in Edit basket.`
   return {
     cost,
     tax,

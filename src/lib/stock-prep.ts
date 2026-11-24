@@ -7,6 +7,7 @@ import {
   type Item,
 } from './domain'
 import { isFabric } from './fabric'
+import { matchingPreparedLots, type PreparedRequirement } from './prepared-requirement'
 
 const EPS = 1e-8
 const stockRound = (n: number) => Math.round(n * 1e8) / 1e8
@@ -258,8 +259,16 @@ export function planPrepUsage(
   lots: Item[],
   quantity: number,
   source: unknown,
+  requirement?: PreparedRequirement,
 ) {
   const active = activePrepLots(lots, i.id)
+  if (requirement) {
+    if (quantity <= 0)
+      throw new Error(`${i.name}: enter the actual prepared stock used. This recipe requires prepared stock.`)
+    const eligible = matchingPreparedLots(i, active, requirement)
+    if (!eligible.some((lot) => lot.id === source && Number(lot.quantity) + EPS / 2 >= quantity))
+      throw new Error(`${i.name}: ${quantity} ${i.unit} of ${requirement.method} stock is required. Choose a matching prepared lot with enough remaining, or prepare more. Unportioned stock cannot be substituted.`)
+  }
   if (quantity === 0 || (!active.length && !source)) return undefined
   if (!source)
     throw new Error(

@@ -209,7 +209,7 @@ for (const width of [1440, 768, 390]) {
         expect(row.height).toBeLessThan(50)
       }
     }
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Edit basket', exact: true }).click()
     await expect(
       dialog.getByRole('tab', { name: 'Contents & details' }),
     ).toBeVisible()
@@ -338,7 +338,7 @@ for (const width of [1440, 768, 390]) {
       .click()
     await expect(rows).toHaveCount(2)
     await expect(rows.nth(0).getByRole('spinbutton')).toHaveValue('3')
-    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+    await page.getByRole('button', { name: 'Save basket', exact: true }).click()
     await expect(
       dialog.getByRole('heading', { name: kit.name, exact: true }),
     ).toBeVisible()
@@ -350,7 +350,7 @@ for (const width of [1440, 768, 390]) {
         .getByRole('region', { name: 'Included products' })
         .getByRole('listitem'),
     ).toHaveCount(2)
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Edit basket', exact: true }).click()
     await expect(
       dialog.locator('.kit-editor-component').first().getByRole('spinbutton'),
     ).toHaveValue('3')
@@ -381,7 +381,7 @@ for (const issue of ['cost', 'basis', 'sources'] as const) {
     const { kit, writes } = await setup(page, issue)
     await page
       .getByRole('article', { name: kit.name })
-      .getByRole('button', { name: 'Edit kit', exact: true })
+      .getByRole('button', { name: 'Edit basket', exact: true })
       .click()
     const first = page
       .getByRole('dialog')
@@ -419,7 +419,7 @@ for (const width of [768, 390]) {
     await expect(
       dialog.getByRole('button', { name: `${longName} ×1`, exact: true }),
     ).toBeVisible()
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Edit basket', exact: true }).click()
     const row = dialog.locator('.kit-editor-component').nth(2)
     await row.locator('summary').click()
     await row

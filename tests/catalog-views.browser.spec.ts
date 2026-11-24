@@ -203,7 +203,7 @@ for (const width of [390, 1440]) {
       expect((await download).suggestedFilename()).toContain('.csv')
       if (kind === 'Products') {
         for (const choice of [
-          'Create kit',
+          'Create basket',
           'Create food product',
           'Create handmade product',
           'Create resale product',

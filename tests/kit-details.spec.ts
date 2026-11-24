@@ -278,7 +278,7 @@ for (const width of [1440, 768, 390]) {
     await expect(
       dialog.getByText(/Additional assembly: 12 minutes/),
     ).toBeVisible()
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Edit basket', exact: true }).click()
     await expect(
       page.getByRole('tab', { name: 'Contents & details', exact: true }),
     ).toBeVisible()
@@ -288,14 +288,14 @@ for (const width of [1440, 768, 390]) {
     await page
       .getByRole('tab', { name: 'Packaging & cost', exact: true })
       .click()
-    await page.getByLabel('Kit selling price').fill('48.25')
+    await page.getByLabel('Basket selling price').fill('48.25')
     await page.getByLabel('Additional assembly minutes').fill('18')
     await page.getByRole('tab', { name: 'Photo', exact: true }).click()
     await page
       .getByRole('tab', { name: 'Packaging & cost', exact: true })
       .click()
-    await expect(page.getByLabel('Kit selling price')).toHaveValue('48.25')
-    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+    await expect(page.getByLabel('Basket selling price')).toHaveValue('48.25')
+    await page.getByRole('button', { name: 'Save basket', exact: true }).click()
     await expect(
       dialog.getByRole('heading', { name: kitName, exact: true }),
     ).toBeVisible()
@@ -309,8 +309,8 @@ for (const width of [1440, 768, 390]) {
       ),
     )
     expect(writes).toHaveLength(1)
-    await dialog.getByRole('button', { name: 'Edit kit', exact: true }).click()
-    await page.getByLabel('Kit name', { exact: true }).fill('Unsaved name')
+    await dialog.getByRole('button', { name: 'Edit basket', exact: true }).click()
+    await page.getByLabel('Basket name', { exact: true }).fill('Unsaved name')
     await page.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(
       dialog.getByRole('heading', { name: kitName, exact: true }),
@@ -322,7 +322,7 @@ for (const width of [1440, 768, 390]) {
     assertStock()
   })
 
-  test(`Kits tab, search, type filters, hash refresh and Create kit at ${width}`, async ({
+  test(`Kits tab, search, type filters, hash refresh and Create basket at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 950 })
@@ -345,23 +345,23 @@ for (const width of [1440, 768, 390]) {
       page.locator('.section-tabs a[aria-current="page"]'),
     ).toHaveText('Kits')
     await expect(
-      page.getByRole('button', { name: 'Create kit', exact: true }),
+      page.getByRole('button', { name: 'Create basket', exact: true }),
     ).toHaveCount(1)
     await page.getByLabel('Search products', { exact: true }).fill('')
     await page.screenshot({
       path: `${output}/kits-tab-${width}.png`,
       animations: 'disabled',
     })
-    await page.getByRole('button', { name: 'Create kit', exact: true }).click()
+    await page.getByRole('button', { name: 'Create basket', exact: true }).click()
     await page
-      .getByLabel('Kit name', { exact: true })
+      .getByLabel('Basket name', { exact: true })
       .fill('Presentation test kit')
     await page.getByLabel('Add existing product').selectOption('loaf')
     await page
       .getByRole('tab', { name: 'Packaging & cost', exact: true })
       .click()
-    await page.getByLabel('Kit selling price').fill('12')
-    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+    await page.getByLabel('Basket selling price').fill('12')
+    await page.getByRole('button', { name: 'Save basket', exact: true }).click()
     await expect(
       page
         .getByRole('dialog')
@@ -435,7 +435,7 @@ for (const width of [1440, 390]) {
     })
     await dialog
       .getByRole('status')
-      .getByRole('button', { name: 'Edit kit', exact: true })
+      .getByRole('button', { name: 'Edit basket', exact: true })
       .click()
     await expect(
       dialog.getByRole('heading', { name: `Kit · ${kitName}`, exact: true }),
@@ -506,10 +506,10 @@ for (const width of [1440, 390]) {
     expect(measurement.overflows).toBe(0)
     expect(measurement.horizontal).toBeLessThanOrEqual(1)
     await dialog
-      .getByRole('button', { name: 'Edit kit', exact: true })
+      .getByRole('button', { name: 'Edit basket', exact: true })
       .scrollIntoViewIfNeeded()
     await expect(
-      dialog.getByRole('button', { name: 'Edit kit', exact: true }),
+      dialog.getByRole('button', { name: 'Edit basket', exact: true }),
     ).toBeInViewport()
     expect(writes).toHaveLength(0)
     assertStock()
@@ -578,7 +578,7 @@ for (const width of [1440, 390])
     await page.getByLabel('Search products').fill('Gather')
     await page.getByRole('button', { name: kit.name, exact: true }).click()
     await expect(
-      dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit kit', exact: true }),
+      dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit basket', exact: true }),
     ).toBeVisible()
     await expect(
       dialog.getByText('Product category not configured.', { exact: false }),
@@ -615,10 +615,10 @@ for (const width of [1440, 390])
       .getByRole('button', { name: `${component.name} ×2`, exact: true })
       .click()
     await dialog.getByRole('button', { name: `Back to ${kit.name}`, exact: true }).click()
-    await dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit kit', exact: true }).click()
+    await dialog.locator('.product-detail-actions').getByRole('button', { name: 'Edit basket', exact: true }).click()
     await page.getByRole('tab', { name: 'Packaging & cost' }).click()
-    await page.getByLabel('Kit selling price').fill('49')
-    await page.getByRole('button', { name: 'Save kit', exact: true }).click()
+    await page.getByLabel('Basket selling price').fill('49')
+    await page.getByRole('button', { name: 'Save basket', exact: true }).click()
     await expect(
       dialog.locator('.cost-card').filter({ hasText: 'Selling price' }).first(),
     ).toContainText('$49.00')
@@ -631,8 +631,8 @@ for (const width of [1440, 390])
     ).toBe(true)
     await page.keyboard.press('Escape')
     await page
-      .getByRole('button', { name: 'Create kit', exact: true })
+      .getByRole('button', { name: 'Create basket', exact: true })
       .first()
       .click()
-    await expect(page.getByLabel('Kit name', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('Basket name', { exact: true })).toBeVisible()
   })

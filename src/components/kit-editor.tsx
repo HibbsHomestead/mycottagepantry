@@ -14,6 +14,7 @@ import {
 } from '@/lib/domain'
 import type { ProductEditor } from './product-editor'
 import { kitEstimate } from '@/lib/kit-estimate'
+import { PackagingCostTotal, PackagingLineCost } from './financial-editors'
 import './kit-components.css'
 
 type Props = Parameters<typeof ProductEditor>[0] & {
@@ -74,11 +75,11 @@ export function KitEditor({
       {estimate.cost && (
         <>
           <p>Included packages: {money(estimate.cost.ingredient)}</p>
-          <p>Kit packaging: {money(estimate.cost.packagingCost)}</p>
+          <p>Additional basket packaging: {money(estimate.cost.packagingCost)}</p>
           <p>Additional assembly: {money(estimate.cost.labor)}</p>
           <p>
             <strong>
-              Total / sellable kit: {money(estimate.cost.perPackage)}
+              Total / basket: {money(estimate.cost.perPackage)}
             </strong>
           </p>
         </>
@@ -116,7 +117,7 @@ export function KitEditor({
   const contents = (
     <>
       <label className="field">
-        <span>Kit name</span>
+        <span>Basket name</span>
         <input
           required
           value={draft.name}
@@ -161,7 +162,7 @@ export function KitEditor({
           checked={draft.archived === true}
           onChange={(e) => change('archived', e.target.checked)}
         />{' '}
-        Archived / inactive kit
+        Archived / inactive basket
       </label>
       <h3>Included products</h3>
       <p className="form-hint">
@@ -295,7 +296,7 @@ export function KitEditor({
                 <p>
                   Ingredient/allergen information belongs to this component.
                   Review its source statement and missing data; this is not a
-                  verified kit label.
+                  verified basket label.
                 </p>
               </div>
             </details>
@@ -332,16 +333,16 @@ export function KitEditor({
       <p className="form-hint">
         Definition only: saving, activating and previewing do not move or
         reserve stock. Use Assemble to consume stocked components and create
-        finished kits. Produce missing components separately. Kit sales remain
+        finished baskets. Produce missing components separately. Basket sales remain
         unavailable.
       </p>
     </>
   )
   const pricing = (
     <>
-      <h3>Kit-specific packaging</h3>
+      <h3>Additional basket packaging</h3>
       {packaging.map((line, index) => (
-        <div className="calculation-box" key={line.ingredientId}>
+        <div className="calculation-box basket-packaging-row" key={line.ingredientId}>
           <p>
             {workspace.ingredients.find((i) => i.id === line.ingredientId)
               ?.name || line.ingredientId}
@@ -365,6 +366,7 @@ export function KitEditor({
               }
             />
           </label>
+          <PackagingLineCost line={line} ingredients={workspace.ingredients} basket />
           <ItemRemoveButton
             label="Remove packaging"
             onClick={() =>
@@ -377,7 +379,7 @@ export function KitEditor({
         </div>
       ))}
       <label className="field">
-        <span>Add kit packaging</span>
+        <span>Add basket packaging</span>
         <select
           value=""
           onChange={(e) => {
@@ -404,10 +406,11 @@ export function KitEditor({
             ))}
         </select>
       </label>
+      <PackagingCostTotal lines={packaging} ingredients={workspace.ingredients} basket />
       {[
         ['assemblyMinutes', 'Additional assembly minutes'],
         ['assemblyRate', 'Assembly hourly rate'],
-        ['price', 'Kit selling price'],
+        ['price', 'Basket selling price'],
       ].map(([key, label]) => (
         <label className="field" key={key}>
           <span>{label}</span>
@@ -422,13 +425,13 @@ export function KitEditor({
         </label>
       ))}
       <ProductPriceTaxField product={draft} business={workspace.settings[0]} change={change} disabled={busy} />
-      {summary}
     </>
   )
   return (
     <ItemEditorShell
       notice={item && workspace.products.some(p => p.id === item.id) && <ItemDeleteButton table="products" item={item} draft />}
-      title={item ? `Kit · ${item.name}` : 'Create kit'}
+      dialogClassName="basket-editor-dialog"
+      title={item ? `Basket · ${item.name}` : 'Create basket'}
       description="Fixed contents, one selling price. Current estimates follow current component costs."
       tabs={[
         { id: 'contents', label: 'Contents & details', content: contents },
@@ -459,7 +462,7 @@ export function KitEditor({
       submitDisabled={
         busy || uploadBusy || !['Owner', 'Manager'].includes(role)
       }
-      submitLabel="Save kit"
+      submitLabel="Save basket"
       error={error}
       cancel={close}
       onSubmit={async () => {
@@ -523,7 +526,7 @@ function ComponentSources({
   return (
     <div>
       <h4>Ingredient &amp; allergen sources</h4>
-      <p>Source review only; this is not a verified kit label.</p>
+      <p>Source review only; this is not a verified basket label.</p>
       {issue && <p className="warning-text">{issue}</p>}
       <ul>
         {sources.map((i, index) => (

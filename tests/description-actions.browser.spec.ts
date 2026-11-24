@@ -275,7 +275,7 @@ for (const workflow of ['food', 'handmade', 'resale', 'kit'])
       .click()
     await editor
       .getByRole('button', {
-        name: /^(Save Changes|Save changes|Save product|Save product & bill of materials|Save kit|Save Kit)$/,
+        name: /^(Save Changes|Save changes|Save product|Save product & bill of materials|Save basket|Save Basket)$/,
       })
       .click()
     if (workflow === 'kit')

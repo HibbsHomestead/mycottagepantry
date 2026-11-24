@@ -7,6 +7,8 @@ import {
   classificationIds,
   productClassification,
 } from './product-categories'
+import { assertSamePreparedSource, preparedEstimateRate } from './prepared-requirement'
+
 export type Item = { id: string; name: string; [key: string]: any }
 export type Workspace = { [key: string]: Item[] }
 export const units: Record<string, { category: string; factor: number }> = {
@@ -396,7 +398,8 @@ export function recipeProductionLines(
   ingredients: Item[],
   recipes?: Item[],
 ): any[] {
-  if (!recipe.baseRecipeId && !(recipe.productionSupplies || []).length)
+  if (!recipe.baseRecipeId && !(recipe.productionSupplies || []).length &&
+    !(recipe.lines || []).some((line: Item) => line.prepared))
     return (recipe.lines || []).map((line: any) => ({
       ...line,
       sources: [line],
@@ -413,12 +416,14 @@ export function recipeProductionLines(
     )
     const prior = result.get(item.id)
     if (prior) {
+      assertSamePreparedSource(prior, line, item.name)
       prior.quantity += quantity
       prior.sources.push(line)
     } else
       result.set(item.id, {
         ingredientId: item.id,
         productionSupply: line.productionSupply === true,
+        prepared: line.prepared,
         quantity,
         unit: item.unit,
         sources: [line],
@@ -442,6 +447,33 @@ export function packagingLines(product: Item): any[] {
       : [])
   )
 }
+export function resolvePackagingCost(
+  line: Record<string, unknown>,
+  ingredients: Item[],
+  { packages = 1, historical = false, basket = false } = {},
+) {
+  const item = ingredients.find((entry) => entry.id === line.ingredientId && entry.usedAs === 'packaging')
+  if (!item) throw new Error('Choose an available packaging item.')
+  const unit = (typeof line.unit === 'string' && line.unit) || (basket ? item.unit : 'each')
+  const quantity = number(line.quantity, 'Packaging quantity', basket ? 0.000001 : 0)
+  let matchingQuantity: number
+  try {
+    matchingQuantity = convert(1, unit, item.unit, item.conversions)
+  } catch {
+    throw new Error(`Needs unit conversion: ${unitLabel(unit)} to ${unitLabel(item.unit)} for ${item.name}.`)
+  }
+  const price = historical ? item.cost : (item.currentCost ?? item.cost)
+  if ((!historical && item.needsCostSetup) || price == null || String(price).trim() === '')
+    throw new Error(`Missing cost for ${item.name}.`)
+  const unitCost = number(price, 'Packaging cost')
+  const inventoryQuantity = quantity * matchingQuantity * packages
+  return {
+    ...line, name: item.name, inventoryQuantity, storageUnit: item.unit,
+    unit, unitCost, matchingUnitCost: matchingQuantity * unitCost,
+    cost: inventoryQuantity * unitCost,
+  }
+}
+
 export function costBreakdown(
   recipe: Item,
   ingredients: Item[],
@@ -498,7 +530,9 @@ export function costBreakdown(
   const missingCosts = recipeLines.filter((line: any) => {
     const i = ingredients.find((i) => i.id === line.ingredientId)
     if (!i || i.needsCostSetup) return true
-    const price = i.currentCost ?? i.cost
+    const price = line.prepared && !options.historical
+      ? preparedEstimateRate(line, i)
+      : i.currentCost ?? i.cost
     if (
       price == null ||
       price === '' ||
@@ -530,7 +564,7 @@ export function costBreakdown(
     const quantity = number(line.quantity, 'Recipe quantity') * multiplier
     const normalized = convert(quantity, line.unit, i.unit, i.conversions)
     const unitCost = number(
-      options.historical ? i.cost : (i.currentCost ?? i.cost),
+      options.historical ? i.cost : line.prepared ? preparedEstimateRate(line, i) : (i.currentCost ?? i.cost),
       'Ingredient cost',
     )
     return {
@@ -553,9 +587,8 @@ export function costBreakdown(
       const item = ingredients.find((i) => i.id === line.ingredientId)
       if (!item || !isProductionSupply(item))
         throw new Error('Choose an available non-edible production supply.')
-      const price = options.historical
-        ? item.cost
-        : (item.currentCost ?? item.cost)
+      const price = options.historical ? item.cost
+        : line.prepared ? preparedEstimateRate(line, item) : (item.currentCost ?? item.cost)
       if (
         item.needsCostSetup ||
         price == null ||
@@ -605,28 +638,7 @@ export function costBreakdown(
   )
   const packages = actualYield / unitsPerPackage
   const packaging = product
-    ? packagingLines(product).map((line: any) => {
-        const i = ingredients.find(
-          (i) => i.id === line.ingredientId && i.usedAs === 'packaging',
-        )
-        if (!i) throw new Error('Choose an available packaging item.')
-        const perPackage = number(line.quantity, 'Packaging quantity')
-        const quantity =
-          convert(perPackage, line.unit || 'each', i.unit, i.conversions) *
-          packages
-        const unitCost = number(
-          options.historical ? i.cost : (i.currentCost ?? i.cost),
-          'Packaging cost',
-        )
-        return {
-          ...line,
-          name: i.name,
-          inventoryQuantity: quantity,
-          storageUnit: i.unit,
-          unitCost,
-          cost: quantity * unitCost,
-        }
-      })
+    ? packagingLines(product).map((line) => resolvePackagingCost(line, ingredients, { packages, historical: options.historical }))
     : []
   const packagingCost =
     packaging.reduce((s: number, l: any) => s + l.cost, 0) +
@@ -777,26 +789,11 @@ export function kitCosting(
     (sum: number, line: Item) => sum + line.cost,
     0,
   )
-  const packaging = packagingLines(product).map((line: Item) => {
-    const item = workspace.ingredients.find(
-      (i) => i.id === line.ingredientId && i.usedAs === 'packaging',
-    )
-    const price = item?.currentCost ?? item?.cost
-    if (
-      !item ||
-      item.needsCostSetup ||
-      price == null ||
-      String(price).trim() === ''
-    )
-      throw new Error('Kit packaging cost is unavailable.')
-    const quantity = number(line.quantity, 'Kit packaging quantity', 0.000001)
-    const cost =
-      convert(quantity, line.unit || item.unit, item.unit, item.conversions) *
-      number(price, 'Kit packaging cost')
-    return { ...line, name: item.name, cost }
-  })
+  const packaging = packagingLines(product).map((line: Item) =>
+    resolvePackagingCost(line, workspace.ingredients, { basket: true }),
+  )
   const packagingCost = packaging.reduce(
-    (sum: number, line: Item) => sum + line.cost,
+    (sum, line) => sum + line.cost,
     0,
   )
   const laborMinutes = number(product.assemblyMinutes ?? 0, 'Assembly minutes')

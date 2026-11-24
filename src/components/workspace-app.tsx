@@ -60,6 +60,7 @@ import {
 } from '@/lib/recipe-categories'
 import { SupportHelper } from './support-helper'
 import { ProductionRun } from './production-run'
+import { ProductionBoard } from './production-board'
 import { GroceryPrepList } from './grocery-prep-list'
 import { InventoryCounts } from './inventory-counts'
 import {
@@ -79,6 +80,8 @@ import { KitCostCards } from './kit-cost-cards'
 import { KitIncludedProducts } from './kit-included-products'
 import { ProductLabelsInfo } from './product-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
+import { PreparedPortionQuantity, PreparedStockPicker } from './prepared-stock-picker'
+import { preparedLabel } from '@/lib/prepared-requirement'
 import { componentStock } from '@/lib/recipe-components'
 import { RecipeBaseFields } from './recipe-base-fields'
 import { effectiveRecipeLines, effectiveProductionSupplies, recipeProductionLines, packagingLines } from '@/lib/domain'
@@ -390,6 +393,8 @@ export function WorkspaceApp() {
       ? state.products.find((p) => p.id === selectedRecord.id) || selectedRecord
       : selectedRecord
   const [componentPicker, setComponentPicker] = useState(false)
+  const [preparedPicker, setPreparedPicker] = useState<{ replace?: number; ingredientId?: string } | null>(null)
+  const [productionView, setProductionView] = useState<'list' | 'board'>('board')
   const [managingRecipeCategories, setManagingRecipeCategories] =
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
@@ -550,6 +555,17 @@ export function WorkspaceApp() {
     batches = state.batches,
     business = state.settings[0]
   const recipeCategoryOptions = recipeCategories(state)
+  let legacyInputs: Item[] = []
+  let legacyInputIssue = ''
+  if (modal === 'complete' && selected) {
+    try {
+      const recipe = recipes.find((entry) => entry.id === selected.recipeId)
+      if (!recipe) throw new Error('The recipe linked to this run is unavailable.')
+      legacyInputs = recipeProductionLines(recipe, ingredients, recipes)
+    } catch (error) {
+      legacyInputIssue = (error as Error).message
+    }
+  }
   const purchasedRecipeInputs = ingredients.filter(
     (i) => !i.compoundRecipeId && (!i.usedAs || i.usedAs === 'ingredient'),
   )
@@ -856,7 +872,7 @@ export function WorkspaceApp() {
       const keepProductionOpen = [
         'productionSave',
         'productionRecordActuals',
-      ].includes(action)
+      ].includes(action) || (modal === 'production' && action === 'productionComplete' && Array.isArray(data.lines))
       const savedProduction = action.startsWith('production')
         ? result.workspace?.batches?.find((run: Item) => run.id === data.id)
         : undefined
@@ -922,7 +938,7 @@ export function WorkspaceApp() {
     go('Products', 'All Products')
     open('product-detail', product)
   }
-  function open(kind: string, item?: Item, newDraft = false, prep = false) {
+  function open(kind: string, item?: Item, newDraft = false, prep = false, productionReview = false) {
     if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
 
     if (
@@ -1001,6 +1017,7 @@ export function WorkspaceApp() {
       setSelected(item?.productionVersion ? item : null)
       setDraft({
         productId: product?.id || '',
+        productionReview,
         legacyRunId:
           item &&
           !item.productionVersion &&
@@ -1553,7 +1570,7 @@ export function WorkspaceApp() {
       Pantry: ['Receive stock', 'receive-picker'],
       Recipes: ['Create recipe', 'recipe'],
       'Products & Pricing': [
-        route.tab === 'Kits' ? 'Create kit' : 'Create product',
+        route.tab === 'Kits' ? 'Create basket' : 'Create product',
         route.tab === 'Kits'
           ? 'kit'
           : route.tab === 'Handmade'
@@ -1562,7 +1579,7 @@ export function WorkspaceApp() {
               ? 'trade-product-resale'
               : 'product',
       ],
-      ...(sub === 'Grocery & Prep' ? {} : { Production: ['Start production', 'batch'] }),
+      ...(sub === 'Grocery & Prep' ? {} : { Production: ['Plan production', 'batch'] }),
       Finances: ['Record a transaction', 'transaction'],
       Labels: ['Print label', 'print'],
       Reports: ['Export report', 'export'],
@@ -1894,7 +1911,7 @@ export function WorkspaceApp() {
                         }
                       }}
                     >
-                      {tab}
+                      {route.section === 'Products' && tab === 'Kits' ? 'Baskets' : tab}
                     </a>
                   ))}
                 </SectionNavigation>
@@ -2445,7 +2462,7 @@ export function WorkspaceApp() {
                               >
                                 <DropdownMenuItem onSelect={() => open('kit')}>
                                   <Gift size={16} />
-                                  Create kit
+                                  Create basket
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onSelect={() => open('product')}
@@ -2551,7 +2568,7 @@ export function WorkspaceApp() {
                                 className="btn secondary"
                                 onClick={() => open('kit')}
                               >
-                                Create kit
+                                Create basket
                               </button>
                               <button
                                 className="btn secondary"
@@ -2665,7 +2682,14 @@ export function WorkspaceApp() {
                     </>
                   ) : (
                     <>
-                      <div className="production-layout">
+                      <div className="button-row" role="group" aria-label="Production view">
+                        <button type="button" className={`btn ${productionView === 'list' ? '' : 'secondary'}`} aria-pressed={productionView === 'list'} onClick={() => setProductionView('list')}>List</button>
+                        <button type="button" className={`btn ${productionView === 'board' ? '' : 'secondary'}`} aria-pressed={productionView === 'board'} onClick={() => setProductionView('board')}>Kanban board</button>
+                      </div>
+                      {productionView === 'board' ? <ProductionBoard state={state} busy={busy}
+                        canStart={ready && ['Owner', 'Manager'].includes(role)}
+                        canComplete={ready && ['Owner', 'Manager', 'Production Staff'].includes(role)}
+                        open={(run, destination) => open(run.productionVersion || run.status === 'completed' ? 'batch-detail' : ['scheduled', 'planned'].includes(run.status) ? 'production' : 'complete', run, false, false, destination === 'Completed')} /> : <div className="production-layout">
                         <section className="panel">
                           <div className="panel-heading">
                             <div>
@@ -2859,7 +2883,7 @@ export function WorkspaceApp() {
                             View pantry <ArrowRight size={15} />
                           </Btn>
                         </section>
-                      </div>
+                      </div>}
                     </>
                   )}
                 </>
@@ -3775,7 +3799,7 @@ export function WorkspaceApp() {
                 (selected.workflow === 'resale'
                   ? 'Resale product'
                   : selected.workflow === 'kit'
-                    ? 'Product kit'
+                    ? 'Product basket'
                     : selected.workflow === 'handmade'
                       ? 'Handmade product'
                       : 'Food product')}
@@ -3810,7 +3834,7 @@ export function WorkspaceApp() {
                       : 'Create Product',
                     production: selected?.productionVersion
                       ? selected.name
-                      : 'Start production',
+                      : 'Production run',
                     batch: 'Plan compound prep',
                     complete: 'Finish this batch',
                     sale: 'Record a sale',
@@ -4475,6 +4499,17 @@ export function WorkspaceApp() {
               )}
               {modal === 'recipe' && (
                 <div className="recipe-editor-layout">
+                  {preparedPicker && (
+                    <PreparedStockPicker items={purchasedRecipeInputs.filter((item) => !preparedPicker.ingredientId || item.id === preparedPicker.ingredientId)} lots={state.lots || []}
+                      close={() => setPreparedPicker(null)}
+                      select={(line) => {
+                        setFormDirty(true)
+                        setLines((current) => preparedPicker.replace == null
+                          ? [...current.filter((entry) => entry.ingredientId || entry.prepared), line]
+                          : current.map((entry, position) => position === preparedPicker.replace ? line : entry))
+                        setPreparedPicker(null)
+                      }} />
+                  )}
                   {componentPicker && (
                     <RecipeComponentPicker
                       recipes={recipes}
@@ -4575,6 +4610,9 @@ export function WorkspaceApp() {
                           <Plus size={15} />
                           Add compound / prep
                         </button>
+                        <button type="button" className="text-button" onClick={() => setPreparedPicker({})}>
+                          <Plus size={15} /> Add prepared stock
+                        </button>
                       </div>
                     </div>
                     {lines.map((line, index) => {
@@ -4587,7 +4625,12 @@ export function WorkspaceApp() {
                       )
                       return (
                         <div className="recipe-line-editor" key={index}>
-                          {source ? (
+                          {line.prepared && prep ? (
+                            <div className="recipe-component-source">
+                              <strong>{preparedLabel(prep, line.prepared)}</strong>
+                              <small>Prepared stock only · select a matching lot during production</small>
+                            </div>
+                          ) : source ? (
                             <div className="recipe-component-source">
                               <strong>{source.name}</strong>
                               <RecipeTypeBadge recipe={source} />
@@ -4608,6 +4651,7 @@ export function WorkspaceApp() {
                               </a>
                             </div>
                           ) : (
+                            <div className="recipe-component-source">
                             <select
                               aria-label={`Ingredient ${index + 1}`}
                               value={line.ingredientId}
@@ -4628,8 +4672,17 @@ export function WorkspaceApp() {
                                   </option>
                                 ))}
                             </select>
+                            {prep && (state.lots || []).some((lot) => lot.kind === 'ingredient_prep' && lot.ingredientId === prep.id && !lot.reversedAt && lot.quantity > 0) && (
+                              <button type="button" className="text-button" onClick={() => setPreparedPicker({ replace: index, ingredientId: prep.id })}>Use prepared stock instead</button>
+                            )}
+                            </div>
                           )}
-                          <input
+                          {line.prepared ? (
+                            <PreparedPortionQuantity line={line as Item} change={(quantity) => {
+                              setFormDirty(true)
+                              setLines((current) => current.map((entry, position) => position === index ? { ...entry, quantity } : entry))
+                            }} />
+                          ) : <><input
                             type="text"
                             aria-label="Ingredient quantity"
                             min="0.000001"
@@ -4664,7 +4717,7 @@ export function WorkspaceApp() {
                                 {unitLabel(u)}
                               </option>
                             ))}
-                          </select>
+                          </select></>}
                           <RecipeLineCost line={line} ingredients={recipeIngredients} />
                           <ItemRemoveButton
                             label="Remove ingredient"
@@ -4677,7 +4730,7 @@ export function WorkspaceApp() {
                       )
                     })}
                   </section>
-                  <ProductionSupplies recipe={{ ...draft, id: draft.id || 'supply-preview', name: draft.name || 'Recipe', baseRecipe: recipes.find(r => r.id === draft.baseRecipeId) }} items={ingredients} recipes={recipes} change={value => change('productionSupplies', value)} />
+                  <ProductionSupplies recipe={{ ...draft, id: draft.id || 'supply-preview', name: draft.name || 'Recipe', baseRecipe: recipes.find(r => r.id === draft.baseRecipeId) }} items={ingredients} lots={state.lots} recipes={recipes} change={value => change('productionSupplies', value)} />
                   <section className="recipe-editor-labor">
                     <h3>2 · Labor</h3>
                     <div className="form-grid">
@@ -5129,16 +5182,10 @@ export function WorkspaceApp() {
                     <h3>Actual ingredient use</h3>
                     <small>Adjust to match what you used.</small>
                   </div>
-                  {recipeProductionLines(
-                    recipes.find((r) => r.id === selected?.recipeId) || {
-                      id: 'missing',
-                      name: '',
-                      lines: [],
-                    },
-                    ingredients,
-                    recipes,
-                  ).map((l: any) => {
-                    const i = ingredients.find((i) => i.id === l.ingredientId)!
+                  {legacyInputIssue && <p className="warning-text" role="alert">{legacyInputIssue}</p>}
+                  {legacyInputs.map((l) => {
+                    const i = ingredients.find((i) => i.id === l.ingredientId)
+                    if (!i) return <p key={l.ingredientId} className="warning-text">An input linked to this run is unavailable.</p>
                     return (
                       <div key={i.id}>
                         <div className="actual-use-row">
@@ -5164,6 +5211,8 @@ export function WorkspaceApp() {
                         <PrepStockSourceSelect
                           ingredient={i}
                           lots={state.lots}
+                          requirement={l.prepared}
+                          requiredQuantity={l.prepared ? Number(draft.usage?.[i.id] ?? l.quantity * (selected?.count || 1)) : undefined}
                           value={draft.prepSources?.[i.id]}
                           change={(source) => change('prepSources', {
                             ...draft.prepSources,
@@ -5196,6 +5245,8 @@ export function WorkspaceApp() {
                         : Number(draft.laborMinutes)
                     }
                     usage={draft.usage}
+                    lots={state.lots}
+                    prepSources={draft.prepSources}
                     wasteCost={
                       draft.wasteCost === undefined
                         ? undefined
@@ -5702,6 +5753,7 @@ export function WorkspaceApp() {
               run={selected || undefined}
               productId={draft.productId}
               legacyRunId={draft.legacyRunId}
+              initialReview={draft.productionReview}
               busy={busy}
               mutate={mutate}
               edit={open}
@@ -5920,7 +5972,7 @@ export function WorkspaceApp() {
                         }
                         onClick={() => open('product', selected)}
                       >
-                        Edit kit
+                        Edit basket
                       </Btn>
                     </div>
                   </>

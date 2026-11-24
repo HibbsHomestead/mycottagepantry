@@ -215,7 +215,7 @@ for (const [width, height] of [
       await expect(dialog).toBeVisible()
       await dialog.getByRole('button', { name: 'Produce', exact: true }).click()
       await expect(
-        page.getByRole('dialog', { name: 'Start production', exact: true }),
+        page.getByRole('dialog', { name: 'Production run', exact: true }),
       ).toBeVisible()
       await page.goto(workspaceFixtureUrl('Products/Food'))
       await page.reload()

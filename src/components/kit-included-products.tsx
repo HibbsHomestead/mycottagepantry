@@ -40,7 +40,7 @@ export function KitProductList({ product, workspace, openProduct }: Props) {
             {line.basis !== 'package' && (
               <small className="warning-text">
                 Unsupported quantity basis ({line.basis || 'not configured'}).
-                Edit kit to review this component.
+                Edit basket to review this component.
               </small>
             )}
             {issue && (

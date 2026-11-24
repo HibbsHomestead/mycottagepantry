@@ -136,7 +136,7 @@ export function KitCostCards({
             }
           >
             {configuration === 'kit'
-              ? 'Edit kit'
+              ? 'Edit basket'
               : configuration === 'Categories'
                 ? 'Review category'
                 : 'Review tax settings'}

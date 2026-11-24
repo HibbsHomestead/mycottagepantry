@@ -66,6 +66,7 @@ export function ItemEditorShell({
   cancel,
   onSubmit,
   sectionsLabel = 'Item sections',
+  dialogClassName = '',
 }: {
   title: string
   description: ReactNode
@@ -89,6 +90,7 @@ export function ItemEditorShell({
   cancel: () => void
   onSubmit: (form: HTMLFormElement) => void
   sectionsLabel?: string
+  dialogClassName?: string
 }) {
   const compact = useCompactEditor()
   const summaryPanel = summary ? (
@@ -104,7 +106,7 @@ export function ItemEditorShell({
       }}
     >
       <DialogContent
-        className="app-dialog product-editor-dialog item-editor-dialog"
+        className={`app-dialog product-editor-dialog item-editor-dialog ${dialogClassName}`}
         onEscapeKeyDown={(event) => {
           // Escape first closes an open list (e.g. category search), not the editor.
           if (

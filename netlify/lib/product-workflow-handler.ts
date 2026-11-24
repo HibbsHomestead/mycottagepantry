@@ -19,6 +19,7 @@ import {
 import { tracksFinishedStock } from '../../src/lib/product-workflows'
 import { checkFabricWidth, fabricConvert, isFabric } from '../../src/lib/fabric'
 import { planPrepUsage } from '../../src/lib/stock-prep'
+import { validatePreparedLine } from '../../src/lib/prepared-requirement'
 import { applyPrepUsage, type StockContext } from './stock-prep-handler'
 import { handleFabric } from './fabric-handler'
 import {
@@ -85,6 +86,7 @@ function materialDesign(item: Item, state: Workspace) {
         'Choose tracked craft materials or packaging from this oven.',
       )
     line.quantity = number(line.quantity, 'Material quantity', 0.000001)
+    validatePreparedLine(line, input, state.lots, state.recipes.find((recipe) => recipe.id === item.id)?.lines)
     checkFabricWidth(input, line)
     if (isFabric(input))
       fabricConvert(line.quantity, line.unit, input.unit, input)
@@ -388,6 +390,10 @@ export async function handleProductWorkflow(
         item.recipeId = existingProduct?.recipeId || null
         validateHandmadeBom(item.bom, state)
         const previousBom = existingProduct?.bom
+        for (const line of item.bom.lines) {
+          const material = state.ingredients.find((entry) => entry.id === line.ingredientId)!
+          validatePreparedLine(line, material, state.lots, previousBom?.lines)
+        }
         item.bom = {
           ...item.bom,
           version:
@@ -594,7 +600,7 @@ export async function handleProductWorkflow(
         : convert(used + wasted, line.unit, input.unit, input.conversions)
       if (input.quantity < quantity)
         throw new Error(`${input.name} has insufficient stock.`)
-      const prepared = planPrepUsage(input, state.lots, quantity, data.prepSources?.[input.id])
+      const prepared = planPrepUsage(input, state.lots, quantity, data.prepSources?.[input.id], line.prepared)
       if (prepared) preparedUsage.set(input.id, prepared)
       const unitCost = prepared?.unitCost ?? input.cost
       const amount = prepared?.cost ?? quantity * unitCost

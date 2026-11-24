@@ -4,7 +4,10 @@ import { readFile } from 'node:fs/promises'
 import { fixtureMigrationNames } from '../../tests/database-fixture-migrations'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
 import type { Context } from '@netlify/functions'
-import type { Item } from './domain'
+import { costBreakdown, type Item } from './domain'
+import { preparedRequirement } from './prepared-requirement'
+import { prepStockBalance } from './stock-prep'
+import { productionReviewIssues } from './production-run'
 import { planStockPrep, prepReviewKey } from './stock-prep'
 const session = vi.hoisted(() => ({
   client: null as null | {
@@ -26,6 +29,17 @@ vi.mock('../../netlify/lib/verified-session', async (original) => ({
 }))
 import handler from '../../netlify/functions/workspace.mts'
 const db = new PGlite()
+it('names each product still missing actual good output without treating its plan as output', () => {
+  const lines = [
+    { id: 'first', name: 'Brownies', quantity: 8, output: 6 },
+    { id: 'second', name: 'Blondies', quantity: 4, output: '' },
+    { id: 'third', name: 'Lemon bars', quantity: 6 },
+  ]
+  expect(productionReviewIssues(lines)).toEqual([
+    'Blondies: Enter a whole number of good units greater than zero.',
+    'Lemon bars: Enter a whole number of good units greater than zero.',
+  ])
+})
 const a = '00000000-0000-4000-8000-000000000051',
   b = '00000000-0000-4000-8000-000000000052'
 const context = {
@@ -988,12 +1002,14 @@ it('multi-product runs save actuals, enforce revisions and aggregate shortages, 
         expectedRevision: 1,
       })
     ).error,
-  ).toMatch(/combined/)
+  ).toMatch(/start the run/i)
+  await ok('productionSave', 'batches', { ...draft, status: 'scheduled', expectedRevision: 1 })
+  expect((await call('productionComplete', 'batches', { id: draft.id, expectedRevision: 2 })).error).toMatch(/combined/)
   expect((await ok()).ledger).toEqual(before.ledger)
   const edited = {
     ...draft,
     status: 'scheduled',
-    expectedRevision: 1,
+    expectedRevision: 2,
     lines: [
       line('multi-line-one', 'multi-food-one', 4),
       line('multi-line-two', 'multi-food-two', 3),
@@ -1005,11 +1021,11 @@ it('multi-product runs save actuals, enforce revisions and aggregate shortages, 
   // In-progress runs remain editable; removal, addition and notes persist.
   w = await ok('productionSave', 'batches', {
     ...edited,
-    expectedRevision: 2,
+    expectedRevision: 3,
     note: 'Continue tomorrow',
   })
   expect(find(w.batches, draft.id).note).toBe('Continue tomorrow')
-  const request = { id: draft.id, expectedRevision: 3 }
+  const request = { id: draft.id, expectedRevision: 4 }
   const done = await ok('productionComplete', 'batches', request)
   expect(find(done.ingredients, input.id).quantity).toBe(300)
   expect(find(done.products, 'multi-food-one').quantity).toBe(4)
@@ -1030,7 +1046,7 @@ it('multi-product runs save actuals, enforce revisions and aggregate shortages, 
     (
       await call('productionSave', 'batches', {
         ...edited,
-        expectedRevision: 4,
+        expectedRevision: 5,
       })
     ).status,
   ).toBe(400)
@@ -1092,15 +1108,16 @@ it('mixed food/BOM lines retain editable actuals, rollback late failures, and ke
     lines,
   }
   await ok('productionSave', 'batches', draft)
+  await ok('productionSave', 'batches', { ...draft, status: 'scheduled', expectedRevision: 1 })
   session.user = 'production-staff'
   expect(
-    (await call('productionSave', 'batches', { ...draft, expectedRevision: 1 }))
+    (await call('productionSave', 'batches', { ...draft, expectedRevision: 2 }))
       .status,
   ).toBe(400)
   // Staff can record actuals, but forged header, quantity, product and definition changes are ignored.
   await ok('productionRecordActuals', 'batches', {
     ...draft,
-    expectedRevision: 1,
+    expectedRevision: 2,
     name: 'Forged',
     lines: lines.map((l) => ({
       ...l,
@@ -1117,7 +1134,7 @@ it('mixed food/BOM lines retain editable actuals, rollback late failures, and ke
     (
       await call('productionComplete', 'batches', {
         id: draft.id,
-        expectedRevision: 2,
+        expectedRevision: 3,
       })
     ).error,
   ).toMatch(/waste/)
@@ -1129,12 +1146,13 @@ it('mixed food/BOM lines retain editable actuals, rollback late failures, and ke
   lines = lines.map((l) => ({ ...l, waste: 0 }))
   await ok('productionSave', 'batches', {
     ...draft,
+    status: 'scheduled',
     lines,
-    expectedRevision: 2,
+    expectedRevision: 3,
   })
   const done = await ok('productionComplete', 'batches', {
     id: draft.id,
-    expectedRevision: 3,
+    expectedRevision: 4,
   })
   expect(find(done.ingredients, 'multi-input').quantity).toBe(100)
   expect(find(done.products, product.id).quantity).toBe(1)
@@ -1494,6 +1512,54 @@ it('posts count and weight prep, preserves costs and identity, consumes a partia
   } finally { session.user = 'production-owner-a' }
 })
 
+it('starts an existing draft and finalizes two required portions atomically from a matching lot', async () => {
+  session.user = 'production-owner-a'
+  const date = '2026-01-01'
+  const item = { id: 'required-prep-input', name: 'Fixture counted fruit', unit: 'each', quantity: 26, cost: 0.5 }
+  await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+  await db.query('INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5)', [item.id, a, JSON.stringify(item), item.quantity, item.cost])
+  const before = await ok()
+  const prep = { id: item.id, date, operationId: '93e18b3d-6046-47e6-abca-712f97d4a911', used: 12, portions: 3, perPortion: 4, outputUnit: 'each', method: 'Frozen', location: 'Test freezer', note: 'Approximately two cups' }
+  const stocked = await ok('stockPrepPost', 'ingredients', { ...prep, review: prepReviewKey(planStockPrep(item, before.lots, prep, date)) })
+  const lotId = `prep-${prep.operationId}`
+  const prepared = preparedRequirement(item, find(stocked.lots, lotId))
+  expect(() => preparedRequirement({ ...item, unit: 'g' }, find(stocked.lots, lotId))).toThrow(/verified conversion from each per portion to g/)
+  const line = { ingredientId: item.id, quantity: 4, unit: 'each', prepared }
+  const recipe = { id: 'required-prep-recipe', name: 'Recipe with frozen portions', yield: 1, yieldUnit: 'each', lines: [line] }
+  const saved = await ok('save', 'recipes', recipe)
+  expect(find(saved.recipes, recipe.id).lines[0].prepared).toEqual(prepared)
+  expect(find(saved.recipes, 'prep-recipe')).toEqual(find(stocked.recipes, 'prep-recipe'))
+  expect(costBreakdown(find(saved.recipes, recipe.id), saved.ingredients).ingredient).toBe(2)
+  expect(costBreakdown(find(saved.recipes, recipe.id), saved.ingredients, { multiplier: 2 }).ingredient).toBe(4)
+  const product = { id: 'required-prep-product', name: 'Fixture frozen-fruit loaf', workflow: 'food', recipeId: recipe.id, unitsPerPackage: 1, price: 5, quantity: 0, cost: 0 }
+  await db.query('INSERT INTO products(id,business_id,recipe_id,data,quantity,cost) VALUES($1,$2,$3,$4,0,0)', [product.id, a, recipe.id, JSON.stringify(product)])
+  const output = { id: 'required-prep-line', productId: product.id, quantity: 2, output: 2, mapping }
+  const run = { name: 'Two portions', id: 'required-prep-run', date, status: 'draft', lines: [output] }
+  const drafted = await ok('productionSave', 'batches', run)
+  expect((await call('productionSave', 'batches', { ...run, status: 'scheduled', expectedRevision: 0 })).status).toBe(400)
+  expect(find((await ok()).batches, run.id).status).toBe('draft')
+  const started = await ok('productionSave', 'batches', { ...run, status: 'scheduled', expectedRevision: 1 })
+  expect(find(started.batches, run.id)).toMatchObject({ status: 'scheduled', revision: 2 })
+  expect(started.ledger).toEqual(drafted.ledger)
+  const wrong = await ok('productionRecordActuals', 'batches', { id: run.id, expectedRevision: 2, lines: [{ ...output, prepSources: { [item.id]: 'unportioned' } }] })
+  expect((await call('productionComplete', 'batches', { id: run.id, expectedRevision: 3 })).error).toMatch(/unportioned stock cannot be substituted/i)
+  expect((await ok()).ledger).toEqual(wrong.ledger)
+  const assigned = { ...output, prepSources: { [item.id]: lotId } }
+  await ok('productionRecordActuals', 'batches', { id: run.id, expectedRevision: 3, lines: [{ ...assigned, usage: { [item.id]: 16 } }] })
+  expect((await call('productionComplete', 'batches', { id: run.id, expectedRevision: 4 })).error).toMatch(/prepare more/i)
+  expect(find((await ok()).batches, run.id).status).toBe('scheduled')
+  await ok('productionRecordActuals', 'batches', { id: run.id, expectedRevision: 4, lines: [assigned] })
+  const request = { id: run.id, expectedRevision: 5 }
+  const completed = await ok('productionComplete', 'batches', request)
+  expect(find(completed.lots, lotId)).toMatchObject({ quantity: 4, balances: [0, 0, 4] })
+  expect(find(completed.ingredients, item.id).quantity).toBe(18)
+  expect(prepStockBalance(find(completed.ingredients, item.id), completed.lots).available).toBe(14)
+  expect(completed.ledger.filter((entry: Item) => entry.batchId === run.id && entry.ingredientId === item.id)).toMatchObject([{ quantity: -8, amount: -4, prepLotId: lotId }])
+  expect((await ok('productionComplete', 'batches', request)).ledger).toEqual(completed.ledger)
+  expect((await call('productionSave', 'batches', { ...run, expectedRevision: 6 })).status).toBe(400)
+  expect((await ok()).ledger).toEqual(completed.ledger)
+})
+
 it('portions generic materials, packaging and supplies without duplicating stock or value', async () => {
   session.user = 'production-owner-a'
   const date = '2026-01-01'
@@ -1540,11 +1606,14 @@ it('portions generic materials, packaging and supplies without duplicating stock
   expect(find(reversed.ingredients, glue.id)).toMatchObject({ quantity: 1000, cost: glue.cost })
   expect((await ok('stockPrepReverse', 'ingredients', correction)).ledger).toEqual(reversed.ledger)
 
-  const design = { id: 'portion-ribbon-design', name: 'Ribbon project', workflow: 'handmade', yield: 1, laborMinutes: 0, laborRate: 0, overhead: 0, lines: [{ ingredientId: ribbon.id, quantity: 1, unit: 'yd' }, { ingredientId: boxes.id, quantity: 1, unit: 'each' }] }
+  const prepSources = { [ribbon.id]: `prep-${ribbonRequest.operationId}`, [boxes.id]: `prep-${boxesRequest.operationId}` }
+  const design = { id: 'portion-ribbon-design', name: 'Ribbon project', workflow: 'handmade', yield: 1, laborMinutes: 0, laborRate: 0, overhead: 0, lines: [
+    { ingredientId: ribbon.id, quantity: 3, unit: 'ft', prepared: preparedRequirement(ribbon, find(reversed.lots, prepSources[ribbon.id])) },
+    { ingredientId: boxes.id, quantity: 1, unit: 'each', prepared: preparedRequirement(boxes, find(reversed.lots, prepSources[boxes.id])) },
+  ] }
   await ok('save', 'recipes', design)
   const product = { id: 'portion-ribbon-product', name: 'Ribbon project', workflow: 'handmade', recipeId: design.id, price: 15, sku: 'RIBBON-FIXTURE', productCategoryId: 'goods' }
   await ok('save', 'products', product)
-  const prepSources = { [ribbon.id]: `prep-${ribbonRequest.operationId}`, [boxes.id]: `prep-${boxesRequest.operationId}` }
   await ok('productionSave', 'batches', { id: 'portion-project-run', productId: product.id, quantity: 1, status: 'scheduled', date, mapping: { quantity: 1, unit: 'each', verified: true } })
   const done = await ok('productionComplete', 'batches', { id: 'portion-project-run', output: 1, prepSources })
   expect(find(done.ingredients, ribbon.id).quantity).toBe(11)
@@ -1552,12 +1621,12 @@ it('portions generic materials, packaging and supplies without duplicating stock
   expect(find(done.lots, prepSources[ribbon.id]).balances).toEqual([1, 2])
   expect(find(done.lots, prepSources[boxes.id]).balances).toEqual([2, 3])
   expect(done.ledger.filter((line: Item) => line.batchId === 'portion-project-run' && line.ingredientId)).toEqual(expect.arrayContaining([
-    expect.objectContaining({ ingredientId: ribbon.id, prepLotId: prepSources[ribbon.id], quantity: -1, amount: -3 }),
+    expect.objectContaining({ ingredientId: ribbon.id, prepLotId: prepSources[ribbon.id], quantity: expect.closeTo(-1, 8), amount: expect.closeTo(-3, 8) }),
     expect.objectContaining({ ingredientId: boxes.id, prepLotId: prepSources[boxes.id], quantity: -1, amount: -2 }),
   ]))
   const legacy = { id: 'portion-legacy-project', name: 'Legacy ribbon project', productId: product.id, recipeId: design.id, count: 1, yield: 1, date }
   await ok('save', 'batches', legacy)
-  const actual = { id: legacy.id, actualYield: 1, laborMinutes: 0, usage: { [ribbon.id]: 1, [boxes.id]: 1 }, materialWaste: { [ribbon.id]: 0, [boxes.id]: 0 }, prepSources }
+  const actual = { id: legacy.id, actualYield: 1, laborMinutes: 0, usage: { [ribbon.id]: 3, [boxes.id]: 1 }, materialWaste: { [ribbon.id]: 0, [boxes.id]: 0 }, prepSources }
   const completed = await ok('complete', 'batches', actual)
   expect(find(completed.ingredients, ribbon.id).quantity).toBe(10)
   expect(find(completed.lots, prepSources[ribbon.id]).balances).toEqual([0, 2])

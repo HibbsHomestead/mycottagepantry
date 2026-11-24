@@ -440,12 +440,20 @@ export function updateIngredient(
     next.unit,
     next.conversions,
   )
-  next.reorderQuantity = convert(
-    number(input.reorderQuantity ?? 0, 'Reorder quantity'),
-    next.storageUnit,
-    next.unit,
-    next.conversions,
-  )
+  if (input.reorderQuantity !== undefined) {
+    next.reorderQuantity = convert(
+      number(input.reorderQuantity ?? 0, 'Reorder quantity'),
+      next.storageUnit,
+      next.unit,
+      next.conversions,
+    )
+  } else if (basis.changed && Number(existing.reorderQuantity)) {
+    try {
+      next.reorderQuantity = convert(existing.reorderQuantity, existing.unit, next.unit, next.conversions)
+    } catch {
+      throw new Error('The saved reorder quantity cannot be carried to this inventory unit without a verified conversion. Keep the existing stock basis or add a verified conversion.')
+    }
+  }
   if (
     Array.isArray(input.allergens) &&
     JSON.stringify(input.allergens) !== JSON.stringify(existing.allergens || [])
