@@ -375,6 +375,21 @@ export function isProductionSupply(item: Item) {
   return ['supply', 'material', 'packaging'].includes(item.usedAs)
 }
 
+export function recipeInputLines(recipe: Item, recipes?: Item[]): Item[] {
+  return [
+    ...effectiveRecipeLines(recipe, recipes),
+    ...effectiveProductionSupplies(recipe, recipes),
+  ]
+}
+
+export function knownCurrentIngredientCost(item: Item): number | undefined {
+  const price = item.currentCost ?? item.cost
+  return !item.needsCostSetup && price != null && price !== '' &&
+    Number.isFinite(Number(price)) && Number(price) >= 0
+    ? Number(price)
+    : undefined
+}
+
 /** Aggregate production inputs before an actual-use override or stock deduction. */
 export function recipeProductionLines(
   recipe: Item,
@@ -387,10 +402,7 @@ export function recipeProductionLines(
       sources: [line],
     }))
   const result = new Map<string, any>()
-  for (const line of [
-    ...effectiveRecipeLines(recipe, recipes),
-    ...effectiveProductionSupplies(recipe, recipes),
-  ]) {
+  for (const line of recipeInputLines(recipe, recipes)) {
     const item = ingredients.find((i) => i.id === line.ingredientId)
     if (!item) throw new Error('Ingredient is unavailable.')
     const quantity = convert(

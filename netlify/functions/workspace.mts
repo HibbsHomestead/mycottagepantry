@@ -37,11 +37,13 @@ import {
 } from '../../src/lib/section-categories'
 import { handleHandmadeMaterial } from '../lib/handmade-material-handler'
 import { handleProduction } from '../lib/production-handler'
+import { handleGroceryList } from '../lib/grocery-list-handler'
 import { applyPrepUsage, handleStockPrep } from '../lib/stock-prep-handler'
 import {
   activePrepLots,
   planPrepUsage,
   prepStockBalance,
+  stockPrepTypeReason,
 } from '../../src/lib/stock-prep'
 import { rapidCountCommand } from '../../src/lib/rapid-count'
 import { effectiveAccess, latestManualGrant } from '../lib/manual-access'
@@ -595,6 +597,11 @@ export default async (req: Request, context: Context) => {
         'inventoryCountCancel',
       ].includes(operation?.action)
     }
+    if (requestUrl.searchParams.has('groceryList')) {
+      const response = await handleGroceryList(req, client, org, user.id, role)
+      await client.query('COMMIT')
+      return response
+    }
     let deviceCookie = context.cookies.get('cp_print_device')
     if (!deviceCookie || !/^[a-f0-9]{64}$/.test(deviceCookie)) {
       deviceCookie = randomBytes(32).toString('hex')
@@ -777,7 +784,7 @@ export default async (req: Request, context: Context) => {
       })
     }
     const state: Workspace = {}
-    const lastIngredientStock = new Map<string, { unit: string; quantity: number }>()
+    const lastIngredientStock = new Map<string, { unit: string; quantity: number; usedAs: string }>()
     const preparedWrites = new Set<string>()
     const authorizePreparedWrite = (id: string) => {
       preparedWrites.add(id)
@@ -951,22 +958,21 @@ export default async (req: Request, context: Context) => {
           if (
             !previous ||
             item.unit !== previous.unit ||
-            item.trackInventory === false ||
-            item.compoundRecipeId ||
-            (item.usedAs && item.usedAs !== 'ingredient')
+            (item.usedAs || 'ingredient') !== previous.usedAs ||
+            stockPrepTypeReason(item)
           )
             throw new Error(
-              'Use the existing prepared stock before changing its ingredient unit, inventory tracking, or use.',
+              'Use the existing prepared stock before changing this item’s unit, inventory tracking, or use.',
             )
           if (!authorized && Number(item.quantity) < previous.quantity - 1e-8)
-            throw new Error('This ingredient has prepared stock. Select a stock source in production, or reverse untouched prep before reducing its stock here.')
+            throw new Error('This item has prepared stock. Select a stock source in production, or reverse untouched prep before reducing its stock here.')
           prepStockBalance(item, state.lots)
         }
         await client.query(
           `INSERT INTO ingredients(id,business_id,data,quantity,cost) VALUES($1,$2,$3,$4,$5) ON CONFLICT(business_id,id) DO UPDATE SET data=$3,quantity=$4,cost=$5,updated_at=NOW()`,
           [item.id, org, JSON.stringify(item), item.quantity, item.cost],
         )
-        lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity) })
+        lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity), usedAs: item.usedAs || 'ingredient' })
         await saveCatalogAcceptance(client, org, item)
       } else if (
         ['label_elements', 'label_versions', 'label_print_jobs'].includes(table)
@@ -1238,7 +1244,7 @@ export default async (req: Request, context: Context) => {
       )
     }
     for (const item of state.ingredients)
-      lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity) })
+      lastIngredientStock.set(item.id, { unit: item.unit, quantity: Number(item.quantity), usedAs: item.usedAs || 'ingredient' })
     if (sandbox && !state.settings.length) {
       // Provision once under the workspace lock, in the same transaction. A
       // failed seed rolls back completely; normal page loads never reseed it.
@@ -2998,7 +3004,7 @@ export default async (req: Request, context: Context) => {
         // Price treatment changes were validated and written under the business lock.
       } else if (['stockPrepPost', 'stockPrepReverse'].includes(action)) {
         if (table !== 'ingredients' || !['Owner', 'Manager'].includes(role))
-          throw new Error('Only an Owner or Manager can prepare or reverse ingredient stock.')
+          throw new Error('Only an Owner or Manager can prepare or reverse this item’s stock.')
         await handleStockPrep(action, data, { ...stockContext(), audit })
       } else if (action === 'inventoryMarkReviewed') {
         if (table !== 'ingredients')

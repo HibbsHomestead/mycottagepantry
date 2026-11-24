@@ -43,6 +43,7 @@ export function FinishedInventory({
       <p className="form-hint">
         Finished selling packages from product production, kit assembly, and
         resale receipts. Legacy food runs create no inferred opening balances.
+        Prep / portion stock is unavailable here because finished stock is tracked by selling package.
       </p>
       {suspicious.length > 0 && (
         <details className="panel resale-count-review">

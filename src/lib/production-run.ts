@@ -1,4 +1,4 @@
-import { convert, type Item, type Workspace } from './domain'
+import { convert, knownCurrentIngredientCost, type Item, type Workspace } from './domain'
 import { productionRequirements } from './production'
 import { cardCost } from './product-list'
 import { resaleCostBasis } from './resale-cost'
@@ -125,15 +125,7 @@ export function combinedProductionRequirements(
               ? resaleCostBasis(item).label
               : 'Current product estimate'
         } else if (r.kind !== 'product') {
-          const price = item.currentCost ?? item.cost
-          unitCost =
-            !item.needsCostSetup &&
-            price != null &&
-            price !== '' &&
-            Number.isFinite(Number(price)) &&
-            Number(price) >= 0
-              ? Number(price)
-              : undefined
+          unitCost = knownCurrentIngredientCost(item)
           costBasis =
             item.currentCost != null
               ? 'Current material cost'

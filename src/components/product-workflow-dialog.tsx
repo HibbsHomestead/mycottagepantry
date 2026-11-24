@@ -1,5 +1,6 @@
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
+import { PrepStockSourceSelect } from './stock-prep'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { HandmadeProductEditor } from './handmade-workspace'
@@ -190,7 +191,7 @@ function WorkflowDialog({
   const isReceive = kind === 'trade-receive'
   const isAdjust = kind === 'trade-adjust'
   const design = workspace.recipes.find((r) => r.id === draft.recipeId)
-  const change = (key: string, value: string | number | boolean) => {
+  const change = (key: string, value: string | number | boolean | Record<string, string>) => {
     setDirty(true)
     setDraft((d) => ({ ...d, [key]: value }))
   }
@@ -348,6 +349,7 @@ function WorkflowDialog({
                   ...draft,
                   usage: actual,
                   materialWaste: wasted,
+                  prepSources: draft.prepSources,
                 })
               } else
                 await mutate(
@@ -807,6 +809,13 @@ function WorkflowDialog({
                         }}
                       />
                     </Field>
+                    <PrepStockSourceSelect
+                      ingredient={workspace.ingredients.find((input) => input.id === line.ingredientId)}
+                      lots={workspace.lots}
+                      value={draft.prepSources?.[line.ingredientId]}
+                      change={(source) => change('prepSources', { ...draft.prepSources, [line.ingredientId]: source })}
+                      disabled={busy}
+                    />
                   </div>
                 ))}
                 {design && (

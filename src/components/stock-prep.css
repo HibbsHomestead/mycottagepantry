@@ -20,14 +20,116 @@
 }
 .stock-prep-dialog.stock-prep-dialog {
   max-width: min(42rem, calc(100% - 2rem));
+  max-height: calc(var(--inventory-view-height, 100dvh) - 2rem);
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.stock-prep-dialog [data-slot="dialog-header"] {
+  padding: 1rem 3.5rem 0.75rem 1rem;
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+}
+.stock-prep-dialog.stock-prep-dialog [data-slot="dialog-title"] {
+  padding-right: 0;
+}
+.stock-prep-dialog form {
+  display: grid;
+  grid-template: minmax(0, 1fr) auto / minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+.stock-prep-body {
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
 }
 .stock-prep-dialog fieldset {
+  display: grid;
+  gap: 1rem;
   min-inline-size: 0;
   padding: 0;
   border: 0;
 }
+.stock-prep-dialog .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.stock-prep-dialog .field {
+  min-width: 0;
+  margin: 0;
+  gap: 0.375rem;
+}
+.stock-prep-dialog .field > :is(label, span, small) {
+  font-size: max(var(--interface-text-min, 0px), 0.8125rem);
+  color: var(--muted);
+}
+.stock-prep-dialog .field > :is(label, span) {
+  font-weight: 600;
+}
+.stock-prep-dialog .field :is(input, select, textarea) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 44px;
+}
+.stock-prep-dialog input[type="date"] {
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.stock-prep-dialog input[type="date"]::-webkit-date-and-time-value {
+  min-height: 1.5em;
+  text-align: start;
+}
+.stock-prep-dialog details[open] summary {
+  margin-bottom: 0.75rem;
+}
+.stock-prep-dialog details .form-grid {
+  margin-top: 0.75rem;
+}
+.stock-prep-dialog [aria-invalid="true"],
+.stock-prep-loss-invalid {
+  border-color: #c56868;
+  outline: 1px solid #c56868;
+  outline-offset: 1px;
+}
+.stock-prep-dialog .form-error-notice {
+  margin: 1rem 0 0;
+  max-height: none;
+}
 .stock-prep-actions {
-  margin-block-start: 1rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+.stock-prep-actions .btn {
+  min-height: 44px;
+}
+.stock-prep-dialog:has(> .back-to-top-dock) .stock-prep-actions {
+  padding-inline-end: 3.75rem;
+}
+.stock-prep-dialog > .back-to-top-dock {
+  position: absolute;
+  grid-column: auto;
+  inset: auto 1rem max(0.75rem, env(safe-area-inset-bottom, 0px)) auto;
+  width: 44px;
+}
+.stock-prep-dialog .back-to-top-popup {
+  right: 0;
+  width: 44px;
+  height: 44px;
+}
+@media (max-width: 540px) {
+  .stock-prep-dialog .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .stock-prep-review dl > div {
   display: flex;
