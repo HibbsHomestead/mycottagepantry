@@ -1,4 +1,4 @@
-import { packagingLines, type Workspace } from './domain'
+import { isMixedPack, mixedLabelQuantity, packagingLines, type Item, type Workspace } from './domain'
 import {
   blankLabel,
   labelTextLines,
@@ -205,7 +205,13 @@ export function normalizeAssortment(
     const definition =
       run.status === 'completed' ? line.definition?.product : product
     if (definition?.workflow === 'kit' || product?.workflow === 'kit') {
-      const components: { productId: string; quantity: number }[] =
+      const mixed = isMixedPack(definition)
+      const labels = mixedLabelQuantity(definition)
+      if (mixed && (input.mode !== 'fixed' ||
+        (definition?.mixedLabelTemplateId && input.templateId !== definition.mixedLabelTemplateId) ||
+        (labels && (labelsPerContainer !== labels || input.packagingId !== definition?.mixedLabelStockId))))
+        throw new Error('Review and use the mixed pack’s saved contents and label configuration.')
+      const components: Item[] =
         (run.status === 'completed'
           ? line.definition?.components
           : product?.kitComponents) || []
@@ -219,14 +225,16 @@ export function normalizeAssortment(
                 !group.lines.some(
                   (row) =>
                     row.productId === component.productId &&
-                    row.unit === 'package' &&
+                    row.unit === (mixed && component.basis === 'unpackaged' ? 'item' : 'package') &&
+                    row.wrapped === !(mixed && component.basis === 'unpackaged') &&
                     row.count === Number(component.quantity),
                 ),
             ),
         )
       )
         throw new Error(
-          'This basket uses fixed selling-package components. Match its saved component IDs and selling-package counts; do not substitute loose items or another flavor on its label.',
+          mixed ? 'Match the saved mixed-pack contents, quantities and stock bases before reviewing this label.' :
+            'This basket uses fixed selling-package components. Match its saved component IDs and selling-package counts; do not substitute loose items or another flavor on its label.',
         )
     }
     if (

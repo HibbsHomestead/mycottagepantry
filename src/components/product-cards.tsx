@@ -8,7 +8,7 @@ import { stockUnitLabel } from '@/lib/resale-stock'
 import { productCategoryName } from '@/lib/product-categories'
 import { stockStatus } from '@/lib/ingredients'
 import { MoreHorizontal } from 'lucide-react'
-import { money, type Item, type Workspace } from '@/lib/domain'
+import { isMixedPack, money, type Item, type Workspace } from '@/lib/domain'
 import { singularYield } from '@/lib/product-recipe-links'
 import { PantryPhoto } from './pantry-photo'
 import {
@@ -59,11 +59,12 @@ export function ProductCards({
         const price = resolvedPrice ?? NaN
         const belowTarget =
           pricing && pricing.margin < Number(product.targetMargin ?? 65)
+        const assembly = isMixedPack(product) ? 'Mixed pack' : 'Basket'
         const status = product.archived
-          ? product.workflow === 'kit' ? 'Basket · Archived' : 'Archived'
+          ? product.workflow === 'kit' ? `${assembly} · Archived` : 'Archived'
           : product.workflow === 'kit'
-            ? ['Basket', product.status].filter(Boolean).join(' · ')
-            : product.status
+            ? [assembly, product.status].filter(Boolean).join(' · ')
+            : product.unpackagedOutput ? 'Unpackaged production output' : product.status
         const stock = ['handmade', 'resale'].includes(product.workflow)
           ? stockStatus(product)
           : undefined
@@ -358,7 +359,7 @@ function ProductTable({
                     {product.name}
                   </button>
                 </td>
-                <td>{product.workflow === 'kit' ? 'Basket' : workflowOf(product)}</td>
+                <td>{isMixedPack(product) ? 'Mixed pack' : product.workflow === 'kit' ? 'Basket' : workflowOf(product)}</td>
                 <td>
                   {productCategoryName(product, workspace.settings[0]) ||
                     'Uncategorized'}

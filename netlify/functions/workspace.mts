@@ -100,7 +100,7 @@ import { tracksFinishedStock } from '../../src/lib/product-workflows'
 import { categoryTaxState } from '../../src/lib/product-categories'
 import { labelContent } from '../../src/lib/label-persistence'
 import { assortmentReview, normalizeAssortment } from '../../src/lib/label-assortments'
-import { saleTaxProduct } from '../../src/lib/domain'
+import { isMixedPack, saleTaxProduct, unpackagedOutputUnit } from '../../src/lib/domain'
 import {
   isPackaging,
   selectPantryCategory,
@@ -2631,13 +2631,17 @@ export default async (req: Request, context: Context) => {
         throw new Error('Recorded sales are immutable. Use a refund.')
       const p = state.products.find((p) => p.id === item.productId)
       if (!p) throw new Error('Choose a product.')
-      if (p.workflow === 'kit')
+      if (p.unpackagedOutput === true)
+        throw new Error('Unpackaged production output is for assembly, not direct sale.')
+      if (p.workflow === 'kit' && !isMixedPack(p))
         throw new Error(
           'Basket fulfillment is unavailable: finished-package consumption is not supported for every component. No stock or sale was posted.',
         )
       if (item.refundOf)
         throw new Error('Use the refund action to reverse a recorded sale.')
       item.quantity = number(item.quantity, 'Packages sold', 0.000001)
+      if (isMixedPack(p) && (p.archived || p.status !== 'active' || !tracksFinishedStock(p) || !Number.isSafeInteger(item.quantity)))
+        throw new Error('Sell whole completed packs from an active mixed product with posted stock.')
       item.discounts = number(item.discounts || 0, 'Discounts')
       const entered =
         number(item.amount ?? item.quantity * p.price, 'Entered sales amount') -
@@ -3292,6 +3296,8 @@ export default async (req: Request, context: Context) => {
           )
         const linked = updateProductRecipe(state, data)
         const original = state.products.find((p) => p.id === linked.id)
+        if (original?.unpackagedOutput === true && linked !== original)
+          throw new Error('Create a separate unpackaged output for a different recipe or content unit.')
         if (
           original?.workflow === 'resale' ||
           original?.workflow === 'handmade'
@@ -4612,6 +4618,14 @@ export default async (req: Request, context: Context) => {
         }
         if (table === 'products') {
           const previous = state.products.find((p) => p.id === item.id)
+          if (previous && (previous.unpackagedOutput === true) !== (item.unpackagedOutput === true))
+            throw new Error('Create a separate product to change its unpackaged output basis.')
+          if (item.unpackagedOutput === true) {
+            if (previous && (item.recipeId !== previous.recipeId || item.contentUnit !== previous.contentUnit))
+              throw new Error('Create a separate output for a different recipe or content unit.')
+            unpackagedOutputUnit({ ...item, quantity: previous?.quantity || 0, stockOutputBasis: previous?.stockOutputBasis, stockCostKnown: previous?.stockCostKnown }, state)
+            item.unpacked = true
+          }
           item.foodStockEnabled = previous?.foodStockEnabled
           item.quantity = previous?.quantity || 0
           item.cost = previous?.cost || 0

@@ -1,5 +1,6 @@
 import {
   convert,
+  isMixedPack,
   knownCurrentIngredientCost,
   number,
   packagingLines,
@@ -65,6 +66,8 @@ export type GroceryProduct = {
   name: string
   basket: string
   perBasket: number
+  assembly?: 'mixed pack'
+  unit?: string
   required: number
   allocated: number
   unreserved: number
@@ -695,7 +698,8 @@ export function generateGroceryList(
     if ((product?.workflow || line.definition?.product?.workflow) !== 'kit')
       continue
     basketLines.add(line)
-    const basket = `${label} · ${line.quantity} ${Number(line.quantity) === 1 ? 'basket' : 'baskets'}`
+    const mixed = isMixedPack(product || line.definition?.product)
+    const basket = `${label} · ${line.quantity} ${mixed ? 'mixed pack' : 'basket'}${Number(line.quantity) === 1 ? '' : 's'}`
     try {
       const components = basketProduction(line, state, run.id)
       if (!components.length)
@@ -761,6 +765,7 @@ export function generateGroceryList(
           name: entry.name,
           basket,
           perBasket: Number(entry.component.quantity),
+          ...(mixed ? { assembly: 'mixed pack', unit: entry.component.basis === 'unpackaged' ? entry.component.contentUnit : undefined } : {}),
           required: entry.required,
           allocated: entry.allocated,
           unreserved: Math.max(
@@ -969,10 +974,10 @@ export function groceryProductSummary(product: GroceryProduct) {
   const packages = (quantity: number, descriptor = '') =>
     groceryQuantity(
       quantity,
-      `${descriptor}${quantity === 1 ? 'package' : 'packages'}`,
+      `${descriptor}${product.unit ? `${product.unit} ${quantity === 1 ? 'unit' : 'units'}` : quantity === 1 ? 'package' : 'packages'}`,
     )
   return [
-    `${packages(product.perBasket)} per basket`,
+    `${packages(product.perBasket)} per ${product.assembly || 'basket'}`,
     `${packages(product.required)} required`,
     `${packages(product.allocated)} allocated from finished stock`,
     `${packages(product.unreserved)} unreserved`,

@@ -7,6 +7,7 @@ import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
 import {
   basketComponentCosts,
+  isMixedPack,
   packagingLines,
   effectiveRecipeLines,
   money,
@@ -18,6 +19,7 @@ import { PackagingCostTotal, PackagingLineCost } from './financial-editors'
 import './kit-components.css'
 
 type Props = Parameters<typeof ProductEditor>[0] & {
+  mixedPack?: boolean
   openProduct: (item: Item) => void
   onSaved?: (id: string) => void
 }
@@ -31,6 +33,7 @@ export function KitEditor({
   onDirty,
   openProduct,
   onSaved,
+  mixedPack,
 }: Props) {
   const [draft, setDraft] = useState<Item>(() =>
     item
@@ -39,6 +42,7 @@ export function KitEditor({
           id: crypto.randomUUID(),
           name: '',
           workflow: 'kit',
+          ...(mixedPack ? { assemblyType: 'mixed-pack' } : {}),
           status: 'draft',
           kitComponents: [],
           packagingLines: [],
@@ -52,12 +56,22 @@ export function KitEditor({
   const [busy, setBusy] = useState(false)
   const [uploadBusy, setUploadBusy] = useState(false)
   const [error, setError] = useState('')
+  const [basis, setBasis] = useState('unpackaged')
   const change = (key: string, value: unknown) => {
     setDraft((d) => ({ ...d, [key]: value }))
     onDirty(true)
   }
   const components: Item[] = draft.kitComponents || []
   const packaging: Item[] = draft.packagingLines || []
+  const mixed = isMixedPack(draft)
+  const subject = mixed ? 'mixed pack' : 'basket'
+  const contentCount = components.reduce((total, row) => total + Number(row.quantity || 0), 0)
+  const sameUnit = components[0]?.contentUnit
+  const countUnit = sameUnit && components.every((line) => line.contentUnit === sameUnit)
+    ? (contentCount === 1 || sameUnit.endsWith('s') ? sameUnit : `${sameUnit}s`)
+    : 'items'
+  const packagingSummary = packaging.filter((line) => !draft.mixedLabelStockId || line.ingredientId !== draft.mixedLabelStockId)
+    .map((line) => `${line.quantity} ${workspace.ingredients.find((item) => item.id === line.ingredientId)?.name || 'unavailable packaging'}`).join(' + ')
   const updateLine = (
     key: string,
     rows: Item[],
@@ -75,12 +89,13 @@ export function KitEditor({
     <>
       {estimate.cost && (
         <>
-          <p>Included packages: {money(estimate.cost.ingredient)}</p>
-          <p>Additional basket packaging: {money(estimate.cost.packagingCost)}</p>
+          <p>{mixed ? 'Contents cost' : 'Included packages'}: {money(estimate.cost.ingredient)}</p>
+          <p>{mixed ? 'Outer packaging and labels' : 'Additional basket packaging'}: {money(estimate.cost.packagingCost)}</p>
           <p>Additional assembly: {money(estimate.cost.labor)}</p>
+          {mixed && estimate.cost.overhead > 0 && <p>Packing overhead: {money(estimate.cost.overhead)}</p>}
           <p>
             <strong>
-              Total / basket: {money(estimate.cost.perPackage)}
+              Total / {subject}: {money(estimate.cost.perPackage)}
             </strong>
           </p>
         </>
@@ -118,7 +133,7 @@ export function KitEditor({
   const contents = (
     <>
       <label className="field">
-        <span>Basket name</span>
+        <span>{mixed ? 'Mixed pack name' : 'Basket name'}</span>
         <input
           required
           value={draft.name}
@@ -163,12 +178,26 @@ export function KitEditor({
           checked={draft.archived === true}
           onChange={(e) => change('archived', e.target.checked)}
         />{' '}
-        Archived / inactive basket
+        Archived / inactive {subject}
       </label>
-      <h3>Included products</h3>
+      <h3>{mixed ? 'Multiple products / flavors in one package' : 'Included products'}</h3>
+      {mixed && (
+        <div className="calculation-box">
+          <p><strong>Contents:</strong> {contentCount} {countUnit} total</p>
+          <p><strong>Packaging:</strong> {packagingSummary || 'Not configured'}</p>
+          <label className="field"><span>Expected contents count (optional)</span>
+            <input type="number" min="1" step="1" value={draft.expectedContents ?? ''}
+              onChange={(event) => change('expectedContents', event.target.value)} />
+          </label>
+          {draft.expectedContents && Number(draft.expectedContents) !== contentCount && (
+            <p role="status" className="warning-text">Contents count mismatch: {contentCount} selected; expected {draft.expectedContents}.</p>
+          )}
+        </div>
+      )}
       <p className="form-hint">
-        Quantities count whole selling packages. Individual unpackaged contents
-        are unavailable without a separate unpackaged cost basis.
+        {mixed
+          ? 'Choose a verified unpackaged recipe output or an existing finished package. Only finished packages include their own wrappers and labels.'
+          : 'Quantities count whole selling packages.'}
       </p>
       {components.map((line, index) => {
         const p = workspace.products.find((p) => p.id === line.productId)
@@ -192,11 +221,12 @@ export function KitEditor({
                   <strong>Unavailable product {line.productId}</strong>
                 )}
                 {p?.archived && <small>Archived component</small>}
+                {mixed && <small>{line.basis === 'unpackaged' ? `Unpackaged · ${line.contentUnit}` : 'Finished package'}{p?.recipeId ? ` · ${workspace.recipes.find((recipe) => recipe.id === p.recipeId)?.name || 'Recipe unavailable'}` : ''}{p?.variant ? ` · ${p.variant}` : ''}</small>}
               </div>
               <label className="field kit-component-quantity">
                 <span>Quantity</span>
                 <input
-                  aria-label={`Whole selling packages quantity · ${p?.name || line.productId}`}
+                  aria-label={`${line.basis === 'unpackaged' ? 'Unpackaged' : 'Whole selling packages'} quantity · ${p?.name || line.productId}`}
                   type="number"
                   min="1"
                   step="1"
@@ -244,7 +274,7 @@ export function KitEditor({
                 <p>
                   {line.basis === 'package'
                     ? 'Whole selling packages'
-                    : `Unsupported quantity basis (${line.basis || 'not configured'}). Individual contents require a separate unpackaged cost basis.`}
+                    : `${line.contentUnit || 'Unit unavailable'} · Unpackaged recipe output`}
                 </p>
                 <p>
                   {p?.sellingUnit || 'Selling package'}
@@ -258,7 +288,7 @@ export function KitEditor({
                 </p>
                 {costIssue && <p className="warning-text">{costIssue}</p>}
                 <p>
-                  {p?.workflow === 'resale'
+                  {line.basis === 'unpackaged' ? 'Includes the flavor’s production labor and overhead, without individual packaging or labels.' : p?.workflow === 'resale'
                     ? 'Includes recorded received-item cost. Production labor and packaging are not added again.'
                     : 'Includes component production labor, overhead and existing packaging. These costs are not added again.'}
                 </p>
@@ -286,17 +316,23 @@ export function KitEditor({
           </section>
         )
       })}
+      {mixed && <label className="field"><span>Stock basis for the next component</span>
+        <select value={basis} onChange={(event) => setBasis(event.target.value)}>
+          <option value="unpackaged">Unpackaged output units</option>
+          <option value="package">Existing finished packages</option>
+        </select>
+      </label>}
       <label className="field">
-        <span>Add existing product</span>
+        <span>{mixed ? 'Add source product / recipe variant' : 'Add existing product'}</span>
         <select
           value=""
-          onChange={(e) =>
-            e.target.value &&
-            change('kitComponents', [
-              ...components,
-              { productId: e.target.value, quantity: 1, basis: 'package' },
-            ])
-          }
+          onChange={(event) => {
+            const source = workspace.products.find((product) => product.id === event.target.value)
+            if (!source) return
+            change('kitComponents', [...components, source.unpackagedOutput === true
+              ? { productId: source.id, quantity: 1, basis: 'unpackaged', contentUnit: source.contentUnit }
+              : { productId: source.id, quantity: 1, basis: 'package' }])
+          }}
         >
           <option value="">Choose product…</option>
           {workspace.products
@@ -304,26 +340,25 @@ export function KitEditor({
               (p) =>
                 p.workflow !== 'kit' &&
                 !p.archived &&
+                (p.unpackagedOutput === true) === (mixed && basis === 'unpackaged') &&
                 !components.some((c) => c.productId === p.id),
             )
             .map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}
+                {[p.name, ...(mixed ? [p.variant, p.sku] : [])].filter(Boolean).join(' · ')}
               </option>
             ))}
         </select>
       </label>
       <p className="form-hint">
-        Definition only: saving, activating and previewing do not move or
-        reserve stock. Use Assemble to consume stocked components and create
-        finished baskets. Produce missing components separately. Basket sales remain
-        unavailable.
+        {mixed ? 'For a loose flavor that is not listed, create a food product marked Unpackaged production output. Link its existing recipe, verify its yield unit and leave individual packaging empty. Saving this pack does not move stock; use Production to link component runs and post finished packs.'
+          : 'Saving does not move stock. Use Assemble to plan missing components and post finished baskets. Basket sales remain unavailable.'}
       </p>
     </>
   )
   const pricing = (
     <>
-      <h3>Additional basket packaging</h3>
+      <h3>{mixed ? 'Outer packaging and label stock' : 'Additional basket packaging'}</h3>
       {packaging.map((line, index) => (
         <div className="calculation-box basket-packaging-row" key={line.ingredientId}>
           <p>
@@ -362,7 +397,7 @@ export function KitEditor({
         </div>
       ))}
       <label className="field">
-        <span>Add basket packaging</span>
+        <span>{mixed ? 'Add outer packaging or label stock' : 'Add basket packaging'}</span>
         <select
           value=""
           onChange={(e) => {
@@ -389,11 +424,29 @@ export function KitEditor({
             ))}
         </select>
       </label>
-      <PackagingCostTotal lines={packaging} ingredients={workspace.ingredients} basket />
+      <PackagingCostTotal lines={packaging} ingredients={workspace.ingredients} basket label={mixed ? 'Total outer packaging and labels per mixed pack' : undefined} />
+      {mixed && <>
+        <p className="form-hint">Add containers and label materials above with their quantities per finished pack. Use the expected count on Contents &amp; details rather than the container name.</p>
+        <label className="field"><span>Assortment label template</span>
+          <select value={draft.mixedLabelTemplateId || ''} onChange={(event) => change('mixedLabelTemplateId', event.target.value)}>
+            <option value="">Choose in Labels later</option>
+            {(workspace.label_templates || []).filter((entry) => !entry.deletedAt && !entry.round && entry.format !== 'front-back').map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>Label material from packaging above</span>
+          <select value={draft.mixedLabelStockId || ''} onChange={(event) => change('mixedLabelStockId', event.target.value)}>
+            <option value="">No designated label stock</option>
+            {packaging.map((line) => <option key={line.ingredientId} value={line.ingredientId}>{workspace.ingredients.find((entry) => entry.id === line.ingredientId)?.name || line.ingredientId}</option>)}
+          </select>
+        </label>
+        <h3>Contents cost breakdown</h3>
+        <ul>{componentCosts.map((row) => <li key={row.productId}>{row.quantity} × {row.name}: {row.cost == null ? 'Cost unavailable' : money(row.cost)}</li>)}</ul>
+      </>}
       {[
         ['assemblyMinutes', 'Additional assembly minutes'],
         ['assemblyRate', 'Assembly hourly rate'],
-        ['price', 'Basket selling price'],
+        ...(mixed ? [['assemblyOverhead', 'Additional packing overhead per pack ($)']] : []),
+        ['price', mixed ? 'Mixed pack selling price' : 'Basket selling price'],
       ].map(([key, label]) => (
         <label className="field" key={key}>
           <span>{label}</span>
@@ -401,8 +454,8 @@ export function KitEditor({
             type="number"
             min="0"
             step="any"
-            required
-            value={draft[key]}
+            required={key !== 'assemblyOverhead'}
+            value={draft[key] ?? ''}
             onChange={(e) => change(key, e.target.value)}
           />
         </label>
@@ -414,7 +467,7 @@ export function KitEditor({
     <ItemEditorShell
       notice={item && workspace.products.some(p => p.id === item.id) && <ItemDeleteButton table="products" item={item} draft />}
       dialogClassName="basket-editor-dialog"
-      title={item ? `Basket · ${item.name}` : 'Create basket'}
+      title={item ? `${mixed ? 'Mixed pack' : 'Basket'} · ${item.name}` : `Create ${subject}`}
       description="Fixed contents, one selling price. Current estimates follow current component costs."
       tabs={[
         { id: 'contents', label: 'Contents & details', content: contents },
@@ -445,7 +498,7 @@ export function KitEditor({
       submitDisabled={
         busy || uploadBusy || !['Owner', 'Manager'].includes(role)
       }
-      submitLabel="Save basket"
+      submitLabel={`Save ${subject}`}
       error={error}
       cancel={close}
       onSubmit={async () => {

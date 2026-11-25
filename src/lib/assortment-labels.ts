@@ -1,4 +1,4 @@
-import { type Item, type Workspace } from './domain'
+import { isMixedPack, mixedLabelQuantity, packagingLines, type Item, type Workspace } from './domain'
 import { resolveLabelData } from './label-studio'
 import { productionRunLines } from './production-run'
 
@@ -26,6 +26,19 @@ export type AssortmentSpec = {
   copies: number
   componentId: string
   lines: PackedLine[]
+}
+
+export function fixedAssortmentContents(definition?: Item) {
+  const lines: PackedLine[] = (definition?.kitComponents || []).map((line: Item) => ({
+    productId: line.productId,
+    quantity: Number(line.quantity),
+    unit: line.basis === 'unpackaged' ? 'loose' : 'package',
+  }))
+  return {
+    lines,
+    expectedLoose: lines.reduce((sum, line) => sum + (line.unit === 'loose' ? line.quantity : 0), 0),
+    expectedPackages: lines.reduce((sum, line) => sum + (line.unit === 'package' ? line.quantity : 0), 0),
+  }
 }
 
 function text(value: unknown, max = 300, required = false) {
@@ -146,25 +159,35 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
       'Actual contents must match the intended loose-item and individually packaged counts per container.',
     )
   const keys = new Set<string>()
-  const basketDefinition = (posted ? output[0]?.definition?.product : owner)
-    ?.kitComponents
+  const definition = posted ? output[0]?.definition?.product : owner
+  const mixed = isMixedPack(owner)
+  const basketDefinition = definition?.kitComponents
+  if (mixed) {
+    const labels = mixedLabelQuantity(definition)
+    if (spec.mode !== 'fixed') throw new Error('Use the saved fixed contents for a mixed-pack label.')
+    if (definition?.mixedLabelTemplateId && spec.templateId !== definition.mixedLabelTemplateId)
+      throw new Error('Use the label template saved on the mixed pack.')
+    if (!spec.componentId && labels && (spec.packagingId !== definition.mixedLabelStockId || spec.copies !== spec.containers * labels))
+      throw new Error(`Use the saved label material and ${labels} label(s) per mixed pack.`)
+  }
   if (owner?.workflow === 'kit' && spec.mode === 'fixed') {
     const expected = Array.isArray(basketDefinition) ? basketDefinition : []
     if (
       expected.length !== spec.lines.length ||
       expected.some(
         (component: Item) =>
-          component.basis !== 'package' ||
+          (!mixed && component.basis !== 'package') ||
           !spec.lines.some(
             (line) =>
-              line.unit === 'package' &&
+              line.unit === (mixed && component.basis === 'unpackaged' ? 'loose' : 'package') &&
               line.productId === component.productId &&
               line.quantity === Number(component.quantity),
           ),
       )
     )
       throw new Error(
-        'Fixed basket contents must match its configured selling packages. Use an actual selection for a variable packing mix.',
+        mixed ? 'Label contents changed. Reload the saved mixed-pack combination and review it again.' :
+          'Fixed basket contents must match its configured selling packages. Use an actual selection for a variable packing mix.',
       )
   }
   const warnings: string[] = []
@@ -251,6 +274,10 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
   const settings = workspace.settings[0] || {}
   const snapshot = {
     name: selectedComponent?.name || spec.name,
+    ...(mixed ? {
+      contentsSummary: sections.map((section) => `${section.quantity} ${section.name.toLowerCase()}${section.unit === 'package' ? ' (finished packages)' : ''}`).join(' + '),
+      fixedRevision: [definition?.name, definition?.expectedContents, definition?.mixedLabelTemplateId, definition?.mixedLabelStockId, packagingLines(definition || {}), basketDefinition],
+    } : {}),
     sections: selectedComponent ? [selectedComponent] : sections,
     allSections: sections,
     fields: [
@@ -317,6 +344,7 @@ export function assortmentLabelText(
 ) {
   return [
     snapshot.name,
+    !component && snapshot.contentsSummary,
     ...snapshot.sections.flatMap((section) => [
       component ? '' : `${section.name} — ${section.contents}`,
       section.declaration,

@@ -3,6 +3,7 @@ import {
   assortmentJobCurrent,
   assortmentLabel,
   assortmentSignature,
+  fixedAssortmentContents,
   type AssortmentSpec,
   type PackedLine,
 } from '@/lib/assortment-labels'
@@ -12,6 +13,8 @@ import {
 } from '@/lib/assortment-print'
 import {
   knownCurrentIngredientCost,
+  isMixedPack,
+  mixedLabelQuantity,
   money,
   type Item,
   type Workspace,
@@ -26,6 +29,10 @@ function initialSpec(workspace: Workspace, context?: Context): AssortmentSpec {
   const product = workspace.products.find(
     (item) => item.id === context?.productId,
   )
+  const run = workspace.batches.find((item) => item.id === context?.batchId)
+  const output = productionRunLines(run).find((line) => line.productId === product?.id)
+  const definition = run?.status === 'completed' ? output?.definition?.product : product
+  const containers = isMixedPack(product) && output ? Math.max(1, Number(run?.status === 'completed' ? output.actualYield : output.quantity)) : 1
   return {
     name: product?.name || '',
     templateId: '',
@@ -40,6 +47,14 @@ function initialSpec(workspace: Workspace, context?: Context): AssortmentSpec {
     copies: 1,
     componentId: '',
     lines: [{ ...emptyLine }],
+    ...(isMixedPack(product) ? {
+      ...fixedAssortmentContents(definition),
+      templateId: definition?.mixedLabelTemplateId || '',
+      packagingId: definition?.mixedLabelStockId || '',
+      group: run ? 'Mixed pack' : '',
+      containers,
+      copies: containers * (mixedLabelQuantity(definition) || 1),
+    } : {}),
   }
 }
 
@@ -354,24 +369,10 @@ export function AssortmentLabels({
                     (line) => line.productId === spec.productId,
                   )?.definition?.product
                 : outer
-            const lines: PackedLine[] = (definition?.kitComponents || []).map(
-              (line: Item) => ({
-                productId: line.productId,
-                quantity: Number(line.quantity),
-                unit: 'package',
-              }),
-            )
-            change({
-              lines,
-              expectedLoose: 0,
-              expectedPackages: lines.reduce(
-                (sum, line) => sum + line.quantity,
-                0,
-              ),
-            })
+            change(fixedAssortmentContents(definition))
           }}
         >
-          Use configured basket contents as individually packaged units
+          {isMixedPack(outer) ? 'Reload saved mixed-pack contents' : 'Use configured basket contents as individually packaged units'}
         </button>
       )}
       <h3>Actual contents per outer container</h3>

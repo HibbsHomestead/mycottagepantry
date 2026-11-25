@@ -1,6 +1,7 @@
 import {
   basketAssemblyCosts,
   basketComponentCosts,
+  isMixedPack,
   money,
   priceTaxLabel,
   type Workspace,
@@ -22,6 +23,7 @@ export function KitCostCards({
   configure: (section: string) => void
   canEdit?: boolean
 }) {
+  const subject = isMixedPack(product) ? 'mixed pack' : 'basket'
   const {
     cost: c,
     tax,
@@ -52,7 +54,7 @@ export function KitCostCards({
       tone: 'lavender' as const,
     },
     {
-      label: 'Additional basket packaging',
+      label: subject === 'mixed pack' ? 'Outer packaging and labels' : 'Additional basket packaging',
       value: additional.packagingCost,
       tone: 'blue' as const,
     },
@@ -62,7 +64,7 @@ export function KitCostCards({
       tone: 'peach' as const,
     },
     {
-      label: 'Additional basket overhead',
+      label: `Additional ${subject} overhead`,
       value: additional.overhead,
       tone: 'neutral' as const,
     },
@@ -71,23 +73,23 @@ export function KitCostCards({
     <div className="pricing-summary cost-summary">
       <div
         className="cost-card-grid cost-breakdown-grid"
-        aria-label="Cost breakdown per basket"
+        aria-label={`Cost breakdown per ${subject}`}
       >
         {breakdown.map((row) => (
           <CostCard
             key={row.label}
             label={row.label}
             value={amount(row.value)}
-            note="Per basket"
+            note={`Per ${subject}`}
             tone={row.tone}
           />
         ))}
       </div>
       <div className="detail-stats cost-card-grid">
         <CostCard
-          label="Cost per basket"
+          label={`Cost per ${subject}`}
           value={c ? amount(c.perPackage) : 'Incomplete'}
-          note="One sellable basket · current estimate"
+          note={`One sellable ${subject} · current estimate`}
         />
         <CostCard
           label="Selling price"
@@ -98,9 +100,9 @@ export function KitCostCards({
           tone="blue"
         />
         <CostCard
-          label="Profit per basket"
+          label={`Profit per ${subject}`}
           value={amount(p?.profit)}
-          note="Revenue less basket cost; excludes tax"
+          note={`Revenue less ${subject} cost; excludes tax`}
           tone="green"
         />
       </div>
@@ -117,7 +119,7 @@ export function KitCostCards({
           note={`For ${target}% target margin`}
         />
         <CostCard
-          label="Tax per basket"
+          label={`Tax per ${subject}`}
           value={amount(tax?.tax)}
           note="Collected for tax; separate from revenue"
           tone="peach"
@@ -125,13 +127,13 @@ export function KitCostCards({
         <CostCard
           label="Customer price"
           value={amount(tax?.customerTotal)}
-          note="Total including tax; per basket"
+          note={`Total including tax; per ${subject}`}
           tone="blue"
         />
         <CostCard
           label="Revenue excluding tax"
           value={amount(tax?.revenue)}
-          note="Per basket"
+          note={`Per ${subject}`}
           tone="neutral"
         />
       </div>
@@ -153,7 +155,7 @@ export function KitCostCards({
             }
           >
             {configuration === 'kit'
-              ? 'Edit basket'
+              ? `Edit ${subject}`
               : configuration === 'Categories'
                 ? 'Review category'
                 : 'Review tax settings'}
@@ -163,10 +165,9 @@ export function KitCostCards({
       <details className="calculation-box">
         <summary>How this is calculated</summary>
         <p>
-          Each configured quantity is a whole selling package, not an individual
-          item inside that package. Included product costs already contain
-          component production labor, overhead and packaging; those costs are
-          counted once.
+          {subject === 'mixed pack'
+            ? 'Unpackaged output includes recipe production labor and overhead but excludes selling packaging. A finished package includes its own packaging. Component costs are counted once.'
+            : 'Each configured quantity is a whole selling package, not an individual item inside that package. Included product costs already contain component production labor, overhead and packaging; those costs are counted once.'}
         </p>
         <p>
           Current estimates can change as inputs change. Completed assembly uses
@@ -178,7 +179,7 @@ export function KitCostCards({
             {line.unit ||
               workspace.ingredients.find((i) => i.id === line.ingredientId)
                 ?.unit}{' '}
-            = {costMoney(line.cost)} additional packaging per basket.
+            = {costMoney(line.cost)} additional packaging per {subject}.
           </p>
         ))}
         {additional.packagingIssue && (
@@ -191,19 +192,20 @@ export function KitCostCards({
           <p>
             Additional assembly: {additional.laborMinutes} minutes ÷ 60 ×{' '}
             {money(additional.laborRate!)} per hour ={' '}
-            {costMoney(additional.labor)} per basket.
+            {costMoney(additional.labor)} per {subject}.
           </p>
         )}
         <p>
-          Additional overhead: {money(additional.overhead)}. No separate basket
-          overhead charge is configured.
+          Additional overhead: {money(additional.overhead)}.
+          {!additional.overhead && ` No separate ${subject} overhead charge is configured.`}
         </p>
         {c && (
           <>
             <p>
-              Total cost per basket = included products (
+              Total cost per {subject} = included products (
               {costMoney(c.ingredient)}) + additional packaging (
-              {costMoney(c.packagingCost)}) + assembly ({costMoney(c.labor)}) ={' '}
+              {costMoney(c.packagingCost)}) + assembly ({costMoney(c.labor)})
+              {c.overhead ? ` + packing overhead (${costMoney(c.overhead)})` : ''} ={' '}
               {costMoney(c.perPackage)}.
             </p>
           </>
@@ -211,8 +213,8 @@ export function KitCostCards({
         {p && (
           <>
             <p>
-              Profit per basket = revenue excluding tax ({money(p.revenue)}) −
-              total cost per basket ({money(c!.perPackage)}). Margin = profit ÷
+              Profit per {subject} = revenue excluding tax ({money(p.revenue)}) −
+              total cost per {subject} ({money(c!.perPackage)}). Margin = profit ÷
               revenue excluding tax.
             </p>
             <p>
@@ -240,7 +242,7 @@ export function KitCostCards({
           </p>
         )}
         <p>
-          Viewing or editing a basket definition does not assemble products,
+          Viewing or editing a {subject} definition does not assemble products,
           reserve stock or create stock movements.
         </p>
       </details>

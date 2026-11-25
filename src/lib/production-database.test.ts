@@ -11,6 +11,9 @@ import { productionReviewIssues } from './production-run'
 import { basketChecklist, type ChecklistStage } from './production-checklist'
 import { marketOutput } from './production-destinations'
 import { planStockPrep, prepReviewKey } from './stock-prep'
+import { mixedPackFixture } from '../test/fixtures/mixed-pack'
+import { basketProduction } from './basket-production'
+import { emptyGrocerySources, generateGroceryList } from './grocery-list'
 const session = vi.hoisted(() => ({
   client: null as null | {
     query: (sql: string, params?: unknown[]) => Promise<unknown>
@@ -259,6 +262,9 @@ beforeAll(async () => {
     lines: [{ ingredientId: 'prep-count', quantity: 3, unit: 'each' }],
   })
   seed.products.push({ id: 'prep-product', name: 'Test banana loaf', workflow: 'food', recipeId: 'prep-recipe', unitsPerPackage: 1, price: 5, quantity: 0, cost: 0 })
+  const mixed = mixedPackFixture()
+  seed.ingredients.push(...mixed.ingredients)
+  seed.recipes.push(...mixed.recipes)
   for (const [table, rows] of Object.entries(seed))
     for (const item of rows) {
       const columns =
@@ -1793,4 +1799,79 @@ it('plans basket contents atomically, allows zero finished stock, and posts part
   expect(find(workspace.products, 'basket-test-roll').quantity).toBe(2)
   const postedRun = find(workspace.batches, linked.id)
   expect(marketOutput(postedRun, postedRun.lines[0], eventId, workspace)).toEqual({ planned: 1, completed: 1, forBaskets: 0 })
+})
+
+it('saves, allocates, produces, and sells a fixed mixed six-pack without duplicate stock posting', async () => {
+  session.user = 'production-owner-a'
+  const { outputs, wrapped, pack, flour, container, labels, wrap } = mixedPackFixture()
+  const fixture = { ...pack, productCategoryId: 'food', mixedLabelTemplateId: '' }
+  for (const product of [...outputs, wrapped]) await ok('save', 'products', product)
+  expect((await call('save', 'products', { ...fixture, expectedContents: 5 })).error).toMatch(/contents count mismatch/i)
+  await ok('save', 'products', fixture)
+  expect(find((await ok()).products, pack.id)).toMatchObject({ kitComponents: pack.kitComponents, expectedContents: 6 })
+  const date = '2026-11-24'
+  const existingId = 'mixed-existing-output'
+  await ok('productionSave', 'batches', { id: existingId, productId: outputs[0].id, quantity: 4, status: 'scheduled', date })
+  let workspace = await ok('productionComplete', 'batches', { id: existingId, output: 4 })
+  const before = workspace
+  const parent = { id: 'mixed-parent-run', name: pack.name, status: 'draft', date, expectedRevision: 0, planContents: true,
+    lines: [{ id: 'mixed-parent-line', productId: pack.id, quantity: 10, basketPlan: { [outputs[0].id]: { stock: 4, wholeBatch: true } } }],
+  }
+  workspace = await ok('productionSave', 'batches', parent)
+  const saved = () => find(workspace.batches, parent.id)
+  const linked = workspace.batches.filter((run: Item) => run.lines?.some((line: Item) => line.basketAssignments?.some((assignment: Item) => assignment.runId === parent.id)))
+  expect(basketProduction(saved().lines[0], workspace, parent.id).map((row) => [row.required, row.allocated, row.pending])).toEqual([[30, 4, 26], [30, 0, 30]])
+  expect(linked.map((run: Item) => run.quantity).sort((left: number, right: number) => left - right)).toEqual([30, 36])
+  expect((await call('productionSave', 'batches', { ...parent, id: 'mixed-competing-run' })).error).toMatch(/0 eligible/)
+  expect(workspace.ledger).toEqual(before.ledger)
+  const grocery = generateGroceryList(workspace, { ...emptyGrocerySources, runs: [parent.id, ...linked.map((run: Item) => run.id)] }, 'mixed-grocery', date)
+  expect(grocery.lines.find((line) => line.name === flour.name)).toMatchObject({ needed: 660 })
+  expect(grocery.lines.find((line) => line.name === container.name)).toMatchObject({ needed: 10 })
+  expect(grocery.lines.find((line) => line.name === labels.name)).toMatchObject({ needed: 20 })
+  expect(grocery.lines.find((line) => line.name === wrap.name)).toBeUndefined()
+  const mark = async (stage: ChecklistStage) => {
+    for (const entry of basketChecklist(saved().lines[0], workspace, stage))
+      workspace = await ok('productionChecklist', 'batches', { id: parent.id, lineId: saved().lines[0].id, expectedRevision: saved().revision, stage, key: entry.key, signature: entry.signature, checked: true })
+  }
+  await mark('reviewed')
+  workspace = await ok('productionSave', 'batches', { ...saved(), status: 'scheduled', expectedRevision: saved().revision })
+  workspace = await ok('productionRecordActuals', 'batches', { id: parent.id, expectedRevision: saved().revision, lines: [{ id: saved().lines[0].id, output: 10 }] })
+  expect((await call('productionComplete', 'batches', { id: parent.id, expectedRevision: saved().revision })).status).toBe(400)
+  expect((await ok()).ledger).toEqual(before.ledger)
+  for (const run of linked) {
+    workspace = await ok('productionSave', 'batches', { ...run, status: 'scheduled', expectedRevision: run.revision })
+    workspace = await ok('productionRecordActuals', 'batches', { id: run.id, expectedRevision: find(workspace.batches, run.id).revision, lines: [{ id: run.lines[0].id, output: run.quantity }] })
+    const post = { id: run.id, expectedRevision: find(workspace.batches, run.id).revision }
+    workspace = await ok('productionComplete', 'batches', post)
+    expect((await ok('productionComplete', 'batches', post)).ledger).toEqual(workspace.ledger)
+  }
+  expect(find(workspace.ingredients, flour.id).quantity).toBe(find(before.ingredients, flour.id).quantity - 660)
+  await mark('picked')
+  await mark('packed')
+  const finish = { id: parent.id, expectedRevision: saved().revision }
+  const raw = find(workspace.ingredients, flour.id).quantity
+  const setContainerFixtureStock = async (quantity: number) => {
+    await db.query("SELECT set_config('app.business_id',$1,false)", [a])
+    await db.query("UPDATE ingredients SET quantity=$3,data=jsonb_set(data,'{quantity}',to_jsonb($3::numeric)) WHERE business_id=$1 AND id=$2", [a, container.id, quantity])
+  }
+  await setContainerFixtureStock(9)
+  const beforeFailure = await ok()
+  expect((await call('productionComplete', 'batches', finish)).status).toBe(400)
+  const afterFailure = await ok()
+  expect(afterFailure.ledger).toEqual(beforeFailure.ledger)
+  expect(afterFailure.products).toEqual(beforeFailure.products)
+  await setContainerFixtureStock(25)
+  workspace = await ok('productionComplete', 'batches', finish)
+  expect(find(workspace.products, pack.id).quantity).toBe(10)
+  expect(find(workspace.products, outputs[0].id).quantity).toBe(10)
+  expect(find(workspace.products, outputs[1].id).quantity).toBe(0)
+  expect(find(workspace.ingredients, flour.id).quantity).toBe(raw)
+  expect(find(workspace.ingredients, container.id).quantity).toBe(15)
+  expect(find(workspace.ingredients, labels.id).quantity).toBe(5)
+  expect(find(workspace.ingredients, wrap.id).quantity).toBe(100)
+  expect(saved().historicalCost).toBeCloseTo(47.5)
+  expect((await ok('productionComplete', 'batches', finish)).ledger).toEqual(workspace.ledger)
+  workspace = await ok('save', 'sales', { id: 'mixed-sale', name: pack.name, productId: pack.id, date, quantity: 1, amount: 18 })
+  expect(find(workspace.products, pack.id).quantity).toBe(9)
+  expect(find(workspace.sales, 'mixed-sale').costSource).toBe('finished_weighted_average')
 })
