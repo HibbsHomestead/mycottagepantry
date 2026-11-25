@@ -32,6 +32,7 @@ import {
   labelOutputBlocker,
   outputFailureStatus,
   printerSelection,
+  recordLabelPrintTiming,
   runLabelOutput,
 } from './label-print-workflow'
 import { workspaceFonts, type LabelFont } from '@/lib/label-font-catalog'
@@ -104,6 +105,8 @@ export function LabelPreviewDialog({
   )
   const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false)
+  const printBusy = useRef(false)
+  const [printCancel, setPrintCancel] = useState<AbortController>()
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [fontMetricsVersion, setFontMetricsVersion] = useState(0)
@@ -182,10 +185,6 @@ export function LabelPreviewDialog({
     }
   }, [doc, data, assets, customFonts, fontMetricsVersion])
   const { issues, missing } = validation
-  const { printerProfiles, selectedPrinter } = printerSelection(
-    w,
-    printingMethod,
-  )
   const renderKey = JSON.stringify([
     doc,
     data,
@@ -211,6 +210,7 @@ export function LabelPreviewDialog({
       setBlock = (error as Error).message
     }
   }
+  const { printerProfiles, selectedPrinter } = printerSelection(w, printingMethod, runDocument)
   const printBlocked =
     setBlock ||
     (renderError
@@ -367,7 +367,8 @@ export function LabelPreviewDialog({
     return () => observer.disconnect()
   }, [doc, open])
 
-  async function request(action: string, payload: Record<string, unknown>) {
+  async function request(action: string, payload: Record<string, unknown>, signal?: AbortSignal) {
+    const scope = latest.current.settings[0]?.labelEditorScope
     const response = await fetch('/api/workspace', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -375,16 +376,19 @@ export function LabelPreviewDialog({
         action,
         data: {
           ...payload,
-          expectedScope: latest.current.settings[0]?.labelEditorScope,
+          expectedScope: scope,
         },
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
     })
     const result = await response.json()
     if (!response.ok)
       throw new Error(result.error || 'The request failed. Try again.')
     if (!result.workspace)
       throw new Error('The server response is incomplete. Try again.')
+    if (scope !== latest.current.settings[0]?.labelEditorScope)
+      throw new Error('The oven changed. Reopen the label preview before printing.')
+    if (result.preparedLabel && action === 'labelPrint') return result.workspace as Workspace
     const merged = mergeLabelWorkspace(latest.current, result.workspace)
     latest.current = merged
     onWorkspace(merged)
@@ -392,7 +396,11 @@ export function LabelPreviewDialog({
   }
 
   async function print() {
-    if (!doc || busy) return
+    if (!doc || printBusy.current) return
+    const scope = latest.current.settings[0]?.labelEditorScope
+    printBusy.current = true
+    const controller = selectedPrinter?.method !== 'qz' ? new AbortController() : undefined
+    setPrintCancel(controller)
     setBusy(true)
     setError('')
     try {
@@ -439,13 +447,30 @@ export function LabelPreviewDialog({
               assets={jobAssets}
             />,
           ),
-        setStatus,
+        signal: controller?.signal,
+        timing: recordLabelPrintTiming,
+        setStatus: (stage) => {
+          if (stage.startsWith('Opening')) setPrintCancel(undefined)
+          setStatus(stage)
+        },
         onWorkspace,
+        onBrowserJob: (job) => {
+          const current = latest.current
+          if (scope !== current.settings[0]?.labelEditorScope || current.label_print_jobs?.some((entry) => entry.id === job.id)) return
+          const next = { ...current, label_print_jobs: [...(current.label_print_jobs || []), job] }
+          latest.current = next
+          onWorkspace(next)
+        },
       })
     } catch (e) {
-      setError((e as Error).message)
-      setStatus(outputFailureStatus('print'))
+      if (controller?.signal.aborted) setStatus('Print preparation canceled. Your label is unchanged.')
+      else {
+        setError((e as Error).message)
+        setStatus(outputFailureStatus('print'))
+      }
     } finally {
+      setPrintCancel(undefined)
+      printBusy.current = false
       setBusy(false)
     }
   }
@@ -648,7 +673,7 @@ export function LabelPreviewDialog({
                 }
               />
               <LabelPrintOptions
-                doc={doc}
+                doc={runDocument || doc}
                 printerProfiles={printerProfiles}
                 selectedPrinter={selectedPrinter}
                 printingMethod={printingMethod}
@@ -737,6 +762,7 @@ export function LabelPreviewDialog({
           </p>
         )}
         <footer className="button-row label-preview-actions">
+          {printCancel && <button type="button" className="btn secondary" onClick={() => printCancel.abort()}>Cancel preparation</button>}
           <button
             className="btn secondary"
             disabled={busy}

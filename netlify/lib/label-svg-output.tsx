@@ -4,7 +4,14 @@ import { load } from 'cheerio'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Resvg } from '@resvg/resvg-js'
-import { PDFDocument } from 'pdf-lib'
+import { concatTransformationMatrix, PDFDocument } from 'pdf-lib'
+import {
+  checkPrinterSize,
+  pdfPrintMatrix,
+  printerSize,
+  type PrinterProfile,
+} from '../../src/lib/label-printers'
+import { calibrationMarkup } from '../../src/lib/label-calibration'
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -29,6 +36,24 @@ import {
 import type { LabelFont } from '../../src/lib/label-font-catalog'
 import type { Item } from '../../src/lib/domain'
 
+export async function exportCalibrationPdf(profile: PrinterProfile) {
+  const { width, height } = printerSize(profile)
+  const png = new Resvg(calibrationMarkup(profile), {
+    fitTo: { mode: 'width', value: Math.ceil((width * 300) / 72) },
+    font: {
+      fontFiles: [resolve('public/label-fonts/dm-sans.ttf')],
+      loadSystemFonts: false,
+      defaultFontFamily: 'DM Sans',
+    },
+  })
+    .render()
+    .asPng()
+  const pdf = await PDFDocument.create()
+  const page = pdf.addPage([width, height])
+  page.drawImage(await pdf.embedPng(png), { x: 0, y: 0, width, height })
+  return pdf.save()
+}
+
 /** The same SVG used by the editor, rasterized at 300 DPI with explicit fonts/assets. */
 export async function exportSvgLabelPdf(
   documents: LabelDocument[],
@@ -40,6 +65,7 @@ export async function exportSvgLabelPdf(
     font: (key: string) => Promise<Uint8Array>
     image: (asset: Item) => Promise<Uint8Array>
   },
+  profile?: PrinterProfile,
 ) {
   if (!documents.length || documents.length > 200)
     throw new Error('Choose 1–200 individual labels per run.')
@@ -97,7 +123,9 @@ export async function exportSvgLabelPdf(
           (f) => key === f.file || key === f.file + '-bold',
         )?.name
         if (!face.familyName)
-          throw new Error('The selected font has no usable family metadata.')
+          throw new Error(
+            'The selected font has no usable family metadata.',
+          )
         if (alias) {
           fontNames.set(alias, face.familyName)
           const metrics: Record<string, number> = {}
@@ -108,8 +136,9 @@ export async function exportSvgLabelPdf(
             Math.max(face.ascent, face.bbox.maxY) / face.unitsPerEm
           metrics.__descent =
             Math.max(-face.descent, -face.bbox.minY) / face.unitsPerEm
-          labelFontMetrics[alias + (key.endsWith('-bold') ? '-bold' : '')] ||=
-            metrics
+          labelFontMetrics[
+            alias + (key.endsWith('-bold') ? '-bold' : '')
+          ] ||= metrics
         }
         return bytes
       }),
@@ -138,12 +167,17 @@ export async function exportSvgLabelPdf(
     )
     const xml = load(markup, { xml: true })
     xml('[font-family]').each((_, node) => {
-      const name = (xml(node).attr('font-family') || '').replace(/^"|"$/g, '')
+      const name = (xml(node).attr('font-family') || '').replace(
+        /^"|"$/g,
+        '',
+      )
       if (fontNames.has(name))
         xml(node).attr('font-family', JSON.stringify(fontNames.get(name)))
     })
     const svg = xml.xml()
-    const fontDirectory = await mkdtemp(join(tmpdir(), 'cottage-label-fonts-'))
+    const fontDirectory = await mkdtemp(
+      join(tmpdir(), 'cottage-label-fonts-'),
+    )
     try {
       const fontFiles = await Promise.all(
         fontBuffers.map(async (bytes, i) => {
@@ -156,7 +190,10 @@ export async function exportSvgLabelPdf(
         }),
       )
       const rendered = new Resvg(svg, {
-        fitTo: { mode: 'width', value: Math.ceil((document.width / 72) * 300) },
+        fitTo: {
+          mode: 'width',
+          value: Math.ceil((document.width / 72) * 300),
+        },
         font: { fontFiles, loadSystemFonts: false },
       }).render()
       images.set(key, await pdf.embedPng(rendered.asPng()))
@@ -166,12 +203,18 @@ export async function exportSvgLabelPdf(
   }
   const sheet = layout.mode === 'sheet'
   const capacity = sheet ? layout.rows * layout.columns : 1
+  if (profile) checkPrinterSize(first, profile)
+  const media = profile ? printerSize(profile) : first
   for (let start = 0; start < documents.length; start += capacity) {
     const page = pdf.addPage(
       sheet
         ? [layout.pageWidth, layout.pageHeight]
-        : [first.width, first.height],
+        : [media.width, media.height],
     )
+    if (profile)
+      page.pushOperators(
+        concatTransformationMatrix(...pdfPrintMatrix(first, profile)),
+      )
     for (let i = 0; i < Math.min(capacity, documents.length - start); i++) {
       page.drawImage(images.get(JSON.stringify(documents[start + i]))!, {
         x:
@@ -180,11 +223,12 @@ export async function exportSvgLabelPdf(
               (i % layout.columns) * (first.width + layout.gutter)
             : 0) + (layout.offsetX || 0),
         y:
-          page.getHeight() -
+          (profile ? first.height : page.getHeight()) -
           first.height -
           (sheet
             ? layout.margin +
-              Math.floor(i / layout.columns) * (first.height + layout.gutter)
+              Math.floor(i / layout.columns) *
+                (first.height + layout.gutter)
             : 0) -
           (layout.offsetY || 0),
         width: first.width,

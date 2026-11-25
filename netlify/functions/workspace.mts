@@ -52,7 +52,7 @@ import {
   assertSavedLabelOutput,
   validateSavedLabelContext,
 } from '../../src/lib/saved-labels'
-import { exportSvgLabelPdf } from '../lib/label-svg-output'
+import { exportCalibrationPdf, exportSvgLabelPdf } from '../lib/label-svg-output'
 import {
   labelSide,
   labelSides,
@@ -99,6 +99,7 @@ import {
 import { tracksFinishedStock } from '../../src/lib/product-workflows'
 import { categoryTaxState } from '../../src/lib/product-categories'
 import { labelContent } from '../../src/lib/label-persistence'
+import { assortmentReview, normalizeAssortment } from '../../src/lib/label-assortments'
 import { saleTaxProduct } from '../../src/lib/domain'
 import {
   isPackaging,
@@ -158,8 +159,6 @@ import {
   validatePrinterProfile,
   checkPrinterSize,
   qzPrintOptions,
-  printerSize,
-  points,
 } from '../../src/lib/label-printers'
 import { qzConfigured, qzCertificate, signQzCall } from '../lib/qz-print'
 import {
@@ -201,9 +200,7 @@ import {
 import { getStore } from '@netlify/blobs'
 import { imageSize } from 'image-size'
 import {
-  blankLabel,
   systemLabelTemplates,
-  newElement,
   validateLabelDocument,
   resolveLabelData,
   labelFonts,
@@ -279,6 +276,7 @@ const tables = [
   'label_print_jobs',
 ]
 export default async (req: Request, context: Context) => {
+  const requestStarted = performance.now()
   if (!['GET', 'POST'].includes(req.method))
     return Response.json(
       { error: 'Method not allowed.', code: 'METHOD_NOT_ALLOWED' },
@@ -1175,6 +1173,8 @@ export default async (req: Request, context: Context) => {
       org,
     ])
     let metadataOnly = false
+    let labelOnlyMutation = false
+    const labelWorkspaceStarted = performance.now()
     // A personal navigation preference never enters stock, costing or finance workflows.
     if (
       req.method === 'POST' &&
@@ -1183,6 +1183,9 @@ export default async (req: Request, context: Context) => {
       )
     ) {
       const body = await req.clone().json()
+      labelOnlyMutation =
+        body?.action === 'labelAssortment' ||
+        (body?.action === 'labelPrint' && body.data?.compact === true)
       metadataOnly =
         requestUrl.searchParams.has('deleteMockup') ||
         requestUrl.searchParams.has('labelPdf') ||
@@ -1200,6 +1203,7 @@ export default async (req: Request, context: Context) => {
           'templateAssignments',
           'productLabelAssignment',
           'labelPrint',
+          'labelAssortment',
           'assortmentLabel',
           'itemDeleteCheck',
           'itemDelete',
@@ -1259,7 +1263,9 @@ export default async (req: Request, context: Context) => {
     // The business row is locked above. Normalize only category metadata, never
     // run general record saves (which may recalculate stock or costing).
     const categorySettingsBefore = JSON.stringify(state.settings[0])
-    const categoryCleanup = consolidateCategories(state)
+    const categoryCleanup = labelOnlyMutation
+      ? { changes: [], counts: {} }
+      : consolidateCategories(state)
     for (const { table, item } of categoryCleanup.changes) {
       await client.query(
         `UPDATE ${table} SET data=$1::jsonb WHERE business_id=$2 AND id=$3`,
@@ -2429,58 +2435,7 @@ export default async (req: Request, context: Context) => {
       ).find((p: any) => p.id === input.profileId && p.method === 'qz')
       if (!profile)
         throw new Error('Save a direct printer profile for this device first.')
-      const size = printerSize(profile),
-        document = {
-          ...blankLabel(),
-          ...size,
-          name: 'Printer calibration test',
-          elements: [
-            {
-              ...newElement('border'),
-              x: 4,
-              y: 4,
-              width: size.width - 8,
-              height: size.height - 8,
-            },
-            {
-              ...newElement('text', 'Cottage Pantry\nTest label · actual size'),
-              font: 'DM Sans',
-              fontSize: Math.min(12, size.width / 16),
-              x: 8,
-              y: 8,
-              width: size.width - 16,
-              height: size.height - 16,
-            },
-          ],
-        }
-      const snapshot = {
-        values: {},
-        warnings: [],
-        allergens: [],
-        weightsVerified: true,
-        ingredientParts: [],
-      }
-      const bytes = await exportLabelPdf(
-        document,
-        snapshot,
-        [],
-        1,
-        {
-          ...defaultSheet,
-          mode: 'roll',
-          offsetX: points(profile.offsetX, profile.unit),
-          offsetY: points(profile.offsetY, profile.unit),
-        },
-        {
-          font: async (key) =>
-            new Uint8Array(
-              await readFile(resolve('public/label-fonts', key + '.ttf')),
-            ),
-          image: async () => {
-            throw new Error('Test labels do not contain images.')
-          },
-        },
-      )
+      const bytes = await exportCalibrationPdf(profile)
       const job = {
         id: randomUUID(),
         createdAt: new Date().toISOString(),
@@ -2505,6 +2460,7 @@ export default async (req: Request, context: Context) => {
       )
     }
     if (req.method === 'POST' && requestUrl.searchParams.has('labelPdf')) {
+      const templateStart = performance.now()
       if (!['Owner', 'Manager'].includes(role))
         throw new Error('Only an Owner or Manager can prepare print exports.')
       const data = await req.json(),
@@ -2529,6 +2485,7 @@ export default async (req: Request, context: Context) => {
       )
         throw new Error('Product is unavailable.')
       assertSavedLabelOutput(masterDocument, source, data.brandId)
+      const sourceStart = performance.now()
       const snapshot = resolveLabelData(
           state,
           source,
@@ -2536,6 +2493,7 @@ export default async (req: Request, context: Context) => {
         ),
         copies = number(data.copies, 'Label copies', 1),
         layout = { ...(data.layout || defaultSheet) }
+      const geometryStart = performance.now()
       const setPlan =
         masterDocument.format === 'front-back'
           ? labelSetPlan(masterDocument, copies, data.parts, data.order)
@@ -2548,21 +2506,30 @@ export default async (req: Request, context: Context) => {
         Array.from({ length: copies }, () => 'front' as const)
       await validateAutoFitOutput(masterDocument, snapshot)
       validateLabelRunContent(masterDocument, snapshot, sequence)
+      const deviceProfiles =
+        state.settings[0].printerProfilesByDevice?.[deviceKey] || []
       const printerProfile = data.printerProfileId
-        ? (state.settings[0].printerProfilesByDevice?.[deviceKey] || []).find(
+        ? deviceProfiles.find(
             (p: any) => p.id === data.printerProfileId && p.method === 'qz',
           )
         : undefined
       if (data.printerProfileId && !printerProfile)
         throw new Error('Select a direct printer profile saved on this device.')
-      if (printerProfile) {
+      const mediaProfile =
+        printerProfile ||
+        (data.mediaProfileId
+          ? deviceProfiles.find((p: any) => p.id === data.mediaProfileId)
+          : undefined)
+      if (data.mediaProfileId && !mediaProfile)
+        throw new Error('Select a media profile saved on this device.')
+      if (mediaProfile) {
         if (layout.mode === 'sheet')
           throw new Error(
-            'Use one label per page for this thermal printer profile.',
+            'Use one label per page for this print profile.',
           )
-        checkPrinterSize(document, printerProfile)
-        layout.offsetX = points(printerProfile.offsetX, printerProfile.unit)
-        layout.offsetY = points(printerProfile.offsetY, printerProfile.unit)
+        checkPrinterSize(document, mediaProfile)
+        delete layout.offsetX
+        delete layout.offsetY
       }
       if (!Number.isInteger(copies) || copies > 200)
         throw new Error('Print between 1 and 200 copies.')
@@ -2588,6 +2555,7 @@ export default async (req: Request, context: Context) => {
           )
         },
       }
+      const pdfStart = performance.now()
       const bytes =
         masterDocument.renderVersion === 2 ||
         masterDocument.format === 'front-back'
@@ -2597,6 +2565,7 @@ export default async (req: Request, context: Context) => {
               state.graphic_assets,
               layout,
               pdfLoaders,
+              mediaProfile,
             )
           : await exportLabelPdf(
               document,
@@ -2605,7 +2574,9 @@ export default async (req: Request, context: Context) => {
               copies,
               layout,
               pdfLoaders,
+              mediaProfile,
             )
+      const saveStart = performance.now()
       const printJobId = randomUUID()
       if (printerProfile)
         await getStore('label-print-pdfs').set(
@@ -2640,6 +2611,7 @@ export default async (req: Request, context: Context) => {
           'Content-Disposition':
             'attachment; filename="cottage-pantry-labels.pdf"',
           'Cache-Control': 'private, no-store',
+          'Server-Timing': `auth;dur=${(labelWorkspaceStarted - requestStarted).toFixed(1)}, workspace;dur=${(templateStart - labelWorkspaceStarted).toFixed(1)}, template;dur=${(sourceStart - templateStart).toFixed(1)}, source;dur=${(geometryStart - sourceStart).toFixed(1)}, fit;dur=${(pdfStart - geometryStart).toFixed(1)}, pdf;dur=${(saveStart - pdfStart).toFixed(1)}, save;dur=${(performance.now() - saveStart).toFixed(1)}`,
         },
       })
     }
@@ -4219,11 +4191,80 @@ export default async (req: Request, context: Context) => {
           name: data.name.slice(0, 100),
         })
         await audit('Brand kit saved', data.name)
+      } else if (action === 'labelAssortment') {
+        if (!['Owner', 'Manager'].includes(role) || !user || data.expectedScope !== createHash('sha256').update(org + ':' + user.id).digest('hex'))
+          throw new Error('Reopen Labels in the correct oven as an Owner or Manager.')
+        const hash = (key: string) => createHash('sha256').update(key).digest('hex')
+        let result: Record<string, unknown>
+        if (data.op === 'savePreset') {
+          const plan = normalizeAssortment(state, data.plan)
+          if (plan.mode !== 'fixed') throw new Error('Only fixed combinations can be saved as presets.')
+          const settings = state.settings[0]
+          const presets: Item[] = settings.labelAssortmentPresets || []
+          if (presets.length >= 50) throw new Error('This oven already has 50 fixed assortment presets.')
+          if (presets.some((preset) => preset.name.toLowerCase() === plan.name.toLowerCase()))
+            throw new Error('Use a unique name for this fixed preset.')
+          const { runId: _runId, runLineId: _runLineId, ...preset } = plan
+          settings.labelAssortmentPresets = [...presets, { ...preset, id: randomUUID() }]
+          await save('settings', settings)
+          result = { presets: settings.labelAssortmentPresets }
+        } else if (data.op === 'approve') {
+          const review = assortmentReview(state, data.plan, data.target)
+          if (review.warnings.length) throw new Error(review.warnings[0])
+          const reviewHash = hash(review.reviewKey)
+          if (data.reviewHash !== reviewHash) throw new Error('The assortment, template or source statements changed. Review the current preview again.')
+          const planHash = hash(JSON.stringify(review.plan))
+          const existing = state.label_print_jobs.find((job) => job.assortment?.reviewHash === reviewHash && !job.supersededAt && !job.appliedAt && job.assortment?.planHash === planHash)
+          if (existing) {
+            result = { job: existing }
+          } else {
+            const now = new Date().toISOString()
+            const job: Item = {
+              id: randomUUID(), name: review.document.name, templateId: review.plan.templateId, batchId: review.plan.runId,
+              outputType: 'print', copies: review.copies, layout: defaultSheet,
+              renderedDataSnapshot: review.data, documentSnapshot: review.document,
+              assortment: { plan: review.plan, target: review.target, reviewHash, planHash, products: review.products },
+              createdAt: now, approvedAt: now, status: 'approved',
+            }
+            const replaced = []
+            if (review.plan.runId) {
+              for (const prior of state.label_print_jobs) {
+                const priorPlan = prior.assortment?.plan
+                if (!priorPlan || prior.supersededAt || priorPlan.runId !== review.plan.runId || priorPlan.runLineId !== review.plan.runLineId || prior.assortment.planHash === planHash) continue
+                const update = { supersededAt: now }
+                await client.query('UPDATE label_print_jobs SET data=data || $3::jsonb WHERE business_id=$1 AND id=$2', [org, prior.id, JSON.stringify(update)])
+                replaced.push({ ...prior, ...update })
+              }
+            }
+            await save('label_print_jobs', job)
+            result = { job, replaced }
+          }
+        } else {
+          const job = state.label_print_jobs.find((candidate) => candidate.id === data.jobId && candidate.assortment)
+          if (!job) throw new Error('Choose an approved assortment label in this oven.')
+          if (data.op === 'prepare') {
+            const review = assortmentReview(state, data.plan, data.target)
+            if (job.supersededAt || review.warnings.length || hash(review.reviewKey) !== job.assortment.reviewHash)
+              throw new Error('The packing selection or label sources changed. Review and approve a fresh snapshot before printing.')
+            result = { job }
+          } else if (data.op === 'printed' || data.op === 'applied') {
+            if (data.op === 'applied' && !job.printedAt) throw new Error('Confirm the labels were physically printed first.')
+            const now = new Date().toISOString()
+            const update = data.op === 'printed' ? { printedAt: job.printedAt || now } : { appliedAt: job.appliedAt || now }
+            await client.query('UPDATE label_print_jobs SET data=data || $3::jsonb WHERE business_id=$1 AND id=$2', [org, job.id, JSON.stringify(update)])
+            result = { job: { ...job, ...update } }
+          } else throw new Error('Choose a supported assortment action.')
+        }
+        await client.query('COMMIT')
+        return Response.json(result, { headers: { 'Cache-Control': 'private, no-store' } })
       } else if (action === 'assortmentLabel') {
         if (table !== 'label_print_jobs' || !['Owner', 'Manager'].includes(role))
           throw new Error('An Owner or Manager must manage assortment labels.')
         await handleAssortmentLabel(state, data, user?.id || 'Demo owner', save)
       } else if (action === 'labelPrint') {
+        const templateStarted = performance.now()
+        if (data.compact === true && data.expectedScope !== createHash('sha256').update(org + ':' + user!.id).digest('hex'))
+          throw new Error('Reopen the label in the correct oven before printing.')
         const template = state.label_templates.find(
           (t) => t.id === data.templateId,
         )
@@ -4267,15 +4308,18 @@ export default async (req: Request, context: Context) => {
           selectedRun?.document || document,
           data.layout || defaultSheet,
         )
+        const sourceStarted = performance.now()
         const brand = state.brand_kits.find((b) => b.id === data.brandId),
           snapshot = resolveLabelData(state, source, brand)
+        const fitStarted = performance.now()
         await validateAutoFitOutput(document, snapshot)
         validateLabelRunContent(
           document,
           snapshot,
           selectedRun?.sequence || ['front'],
         )
-        await save('label_print_jobs', {
+        const saveStarted = performance.now()
+        const job = {
           id: randomUUID(),
           name: template.name,
           templateId: template.id,
@@ -4294,7 +4338,17 @@ export default async (req: Request, context: Context) => {
           layout: data.layout,
           createdAt: new Date().toISOString(),
           status: 'prepared',
-        })
+        }
+        await save('label_print_jobs', job)
+        if (data.compact === true && data.outputType === 'print') {
+          await client.query('COMMIT')
+          return Response.json({ preparedLabel: true, workspace: { label_print_jobs: [job], graphic_assets: state.graphic_assets } }, {
+            headers: {
+              'Cache-Control': 'private, no-store',
+              'Server-Timing': `auth;dur=${(labelWorkspaceStarted - requestStarted).toFixed(1)}, workspace;dur=${(templateStarted - labelWorkspaceStarted).toFixed(1)}, template;dur=${(sourceStarted - templateStarted).toFixed(1)}, source;dur=${(fitStarted - sourceStarted).toFixed(1)}, fit;dur=${(saveStarted - fitStarted).toFixed(1)}, save;dur=${(performance.now() - saveStarted).toFixed(1)}`,
+            },
+          })
+        }
       } else if (action === 'save') {
         if (
           ![
@@ -4739,6 +4793,7 @@ export default async (req: Request, context: Context) => {
             'labelColorPreferences',
             'directSignedJobs',
             'printerTestJobs',
+            'labelAssortmentPresets',
           ])
             item[key] = state.settings[0]?.[key]
           delete item.currentPrinterProfiles

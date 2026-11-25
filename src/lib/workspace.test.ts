@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Context } from '@netlify/functions'
+import { createHash } from 'node:crypto'
 import { bestCrumbleSource } from '../test/fixtures/best-crumble'
+import { assortmentFixture } from '../test/fixtures/label-assortments'
+import { assortmentReview } from './label-assortments'
 import { convert } from './domain'
 import { inventoryMovementView } from './inventory-adjustment'
 import {
@@ -87,6 +90,10 @@ vi.mock('@netlify/database', () => ({
             const existing = rows.findIndex((r) => r.id === item.id)
             if (existing < 0) rows.push(item)
             else rows[existing] = item
+          }
+          if (sql.startsWith('UPDATE label_print_jobs SET data=data ||')) {
+            const job = database.records.label_print_jobs?.find((item) => item.id === params[1])
+            if (job) Object.assign(job, JSON.parse(params[2]))
           }
           return { rows: [] }
         },
@@ -574,6 +581,59 @@ it('preserves the rendered label data and design at print preparation time', asy
       })
     ).status,
   ).toBe(400)
+})
+
+it('returns exactly the compact prepared browser job without a full workspace reload', async () => {
+  const { workspace } = assortmentFixture()
+  Object.assign(database.records, workspace)
+  const scope = createHash('sha256').update('private-business:verified-owner').digest('hex')
+  const payload = { templateId: 'test-stock', source: { kind: 'product', id: 'Blueberry' }, copies: 2, outputType: 'print', compact: true }
+  expect((await post('labelPrint', 'label_print_jobs', { ...payload, expectedScope: 'wrong' })).status).toBe(400)
+  database.queries = []
+  const result = await post('labelPrint', 'label_print_jobs', { ...payload, expectedScope: scope })
+  expect(result.status).toBe(200)
+  expect(result.preparedLabel).toBe(true)
+  expect(Object.keys(result.workspace).sort()).toEqual(['graphic_assets', 'label_print_jobs'])
+  expect(result.workspace.label_print_jobs[0].copies).toBe(2)
+  expect(database.queries.filter(({ sql }) => /^SELECT data FROM products WHERE/.test(sql))).toHaveLength(1)
+})
+
+it('keeps assortment snapshots immutable, separates confirmations and does not write stock or production', async () => {
+  const { workspace, plan } = assortmentFixture()
+  Object.assign(database.records, workspace)
+  const target = { group: 0, component: -1 }
+  const scope = createHash('sha256').update('private-business:verified-owner').digest('hex')
+  const digest = () => createHash('sha256').update(assortmentReview(database.records, plan, target).reviewKey).digest('hex')
+  const submit = (op: string, data: Record<string, unknown> = {}) => post('labelAssortment', 'label_print_jobs', { op, expectedScope: scope, plan, target, ...data })
+  const preset = await submit('savePreset')
+  expect(preset.status).toBe(200)
+  expect(preset.presets[0].name).toBe(plan.name)
+  database.records.products[0].packagingId = 'outer-box'
+  database.records.batches.push({ id: 'packing', name: 'Packing run', lines: [{ id: 'packing-line', name: 'Outer boxes', productId: 'Blueberry', output: 2 }] })
+  plan.runId = 'packing'
+  plan.runLineId = 'packing-line'
+  const approval = await submit('approve', { reviewHash: digest() })
+  expect(approval.status).toBe(200)
+  const jobId = approval.job.id
+  const original = structuredClone(approval.job.documentSnapshot)
+  expect((await submit('approve', { reviewHash: digest() })).job.id).toBe(jobId)
+  expect((await submit('prepare', { jobId })).job).toMatchObject({ copies: 2, status: 'approved' })
+  expect((await submit('applied', { jobId })).status).toBe(400)
+  expect((await submit('printed', { jobId })).job).toHaveProperty('printedAt')
+  expect((await submit('applied', { jobId })).job).toHaveProperty('appliedAt')
+  database.records.ingredients[1].subingredients = 'Chocolate, cane sugar, salt'
+  expect((await submit('prepare', { jobId })).status).toBe(400)
+  expect((await submit('approve', { reviewHash: approval.job.assortment.reviewHash })).status).toBe(400)
+  const updated = await submit('approve', { reviewHash: digest() })
+  expect(updated.job.id).not.toBe(jobId)
+  const oldSelection = structuredClone(plan)
+  plan.groups[0].lines = plan.groups[0].lines.slice(1)
+  const changedPacking = await submit('approve', { reviewHash: digest() })
+  expect(changedPacking.replaced.map((job: { id: string }) => job.id)).toEqual([jobId, updated.job.id])
+  expect((await submit('prepare', { jobId: updated.job.id, plan: oldSelection })).status).toBe(400)
+  expect(database.records.label_print_jobs.find((job) => job.id === jobId)?.documentSnapshot).toEqual(original)
+  expect(database.queries.filter(({ sql }) => /^(INSERT INTO|UPDATE|DELETE FROM) (ingredients|products|batches|ledger|batch_usage)\b/.test(sql))).toEqual([])
+  expect((await submit('prepare', { jobId, expectedScope: 'other-oven' })).status).toBe(400)
 })
 
 it('stores original graphics privately and rejects unsafe upload formats', async () => {
@@ -1320,6 +1380,44 @@ it('scopes printer profiles to the current device and hides private maps', async
     (await other.json()).workspace.settings[0].currentPrinterProfiles,
   ).toEqual([])
 })
+it('exports rotated PDFs only for the saved media profile on this device', async () => {
+  const { blankLabel, newElement } = await import('./label-studio')
+  const document = {
+    ...blankLabel(), id: 'test-roll-label', width: 216, height: 288,
+    elements: [newElement('text', 'Roll label')],
+  }
+  database.records.label_templates = [document]
+  database.records.ingredients = [{ id: 'test-ingredient', name: 'Test ingredient' }]
+  const saved = await post('labelPrinterProfile', 'settings', {
+    operation: 'save',
+    profile: {
+      name: 'Browser roll', method: 'browser', width: 4, height: 3, unit: 'in',
+      orientation: 'portrait', designWidth: 216, designHeight: 288, rotation: 90,
+      offsetX: 0, offsetY: 0,
+    },
+  })
+  expect(saved.status).toBe(200)
+  const mediaProfileId = saved.workspace.settings[0].currentPrinterProfiles[0].id
+  const requestPdf = (device: Context, profileId?: string) => handler(
+    new Request('https://cottage-pantry.test/api/workspace?labelPdf=1', {
+      method: 'POST', body: JSON.stringify({
+        templateId: document.id, source: { kind: 'ingredient', id: 'test-ingredient' },
+        copies: 2, mediaProfileId: profileId,
+      }),
+    }),
+    device,
+  )
+  const { PDFDocument } = await import('pdf-lib')
+  for (const [profileId, width, height] of [[mediaProfileId, 288, 216], [undefined, 216, 288]] as const) {
+    const response = await requestPdf(context, profileId)
+    expect(response.status).toBe(200)
+    const pdf = await PDFDocument.load(await response.arrayBuffer())
+    expect(pdf.getPages().map((page) => page.getSize())).toEqual([{ width, height }, { width, height }])
+  }
+  const foreignDevice = { cookies: { get: () => 'b'.repeat(64) } } as unknown as Context
+  expect((await requestPdf(foreignDevice, mediaProfileId)).status).toBe(400)
+  expect(database.records.label_templates).toEqual([document])
+})
 it('saves exact committed alpha colors and preserves named Brand Kit swatches', async () => {
   database.records.brand_kits = [
     { id: 'brand', name: 'Brand', colors: ['#000000'] },
@@ -1364,10 +1462,13 @@ it('authorizes a prepared direct test job once and ignores caller-supplied print
       profile: {
         name: 'Approved printer',
         method: 'qz',
-        width: 2,
-        height: 1,
+        width: 4,
+        height: 3,
         unit: 'in',
         orientation: 'landscape',
+        designWidth: 216,
+        designHeight: 288,
+        rotation: 270,
         offsetX: 0,
         offsetY: 0,
       },
@@ -1394,12 +1495,17 @@ it('authorizes a prepared direct test job once and ignores caller-supplied print
     expect(first.status).toBe(200)
     const signed = await first.json()
     expect(signed.params.printer.name).toBe('Approved printer')
-    expect(signed.params.options.copies).toBe(1)
-    expect(
-      Buffer.from(signed.params.data[0].data, 'base64')
-        .subarray(0, 5)
-        .toString(),
-    ).toBe('%PDF-')
+    expect(signed.params.options).toMatchObject({
+      copies: 1,
+      orientation: 'portrait',
+      rotation: 0,
+      scaleContent: false,
+      size: { width: 4, height: 3 },
+    })
+    const { PDFDocument } = await import('pdf-lib')
+    const pdf = await PDFDocument.load(Buffer.from(signed.params.data[0].data, 'base64'))
+    expect(pdf.getPageCount()).toBe(1)
+    expect(pdf.getPage(0).getSize()).toEqual({ width: 288, height: 216 })
     const repeated = await request('printerSign=1', body)
     expect(repeated.status).toBe(400)
     expect((await repeated.json()).error).toMatch(/already authorized/)

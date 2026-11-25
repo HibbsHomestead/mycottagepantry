@@ -370,6 +370,7 @@ export function WorkspaceApp() {
     [labelProduct, setLabelProduct] = useState(''),
     [labelDesign, setLabelDesign] = useState(''),
     [labelCreateRequest, setLabelCreateRequest] = useState(0),
+    [assortmentRunId, setAssortmentRunId] = useState(''),
     [previewProduct, setPreviewProduct] = useState<Item | null>(null),
     [previewLabelId, setPreviewLabelId] = useState(''),
     [financeEntry, setFinanceEntry] = useState(''),
@@ -2942,6 +2943,7 @@ export function WorkspaceApp() {
                   initialCreateRequest={labelCreateRequest}
                   onCreateRequestHandled={() => setLabelCreateRequest(0)}
                   initialSection={sub}
+                  initialAssortmentRunId={assortmentRunId}
                   onSectionChange={(section) => go('Labels', section)}
                   onDirtyChange={(dirty) => {
                     labelUnsaved.current = dirty
@@ -5794,6 +5796,20 @@ export function WorkspaceApp() {
                   ))}
               </section>
             )}
+          {modal === 'production' && selected && (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={formDirty || busy}
+              onClick={() => {
+                setAssortmentRunId(selected.id)
+                setModalState(null)
+                go('Labels', 'Assortments')
+              }}
+            >
+              Review assortment labels for this saved run
+            </button>
+          )}
           {modal === 'production' && (
             <ProductionRun
               onDirtyChange={setFormDirty}

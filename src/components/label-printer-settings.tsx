@@ -6,6 +6,7 @@ import {
   desktopBridgeSupported,
 } from '@/lib/qz-bridge'
 import type { PrinterProfile } from '@/lib/label-printers'
+import { CalibrationPreview } from './label-print-media'
 export function LabelPrinterSettings({
   profiles,
   canEdit,
@@ -37,7 +38,7 @@ export function LabelPrinterSettings({
     width: width / 72,
     height: height / 72,
     unit: 'in',
-    orientation: width > height ? 'landscape' : 'portrait',
+    orientation: 'portrait',
     offsetX: 0,
     offsetY: 0,
     preferred: false,
@@ -230,23 +231,8 @@ export function LabelPrinterSettings({
             <option value="mm">Millimeters</option>
           </select>
         </label>
-        {number('width', 'Label width')}
-        {number('height', 'Label height')}
-        <label className="field">
-          <span>Orientation</span>
-          <select
-            value={draft.orientation}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                orientation: e.target.value as PrinterProfile['orientation'],
-              })
-            }
-          >
-            <option value="portrait">Portrait</option>
-            <option value="landscape">Landscape</option>
-          </select>
-        </label>
+        {number('width', 'Loaded width across printhead')}
+        {number('height', 'Loaded length in feed direction')}
         {number('dpi', 'Resolution (DPI, if known)')}
         {number('offsetX', 'Horizontal alignment offset')}
         {number('offsetY', 'Vertical alignment offset')}
@@ -276,6 +262,10 @@ export function LabelPrinterSettings({
         />{' '}
         Preferred printer for this device
       </label>
+      <p className="muted">Set the design size and artwork rotation in Label Studio → Print & Export.</p>
+      {profiles.some((profile) => JSON.stringify(profile) === JSON.stringify(draft)) && (
+        <CalibrationPreview profile={draft} />
+      )}
       <FormErrorNotice message={error} />
       <div className="button-row">
         <button
@@ -311,7 +301,7 @@ export function LabelPrinterSettings({
             })
           }
         >
-          Print test label
+          Print one test label
         </button>
         <button
           className="text-button"
@@ -330,8 +320,8 @@ export function LabelPrinterSettings({
       <p className="muted">
         Save size or alignment changes before testing. PDF printing uses one
         document page per roll label and one driver copy. Match paper size and
-        select actual size / 100% in the browser and driver. Browser code cannot
-        force every driver setting.
+        select actual size / 100% in the browser and driver. Disable extra driver
+        rotation and browser headers and footers. The app cannot override the driver.
       </p>
     </section>
   )
