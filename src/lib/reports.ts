@@ -86,11 +86,13 @@ export function reportRows(name: string, state: Workspace): Item[] {
       }
       const transactions = sales.filter((s) => s.productId === p.id)
       let marginPercent: number | string
-      try {
-        if (cost === null) throw new Error('Incomplete kit estimate')
-        marginPercent = profitability(p, cost, state.settings[0]).margin
-      } catch {
-        marginPercent = 'Unavailable — review tax configuration'
+      if (cost === null) marginPercent = 'Unavailable — incomplete basket estimate'
+      else {
+        try {
+          marginPercent = profitability(p, cost, state.settings[0]).margin
+        } catch {
+          marginPercent = 'Unavailable — review tax configuration'
+        }
       }
       return {
         id: p.id,

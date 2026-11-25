@@ -41,10 +41,10 @@ export function ProductCards({
       aria-label="Product cards"
     >
       {products.map((product) => {
-        const recipe = workspace.recipes.find((r) => r.id === product.recipeId)
-        const sellingUnit =
+        const recipe = product.workflow === 'kit' ? undefined : workspace.recipes.find((r) => r.id === product.recipeId)
+        const sellingUnit = product.workflow === 'kit' ? 'basket' :
           String(
-            product.sellingUnit || (product.workflow === 'kit' ? 'kit' : ''),
+            product.sellingUnit || '',
           ).trim() ||
           (['handmade', 'resale'].includes(product.workflow)
             ? 'item'
@@ -60,9 +60,9 @@ export function ProductCards({
         const belowTarget =
           pricing && pricing.margin < Number(product.targetMargin ?? 65)
         const status = product.archived
-          ? 'Archived'
+          ? product.workflow === 'kit' ? 'Basket · Archived' : 'Archived'
           : product.workflow === 'kit'
-            ? `Basket · ${product.status}`
+            ? ['Basket', product.status].filter(Boolean).join(' · ')
             : product.status
         const stock = ['handmade', 'resale'].includes(product.workflow)
           ? stockStatus(product)
@@ -358,7 +358,7 @@ function ProductTable({
                     {product.name}
                   </button>
                 </td>
-                <td>{workflowOf(product)}</td>
+                <td>{product.workflow === 'kit' ? 'Basket' : workflowOf(product)}</td>
                 <td>
                   {productCategoryName(product, workspace.settings[0]) ||
                     'Uncategorized'}
@@ -366,6 +366,7 @@ function ProductTable({
                 <td>{Number.isFinite(price) ? <>{money(price)}<small className="product-price-tax-label">{taxLabel}</small></> : 'Unavailable'}</td>
                 <td>
                   {cost === undefined ? 'Incomplete' : money(cost)}
+                  {product.workflow === 'kit' && <small>per basket</small>}
                   {product.workflow === 'resale' && (
                     <small>{resaleCostBasis(product).label}</small>
                   )}

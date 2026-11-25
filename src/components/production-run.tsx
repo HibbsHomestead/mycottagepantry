@@ -27,6 +27,7 @@ type Props = ComponentProps<typeof LegacyProductionRun> & {
   initialEventId?: string
   openLinkedRun?: (run: Item) => void
   returnToBasket?: () => void
+  openAssortment?: (productId?: string) => void
 }
 const blank = (productId = ''): Item => ({
   id: crypto.randomUUID(),
@@ -53,6 +54,7 @@ export function ProductionRun(props: Props) {
     return (
       <>
         <LegacyProductionRun {...props} />
+        {props.run.status === 'completed' && props.openAssortment && <button type="button" className="btn secondary" onClick={() => props.openAssortment?.(props.run?.productId)}>Assortment labels for this run</button>}
         {['Owner', 'Manager'].includes(props.role || 'Owner') && (
           <button
             type="button"
@@ -96,6 +98,7 @@ function RunEditor({
   initialEventId,
   openLinkedRun,
   returnToBasket,
+  openAssortment,
   role = 'Owner',
 }: Props) {
   const [id, setId] = useState(run?.id || crypto.randomUUID())
@@ -302,6 +305,7 @@ function RunEditor({
         </strong>{' '}
         · {lines.length} product {lines.length === 1 ? 'line' : 'lines'}
       </p>
+      {run?.id && status !== 'canceled' && openAssortment && <button type="button" className="btn secondary" onClick={() => openAssortment(lines.length === 1 ? lines[0].productId : undefined)}>Assortment labels for this run</button>}
       <details open={!started && !terminal} hidden={reviewing}>
       <summary>Run name, date & notes</summary>
       <div className="form-grid">

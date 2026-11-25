@@ -385,7 +385,7 @@ async function handleSingleProduction(
         type: 'assembly_consumption',
         batchId: existing.id,
         sourceId: existing.id,
-        reason: reason || 'Kit assembly',
+        reason: reason || 'Basket assembly',
       })
     else {
       if (prepared) await applyPrepUsage(ctx, item, prepared)

@@ -1,5 +1,5 @@
 import { resaleCostBasis } from './resale-cost'
-import { handmadeEstimate } from './handmade'
+import { handmadeBom, handmadeEstimate } from './handmade'
 import { configuredTaxRates } from './tax-configuration'
 import {
   categoryTaxState,
@@ -744,82 +744,119 @@ export function validateKit(product: Item, workspace: Workspace) {
 export function kitCosting(
   product: Item,
   workspace: Workspace,
+  options: { allowResaleEstimate?: boolean } = {},
 ): ReturnType<typeof costBreakdown> {
   validateKit(product, workspace)
-  const lines = product.kitComponents.map((line: Item) => {
-    const component = workspace.products.find((p) => p.id === line.productId)!
-    if (
-      component.workflow === 'resale' &&
-      (component.cost == null || String(component.cost).trim() === '')
-    )
-      throw new Error(`${component.name}: received cost is unavailable.`)
-    if (component.needsCostSetup)
-      throw new Error(`${component.name}: cost is incomplete.`)
-    if (component.workflow !== 'resale') {
-      const recipe = workspace.recipes.find((r) => r.id === component.recipeId)
-      if (!recipe?.lines?.length)
-        throw new Error(`${component.name}: recipe cost is unavailable.`)
-      const sources = [
-        ...effectiveRecipeLines(recipe, workspace.recipes),
-        ...packagingLines(component),
-      ]
-      for (const source of sources) {
-        const ingredient = workspace.ingredients.find(
-          (i) => i.id === source.ingredientId,
-        )
-        const price = ingredient?.currentCost ?? ingredient?.cost
-        if (
-          !ingredient ||
-          ingredient.needsCostSetup ||
-          price == null ||
-          String(price).trim() === '' ||
-          !Number.isFinite(Number(price))
-        )
-          throw new Error(
-            `${component.name}: ingredient or packaging cost is incomplete.`,
-          )
-      }
-    }
-    const cost =
-      productCosting(component, workspace).perPackage *
-      number(line.quantity, 'Component packages', 1)
-    return { ...line, name: component.name, cost }
+  const lines = basketComponentCosts(product, workspace, options).map((line) => {
+    if (line.issue) throw new Error(line.issue)
+    const { component: _component, ...costLine } = line
+    return { ...costLine, cost: line.cost! }
   })
-  const ingredient = lines.reduce(
-    (sum: number, line: Item) => sum + line.cost,
-    0,
-  )
-  const packaging = packagingLines(product).map((line: Item) =>
-    resolvePackagingCost(line, workspace.ingredients, { basket: true }),
-  )
-  const packagingCost = packaging.reduce(
-    (sum, line) => sum + line.cost,
-    0,
-  )
-  const laborMinutes = number(product.assemblyMinutes ?? 0, 'Assembly minutes')
-  const laborRate = number(product.assemblyRate ?? 0, 'Assembly rate')
-  const labor = (laborMinutes / 60) * laborRate
-  const total = ingredient + packagingCost + labor
+  const ingredient = lines.reduce((sum, line) => sum + line.cost, 0)
+  const additional = basketAssemblyCosts(product, workspace)
+  if (additional.packagingIssue || additional.laborIssue) throw new Error(additional.packagingIssue || additional.laborIssue)
+  const { packaging, packagingCost, laborMinutes, laborRate, labor, overhead } = additional
+  const total = ingredient + packagingCost! + labor! + overhead
   return {
-    lines,
-    packaging,
-    supplies: [],
-    suppliesCost: 0,
-    ingredient,
-    packagingCost,
-    laborMinutes,
-    laborRate,
-    labor,
-    overhead: 0,
-    waste: 0,
-    total,
-    plannedYield: 1,
-    actualYield: 1,
-    packages: 1,
-    unitsPerPackage: 1,
-    perItem: total,
-    perPackage: total,
+    lines, packaging, supplies: [], suppliesCost: 0, ingredient, packagingCost: packagingCost!,
+    laborMinutes: laborMinutes!, laborRate: laborRate!, labor: labor!, overhead, waste: 0, total,
+    plannedYield: 1, actualYield: 1, packages: 1, unitsPerPackage: 1,
+    perItem: total, perPackage: total,
   }
+}
+
+export function basketAssemblyCosts(product: Item, workspace: Workspace) {
+  const packaging: (ReturnType<typeof resolvePackagingCost> & { quantity: number; ingredientId: string })[] = []
+  const packagingErrors: string[] = []
+  for (const line of packagingLines(product)) {
+    try { packaging.push({ ...resolvePackagingCost(line, workspace.ingredients, { basket: true }), quantity: Number(line.quantity), ingredientId: line.ingredientId }) }
+    catch (error) { packagingErrors.push((error as Error).message) }
+  }
+  let laborMinutes: number | undefined, laborRate: number | undefined, labor: number | undefined
+  let laborIssue = ''
+  try {
+    laborMinutes = number(product.assemblyMinutes ?? 0, 'Assembly minutes')
+    laborRate = number(product.assemblyRate ?? 0, 'Assembly rate')
+    labor = (laborMinutes / 60) * laborRate
+  } catch (error) { laborIssue = (error as Error).message }
+  return { packaging, packagingCost: packagingErrors.length ? undefined : packaging.reduce((sum, line) => sum + line.cost, 0),
+    packagingIssue: packagingErrors.join(' '), laborMinutes, laborRate, labor, laborIssue, overhead: 0 }
+}
+
+type BasketComponentCost = Item & {
+  component?: Item
+  unitCost?: number
+  source?: string
+  cost?: number
+  issue?: string
+}
+
+export function basketComponentCosts(
+  product: Item,
+  workspace: Workspace,
+  options: { allowResaleEstimate?: boolean } = {},
+): BasketComponentCost[] {
+  const components: Item[] = Array.isArray(product.kitComponents) ? product.kitComponents : []
+  return components.map((line) => {
+    const component = workspace.products.find((entry) => entry.id === line.productId)
+    const name = component?.name || `Unavailable product (${line.productId})`
+    try {
+      if (!component) throw new Error('Restore the product reference.')
+      if (component.id === product.id || component.workflow === 'kit')
+        throw new Error('Baskets cannot contain baskets.')
+      const quantity = number(line.quantity, 'Whole selling packages', 1)
+      if (line.basis !== 'package' || !Number.isInteger(quantity))
+        throw new Error('Choose a whole selling-package quantity.')
+      if (components.filter((entry) => entry.productId === component.id).length !== 1)
+        throw new Error('Combine duplicate package quantities.')
+      const { unitCost, source } = basketPackageCost(component, workspace, options)
+      return { ...line, name, component, unitCost, source, cost: unitCost * quantity }
+    } catch (error) {
+      return { ...line, name, component, issue: `${name}: ${(error as Error).message}` }
+    }
+  })
+}
+
+export function basketPackageCost(
+  component: Item,
+  workspace: Workspace,
+  options: { allowResaleEstimate?: boolean } = {},
+) {
+  if (component.needsCostSetup)
+    throw new Error('Review the product’s flagged cost setup.')
+  const handmade = component.workflow === 'handmade'
+  const bom = handmade ? handmadeBom(component, workspace) : undefined
+  if (handmade && !bom) throw new Error('Bill of materials is missing.')
+  if (!handmade && component.workflow !== 'resale') {
+    const recipe = workspace.recipes.find((entry) => entry.id === component.recipeId)
+    if (!recipe) throw new Error('Connect a recipe with costed ingredients.')
+    const ingredients = effectiveRecipeLines(recipe, workspace.recipes)
+    if (!ingredients.length) throw new Error('Add costed ingredients to the linked recipe.')
+    const sources = [
+      ...ingredients,
+      ...effectiveProductionSupplies(recipe, workspace.recipes),
+      ...packagingLines(component),
+    ]
+    for (const source of sources) {
+      const ingredient = workspace.ingredients.find((entry) => entry.id === source.ingredientId)
+      const price = source.prepared && ingredient
+        ? preparedEstimateRate(source, ingredient)
+        : ingredient?.currentCost ?? ingredient?.cost
+      if (
+        !ingredient || ingredient.needsCostSetup || price == null ||
+        String(price).trim() === '' || !Number.isFinite(Number(price)) || Number(price) < 0
+      )
+        throw new Error(
+          `Cost incomplete: missing cost for ${ingredient?.name || `ingredient or packaging ${source.ingredientId}`}.`,
+        )
+    }
+  }
+  const unitCost = productCosting(bom ? { ...component, bom } : component, workspace, options).perPackage
+  if (!Number.isFinite(unitCost) || unitCost < 0) throw new Error('Package cost is invalid.')
+  const source = component.workflow === 'resale'
+    ? resaleCostBasis(component).label
+    : handmade ? 'Current bill of materials estimate' : 'Current recipe estimate'
+  return { unitCost, source }
 }
 export function productCosting(
   product: Item,
@@ -864,7 +901,7 @@ export function productCosting(
       perItem: c.unit,
     }
   }
-  if (product.workflow === 'kit') return kitCosting(product, workspace)
+  if (product.workflow === 'kit') return kitCosting(product, workspace, options)
   if (product.workflow === 'resale') {
     const basis = resaleCostBasis(
       options.allowResaleEstimate

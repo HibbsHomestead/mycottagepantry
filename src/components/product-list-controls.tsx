@@ -28,7 +28,7 @@ export function ProductSummaries({ products }: { products: Item[] }) {
           icon: <Scissors size={21} />,
         },
         {
-          label: 'Resale products & kits',
+          label: 'Resale products & baskets',
           value: (
             <>
               <span>Resale: {count('resale')}</span>

@@ -20,7 +20,7 @@ export function kitEstimate(product: Item, workspace: Workspace) {
       ? NaN
       : Number(product.price)
   try {
-    cost = productCosting(product, workspace)
+    cost = productCosting(product, workspace, { allowResaleEstimate: true })
   } catch (error) {
     costError = (error as Error).message
   }

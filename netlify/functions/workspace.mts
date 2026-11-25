@@ -1,4 +1,5 @@
 import { labelFontMetrics } from '../../src/lib/label-font-metrics'
+import { handleAssortmentLabel } from '../lib/assortment-label-handler'
 import { squareSalesAction } from '../lib/square-sales-import'
 import { demoBusiness, demoRequested, demoWorkspaceBlocked, demoUnavailable } from '../lib/demo-session'
 import { demoWorkspaceSeed } from '../lib/demo-workspace-seed'
@@ -1203,6 +1204,7 @@ export default async (req: Request, context: Context) => {
           'productLabelAssignment',
           'labelPrint',
           'labelAssortment',
+          'assortmentLabel',
           'itemDeleteCheck',
           'itemDelete',
           'itemArchive',
@@ -2947,6 +2949,7 @@ export default async (req: Request, context: Context) => {
           'productionSave',
           'productionComplete',
           'productionCancel',
+          'assortmentLabel',
         ].includes(action)
       )
         throw new Error(
@@ -4254,6 +4257,10 @@ export default async (req: Request, context: Context) => {
         }
         await client.query('COMMIT')
         return Response.json(result, { headers: { 'Cache-Control': 'private, no-store' } })
+      } else if (action === 'assortmentLabel') {
+        if (table !== 'label_print_jobs' || !['Owner', 'Manager'].includes(role))
+          throw new Error('An Owner or Manager must manage assortment labels.')
+        await handleAssortmentLabel(state, data, user?.id || 'Demo owner', save)
       } else if (action === 'labelPrint') {
         const templateStarted = performance.now()
         if (data.compact === true && data.expectedScope !== createHash('sha256').update(org + ':' + user!.id).digest('hex'))
