@@ -279,7 +279,7 @@ export function demoWorkspaceSeed(): Workspace {
     },
     {
       id: 'breakfast-kit',
-      name: 'Weekend breakfast gift kit',
+      name: 'Weekend breakfast gift basket',
       workflow: 'kit',
       status: 'draft',
       quantity: 0,

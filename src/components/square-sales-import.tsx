@@ -522,7 +522,7 @@ export function SquareSalesImport({
               <p>
                 One Square unit means one sellable package unless you explicitly
                 change the conversion. Names never imply pack sizes. Products
-                from Food, Handmade, Resale and Kits are available. Leaving
+                from Food, Handmade, Resale and Baskets are available. Leaving
                 unmatched does not block financial reporting.
               </p>
               {!mappedRows.length && (

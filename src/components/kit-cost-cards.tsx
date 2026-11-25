@@ -1,4 +1,11 @@
-import { money, priceTaxLabel, type Item, type Workspace } from '@/lib/domain'
+import {
+  basketAssemblyCosts,
+  basketComponentCosts,
+  money,
+  priceTaxLabel,
+  type Workspace,
+  type Item,
+} from '@/lib/domain'
 import { kitEstimate } from '@/lib/kit-estimate'
 import { CostCard, costMoney } from './cost-cards'
 
@@ -26,23 +33,37 @@ export function KitCostCards({
     explanation,
   } = kitEstimate(product, workspace)
   const target = Number(product.targetMargin ?? 65)
+  const knownComponents = c
+    ? []
+    : basketComponentCosts(product, workspace, {
+        allowResaleEstimate: true,
+      }).filter((line) => line.cost !== undefined)
+  const additional = basketAssemblyCosts(product, workspace)
   const amount = (value: number | undefined) =>
     value === undefined ? 'Unavailable' : costMoney(value)
   const breakdown = [
     {
-      label: 'Included products',
-      value: c?.ingredient,
+      label: c ? 'Included products' : 'Known included-product subtotal',
+      value:
+        c?.ingredient ??
+        (knownComponents.length
+          ? knownComponents.reduce((sum, line) => sum + line.cost!, 0)
+          : undefined),
       tone: 'lavender' as const,
     },
     {
-      label: 'Additional packaging',
-      value: c?.packagingCost,
+      label: 'Additional basket packaging',
+      value: additional.packagingCost,
       tone: 'blue' as const,
     },
-    { label: 'Assembly labor', value: c?.labor, tone: 'peach' as const },
     {
-      label: 'Additional overhead',
-      value: c?.overhead,
+      label: 'Additional assembly labor',
+      value: additional.labor,
+      tone: 'peach' as const,
+    },
+    {
+      label: 'Additional basket overhead',
+      value: additional.overhead,
       tone: 'neutral' as const,
     },
   ]
@@ -50,38 +71,34 @@ export function KitCostCards({
     <div className="pricing-summary cost-summary">
       <div
         className="cost-card-grid cost-breakdown-grid"
-        aria-label="Cost breakdown per kit"
+        aria-label="Cost breakdown per basket"
       >
         {breakdown.map((row) => (
           <CostCard
             key={row.label}
             label={row.label}
             value={amount(row.value)}
-            note="per kit"
+            note="Per basket"
             tone={row.tone}
           />
         ))}
       </div>
       <div className="detail-stats cost-card-grid">
         <CostCard
-          label="Total cost per kit"
-          value={amount(c?.perPackage)}
-          note="one sellable kit"
+          label="Cost per basket"
+          value={c ? amount(c.perPackage) : 'Incomplete'}
+          note="One sellable basket · current estimate"
         />
         <CostCard
           label="Selling price"
           value={
             Number.isFinite(price) && price >= 0 ? money(price) : 'Not set'
           }
-          note={
-            tax
-              ? priceTaxLabel(tax.snapshot)
-              : 'Tax treatment unavailable'
-          }
+          note={tax ? priceTaxLabel(tax.snapshot) : 'Tax treatment unavailable'}
           tone="blue"
         />
         <CostCard
-          label="Profit per kit"
+          label="Profit per basket"
           value={amount(p?.profit)}
           note="Revenue less basket cost; excludes tax"
           tone="green"
@@ -100,7 +117,7 @@ export function KitCostCards({
           note={`For ${target}% target margin`}
         />
         <CostCard
-          label="Tax per kit"
+          label="Tax per basket"
           value={amount(tax?.tax)}
           note="Collected for tax; separate from revenue"
           tone="peach"
@@ -108,13 +125,13 @@ export function KitCostCards({
         <CostCard
           label="Customer price"
           value={amount(tax?.customerTotal)}
-          note="Total including tax; per kit"
+          note="Total including tax; per basket"
           tone="blue"
         />
         <CostCard
           label="Revenue excluding tax"
           value={amount(tax?.revenue)}
-          note="per kit"
+          note="Per basket"
           tone="neutral"
         />
       </div>
@@ -151,35 +168,43 @@ export function KitCostCards({
           component production labor, overhead and packaging; those costs are
           counted once.
         </p>
-        {c?.lines.map((line: Item) => (
-          <p key={line.productId}>
-            {line.name}: {line.quantity} whole selling package(s) ={' '}
-            {costMoney(line.cost)} per kit.
-          </p>
-        ))}
-        {c?.packaging.map((line, index) => (
+        <p>
+          Current estimates can change as inputs change. Completed assembly uses
+          recorded stock valuation and retains its posted costs.
+        </p>
+        {additional.packaging.map((line, index) => (
           <p key={index}>
             {line.name}: {line.quantity}{' '}
             {line.unit ||
               workspace.ingredients.find((i) => i.id === line.ingredientId)
                 ?.unit}{' '}
-            = {costMoney(line.cost)} additional packaging per kit.
+            = {costMoney(line.cost)} additional packaging per basket.
           </p>
         ))}
+        {additional.packagingIssue && (
+          <p className="warning-text">{additional.packagingIssue}</p>
+        )}
+        {additional.laborIssue && (
+          <p className="warning-text">{additional.laborIssue}</p>
+        )}
+        {additional.labor !== undefined && (
+          <p>
+            Additional assembly: {additional.laborMinutes} minutes ÷ 60 ×{' '}
+            {money(additional.laborRate!)} per hour ={' '}
+            {costMoney(additional.labor)} per basket.
+          </p>
+        )}
+        <p>
+          Additional overhead: {money(additional.overhead)}. No separate basket
+          overhead charge is configured.
+        </p>
         {c && (
           <>
             <p>
-              Additional assembly: {c.laborMinutes} minutes ÷ 60 ×{' '}
-              {money(c.laborRate)} per hour = {costMoney(c.labor)} per kit.
-            </p>
-            <p>
-              Additional overhead: {money(c.overhead)}. The existing kit
-              calculation adds no separate overhead charge.
-            </p>
-            <p>
-              Total cost per basket = included products ({costMoney(c.ingredient)})
-              + additional packaging ({costMoney(c.packagingCost)}) + assembly (
-              {costMoney(c.labor)}) = {costMoney(c.perPackage)}.
+              Total cost per basket = included products (
+              {costMoney(c.ingredient)}) + additional packaging (
+              {costMoney(c.packagingCost)}) + assembly ({costMoney(c.labor)}) ={' '}
+              {costMoney(c.perPackage)}.
             </p>
           </>
         )}

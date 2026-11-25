@@ -1,4 +1,5 @@
 import { labelFontMetrics } from '../../src/lib/label-font-metrics'
+import { handleAssortmentLabel } from '../lib/assortment-label-handler'
 import { squareSalesAction } from '../lib/square-sales-import'
 import { demoBusiness, demoRequested, demoWorkspaceBlocked, demoUnavailable } from '../lib/demo-session'
 import { demoWorkspaceSeed } from '../lib/demo-workspace-seed'
@@ -1199,6 +1200,7 @@ export default async (req: Request, context: Context) => {
           'templateAssignments',
           'productLabelAssignment',
           'labelPrint',
+          'assortmentLabel',
           'itemDeleteCheck',
           'itemDelete',
           'itemArchive',
@@ -2975,6 +2977,7 @@ export default async (req: Request, context: Context) => {
           'productionSave',
           'productionComplete',
           'productionCancel',
+          'assortmentLabel',
         ].includes(action)
       )
         throw new Error(
@@ -4216,6 +4219,10 @@ export default async (req: Request, context: Context) => {
           name: data.name.slice(0, 100),
         })
         await audit('Brand kit saved', data.name)
+      } else if (action === 'assortmentLabel') {
+        if (table !== 'label_print_jobs' || !['Owner', 'Manager'].includes(role))
+          throw new Error('An Owner or Manager must manage assortment labels.')
+        await handleAssortmentLabel(state, data, user?.id || 'Demo owner', save)
       } else if (action === 'labelPrint') {
         const template = state.label_templates.find(
           (t) => t.id === data.templateId,

@@ -1136,7 +1136,7 @@ it('keeps default changes prospective and requires a current, tenant scoped bulk
     const choices = { strategy: 'total', includeOverrides: false }
     const preview = await request('priceTaxPreview', choices)
     expect(preview.status, preview.error).toBe(200)
-    expect(preview.plan).toMatchObject({ counts: { Food: 1, Handmade: 1, Resale: 0, Kits: 1 }, overrides: 1, overridesReplaced: 0, failures: 0 })
+    expect(preview.plan).toMatchObject({ counts: { Food: 1, Handmade: 1, Resale: 0, Baskets: 1 }, overrides: 1, overridesReplaced: 0, failures: 0 })
     expect(preview.plan.rows.find((r: Item) => r.id === 'inherit').prices).toEqual([
       expect.objectContaining({ field: 'price', before: expect.objectContaining({ price: 100, tax: 5, total: 105 }), after: expect.objectContaining({ price: 105, tax: 5, total: 105 }) }),
       expect.objectContaining({ field: 'wholesale', before: expect.objectContaining({ price: 40, total: 42 }), after: expect.objectContaining({ price: 42, total: 42 }) }),

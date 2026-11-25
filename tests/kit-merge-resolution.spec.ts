@@ -6,7 +6,7 @@ import {
 } from './workspace-fixture'
 
 for (const width of [1440, 390]) {
-  test(`incomplete kit review action preserves unsaved edits at ${width}`, async ({
+  test(`incomplete basket review action preserves unsaved edits at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 950 })
@@ -14,7 +14,7 @@ for (const width of [1440, 390]) {
     const workspace = demoData()
     workspace.products.push({
       id: 'merge-review-kit',
-      name: 'Merge review kit',
+      name: 'Merge review basket',
       workflow: 'kit',
       status: 'active',
       taxSource: 'category',
@@ -37,8 +37,8 @@ for (const width of [1440, 390]) {
       waitUntil: 'networkidle',
     })
     await page
-      .getByRole('article', { name: 'Merge review kit' })
-      .getByRole('button', { name: 'Edit basket', exact: true })
+      .getByRole('article', { name: 'Merge review basket' })
+      .getByRole('button', { name: 'Edit Merge review basket', exact: true })
       .click()
     const dialog = page.getByRole('dialog')
     await dialog.getByLabel('Whole selling packages').first().fill('2')
