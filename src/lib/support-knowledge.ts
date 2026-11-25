@@ -57,11 +57,11 @@ export const supportKnowledge = [
   },
   {
     id: 'products',
-    title: 'Products, handmade designs and kits',
+    title: 'Products, handmade designs and baskets',
     href: '/oven#Products',
     terms:
       'product products pricing price kit kits handmade design designs resale consignment link unlink recipe component',
-    text: 'Products can be linked to a recipe or kept unlinked for review. Use recipe connection controls to review an existing link before changing it. Handmade designs use craft materials; food recipes reject craft materials. Kits assemble existing finished components with their outer packaging; their raw ingredients are not consumed again. Correct missing recipe/yield/unit mappings before production. Historical completed runs retain their recorded costs. Resale and consignment require the corresponding enabled plan features.',
+    text: 'Products can be linked to a recipe or kept unlinked for review. Use recipe connection controls to review an existing link before changing it. Handmade designs use craft materials; food recipes reject craft materials. Baskets assemble finished components with their outer packaging; their raw ingredients are not consumed again. Correct missing recipe, yield, or unit mappings before production. Historical completed runs retain their recorded costs. Resale and consignment require the corresponding enabled plan features.',
   },
   {
     id: 'label-recovery',
@@ -93,7 +93,7 @@ export const supportKnowledge = [
     href: '/oven#Production',
     terms:
       'production produce assembly assemble kit batch recipe yield shortage output waste',
-    text: 'Start production, choose a product and enter output quantity. Review requirements, verified yield mapping and shortages. Food production uses its linked recipe. Kits consume existing finished components and outer packaging, not those components’ raw ingredients again. Producing missing components is separate. Drafts and scheduling move no stock. Completion posts actual consumption, usable output, costs and waste atomically; completed runs are not edited. Missing recipe, yield or conversion must be corrected explicitly.',
+    text: 'Start production, choose a product and enter output quantity. Review requirements, verified yield mapping and shortages. Food production uses its linked recipe. Basket plans can allocate finished stock or link component runs to make the contents. Grocery & Prep includes what those runs need as well as basket packaging. Finalizing assembly consumes finished components, not their raw ingredients again. Drafts and scheduling move no stock. Completion posts actual consumption, usable output, costs and waste atomically; completed runs are not edited. Missing recipe, yield or conversion must be corrected explicitly.',
   },
   {
     id: 'labels',

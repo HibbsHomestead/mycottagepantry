@@ -71,6 +71,9 @@ const sourceTables = [
   'vendors',
   'events',
   'event_batch_links',
+  'lots',
+  'ledger',
+  'finance_transactions',
 ] as const
 
 type GroceryClient = {

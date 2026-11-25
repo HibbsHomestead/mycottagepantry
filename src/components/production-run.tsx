@@ -5,6 +5,11 @@ import { type Item, money, units } from '../lib/domain'
 import { ovenToday } from '../lib/oven-dates'
 import { workflowOf } from '../lib/product-workflows'
 import { productionDefinition } from '../lib/production'
+import { basketChecklist, basketChecklistIssues, checklistStages } from '../lib/production-checklist'
+import { basketAllocationIssues } from '../lib/basket-production'
+import { BasketProductionWork } from './basket-production-work'
+import { ProductionBasketChecklist } from './production-basket-checklist'
+import { basketAssignments, eligibleBasketRuns, productionOrderInvoices } from '../lib/production-destinations'
 import {
   combinedProductionRequirements,
   productionOutputIssue,
@@ -17,6 +22,11 @@ import './production-run.css'
 type Props = ComponentProps<typeof LegacyProductionRun> & {
   onDirtyChange?: (dirty: boolean) => void
   initialReview?: boolean
+  heldDraft?: Item
+  holdDraft?: (draft?: Item) => void
+  initialEventId?: string
+  openLinkedRun?: (run: Item) => void
+  returnToBasket?: () => void
 }
 const blank = (productId = ''): Item => ({
   id: crypto.randomUUID(),
@@ -81,25 +91,37 @@ function RunEditor({
   busy,
   onDirtyChange,
   initialReview,
+  heldDraft,
+  holdDraft,
+  initialEventId,
+  openLinkedRun,
+  returnToBasket,
   role = 'Owner',
 }: Props) {
   const [id, setId] = useState(run?.id || crypto.randomUUID())
-  const [revision, setRevision] = useState(Number(run?.revision || 0))
+  const initial = heldDraft || run
+  const [revision, setRevision] = useState(Number(initial?.revision || 0))
   const [status, setStatus] = useState(run?.status || 'draft')
-  const [name, setName] = useState(run?.name || 'Production run')
-  const [date, setDate] = useState(run?.date || ovenToday(state.settings[0]))
-  const [note, setNote] = useState(run?.note || '')
+  const [name, setName] = useState(initial?.name || 'Production run')
+  const [date, setDate] = useState(initial?.date || ovenToday(state.settings[0]))
+  const [dueDate, setDueDate] = useState(initial?.dueDate || '')
+  const [eventId, setEventId] = useState(initial?.eventId || initialEventId || '')
+  const [orderId, setOrderId] = useState(initial?.orderId || '')
+  const [note, setNote] = useState(initial?.note || '')
   const [lines, setLines] = useState<Item[]>(() =>
-    run ? structuredClone(productionRunLines(run)) : [blank(productId)],
+    initial ? structuredClone(productionRunLines(initial)) : [blank(productId)],
   )
-  const [review, setReview] = useState(!!initialReview)
+  const [review, setReview] = useState(!!initialReview && !heldDraft)
   const [savedPlan, setSavedPlan] = useState(!!run && !legacyRunId && Number(run.revision) > 0)
-  const [dirty, setDirty] = useState(false)
+  const [dirty, setDirty] = useState(!!heldDraft)
   const [error, setError] = useState('')
   const [reversalReason, setReversalReason] = useState('')
   useEffect(() => {
     onDirtyChange?.(dirty)
   }, [dirty, onDirtyChange])
+  useEffect(() => {
+    if (run?.id === id && !['completed', 'canceled'].includes(status)) holdDraft?.(dirty ? { id, name, revision, date, dueDate, eventId, orderId, note, lines } : undefined)
+  }, [run?.id, holdDraft, dirty, id, name, revision, date, dueDate, eventId, orderId, note, lines, status])
   const saving = useRef(false)
   const terminal = ['completed', 'canceled'].includes(status)
   const started = status === 'scheduled'
@@ -125,7 +147,7 @@ function RunEditor({
       return {
         ...l,
         definition:
-          l.definition ||
+          (product?.workflow !== 'kit' || terminal ? l.definition : undefined) ||
           (product && productionDefinition(product, state, l.mapping || {})),
       }
     } catch (e) {
@@ -149,9 +171,15 @@ function RunEditor({
       ? [`Product ${index + 1}: select a product and verify its recipe output or materials setup.`]
       : calculation?.products[index]?.error ? [calculation.products[index].error] : []),
   ].filter(Boolean))]
-  const blockers = [...new Set([...startIssues, ...reviewIssues])]
+  const checklistIssues = terminal ? [] : basketChecklistIssues(prepared, state, checklistStages)
+  const allocationIssues = terminal ? [] : basketAllocationIssues(prepared, state, id)
+  const blockers = [...new Set([...startIssues, ...reviewIssues, ...checklistIssues, ...allocationIssues])]
+  const basket = prepared.length === 1 && prepared[0].definition?.product?.workflow === 'kit'
+  const reviewPending = basketChecklistIssues(prepared, state, ['reviewed'])
   const reviewing = started && review
+  const making = basket && allocationIssues.length > 0
   const currentStep = status === 'completed' || reviewing ? 4 : started ? 3 : savedPlan && !dirty ? 2 : 1
+  const workStep = making && started && !reviewing ? 2 : currentStep
   function focusOutput() {
     setReview(false)
     requestAnimationFrame(() => {
@@ -179,24 +207,31 @@ function RunEditor({
       (l.laborMinutes !== '' && l.laborMinutes != null)
     )
   }
-  async function act(action: string, nextStatus = status) {
+  async function act(action: string, nextStatus = status, planContents = false) {
     if (saving.current) return
     saving.current = true
     setError('')
     try {
-      await mutate(action, 'batches', {
+      const result = await mutate(action, 'batches', {
         id,
-        name,
+        name: name === 'Production run' && lines.length ? lines.map((line) => state.products.find((product) => product.id === line.productId)?.name).filter(Boolean).join(', ') || name : name,
         date,
+        dueDate,
+        eventId,
+        orderId,
         note,
         lines,
+        ...(planContents ? { planContents: true } : {}),
         reason: reversalReason,
         status: nextStatus,
         expectedRevision: revision,
         legacyRunId:
           run && id !== run.id ? undefined : run?.legacyRunId || legacyRunId,
       })
-      setRevision(revision + 1)
+      const confirmed = (result as { workspace?: { batches?: Item[] } } | undefined)?.workspace?.batches?.find((entry) => entry.id === id)
+      setRevision(confirmed?.revision ?? revision + 1)
+      if (confirmed) setLines(productionRunLines(confirmed))
+      if (confirmed?.name) setName(confirmed.name)
       setSavedPlan(true)
       setDirty(false)
       setReview(false)
@@ -219,6 +254,9 @@ function RunEditor({
     setId(crypto.randomUUID())
     setRevision(0)
     setStatus('draft')
+    setEventId('')
+    setOrderId('')
+    setDueDate('')
     setSavedPlan(false)
     setName(name + ' — copy')
     setLines(
@@ -237,13 +275,20 @@ function RunEditor({
     state.batches.find((b) => b.id === id) || (run?.id === id ? run : undefined)
   return (
     <div className="production-run multi-production-run" ref={editorRef}>
+      {returnToBasket && <button type="button" disabled={busy || dirty} className="btn secondary" onClick={returnToBasket}>Back to basket</button>}
       {status !== 'canceled' && <ol className="production-steps" aria-label="Production steps">
-        {['Plan', 'Start', 'Record output', 'Review & finalize'].map((step, index) => <li key={step} aria-current={currentStep === index + 1 && status !== 'completed' ? 'step' : undefined}>
+        {(basket ? ['Plan', 'Make contents', 'Pack baskets', 'Review & finalize'] : ['Plan', 'Start', 'Record output', 'Review & finalize']).map((step, index) => <li key={step} aria-current={workStep === index + 1 && status !== 'completed' ? 'step' : undefined}>
           <strong>{index + 1} — {step}</strong>
-          <small>{status === 'completed' || currentStep > index + 1 ? 'Complete' : currentStep === index + 1 ? 'Current step' : 'Upcoming'}</small>
+          <small>{status === 'completed' || workStep > index + 1 ? 'Complete' : workStep === index + 1 ? 'Current step' : 'Upcoming'}</small>
         </li>)}
       </ol>}
-      <h3 tabIndex={-1} ref={headingRef}>{status === 'completed' ? 'Recorded result' : status === 'canceled' ? 'Cancelled run' : reviewing ? 'Review & finalize' : started ? 'Record output' : currentStep === 2 ? 'Start the saved plan' : 'Plan production'}</h3>
+      <h3 tabIndex={-1} ref={headingRef}>{status === 'completed' ? 'Recorded result' : status === 'canceled' ? 'Cancelled run' : reviewing ? 'Review & finalize' : started ? basket ? making ? 'Make contents' : 'Pack baskets' : 'Record output' : currentStep === 2 ? 'Start the saved plan' : 'Plan production'}</h3>
+      {dirty && holdDraft && finalRun && <div className="calculation-box">
+        <p>Closing keeps these unsaved changes available on this page. Save the run to keep them after a reload.</p>
+        <button type="button" className="btn secondary" disabled={busy} onClick={() => {
+          setName(finalRun.name); setDate(finalRun.date); setDueDate(finalRun.dueDate || ''); setEventId(finalRun.eventId || ''); setOrderId(finalRun.orderId || ''); setNote(finalRun.note || ''); setRevision(Number(finalRun.revision || 0)); setLines(productionRunLines(finalRun)); setDirty(false); setError(''); setReview(false)
+        }}>Discard unsaved changes</button>
+      </div>}
       {!terminal && !reviewing && <p>{started ? 'Enter actual good and rejected output for every product. Saving output does not post stock.' : 'Save the plan first. Starting the run does not finalize it, reserve materials or move stock.'}</p>}
       <p>
         <strong>
@@ -285,6 +330,21 @@ function RunEditor({
             }}
           />
         </label>
+        <label>Due date (optional)
+          <input type="date" value={dueDate} disabled={!canEdit} onChange={(event) => { setDueDate(event.target.value); setDirty(true) }} />
+        </label>
+        <label>Market or event (optional)
+          <select value={eventId} disabled={!canEdit} onChange={(event) => { setEventId(event.target.value); setDirty(true) }}>
+            <option value="">No market or event</option>
+            {(state.events || []).map((event) => <option key={event.id} value={event.id}>{event.name}</option>)}
+          </select>
+        </label>
+        <label>Customer order invoice (optional)
+          <select value={orderId} disabled={!canEdit} onChange={(event) => { setOrderId(event.target.value); setDirty(true) }}>
+            <option value="">No customer order</option>
+            {productionOrderInvoices(state).filter((order) => !order.reversedBy || order.id === orderId).map((order) => <option key={order.id} value={order.id}>{order.name}</option>)}
+          </select>
+        </label>
       </div>
       <details>
         <summary>Run notes</summary>
@@ -325,13 +385,13 @@ function RunEditor({
               {product?.name || l.name || `Product ${index + 1}`}
             </legend>
             <details open={!started && !terminal}>
-              <summary>Product plan · {l.quantity} {definition?.bom ? 'finished units' : 'selling packages'}</summary>
+              <summary>{basket ? 'Basket plan' : 'Product plan'} · {l.quantity} {basket ? 'baskets' : definition?.bom ? 'finished units' : 'selling packages'}</summary>
             <div className="form-grid">
               <label>
                 Product
                 <select
                   value={l.productId}
-                  disabled={!canEdit}
+                  disabled={!canEdit || !!l.basketParentId}
                   onChange={(e) => {
                     if (
                       hasActuals(l) &&
@@ -348,17 +408,18 @@ function RunEditor({
                     .filter(
                       (p) =>
                         !p.archived &&
-                        ['food', 'handmade', 'kit'].includes(workflowOf(p)),
+                        ['food', 'handmade', 'kit'].includes(workflowOf(p)) &&
+                        (workflowOf(p) !== 'kit' || lines.length === 1 || p.id === l.productId),
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} · {workflowOf(p)}
+                        {p.name} · {workflowOf(p) === 'kit' ? 'Basket' : workflowOf(p)}
                       </option>
                     ))}
                 </select>
               </label>
               <label>
-                Planned selling packages / finished units
+                {basket ? 'Planned baskets' : 'Planned selling packages / finished units'}
                 <input
                   type="number"
                   min="1"
@@ -377,12 +438,28 @@ function RunEditor({
                   `${result.multiplier.toFixed(4)} batches planned.`}
               </p>
             )}
-            {product?.workflow === 'kit' && (
-              <p>
-                Uses existing finished stock. Component manufacturing is
-                separate.
-              </p>
-            )}
+            {product && workflowOf(product) !== 'kit' && (() => {
+              const destinations = eligibleBasketRuns(state, product.id, id)
+              const assignments = basketAssignments(l)
+              if (!destinations.length && !assignments.length) return null
+              return <details>
+                <summary>Assign output to basket runs ({assignments.length})</summary>
+                <p>Planning only. Assigned packages are part of this batch, not additional output or reserved stock.</p>
+                {assignments.map((assignment, index) => <div key={index} className="form-grid">
+                  <label>Basket run
+                    <select disabled={!canEdit} value={assignment.runId} onChange={(event) => change(l.id, { basketAssignments: assignments.map((entry, position) => position === index ? { ...entry, runId: event.target.value } : entry) })}>
+                      {!destinations.some((run) => run.id === assignment.runId) && <option value={assignment.runId}>{state.batches.find((run) => run.id === assignment.runId)?.name || 'Unavailable basket'}</option>}
+                      {destinations.map((run) => <option key={run.id} value={run.id}>{run.name}</option>)}
+                    </select>
+                  </label>
+                  <label>Packages assigned
+                    <input type="number" min="1" step="1" disabled={!canEdit} value={assignment.quantity} onChange={(event) => change(l.id, { basketAssignments: assignments.map((entry, position) => position === index ? { ...entry, quantity: Number(event.target.value) } : entry) })} />
+                  </label>
+                  {canEdit && <button type="button" className="btn secondary" onClick={() => change(l.id, { basketAssignments: assignments.filter((_, position) => position !== index) })}>Remove assignment</button>}
+                </div>)}
+                {canEdit && destinations.some((run) => !assignments.some((entry) => entry.runId === run.id)) && <button type="button" className="btn secondary" onClick={() => change(l.id, { basketAssignments: [...assignments, { runId: destinations.find((run) => !assignments.some((entry) => entry.runId === run.id))!.id, quantity: 1 }] })}>Add basket assignment</button>}
+              </details>
+            })()}
             {definition?.bom && (
               <p>
                 BOM: {definition.bom.name || product?.name} ·{' '}
@@ -521,10 +598,20 @@ function RunEditor({
               </details>
             )}
             </details>
+            {product?.workflow === 'kit' && <>
+              <BasketProductionWork line={l} state={state} parentId={id} open={dirty ? undefined : openLinkedRun} disabled={busy} change={canEdit && !terminal && basket ? (basketPlan) => change(l.id, { basketPlan }) : undefined} />
+              {!savedPlan && <div><strong>Outer packaging and supplies</strong><ul>{basketChecklist(prepared[index], state, 'reviewed').filter((entry) => entry.supply).map((entry) => <li key={entry.key}>{entry.name}: {entry.required} {entry.unit} required</li>)}</ul></div>}
+              {finalRun && !dirty && <ProductionBasketChecklist run={finalRun} line={l} state={state} busy={busy} stage={terminal ? 'packed' : started ? making ? 'picked' : 'packed' : 'reviewed'} save={canRecordActuals ? async (data) => {
+                const result = await mutate('productionChecklist', 'batches', { ...data, id, name }) as { workspace?: { batches?: Item[] } }
+                const updated = result?.workspace?.batches?.find((entry) => entry.id === id)
+                if (updated) { setLines(productionRunLines(updated)); setRevision(updated.revision) }
+                return result
+              } : undefined} />}
+            </>}
             {(started || terminal) && <section className="production-actual-fields" aria-label={`${product?.name || l.name || 'Product'} output`}>
               <div className="form-grid">
                 <div><label>
-                  Actual good output ({definition?.bom ? 'finished units' : 'selling packages'})
+                  {basket ? 'Actual completed baskets' : `Actual good output (${definition?.bom ? 'finished units' : 'selling packages'})`}
                   <input
                     data-output-input
                     aria-invalid={!terminal && !!productionOutputIssue(l)}
@@ -596,7 +683,7 @@ function RunEditor({
                   {money(snapshot?.overhead || 0)} · packaging{' '}
                   {money(snapshot?.packagingCost || 0)}
                 </p>
-                {(l.usage || []).map((u: Item) => (
+                {(Array.isArray(l.usage) ? l.usage : []).map((u: Item) => (
                   <p key={u.id}>
                     {u.name}: {u.quantity} {u.unit} consumed · {money(u.cost)}
                   </p>
@@ -741,7 +828,7 @@ function RunEditor({
           </fieldset>
         )
       })}
-      {canEdit && !reviewing && (
+      {canEdit && !reviewing && !basket && (
         <button
           type="button"
           className={started ? 'text-button' : 'btn secondary'}
@@ -838,7 +925,7 @@ function RunEditor({
               <p>
                 Finished components use recorded inventory valuation when
                 available; otherwise the current All Products estimate is
-                labeled above. These bases can differ. Kit assembly consumes
+                labeled above. These bases can differ. Basket assembly consumes
                 finished packages, without charging their ingredients again.
               </p>
             </>
@@ -857,7 +944,7 @@ function RunEditor({
           {lines.map((l) => (
             <p key={l.id}>
               {state.products.find((p) => p.id === l.productId)?.name}:{' '}
-              {l.output} good {l.definition?.bom ? 'finished units' : 'selling packages'} to receive ·{' '}
+              {l.output} {basket ? 'completed baskets' : l.definition?.bom ? 'good finished units' : 'good selling packages'} to receive ·{' '}
               {l.waste || 0} rejected · estimated cost{' '}
               {money(
                 calculation?.products.find((p) => p.line.id === l.id)
@@ -865,10 +952,11 @@ function RunEditor({
               )}
             </p>
           ))}
-          <h4>Materials to consume</h4>
+          <h4>{basket ? 'Finished contents and outer supplies to consume' : 'Materials to consume'}</h4>
           <ul>{calculation?.requirements.map((requirement) => <li key={requirement.id}>
             {requirement.name}: {requirement.quantity} {requirement.unit}{requirement.source?.prepared ? ' from prepared stock' : ''} · {requirement.costKnown ? money(requirement.cost) : 'Cost needs review'}
           </li>)}</ul>
+          {basket && <p>Additional assembly labor: {money(calculation?.products[0]?.cost?.labor || 0)}. Component valuation already includes its production costs.</p>}
           <p><strong>Estimated at recorded costs: {calculation?.costKnown ? money(calculation.total) : 'Incomplete'}</strong></p>
           <p>
             Finalization rechecks stock, receives good output, consumes the materials once and locks the actual costs and usage.
@@ -880,7 +968,7 @@ function RunEditor({
           <p>
             {status === 'completed'
               ? `Finalized ${finalRun?.completedAt || ''} by ${finalRun?.finalizedBy || 'recorded operator'}. Actual run cost: ${money(finalRun?.historicalCost || 0)}.`
-              : 'Cancelled. No stock was posted.'}
+            : basket ? 'Basket cancelled. Any linked component production remains as recorded; no component stock was reversed.' : 'Cancelled. No stock was posted.'}
           </p>
           <p>
             Posted quantities, usage and costs are read-only. Corrections use
@@ -948,17 +1036,18 @@ function RunEditor({
                 type="button"
                 className={currentStep === 1 ? 'btn' : 'btn secondary'}
                 disabled={busy}
-                onClick={() => lines.length ? act('productionSave', 'draft') : setError('Add a product before saving the plan.')}
+                onClick={() => lines.length ? act('productionSave', 'draft', basket) : setError('Add a product before saving the plan.')}
               >
-                Save plan
+                {basket ? 'Save basket & component plan' : 'Save plan'}
               </button>
-              {currentStep === 2 && !startIssues.length && <button
+              {currentStep === 2 && !!reviewPending.length && <p>Review the basket contents checklist before starting.</p>}
+              {currentStep === 2 && !startIssues.length && !reviewPending.length && <button
                 type="button"
                 className="btn"
                 disabled={busy}
                 onClick={() => act('productionSave', 'scheduled')}
               >
-                Start run
+                {basket ? 'Start basket plan' : 'Start run'}
               </button>}
             </>
           )}
@@ -974,9 +1063,10 @@ function RunEditor({
                 } else void act(canEdit ? 'productionSave' : 'productionRecordActuals')
               }}
             >
-              Save output
+              {basket ? 'Save actual baskets' : 'Save output'}
             </button>
           )}
+          {started && !reviewing && canEdit && basket && <button type="button" className="btn secondary" disabled={busy} onClick={() => void act('productionSave', status, true)}>Save basket & component plan</button>}
           {started && canFinalize && !blockers.length && !dirty && (
             <button
               type="button"
@@ -993,7 +1083,7 @@ function RunEditor({
               {reviewing ? 'Finalize production' : 'Review & finalize'}
             </button>
           )}
-          {reviewing && <button type="button" className="btn secondary" disabled={busy} onClick={() => setReview(false)}>Back to output</button>}
+          {reviewing && <button type="button" className="btn secondary" disabled={busy} onClick={() => setReview(false)}>{basket ? 'Back to packing' : 'Back to output'}</button>}
           {canEdit && !reviewing && savedPlan && (
             <button
               type="button"
@@ -1001,7 +1091,7 @@ function RunEditor({
               disabled={busy}
               onClick={() => {
                 if (
-                  window.confirm('Cancel this run? No stock has been posted.')
+                  window.confirm(basket ? 'Cancel this basket? Linked runs stay open or completed as recorded. Posted components stay in stock; nothing is reversed.' : 'Cancel this run? No stock has been posted.')
                 )
                   void act('productionCancel')
               }}

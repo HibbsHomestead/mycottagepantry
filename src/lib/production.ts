@@ -81,7 +81,7 @@ export function productionDefinition(
   const workflow = workflowOf(product)
   if (!['food', 'kit', 'handmade'].includes(workflow))
     throw new Error(
-      'Choose a recipe product or kit. Receive purchased products through stock receipts.',
+      'Choose a recipe product or basket. Receive purchased products through stock receipts.',
     )
   if (workflow === 'kit') {
     validateKit(product, state)

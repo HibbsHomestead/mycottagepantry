@@ -708,7 +708,7 @@ export function validateKit(product: Item, workspace: Workspace) {
         `Component ${line.productId} is unavailable; restore its reference.`,
       )
     if (component.id === product.id || component.workflow === 'kit')
-      throw new Error('Kits cannot contain kits.')
+      throw new Error('Baskets cannot contain baskets.')
     if (line.basis !== 'package')
       throw new Error(
         'Individual contents are unavailable: separate unpackaged production and packaging costs are not configured. Use whole selling packages.',
@@ -725,13 +725,13 @@ export function validateKit(product: Item, workspace: Workspace) {
     seen.add(component.id)
   }
   for (const line of packagingLines(product)) {
-    number(line.quantity, 'Kit packaging quantity', 0.000001)
+    number(line.quantity, 'Basket packaging quantity', 0.000001)
     const packaging = workspace.ingredients.find(
       (i) => i.id === line.ingredientId && i.usedAs === 'packaging',
     )
-    if (!packaging) throw new Error('Choose available kit packaging.')
+    if (!packaging) throw new Error('Choose available basket packaging.')
     convert(
-      number(line.quantity, 'Kit packaging quantity', 0.000001),
+      number(line.quantity, 'Basket packaging quantity', 0.000001),
       line.unit || packaging.unit,
       packaging.unit,
       packaging.conversions,

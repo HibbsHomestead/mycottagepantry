@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { basketAllocationIssues, basketProduction, basketSources } from '../../src/lib/basket-production'
+import { basketChecklist, basketChecklistIssues, basketDefinitionChanged, checklistStages, updatedBasketChecklist, type ChecklistStage } from '../../src/lib/production-checklist'
+import { productionOrderInvoices, validateBasketAssignments } from '../../src/lib/production-destinations'
 import {
   convert,
   number,
@@ -32,6 +35,13 @@ type Context = {
 }
 const digest = (data: unknown) =>
   createHash('sha256').update(JSON.stringify(data)).digest('hex')
+function productionLink(value: unknown, existing: string | undefined, records: Item[] | undefined, label: string) {
+  if (value === undefined || value === existing) return existing
+  if (value === '' || value === null) return null
+  if (typeof value !== 'string' || !records?.some((record) => record.id === value))
+    throw new Error(`Choose an existing ${label} from this business.`)
+  return value
+}
 async function handleSingleProduction(
   action: string,
   table: string,
@@ -172,6 +182,8 @@ async function handleSingleProduction(
     const product = state.products.find((p) => p.id === data.productId)
     if (!product || product.archived)
       throw new Error('Choose an active product from this oven.')
+    if (!existing && workflowOf(product) === 'kit')
+      throw new Error('Save a basket from the production board to review its checklist before starting.')
     const quantity = number(data.quantity, 'Selling packages', 1)
     if (!Number.isInteger(quantity))
       throw new Error('Use whole selling packages.')
@@ -509,6 +521,7 @@ export async function handleProduction(
       'productionCancel',
       'productionReverse',
       'productionRecordActuals',
+      'productionChecklist',
     ].includes(action)
   )
     return false
@@ -517,6 +530,8 @@ export async function handleProduction(
   if (existing && !existing.productionVersion)
     throw new Error('Use the original workflow for this legacy recipe run.')
   const revision = Number(existing?.revision || 0)
+  const planHash = action === 'productionSave' && data.planContents === true ? digest(data) : undefined
+  if (planHash && existing?.basketPlanHash === planHash && revision === Number(data.expectedRevision) + 1) return true
   const completionHash = digest(['finalize', data.expectedRevision])
   if (action === 'productionComplete' && existing?.status === 'completed') {
     if (existing.completionHash === completionHash) return true
@@ -576,6 +591,26 @@ export async function handleProduction(
     throw new Error(
       'This run changed in another session. Close and reopen it before saving; your changes have not overwritten it.',
     )
+  if (action === 'productionChecklist') {
+    if (!existing || !checklistStages.includes(data.stage)) throw new Error('Choose a saved basket and checklist stage.')
+    const stage = data.stage as ChecklistStage
+    if (stage !== 'reviewed' && existing.status !== 'scheduled') throw new Error('Start the basket before recording assembly progress.')
+    const lines = productionRunLines(existing)
+    const line = lines.find((entry) => entry.id === data.lineId)
+    if (!line) throw new Error('Reopen this basket before saving the checklist.')
+    const product = ctx.state.products.find((entry) => entry.id === line.productId && !entry.archived)
+    if (!product || workflowOf(product) !== 'kit') throw new Error('Choose an active basket.')
+    ctx.assertProductAccess?.(product)
+    const entry = basketChecklist(line, ctx.state, stage).find((item) => item.key === data.key)
+    if (!entry || entry.signature !== data.signature) throw new Error('The requirements changed. Reopen the checklist and review the quantities.')
+    if (data.checked === true && stage !== 'reviewed' && entry.available + 1e-8 < entry.required)
+      throw new Error(`${entry.name}: ${entry.required - entry.available} ${entry.unit} still needed. Record partial progress instead.`)
+    const quantity = data.checked === true ? entry.required : number(data.quantity ?? 0, 'Checklist quantity')
+    if (quantity > entry.required || (!entry.supply && !Number.isSafeInteger(quantity))) throw new Error('Enter an actual quantity from zero up to the required amount (whole packages for products).')
+    line.checklist = { ...line.checklist, [stage]: { ...line.checklist?.[stage], [entry.key]: { signature: entry.signature, quantity, checked: data.checked === true } } }
+    await ctx.save('batches', { ...existing, lines, revision: revision + 1 })
+    return true
+  }
   if (action === 'productionRecordActuals') {
     if (!existing || !Array.isArray(data.lines))
       throw new Error('Choose a saved production run.')
@@ -618,6 +653,8 @@ export async function handleProduction(
   if (action === 'productionSave') {
     if (!['draft', 'scheduled'].includes(data.status))
       throw new Error('Choose Save draft or Start run.')
+    if (existing?.status === 'scheduled' && data.status === 'draft')
+      throw new Error('Started runs cannot return to Planned.')
     if (
       !Array.isArray(data.lines) ||
       !data.lines.length ||
@@ -648,7 +685,7 @@ export async function handleProduction(
       const sameSetup =
         prior?.productId === input.productId &&
         digest(prior?.mapping || {}) === digest(input.mapping || {})
-      let definition = sameSetup ? prior?.definition : undefined
+      let definition = sameSetup && workflowOf(product) !== 'kit' ? prior?.definition : undefined
       // Drafts can retain incomplete setup. Starting/finalizing requires a valid definition.
       if (!definition) {
         try {
@@ -661,6 +698,8 @@ export async function handleProduction(
           if (data.status !== 'draft') throw e
         }
       }
+      if (prior?.basketPlan && data.planContents !== true && (quantity !== prior.quantity || !definition || basketDefinitionChanged(prior, definition, ctx.state)))
+        throw new Error('Preview and save basket contents and component work before recording output or starting.')
       const actual = {
         id: input.id,
         name: product.name,
@@ -683,10 +722,35 @@ export async function handleProduction(
         quantity,
         mapping: input.mapping || {},
         definition,
+        checklist: updatedBasketChecklist({ productId: product.id, quantity, definition, ...actual }, sameSetup ? prior : undefined, ctx.state),
+        basketAssignments: validateBasketAssignments({ ...input, basketAssignments: input.basketAssignments ?? prior?.basketAssignments }, quantity, data.id, ctx.state),
         ...actual,
         note: String(input.note || '').slice(0, 2000),
+        ...(workflowOf(product) === 'kit' && (prior?.basketPlan || data.planContents === true) ? { basketParentId: data.id, basketPlan: data.planContents === true ? input.basketPlan || {} : prior?.basketPlan } : {}),
       }
     })
+    const managedBasket = lines.find((line) => line.basketPlan)
+    if (managedBasket && (lines.length !== 1 || !managedBasket.definition))
+      throw new Error('Plan each basket in its own run with valid contents and packaging.')
+    if (managedBasket && data.planContents === true) {
+      const rows = basketProduction(managedBasket, ctx.state, data.id)
+      managedBasket.basketPlan = Object.fromEntries(rows.map((row) => {
+        if (!Number.isSafeInteger(row.required) || row.required < 1)
+          throw new Error(`${row.name}: choose a basket count with a valid whole-package requirement.`)
+        if (!Number.isSafeInteger(row.allocated) || row.allocated < 0 || row.allocated > row.eligible || row.allocated > Math.max(0, row.required - row.pending - row.posted))
+          throw new Error(`${row.name}: allocate whole packages within the remaining demand and ${row.eligible} eligible on hand. Existing linked runs are not resized.`)
+        const choice = row.choice
+        return [row.component.productId, { stock: row.allocated, wholeBatch: choice.wholeBatch === true, useExistingRun: choice.useExistingRun === true }]
+      }))
+    }
+    if (productionRunLines(existing).some((line) => line.basketPlan) && !managedBasket)
+      throw new Error('A linked basket cannot be replaced. Cancel the parent and create a new plan; its component work remains.')
+    if ((ctx.state.event_batch_links || []).some((link) => link.recordId === data.id && link.allocations?.some((allocation: Item) => !lines.some((line) => line.id === allocation.lineId && line.productId === allocation.productId))))
+      throw new Error('Remove the market allocation before removing or replacing its product line.')
+    if (data.status === 'scheduled' && existing?.status !== 'scheduled') {
+      const issues = basketChecklistIssues(lines, ctx.state, ['reviewed'])
+      if (issues.length) throw new Error(`Review the basket contents on the board before starting: ${issues.join(' ')}`)
+    }
     for (const line of lines) {
       try {
         const estimate = combinedProductionRequirements(
@@ -724,7 +788,7 @@ export async function handleProduction(
       throw new Error(
         'The original recipe plan is unavailable or already closed.',
       )
-    await ctx.save('batches', {
+    const record = {
       ...existing,
       id: data.id,
       name: String(data.name || 'Production run').slice(0, 200),
@@ -744,17 +808,53 @@ export async function handleProduction(
       productionVersion: 2,
       revision: revision + 1,
       lines,
+      basketPlanHash: planHash,
       legacyRunId,
       productId: first.productId,
       recipeId: first.definition?.recipe?.id || null,
       quantity: lines.reduce((sum: number, l: Item) => sum + l.quantity, 0),
-      kind: 'manufacture',
+      kind: lines.every((line) => line.definition?.product?.workflow === 'kit') ? 'assembly' : 'manufacture',
       status: data.status,
       date: validateDate(data.date || ctx.today),
+      dueDate: data.dueDate === undefined ? existing?.dueDate : data.dueDate ? validateDate(data.dueDate) : null,
+      eventId: productionLink(data.eventId, existing?.eventId, ctx.state.events, 'market or event'),
+      orderId: productionLink(data.orderId, existing?.orderId, productionOrderInvoices(ctx.state).filter((invoice) => !invoice.reversedBy), 'customer order invoice'),
       note: String(data.note || '').slice(0, 2000),
       costingPolicy:
         'Per-line existing recipe/BOM allocations; no additional shared run charges',
-    } as Item)
+    } as Item
+    const plannedState = { ...ctx.state, batches: [...ctx.state.batches.filter((run) => run.id !== record.id), record] }
+    for (const [targetId, productId] of new Map<string, [string, string]>(lines.flatMap((line) =>
+      (line.basketAssignments || []).map((assignment) => [`${assignment.runId}:${line.productId}`, [assignment.runId, line.productId]] as const),
+    )).values()) {
+      const basket = ctx.state.batches.find((run) => run.id === targetId && ['draft', 'scheduled'].includes(run.status))
+      const parentLine = productionRunLines(basket).find((line) => line.basketPlan)
+      if (!parentLine) continue
+      const row = basketProduction(parentLine, plannedState, targetId).find((entry) => entry.component.productId === productId)
+      const priorCoverage = basketSources(ctx.state, targetId, productId).reduce((total, source) => total + source.pending + source.posted, 0)
+      if (record.orderId && (record.orderId !== existing?.orderId || (row && row.pending + row.posted > priorCoverage)))
+        throw new Error('Use a separate run for order-linked output or remove its basket assignments before linking the order.')
+      if (row && row.pending + row.posted > priorCoverage && row.allocated + row.pending + row.posted > row.required)
+        throw new Error(`${row.name}: linked runs exceed this basket’s unmet demand.`)
+    }
+    await ctx.save('batches', record)
+    if (managedBasket && data.planContents === true) {
+      const state = plannedState
+      for (const row of basketProduction(managedBasket, state, record.id)) {
+        if (!row.candidate || row.choice.useExistingRun) continue
+        const childId = 'basket-work-' + digest([record.id, revision, row.component.productId]).slice(0, 40)
+        await handleProduction('productionSave', 'batches', {
+          id: childId,
+          name: row.name,
+          date: record.date,
+          dueDate: record.dueDate,
+          eventId: record.eventId,
+          status: 'draft',
+          expectedRevision: 0,
+          lines: [{ ...row.candidate, id: `${childId}-line`, basketAssignments: [{ runId: record.id, quantity: row.unplanned }] }],
+        } as Item, { ...ctx, state })
+      }
+    }
     if (data.status === 'scheduled' && legacy && legacy.status !== 'canceled') {
       await ctx.save('batches', {
         ...legacy,
@@ -786,6 +886,11 @@ export async function handleProduction(
         `${currentProduct.name}: product setup changed. Review this line before finalizing.`,
       )
     ctx.assertProductAccess?.(currentProduct)
+    if (workflowOf(currentProduct) === 'kit') {
+      const current = productionDefinition(currentProduct, ctx.state, line.mapping || {})
+      if (basketDefinitionChanged(line, current, ctx.state))
+        throw new Error(`${line.name}: basket contents or packaging changed. Save the updated plan and review the affected checklist lines before finalizing.`)
+    }
     if (!line.definition)
       throw new Error(
         `${line.name}: complete the recipe/BOM setup before finalizing.`,
@@ -795,6 +900,10 @@ export async function handleProduction(
         `${line.name}: record actual good output before finalizing.`,
       )
   }
+  const checklistIssues = basketChecklistIssues(lines, ctx.state, checklistStages)
+  if (checklistIssues.length) throw new Error(`Finish the basket checklists before finalizing: ${checklistIssues.join(' ')}`)
+  const allocationIssues = basketAllocationIssues(lines, ctx.state, existing.id)
+  if (allocationIssues.length) throw new Error(allocationIssues.join(' '))
   // Check the aggregate against current stock before applying any product line.
   combinedProductionRequirements(lines, ctx.state, true)
   const completed: Item[] = []

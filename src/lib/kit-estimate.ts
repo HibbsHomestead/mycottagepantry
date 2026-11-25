@@ -27,7 +27,7 @@ export function kitEstimate(product: Item, workspace: Workspace) {
   try {
     const taxes = applicableTaxes(product, workspace.settings[0])
     if (!Number.isFinite(price) || price < 0)
-      throw new Error('Kit selling price is not configured.')
+      throw new Error('Basket selling price is not configured.')
     tax = calculateTax(price, taxes)
     if (cost)
       pricing = profitability(product, cost.perPackage, workspace.settings[0])

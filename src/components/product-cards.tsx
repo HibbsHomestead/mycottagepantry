@@ -62,7 +62,7 @@ export function ProductCards({
         const status = product.archived
           ? 'Archived'
           : product.workflow === 'kit'
-            ? `Kit · ${product.status}`
+            ? `Basket · ${product.status}`
             : product.status
         const stock = ['handmade', 'resale'].includes(product.workflow)
           ? stockStatus(product)
