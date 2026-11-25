@@ -1,4 +1,4 @@
-import { convert, knownCurrentIngredientCost, type Item, type Workspace } from './domain'
+import { convert, flatRecipePackagingCost, knownCurrentIngredientCost, type Item, type Workspace } from './domain'
 import { productionRequirements } from './production'
 import { cardCost } from './product-list'
 import { resaleCostBasis } from './resale-cost'
@@ -195,7 +195,7 @@ export function combinedProductionRequirements(
           ...r,
           id: key,
           quantity,
-          unit: r.kind === 'product' ? 'package' : item.unit,
+          unit: r.kind === 'product' ? r.unit : item.unit,
           available,
           cost,
           costKnown,
@@ -207,8 +207,9 @@ export function combinedProductionRequirements(
           recipeId: item.recipeId,
         })
     }
-    const flatPackaging =
-      Number(line.definition.recipe?.packagingCost || 0) * result.multiplier
+    const flatPackaging = line.definition.recipe
+      ? flatRecipePackagingCost(line.definition.recipe, line.definition.product) * result.multiplier
+      : 0
     const estimate =
       materialCost +
       flatPackaging +

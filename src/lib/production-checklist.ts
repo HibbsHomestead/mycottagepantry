@@ -1,4 +1,4 @@
-import { convert, packagingLines, type Item, type Workspace } from './domain'
+import { convert, isMixedPack, packagingLines, type Item, type Workspace } from './domain'
 import { basketProduction } from './basket-production'
 
 export const checklistStages = ['reviewed', 'picked', 'packed'] as const
@@ -44,10 +44,11 @@ export function basketChecklist(
       key,
       name: product.name,
       perBasket: Number(component.quantity),
-      unit: 'packages',
+      unit: component.basis === 'unpackaged' ? component.contentUnit : 'packages',
       supply: false,
       variant: [
         product.sku,
+        ...(isMixedPack(definition.product) ? [product.name, product.recipeId, product.variant, product.flavor, component.basis] : []),
         product.unitsPerPackage
           ? `${product.unitsPerPackage} ${product.contentUnit || 'units'} per package`
           : 'Selling package',
@@ -94,6 +95,7 @@ export function basketChecklist(
       entry.perBasket,
       entry.unit,
       entry.variant,
+      ...(isMixedPack(definition.product) ? [definition.product.expectedContents, definition.product.mixedLabelTemplateId, definition.product.mixedLabelStockId, definition.product.assemblyMinutes, definition.product.assemblyRate, definition.product.assemblyOverhead] : []),
     ])
     const saved: ChecklistMark | undefined =
       line.checklist?.[stage]?.[entry.key]

@@ -136,6 +136,13 @@
   align-items: end;
   gap: 8px;
 }
+.basket-packaging-row .packaging-line-cost {
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
+}
+.basket-packaging-row .packaging-line-cost strong {
+  white-space: nowrap;
+}
 @media (max-width: 760px) {
   .basket-packaging-row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;

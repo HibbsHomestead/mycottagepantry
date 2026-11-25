@@ -9,8 +9,10 @@ import {
   effectiveRecipeLines,
   effectiveProductionSupplies,
   number,
+  isMixedPack,
   packagingLines,
   recipeInputLines,
+  unpackagedOutputUnit,
   validateKit,
   units,
   type Item,
@@ -130,6 +132,10 @@ export function productionDefinition(
   number(recipe.yield, 'Recipe yield', 0.000001)
   if (!recipe.yieldUnit)
     throw new Error('Missing yield unit. Open Edit Recipe.')
+  if (product.unpackagedOutput === true) {
+    const unit = unpackagedOutputUnit(product, state)
+    mapping = { quantity: 1, unit, verified: true }
+  }
   if (mapping.verified !== true)
     throw new Error(
       'Verify recipe output per selling package before scheduling.',
@@ -221,7 +227,7 @@ export function productionRequirements(
         name: item.name,
         kind,
         itemId: item.id,
-        unit: kind === 'product' ? 'package' : item.unit,
+        unit: kind === 'product' ? (source.contentUnit || 'package') : item.unit,
         quantity: q,
         [allocation]: q,
         tracked:
@@ -266,7 +272,7 @@ export function productionRequirements(
       laborMinutes,
       laborRate: Number(p.assemblyRate || 0),
       labor: (laborMinutes / 60) * Number(p.assemblyRate || 0),
-      overhead: 0,
+      overhead: isMixedPack(p) ? number(p.assemblyOverhead ?? 0, 'Packing overhead per pack') * (good + waste) : 0,
       waste: 0,
     }
   } else {

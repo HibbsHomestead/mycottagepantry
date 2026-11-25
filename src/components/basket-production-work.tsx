@@ -71,6 +71,8 @@ export function BasketProductionWork({
         </p>
       )}
       {rows.map((row) => {
+        const loose = row.component.basis === 'unpackaged'
+        const units = loose ? `${row.component.contentUnit} units` : 'packages'
         const sources = row.sources.map((source) => ({
           ...source,
           shortages:
@@ -93,15 +95,15 @@ export function BasketProductionWork({
         return (
           <details key={row.component.productId}>
             <summary>
-              {row.name} · {row.required} packages · {status}
+              {row.name} · {row.required} {units} · {status}
             </summary>
             <p>
-              {row.component.quantity} per basket · {row.required} required
+              {row.component.quantity} per {loose ? 'mixed pack' : 'basket'} · {row.required} required
               {!completed &&
                 ` · ${row.eligible} eligible of ${row.stock} on hand (unreserved)`}
               .
             </p>
-            {row.item && (
+            {row.item && !loose && (
               <p>
                 {[
                   row.item.sku,
@@ -119,14 +121,14 @@ export function BasketProductionWork({
             </p>
             {!completed && (
               <p>
-                {row.ready} of {row.packingRequired} packages ready for the
+                {row.ready} of {row.packingRequired} {units} ready for the
                 current packing count.
               </p>
             )}
             {change && !completed && (
               <div className="form-grid">
                 <label>
-                  Packages to use from stock
+                  {loose ? 'Unpackaged units to use from stock' : 'Packages to use from stock'}
                   <input
                     type="number"
                     min="0"
@@ -197,10 +199,9 @@ export function BasketProductionWork({
             {!completed && row.candidate && !row.choice.useExistingRun && (
               <p>
                 {change ? 'New run preview' : 'Unplanned production'}:{' '}
-                {row.candidate.quantity} packages · {row.unplanned} for this
-                basket
+                {row.candidate.quantity} {units} · {row.unplanned} for this plan
                 {row.candidate.quantity > row.unplanned &&
-                  ` · ${row.candidate.quantity - row.unplanned} extra, not allocated to baskets`}
+                  ` · ${row.candidate.quantity - row.unplanned} extra, left unallocated`}
                 .
               </p>
             )}

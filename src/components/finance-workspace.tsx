@@ -68,6 +68,7 @@ import {
   ingredientUnits,
   unitLabel,
   calculateTax,
+  isMixedPack,
   priceTaxLabel,
   saleTaxReviewKey,
   applicableTaxes,
@@ -171,6 +172,8 @@ export function FinanceWorkspace({
   onCreatePantryItem?: (kind: 'ingredient' | 'packaging') => void
   onNavigate?: (section: string) => void
 }) {
+  const saleProducts = w.products.filter((product) => product.unpackagedOutput !== true &&
+    (product.workflow !== 'kit' || (isMixedPack(product) && product.status === 'active' && !product.archived)))
   const [tab, setTab] = useState('Consignors'),
     [receipt, setReceipt] = useState<Item | null>(null),
     [reviewFilter, setReviewFilter] = useWorkspaceFilter(
@@ -231,9 +234,9 @@ export function FinanceWorkspace({
         open('simpleSale', {
           saleLines: [
             {
-              productId: w.products[0]?.id || '',
+              productId: saleProducts[0]?.id || '',
               quantity: 1,
-              amount: w.products[0]?.price || 0,
+              amount: saleProducts[0]?.price || 0,
               discounts: 0,
             },
           ],
@@ -702,9 +705,9 @@ export function FinanceWorkspace({
               ? open('simpleSale', {
                   saleLines: [
                     {
-                      productId: w.products[0]?.id || '',
+                      productId: saleProducts[0]?.id || '',
                       quantity: 1,
-                      amount: w.products[0]?.price || 0,
+                      amount: saleProducts[0]?.price || 0,
                       discounts: 0,
                     },
                   ],
@@ -1435,9 +1438,9 @@ export function FinanceWorkspace({
                         open('simpleSale', {
                           saleLines: [
                             {
-                              productId: w.products[0]?.id || '',
+                              productId: saleProducts[0]?.id || '',
                               quantity: 1,
-                              amount: w.products[0]?.price || 0,
+                              amount: saleProducts[0]?.price || 0,
                               discounts: 0,
                             },
                           ],
@@ -1587,7 +1590,8 @@ export function FinanceWorkspace({
                                 })
                               }}
                             >
-                              {w.products.map((p) => (
+                              {!saleProducts.length && <option value="">No sellable products</option>}
+                              {saleProducts.map((p) => (
                                 <option key={p.id} value={p.id}>
                                   {p.name}
                                 </option>
@@ -1706,9 +1710,9 @@ export function FinanceWorkspace({
                         saleLines: [
                           ...draft.saleLines,
                           {
-                            productId: w.products[0]?.id || '',
+                            productId: saleProducts[0]?.id || '',
                             quantity: 1,
-                            amount: w.products[0]?.price || 0,
+                            amount: saleProducts[0]?.price || 0,
                             discounts: 0,
                           },
                         ],

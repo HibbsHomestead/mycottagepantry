@@ -1,4 +1,4 @@
-import type { Item, Workspace } from './domain'
+import { isMixedPack, type Item, type Workspace } from './domain'
 import { productionRunLines } from './production-run'
 
 export const activeProduction = (run: Item) =>
@@ -19,7 +19,9 @@ export function basketAssignments(
 export function activeBasketAssignments(line: Item, state: Workspace) {
   return basketAssignments(line).filter((entry) => {
     const target = state.batches.find((run) => run.id === entry.runId)
-    return target && activeProduction(target)
+    if (!target || !activeProduction(target)) return false
+    const parent = productionRunLines(target).find((entry) => isMixedPack(entry.definition?.product))
+    return !parent || parent.definition.components.some((component: Item) => component.productId === line.productId)
   })
 }
 

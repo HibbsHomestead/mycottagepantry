@@ -447,6 +447,10 @@ export function packagingLines(product: Item): any[] {
       : [])
   )
 }
+
+export function flatRecipePackagingCost(recipe: Item, product?: Item) {
+  return product?.unpackagedOutput === true ? 0 : number(recipe.packagingCost || 0, 'Batch packaging')
+}
 export function resolvePackagingCost(
   line: Record<string, unknown>,
   ingredients: Item[],
@@ -644,7 +648,7 @@ export function costBreakdown(
     packaging.reduce((s: number, l: any) => s + l.cost, 0) +
     (options.reusableBase
       ? 0
-      : number(recipe.packagingCost || 0, 'Batch packaging') * multiplier)
+      : flatRecipePackagingCost(recipe, product) * multiplier)
   const overheadValue = number(recipe.overhead || 0, 'Overhead')
   const overheadMode = recipe.overheadMode || 'batch'
   if (!['batch', 'unit', 'percent'].includes(overheadMode))
@@ -692,7 +696,43 @@ export function costBreakdown(
     perPackage: total / packages,
   }
 }
-/** Fixed kits contain whole selling packages. Unpackaged allocation is deliberately unsupported. */
+export const isMixedPack = (product?: Item) =>
+  product?.workflow === 'kit' && product.assemblyType === 'mixed-pack'
+
+export function mixedLabelQuantity(product?: Item) {
+  return product?.mixedLabelStockId
+    ? packagingLines(product).filter((line) => line.ingredientId === product.mixedLabelStockId)
+        .reduce((total, line) => total + Number(line.quantity), 0)
+    : 0
+}
+
+export function unpackagedOutputUnit(product: Item, workspace: Workspace) {
+  const recipe = workspace.recipes.find((entry) => entry.id === product.recipeId)
+  const unit = product.contentUnit
+  if (product.workflow !== 'food' || product.unpackagedOutput !== true ||
+    Number(product.unitsPerPackage) !== 1 || packagingLines(product).length ||
+    typeof unit !== 'string' || !unit.trim() || !recipe || recipe.compound ||
+    workspace.ingredients.some((entry) => entry.compoundRecipeId === recipe.id) ||
+    unit !== recipe.yieldUnit || !Number.isSafeInteger(Number(recipe.yield)) || Number(recipe.yield) < 1 ||
+    (units[unit] && unit !== 'each'))
+    throw new Error('Set up a separate unpackaged recipe output: link the flavor recipe, verify a whole individual-unit yield and remove all individual packaging and labels.')
+  const stockBasis = product.stockOutputBasis
+  if (Number(product.quantity) > 0 &&
+    (stockBasis?.unit !== unit || Number(stockBasis?.quantity) !== 1 || product.stockCostKnown !== true))
+    throw new Error('Existing unpackaged stock has no matching verified output basis. Review the stock before allocating it.')
+  return unit as string
+}
+
+export function assemblyComponentUnit(component: Item, line: Item, workspace: Workspace, mixed: boolean) {
+  if (line.basis === 'package' && component.unpackagedOutput !== true) return 'package'
+  if (mixed && line.basis === 'unpackaged') {
+    const unit = unpackagedOutputUnit(component, workspace)
+    if (line.contentUnit === unit) return unit
+    throw new Error(`Verify the content unit against the source recipe yield (${unit}).`)
+  }
+  throw new Error('Choose a whole selling package or a verified unpackaged output for a mixed pack.')
+}
+
 export function validateKit(product: Item, workspace: Workspace) {
   if (
     !Array.isArray(product.kitComponents) ||
@@ -709,20 +749,21 @@ export function validateKit(product: Item, workspace: Workspace) {
       )
     if (component.id === product.id || component.workflow === 'kit')
       throw new Error('Baskets cannot contain baskets.')
-    if (line.basis !== 'package')
-      throw new Error(
-        'Individual contents are unavailable: separate unpackaged production and packaging costs are not configured. Use whole selling packages.',
-      )
-    const quantity = number(line.quantity, 'Component packages', 1)
-    if (!Number.isInteger(quantity))
-      throw new Error(
-        'Use whole selling packages; unpackaged contents are unsupported.',
-      )
+    assemblyComponentUnit(component, line, workspace, isMixedPack(product))
+    if (isMixedPack(product) && component.archived) throw new Error(`${component.name} is archived.`)
+    const quantity = number(line.quantity, 'Component quantity', 1)
+    if (!Number.isSafeInteger(quantity)) throw new Error('Use whole component quantities.')
     if (seen.has(component.id))
       throw new Error(
         'Combine duplicate product entries into one package quantity.',
       )
     seen.add(component.id)
+  }
+  if (isMixedPack(product) && product.expectedContents !== '' && product.expectedContents != null) {
+    const expected = number(product.expectedContents, 'Expected contents count', 1)
+    const actual = product.kitComponents.reduce((sum: number, line: Item) => sum + Number(line.quantity), 0)
+    if (!Number.isSafeInteger(expected) || actual !== expected)
+      throw new Error(`Contents count mismatch: ${actual} selected; expected ${expected}.`)
   }
   for (const line of packagingLines(product)) {
     number(line.quantity, 'Basket packaging quantity', 0.000001)
@@ -737,8 +778,14 @@ export function validateKit(product: Item, workspace: Workspace) {
       packaging.conversions,
     )
   }
+  if (isMixedPack(product) && product.mixedLabelStockId) {
+    const labels = packagingLines(product).filter((line) => line.ingredientId === product.mixedLabelStockId)
+    if (!labels.length || labels.some((line) => (line.unit || 'each') !== 'each' || !Number.isSafeInteger(Number(line.quantity))))
+      throw new Error('Add the configured label stock to Packaging in whole individual labels.')
+  }
   number(product.assemblyMinutes ?? 0, 'Assembly minutes')
   number(product.assemblyRate ?? 0, 'Assembly hourly rate')
+  if (isMixedPack(product)) number(product.assemblyOverhead ?? 0, 'Packing overhead per pack')
   return product
 }
 export function kitCosting(
@@ -773,14 +820,16 @@ export function basketAssemblyCosts(product: Item, workspace: Workspace) {
     catch (error) { packagingErrors.push((error as Error).message) }
   }
   let laborMinutes: number | undefined, laborRate: number | undefined, labor: number | undefined
+  let overhead = 0
   let laborIssue = ''
   try {
     laborMinutes = number(product.assemblyMinutes ?? 0, 'Assembly minutes')
     laborRate = number(product.assemblyRate ?? 0, 'Assembly rate')
     labor = (laborMinutes / 60) * laborRate
+    if (isMixedPack(product)) overhead = number(product.assemblyOverhead ?? 0, 'Packing overhead per pack')
   } catch (error) { laborIssue = (error as Error).message }
   return { packaging, packagingCost: packagingErrors.length ? undefined : packaging.reduce((sum, line) => sum + line.cost, 0),
-    packagingIssue: packagingErrors.join(' '), laborMinutes, laborRate, labor, laborIssue, overhead: 0 }
+    packagingIssue: packagingErrors.join(' '), laborMinutes, laborRate, labor, laborIssue, overhead }
 }
 
 type BasketComponentCost = Item & {
@@ -804,13 +853,13 @@ export function basketComponentCosts(
       if (!component) throw new Error('Restore the product reference.')
       if (component.id === product.id || component.workflow === 'kit')
         throw new Error('Baskets cannot contain baskets.')
-      const quantity = number(line.quantity, 'Whole selling packages', 1)
-      if (line.basis !== 'package' || !Number.isInteger(quantity))
-        throw new Error('Choose a whole selling-package quantity.')
+      const quantity = number(line.quantity, 'Component quantity', 1)
+      assemblyComponentUnit(component, line, workspace, isMixedPack(product))
+      if (!Number.isSafeInteger(quantity)) throw new Error('Choose a whole component quantity.')
       if (components.filter((entry) => entry.productId === component.id).length !== 1)
         throw new Error('Combine duplicate package quantities.')
       const { unitCost, source } = basketPackageCost(component, workspace, options)
-      return { ...line, name, component, unitCost, source, cost: unitCost * quantity }
+      return { ...line, name, component, unitCost, source: line.basis === 'unpackaged' ? 'Recipe cost per unpackaged output' : source, cost: unitCost * quantity }
     } catch (error) {
       return { ...line, name, component, issue: `${name}: ${(error as Error).message}` }
     }

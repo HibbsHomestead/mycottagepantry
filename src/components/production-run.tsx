@@ -1,7 +1,7 @@
 import { PrepStockSourceSelect } from './stock-prep'
 import { FormErrorNotice } from './form-error-notice'
 import { useRef, useState, useEffect, type ComponentProps } from 'react'
-import { type Item, money, units } from '../lib/domain'
+import { type Item, isMixedPack, money, units } from '../lib/domain'
 import { ovenToday } from '../lib/oven-dates'
 import { workflowOf } from '../lib/product-workflows'
 import { productionDefinition } from '../lib/production'
@@ -178,6 +178,8 @@ function RunEditor({
   const allocationIssues = terminal ? [] : basketAllocationIssues(prepared, state, id)
   const blockers = [...new Set([...startIssues, ...reviewIssues, ...checklistIssues, ...allocationIssues])]
   const basket = prepared.length === 1 && prepared[0].definition?.product?.workflow === 'kit'
+  const mixed = basket && isMixedPack(prepared[0].definition?.product)
+  const assemblyName = mixed ? 'mixed pack' : 'basket'
   const reviewPending = basketChecklistIssues(prepared, state, ['reviewed'])
   const reviewing = started && review
   const making = basket && allocationIssues.length > 0
@@ -381,7 +383,7 @@ function RunEditor({
           definition?.recipe ||
           state.recipes.find((r) => r.id === product?.recipeId)
         const needsMapping =
-          product && workflowOf(product) !== 'kit' && !product.bom
+          product && workflowOf(product) !== 'kit' && !product.bom && !product.unpackagedOutput
         const snapshot = l.costSnapshot
         return (
           <fieldset key={l.id} className="production-product-line">
@@ -389,7 +391,7 @@ function RunEditor({
               {product?.name || l.name || `Product ${index + 1}`}
             </legend>
             <details open={!started && !terminal}>
-              <summary>{basket ? 'Basket plan' : 'Product plan'} · {l.quantity} {basket ? 'baskets' : definition?.bom ? 'finished units' : 'selling packages'}</summary>
+              <summary>{mixed ? 'Mixed pack plan' : basket ? 'Basket plan' : 'Product plan'} · {l.quantity} {basket ? `${assemblyName}s` : definition?.bom || product?.unpackagedOutput ? 'finished units' : 'selling packages'}</summary>
             <div className="form-grid">
               <label>
                 Product
@@ -417,13 +419,13 @@ function RunEditor({
                     )
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} · {workflowOf(p) === 'kit' ? 'Basket' : workflowOf(p)}
+                        {p.name} · {isMixedPack(p) ? 'Mixed pack' : workflowOf(p) === 'kit' ? 'Basket' : p.unpackagedOutput ? 'Unpackaged output' : workflowOf(p)}
                       </option>
                     ))}
                 </select>
               </label>
               <label>
-                {basket ? 'Planned baskets' : 'Planned selling packages / finished units'}
+                {basket ? `Planned ${assemblyName}s` : 'Planned selling packages / finished units'}
                 <input
                   type="number"
                   min="1"
@@ -615,7 +617,7 @@ function RunEditor({
             {(started || terminal) && <section className="production-actual-fields" aria-label={`${product?.name || l.name || 'Product'} output`}>
               <div className="form-grid">
                 <div><label>
-                  {basket ? 'Actual completed baskets' : `Actual good output (${definition?.bom ? 'finished units' : 'selling packages'})`}
+                  {basket ? `Actual completed ${assemblyName}s` : `Actual good output (${definition?.bom || product?.unpackagedOutput ? 'finished units' : 'selling packages'})`}
                   <input
                     data-output-input
                     aria-invalid={!terminal && !!productionOutputIssue(l)}
@@ -948,7 +950,7 @@ function RunEditor({
           {lines.map((l) => (
             <p key={l.id}>
               {state.products.find((p) => p.id === l.productId)?.name}:{' '}
-              {l.output} {basket ? 'completed baskets' : l.definition?.bom ? 'good finished units' : 'good selling packages'} to receive ·{' '}
+              {l.output} {basket ? `completed ${assemblyName}s` : l.definition?.bom || l.definition?.product?.unpackagedOutput ? 'good finished units' : 'good selling packages'} to receive ·{' '}
               {l.waste || 0} rejected · estimated cost{' '}
               {money(
                 calculation?.products.find((p) => p.line.id === l.id)
@@ -1042,7 +1044,7 @@ function RunEditor({
                 disabled={busy}
                 onClick={() => lines.length ? act('productionSave', 'draft', basket) : setError('Add a product before saving the plan.')}
               >
-                {basket ? 'Save basket & component plan' : 'Save plan'}
+                {basket ? `Save ${assemblyName} & component plan` : 'Save plan'}
               </button>
               {currentStep === 2 && !!reviewPending.length && <p>Review the basket contents checklist before starting.</p>}
               {currentStep === 2 && !startIssues.length && !reviewPending.length && <button
@@ -1051,7 +1053,7 @@ function RunEditor({
                 disabled={busy}
                 onClick={() => act('productionSave', 'scheduled')}
               >
-                {basket ? 'Start basket plan' : 'Start run'}
+                {basket ? `Start ${assemblyName} plan` : 'Start run'}
               </button>}
             </>
           )}
@@ -1067,10 +1069,10 @@ function RunEditor({
                 } else void act(canEdit ? 'productionSave' : 'productionRecordActuals')
               }}
             >
-              {basket ? 'Save actual baskets' : 'Save output'}
+              {basket ? `Save actual ${assemblyName}s` : 'Save output'}
             </button>
           )}
-          {started && !reviewing && canEdit && basket && <button type="button" className="btn secondary" disabled={busy} onClick={() => void act('productionSave', status, true)}>Save basket & component plan</button>}
+          {started && !reviewing && canEdit && basket && <button type="button" className="btn secondary" disabled={busy} onClick={() => void act('productionSave', status, true)}>Save {assemblyName} &amp; component plan</button>}
           {started && canFinalize && !blockers.length && !dirty && (
             <button
               type="button"

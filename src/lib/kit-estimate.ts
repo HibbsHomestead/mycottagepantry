@@ -1,5 +1,6 @@
 import {
   applicableTaxes,
+  isMixedPack,
   calculateTax,
   productCosting,
   profitability,
@@ -10,6 +11,7 @@ import { categoryTaxState } from './product-categories'
 
 /** Keep independent cost and tax results when one part of the estimate is incomplete. */
 export function kitEstimate(product: Item, workspace: Workspace) {
+  const subject = isMixedPack(product) ? 'mixed pack' : 'basket'
   let cost: ReturnType<typeof productCosting> | undefined
   let tax: ReturnType<typeof calculateTax> | undefined
   let pricing: ReturnType<typeof profitability> | undefined
@@ -27,7 +29,7 @@ export function kitEstimate(product: Item, workspace: Workspace) {
   try {
     const taxes = applicableTaxes(product, workspace.settings[0])
     if (!Number.isFinite(price) || price < 0)
-      throw new Error('Basket selling price is not configured.')
+      throw new Error(`Selling price is not configured for this ${subject}.`)
     tax = calculateTax(price, taxes)
     if (cost)
       pricing = profitability(product, cost.perPackage, workspace.settings[0])
@@ -47,11 +49,11 @@ export function kitEstimate(product: Item, workspace: Workspace) {
     : 'kit'
   const explanation = category?.issue
     ? configuration === 'kit'
-      ? `${product.name}: choose an active category in Edit basket → Contents & details.`
+      ? `${product.name}: choose an active category in Edit ${subject} → Contents & details.`
       : configuration === 'Categories'
         ? `${product.name}: review the classification of category “${category.category!.name}” in Products → Categories.`
         : `${product.name}: configure the tax treatment for category “${category.category!.name}” in Settings → Taxes. Missing configuration does not mean tax exempt.`
-    : `${product.name}: review the affected product or packaging costs below, or update the saved price and pricing settings in Edit basket.`
+    : `${product.name}: review the affected product or packaging costs below, or update the saved price and pricing settings in Edit ${subject}.`
   return {
     cost,
     tax,

@@ -85,7 +85,7 @@ import { PreparedPortionQuantity, PreparedStockPicker } from './prepared-stock-p
 import { preparedLabel } from '@/lib/prepared-requirement'
 import { componentStock } from '@/lib/recipe-components'
 import { RecipeBaseFields } from './recipe-base-fields'
-import { effectiveRecipeLines, effectiveProductionSupplies, recipeProductionLines, packagingLines } from '@/lib/domain'
+import { effectiveRecipeLines, effectiveProductionSupplies, isMixedPack, recipeProductionLines, packagingLines } from '@/lib/domain'
 import { ItemDetailHeader, ItemDetailLayout } from './item-detail-layout'
 import { NetWeightField } from './net-weight-field'
 import { RecipeLineCost } from './recipe-line-cost'
@@ -1139,14 +1139,14 @@ export function WorkspaceApp() {
     }
     if (kind === 'ingredient' && !item && route.tab === 'Craft Materials')
       kind = 'trade-material'
-    if (kind === 'kit' || (item?.workflow === 'kit' && kind === 'product')) {
+    if (kind === 'kit' || kind === 'mixed-pack' || (item?.workflow === 'kit' && kind === 'product')) {
       setKitEditorReturn(
         modal === 'product-detail' && selected?.id === item?.id
           ? item!.id
           : null,
       )
       setSelected(item || null)
-      setModal('kit')
+      setModal(kind === 'mixed-pack' ? 'mixed-pack' : 'kit')
       return
     }
     if (kind.startsWith('trade-')) {
@@ -1549,6 +1549,10 @@ export function WorkspaceApp() {
           ...l,
           quantity: parseQuantity(l.quantity),
         }))
+      if (modal === 'product' && data.unpackagedOutput === true && !selected) {
+        data.contentUnit = recipes.find((recipe) => recipe.id === data.recipeId)?.yieldUnit
+        data.unitsPerPackage = 1
+      }
       if (modal === 'batch') {
         data.name = recipes.find((r) => r.id === data.recipeId)?.name
         data.yield =
@@ -1601,9 +1605,9 @@ export function WorkspaceApp() {
     )
     .filter((p) =>
       sub === 'Baskets'
-        ? workflowOf(p) === 'kit'
+        ? workflowOf(p) === 'kit' && !isMixedPack(p)
         : !['Food', 'Handmade', 'Resale'].includes(sub) ||
-          workflowOf(p) === sub.toLowerCase(),
+          workflowOf(p) === sub.toLowerCase() || (sub === 'Food' && isMixedPack(p)),
     ), state, productSort)
   const pageAction = (
     {
@@ -2503,6 +2507,10 @@ export function WorkspaceApp() {
                                   <Gift size={16} />
                                   Create basket
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => open('mixed-pack')}>
+                                  <CookingPot size={16} />
+                                  Multiple products / flavors in one package
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onSelect={() => open('product')}
                                 >
@@ -2609,6 +2617,9 @@ export function WorkspaceApp() {
                               >
                                 Create basket
                               </button>
+                              <button className="btn secondary" onClick={() => open('mixed-pack')}>
+                                Create mixed pack
+                              </button>
                               <button
                                 className="btn secondary"
                                 onClick={() => open('product')}
@@ -2658,9 +2669,9 @@ export function WorkspaceApp() {
                           )
                           .filter((p) =>
                             sub === 'Baskets'
-                              ? workflowOf(p) === 'kit'
+                              ? workflowOf(p) === 'kit' && !isMixedPack(p)
                               : !['Food', 'Handmade', 'Resale'].includes(sub) ||
-                                workflowOf(p) === sub.toLowerCase(),
+                                workflowOf(p) === sub.toLowerCase() || (sub === 'Food' && isMixedPack(p)),
                           )}
                         workspace={state}
                         open={open}
@@ -3649,10 +3660,11 @@ export function WorkspaceApp() {
           }}
         />
       )}
-      {modal === 'kit' && (
+      {(modal === 'kit' || modal === 'mixed-pack') && (
         <KitEditor
           key={selected?.id || 'new'}
           kind="kit"
+          mixedPack={modal === 'mixed-pack'}
           item={selected}
           workspace={state}
           role={role}
@@ -3849,10 +3861,10 @@ export function WorkspaceApp() {
                 (selected.workflow === 'resale'
                   ? 'Resale product'
                   : selected.workflow === 'kit'
-                    ? 'Product basket'
+                    ? isMixedPack(selected) ? 'Mixed pack' : 'Product basket'
                     : selected.workflow === 'handmade'
                       ? 'Handmade product'
-                      : 'Food product')}
+                      : selected.unpackagedOutput ? 'Unpackaged production output' : 'Food product')}
             </ItemDetailHeader>
           ) : (
             <DialogHeader>
@@ -4923,9 +4935,17 @@ export function WorkspaceApp() {
                           .map((r) => ({ value: r.id, label: r.name })),
                       )}
                     </Field>
+                    {(!selected || draft.unpackagedOutput) && (
+                      <label className="field">
+                        <span>Unpackaged production output (not sold directly)</span>
+                        <input type="checkbox" checked={draft.unpackagedOutput === true} disabled={!!selected}
+                          onChange={(event) => change('unpackagedOutput', event.target.checked)} />
+                        {draft.unpackagedOutput && <small>Each stock unit is one {recipes.find((recipe) => recipe.id === draft.recipeId)?.yieldUnit || 'verified recipe output unit'}. Use a whole individual-unit recipe yield and leave Packaging empty.</small>}
+                      </label>
+                    )}
                     <div className="product-pricing-grid">
                       <Field label="Units per package">
-                        {input('unitsPerPackage', 'number')}
+                        {draft.unpackagedOutput ? <input type="number" value={1} readOnly /> : input('unitsPerPackage', 'number')}
                       </Field>
                       <Field label="Retail price ($)">
                         {input('price', 'number')}
@@ -6055,7 +6075,7 @@ export function WorkspaceApp() {
                         }
                         onClick={() => open('product', selected)}
                       >
-                        Edit basket
+                        {isMixedPack(selected) ? 'Edit mixed pack' : 'Edit basket'}
                       </Btn>
                     </div>
                   </>

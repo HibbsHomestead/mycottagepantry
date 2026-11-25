@@ -1,4 +1,4 @@
-import { basketComponentCosts, type Item, type Workspace } from '@/lib/domain'
+import { basketComponentCosts, isMixedPack, type Item, type Workspace } from '@/lib/domain'
 import { costMoney } from './cost-cards'
 import './kit-components.css'
 
@@ -21,6 +21,7 @@ export function KitProductList({
         allowResaleEstimate: true,
       }).map((line, index) => {
         const { component, issue } = line
+        const loose = isMixedPack(product) && line.basis === 'unpackaged'
         const recorded =
           component?.stockCostKnown === true &&
           component.cost != null &&
@@ -46,11 +47,10 @@ export function KitProductList({
             {component?.archived && <small>Archived product</small>}
             {showCosts && line.unitCost !== undefined && (
               <small>
-                {line.quantity} whole selling{' '}
-                {Number(line.quantity) === 1 ? 'package' : 'packages'}
-                {component?.sellingUnit && ` (${component.sellingUnit})`}
+                {loose ? `${line.quantity} unpackaged (${line.contentUnit})` : `${line.quantity} whole selling ${Number(line.quantity) === 1 ? 'package' : 'packages'}`}
+                {!loose && component?.sellingUnit && ` (${component.sellingUnit})`}
                 {' · '}
-                {costMoney(line.unitCost)} per included package
+                {costMoney(line.unitCost)} per {loose ? 'output unit' : 'included package'}
                 {' · '}
                 {costMoney(line.cost!)} extended · {line.source}
               </small>
@@ -61,11 +61,11 @@ export function KitProductList({
               recorded >= 0 &&
               Math.abs(recorded - line.unitCost) > 1e-8 && (
                 <small>
-                  Recorded stock basis: {costMoney(recorded)} per package. Not
+                  Recorded stock basis: {costMoney(recorded)} per {loose ? 'output unit' : 'package'}. Not
                   used in this estimate.
                 </small>
               )}
-            {line.basis !== 'package' && (
+            {line.basis !== 'package' && !loose && (
               <small className="warning-text">
                 Unsupported quantity basis ({line.basis || 'not configured'}).
                 Edit basket to review this component.

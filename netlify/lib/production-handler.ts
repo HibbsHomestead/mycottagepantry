@@ -4,6 +4,9 @@ import { basketChecklist, basketChecklistIssues, basketDefinitionChanged, checkl
 import { productionOrderInvoices, validateBasketAssignments } from '../../src/lib/production-destinations'
 import {
   convert,
+  flatRecipePackagingCost,
+  isMixedPack,
+  unpackagedOutputUnit,
   number,
   roundMoney,
   validateDate,
@@ -280,6 +283,8 @@ async function handleSingleProduction(
   })
   const product = state.products.find((p) => p.id === existing.productId)
   if (!product) throw new Error('Output product unavailable.')
+  if (product.unpackagedOutput === true && (unpackagedOutputUnit(product, state) !== d.recipe?.yieldUnit || d.recipe?.id !== product.recipeId || d.product.unitsPerPackage !== 1))
+    throw new Error('The unpackaged recipe output basis changed. Save and review a new production plan.')
   if (
     product.workflow === 'handmade' &&
     Number(product.quantity || 0) > 0 &&
@@ -364,7 +369,7 @@ async function handleSingleProduction(
       enteredQuantity: line.quantity,
       enteredUnit: line.unit,
       quantity,
-      unit: line.kind === 'product' ? 'package' : item.unit,
+      unit: line.kind === 'product' ? line.unit : item.unit,
       unitCost,
       cost: amount,
       ...(prepared?.lot ? { prepLotId: prepared.lot.id, prepLocation: prepared.lot.location } : {}),
@@ -385,7 +390,7 @@ async function handleSingleProduction(
         type: 'assembly_consumption',
         batchId: existing.id,
         sourceId: existing.id,
-        reason: reason || 'Basket assembly',
+        reason: reason || (isMixedPack(d.product) ? 'Mixed-pack assembly' : 'Basket assembly'),
       })
     else {
       if (prepared) await applyPrepUsage(ctx, item, prepared)
@@ -412,8 +417,7 @@ async function handleSingleProduction(
   const c = result.cost
   // Keep configured flat recipe packaging and allocation rules, replacing estimated input costs with actual stock costs.
   const flatPackaging = d.recipe
-    ? number(d.recipe.packagingCost || 0, 'Recipe packaging') *
-      result.multiplier
+    ? flatRecipePackagingCost(d.recipe, d.product) * result.multiplier
     : 0
   const total =
     ingredient +
@@ -700,6 +704,8 @@ export async function handleProduction(
       }
       if (prior?.basketPlan && data.planContents !== true && (quantity !== prior.quantity || !definition || basketDefinitionChanged(prior, definition, ctx.state)))
         throw new Error('Preview and save basket contents and component work before recording output or starting.')
+      if (isMixedPack(product) && data.status === 'scheduled' && !prior?.basketPlan && data.planContents !== true)
+        throw new Error('Preview and save linked component work before starting the mixed pack.')
       const actual = {
         id: input.id,
         name: product.name,
@@ -887,6 +893,8 @@ export async function handleProduction(
       )
     ctx.assertProductAccess?.(currentProduct)
     if (workflowOf(currentProduct) === 'kit') {
+      if (isMixedPack(currentProduct) && !line.basketPlan)
+        throw new Error('Save a linked mixed-pack plan before finalizing.')
       const current = productionDefinition(currentProduct, ctx.state, line.mapping || {})
       if (basketDefinitionChanged(line, current, ctx.state))
         throw new Error(`${line.name}: basket contents or packaging changed. Save the updated plan and review the affected checklist lines before finalizing.`)

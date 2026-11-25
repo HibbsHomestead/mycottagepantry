@@ -9,6 +9,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import {
   number,
   convert,
+  isMixedPack,
+  packagingLines,
   costBreakdown,
   productCosting,
   validateKit,
@@ -153,8 +155,13 @@ export async function consumeFinishedSale(
   sale: Item,
   product: Item,
 ) {
+  if (product.unpackagedOutput === true) throw new Error('Unpackaged output is not a sellable product.')
+  if (isMixedPack(product) && (product.archived || product.status !== 'active' || !tracksFinishedStock(product)))
+    throw new Error('Complete and post mixed packs before selling them.')
   if (!tracksFinishedStock(product)) return false
   const quantity = number(sale.quantity, 'Items sold', 0.000001)
+  if (isMixedPack(product) && !Number.isSafeInteger(quantity))
+    throw new Error('Sell whole completed mixed packs.')
   if (product.workflow === 'handmade' && product.stockCostKnown !== true)
     throw new Error(
       'Finished inventory cost is unknown. Review the stock basis before selling.',
@@ -257,8 +264,15 @@ export async function handleProductWorkflow(
     const item: Item = existingProduct
       ? preserveStoredProductFields(data, existingProduct)
       : { ...data, id: data.id || randomUUID() }
-    item.name = text(item.name, 'a kit name')
+    const mixed = isMixedPack(item)
+    item.name = text(item.name, mixed ? 'a mixed pack name' : 'a kit name')
+    if ((existingProduct && isMixedPack(existingProduct) !== isMixedPack(item)) ||
+      (item.assemblyType != null && item.assemblyType !== 'mixed-pack'))
+      throw new Error('Create a separate product to change the assembly type.')
     validateKit(item, state)
+    if (mixed && item.mixedLabelTemplateId && !state.label_templates.some(
+      (template) => template.id === item.mixedLabelTemplateId && !template.deletedAt && !template.round && template.format !== 'front-back',
+    )) throw new Error('Choose an available rectangular, single-sided label template.')
     if (!['draft', 'active'].includes(item.status))
       throw new Error('Choose draft or active kit status.')
     const category = (state.settings[0]?.productCategories || []).find(
@@ -275,14 +289,27 @@ export async function handleProductWorkflow(
       !state.graphic_assets.some((a) => a.id === item.imageAssetId)
     )
       throw new Error('Choose a photo from this oven.')
-    item.price = number(
-      required(item.price, 'Kit selling price'),
-      'Kit selling price',
-    )
+    const priceLabel = mixed ? 'Mixed pack selling price' : 'Kit selling price'
+    item.price = number(required(item.price, priceLabel), priceLabel)
     item.quantity = existingProduct?.quantity || 0
     item.cost = existingProduct?.cost || 0
     item.recipeId = null
     item.unitsPerPackage = 1
+    if (mixed) {
+      item.sellingUnit = 'pack'
+      item.kitComponents = item.kitComponents.map((line: Item) => ({
+        productId: line.productId,
+        basis: line.basis,
+        quantity: number(line.quantity, 'Component quantity', 1),
+        ...(line.basis === 'unpackaged' ? { contentUnit: line.contentUnit } : {}),
+      }))
+      item.packagingLines = packagingLines(item).map((line) => ({
+        ...line,
+        quantity: number(line.quantity, 'Packaging quantity', 0.000001),
+      }))
+      item.expectedContents = item.expectedContents == null || item.expectedContents === ''
+        ? undefined : number(item.expectedContents, 'Expected contents count', 1)
+    }
     if (!existingProduct) item.taxSource = 'category'
     else
       for (const key of [
@@ -294,7 +321,7 @@ export async function handleProductWorkflow(
         item[key] = existingProduct[key]
     if (item.status === 'active' && !item.archived) productCosting(item, state)
     await save('products', item)
-    await audit('Kit definition saved; stock unchanged', item.name)
+    await audit(mixed ? 'Mixed pack saved; stock unchanged' : 'Kit definition saved; stock unchanged', item.name)
     return true
   }
   const existingDesign = state.recipes.find((r) => r.id === data.id)

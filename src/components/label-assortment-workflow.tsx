@@ -15,7 +15,7 @@ import { browserPrint } from '@/lib/label-browser-print'
 import { defaultSheet } from '@/lib/label-print-layout'
 import { checkPrinterSize, type PrinterProfile } from '@/lib/label-printers'
 import { productionRunLines } from '@/lib/production-run'
-import type { Item, Workspace } from '@/lib/domain'
+import { isMixedPack, mixedLabelQuantity, type Item, type Workspace } from '@/lib/domain'
 
 const blankLine = (): AssortmentLine => ({
   productId: '',
@@ -161,11 +161,14 @@ export function LabelAssortmentWorkflow({
         : product?.kitComponents
     ) as Item[] | undefined
     const fixed = product?.workflow === 'kit' && components?.length
+    const definition = run?.status === 'completed' ? line?.definition?.product : product
+    const mixed = isMixedPack(definition)
     patch({
       runLineId: id,
       count,
       name: product?.name || plan.name,
       packagingId: undefined,
+      ...(mixed ? { packagingId: definition?.mixedLabelStockId || undefined, labelsPerContainer: mixedLabelQuantity(definition) || 1, ...(definition?.mixedLabelTemplateId ? { templateId: definition.mixedLabelTemplateId } : {}) } : {}),
       ...(fixed
         ? {
             mode: 'fixed',
@@ -177,8 +180,8 @@ export function LabelAssortmentWorkflow({
                   ...blankLine(),
                   productId: component.productId,
                   count: Number(component.quantity),
-                  unit: 'package',
-                  wrapped: true,
+                  unit: mixed && component.basis === 'unpackaged' ? 'item' : 'package',
+                  wrapped: !(mixed && component.basis === 'unpackaged'),
                 })),
               },
             ],

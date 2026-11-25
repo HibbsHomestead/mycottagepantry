@@ -326,10 +326,10 @@ export function PackagingLineCost({ line, ingredients, basket = false }: { line:
   </div>
 }
 
-export function PackagingCostTotal({ lines, ingredients, basket = false }: { lines: Item[]; ingredients: Item[]; basket?: boolean }) {
+export function PackagingCostTotal({ lines, ingredients, basket = false, label }: { lines: Item[]; ingredients: Item[]; basket?: boolean; label?: string }) {
   const estimates = lines.map((line) => packagingEstimate(line, ingredients, basket).value)
   return <p className="packaging-cost-total"><strong>
-    {basket ? 'Total additional packaging per basket' : 'Total packaging per sellable package'}:{' '}
+    {label || (basket ? 'Total additional packaging per basket' : 'Total packaging per sellable package')}:{' '}
     {estimates.some((value) => !value) ? 'Incomplete' : money(estimates.reduce((sum, value) => sum + (value?.cost ?? 0), 0))}
   </strong></p>
 }
