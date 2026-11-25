@@ -7,6 +7,7 @@ import { BakingConverter } from './baking-converter'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { ProductLabelFlow } from './product-label-flow'
+import { AssortmentLabels } from './assortment-labels'
 import { ProductDescriptionField } from './product-description-field'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemCopyProvider, ItemCopyButton } from './item-copy'
@@ -429,6 +430,7 @@ export function WorkspaceApp() {
   const labelUnsaved = useRef(false)
   const workflowDirty = useRef(false)
   const [detailLabelFlow, setDetailLabelFlow] = useState<{ productId: string; labelId: string } | null>(null)
+  const [assortmentContext, setAssortmentContext] = useState<{ productId?: string; batchId?: string }>()
   const [productDetailReturn, setProductDetailReturn] = useState<string | null>(
     null,
   )
@@ -670,8 +672,15 @@ export function WorkspaceApp() {
     if (window.location.hash !== hash) window.history.pushState(null, '', hash)
     lastHash.current = hash
     applyRoute(next)
+    return true
+  }
+  function openAssortment(productId?: string, batchId?: string) {
+    if (!go('Labels', 'Assortments')) return
+    setAssortmentContext({ productId, batchId })
+    setModal(null)
   }
   const navigationGuard = useRef<() => boolean>(() => false)
+  const openedBasketLink = useRef<string | undefined>(undefined)
   useEffect(() => {
     document.title = `${route.tab || route.section} | My Oven | Cottage Pantry`
   }, [route.section, route.tab])
@@ -695,13 +704,14 @@ export function WorkspaceApp() {
         return
       }
       setModal(null)
+      openedBasketLink.current = undefined
       setFormDirty(false)
       workflowDirty.current = false
       const linkedNavigation =
         next.query.has('linked') ||
         parseWorkspaceHash(lastHash.current || '').query.has('linked')
       if (
-        !linkedNavigation ||
+        !linkedNavigation || (next.section === 'Products' && next.tab === 'Baskets') ||
         destinationHash(next) !== destinationHash(routeRef.current)
       )
         applyRoute(next, next.query)
@@ -727,7 +737,10 @@ export function WorkspaceApp() {
   }, [])
   useEffect(() => {
     if (!ready) return
-    const query = new URLSearchParams()
+    const current = parseWorkspaceHash(window.location.hash)
+    const query = route.section === 'Products' && route.tab === 'Baskets' &&
+      destinationHash(current) === destinationHash(route)
+      ? current.query : new URLSearchParams()
     if (route.section === 'Handmade') {
       const current = parseWorkspaceHash(window.location.hash).query
       for (const key of ['product', 'edit']) {
@@ -736,12 +749,26 @@ export function WorkspaceApp() {
       }
     }
     if (search) query.set('search', search)
+    else query.delete('search')
     if (filter !== route.filter) query.set('filter', filter)
+    else query.delete('filter')
     const hash =
       destinationHash(route) + (query.size ? '?' + query.toString() : '')
     window.history.replaceState(null, '', hash)
     lastHash.current = hash
   }, [search, filter, route, ready])
+  useEffect(() => {
+    if (!ready || route.section !== 'Products' || route.tab !== 'Baskets') return
+    const { query } = parseWorkspaceHash(window.location.hash)
+    const id = query.get('product') || query.get('record')
+    if (!id || openedBasketLink.current === id) return
+    const basket = state.products.find((product) => product.id === id && product.workflow === 'kit')
+    if (basket) {
+      openedBasketLink.current = id
+      setSelected(basket)
+      setModalState('product-detail')
+    }
+  }, [ready, route, state.products])
   const loadingWorkspace = useRef<Promise<void> | null>(null)
   const hasLoadedWorkspace = useRef(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
@@ -848,6 +875,10 @@ export function WorkspaceApp() {
           customerMessage(result.error) + ' Your draft is preserved.',
         )
       if (action === 'priceTaxPreview') return result
+      if (action === 'assortmentLabel' && data.op === 'check-print') {
+        setState(result.workspace)
+        return result
+      }
       if (
         action === 'save' &&
         table === 'ingredients' &&
@@ -1405,6 +1436,11 @@ export function WorkspaceApp() {
     URL.revokeObjectURL(url)
     toast.success('CSV exported.')
   }
+  function exportCatalogProducts() {
+    exportData('products', state.products.map((product) => product.workflow === 'kit'
+      ? { ...product, workflow: 'Basket', sellingUnit: 'basket' }
+      : product))
+  }
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (busy) return
@@ -1563,7 +1599,7 @@ export function WorkspaceApp() {
           : p.productCategoryId === productCategoryFilter),
     )
     .filter((p) =>
-      sub === 'Kits'
+      sub === 'Baskets'
         ? workflowOf(p) === 'kit'
         : !['Food', 'Handmade', 'Resale'].includes(sub) ||
           workflowOf(p) === sub.toLowerCase(),
@@ -1573,8 +1609,8 @@ export function WorkspaceApp() {
       Pantry: ['Receive stock', 'receive-picker'],
       Recipes: ['Create recipe', 'recipe'],
       'Products & Pricing': [
-        route.tab === 'Kits' ? 'Create basket' : 'Create product',
-        route.tab === 'Kits'
+        route.tab === 'Baskets' ? 'Create basket' : 'Create product',
+        route.tab === 'Baskets'
           ? 'kit'
           : route.tab === 'Handmade'
             ? 'trade-product'
@@ -1913,7 +1949,7 @@ export function WorkspaceApp() {
                         }
                       }}
                     >
-                      {route.section === 'Products' && tab === 'Kits' ? 'Baskets' : tab}
+                      {tab}
                     </a>
                   ))}
                 </SectionNavigation>
@@ -1944,7 +1980,7 @@ export function WorkspaceApp() {
                   page !== 'Dashboard' &&
                   page !== 'Recipes' &&
                   page !== 'Settings' &&
-                  (page !== 'Products & Pricing' || sub === 'Kits') &&
+                  (page !== 'Products & Pricing' || sub === 'Baskets') &&
                   page !== 'Labels' &&
                   !(page === 'Products & Pricing' && sub === 'Categories') &&
                   sub !== 'Finished Goods' &&
@@ -2517,7 +2553,7 @@ export function WorkspaceApp() {
                         <ProductSortControl value={productSort} onChange={setProductSort} />
                           <CatalogAction
                             label="Export products"
-                            onClick={() => exportData('products')}
+                            onClick={exportCatalogProducts}
                           >
                             <Download size={21} />
                           </CatalogAction>
@@ -2555,7 +2591,7 @@ export function WorkspaceApp() {
                         </div>
                         <PageActions>
                           {' '}
-                          <Btn secondary onClick={() => exportData('products')}>
+                          <Btn secondary onClick={exportCatalogProducts}>
                             <Download size={16} />
                             Export products
                           </Btn>
@@ -2563,7 +2599,7 @@ export function WorkspaceApp() {
                       </div>
                       <PageActions>
                         {' '}
-                        {sub !== 'Kits' &&
+                        {sub !== 'Baskets' &&
                           ['Owner', 'Manager'].includes(role) && (
                             <div className="toolbar">
                               <button
@@ -2600,7 +2636,7 @@ export function WorkspaceApp() {
                             ? 'handmade-products'
                             : sub === 'Resale'
                               ? 'resale-products'
-                              : sub === 'Kits'
+                              : sub === 'Baskets'
                                 ? 'kits'
                                 : 'food-products'
                         }
@@ -2620,7 +2656,7 @@ export function WorkspaceApp() {
                                   productCategoryFilter),
                           )
                           .filter((p) =>
-                            sub === 'Kits'
+                            sub === 'Baskets'
                               ? workflowOf(p) === 'kit'
                               : !['Food', 'Handmade', 'Resale'].includes(sub) ||
                                 workflowOf(p) === sub.toLowerCase(),
@@ -2889,7 +2925,16 @@ export function WorkspaceApp() {
                   )}
                 </>
               )}
-              {page === 'Labels' && (
+              {page === 'Labels' && sub === 'Assortments' && (
+                <AssortmentLabels
+                  key={`${assortmentContext?.productId || ''}:${assortmentContext?.batchId || ''}`}
+                  context={assortmentContext}
+                  workspace={state}
+                  canManage={ready && ['Owner', 'Manager'].includes(role)}
+                  save={(data) => mutate('assortmentLabel', 'label_print_jobs', data)}
+                />
+              )}
+              {page === 'Labels' && sub !== 'Assortments' && (
                 <LabelStudio
                   onOpenSource={open}
                   initialProductId={labelProduct}
@@ -5760,6 +5805,7 @@ export function WorkspaceApp() {
               legacyRunId={draft.legacyRunId}
               initialReview={draft.productionReview}
               initialEventId={draft.initialEventId}
+              openAssortment={(productId) => openAssortment(productId, selected?.id)}
               openLinkedRun={selected ? (component) => {
                 basketReturn.current = selected.id
                 open('production', component, false, false, false, true)
@@ -5889,7 +5935,7 @@ export function WorkspaceApp() {
                         ? ` · Version ${selected.bom.version ?? 'not recorded'}`
                         : ' · Legacy design needs review'}
                     </p>
-                  ) : (
+                  ) : !['kit', 'resale'].includes(selected.workflow) ? (
                     <p className="table-note product-detail-recipe">
                       Connected recipe:{' '}
                       {recipes.find((r) => r.id === selected.recipeId)?.name ||
@@ -5908,13 +5954,14 @@ export function WorkspaceApp() {
                         </button>
                       )}
                     </p>
-                  )}
+                  ) : null}
                   <div className="button-row product-detail-toolbar item-dialog-actions">
                     <ItemDeleteButton table="products" item={selected} />
                     <div className="button-row product-detail-primary-actions">
                       <Btn secondary onClick={() => setModal(null)}>
                         Close
                       </Btn>
+                      {selected.workflow === 'kit' && <Btn secondary onClick={() => openAssortment(selected.id)}>Assortment labels</Btn>}
                       {selected.workflow !== 'kit' && (
                         <Btn
                           secondary

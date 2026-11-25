@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
 import {
-  productCosting,
+  basketComponentCosts,
   packagingLines,
   effectiveRecipeLines,
   money,
@@ -70,6 +70,7 @@ export function KitEditor({
       rows.map((r, i) => (i === index ? { ...r, [field]: value } : r)),
     )
   const estimate = kitEstimate(draft, workspace)
+  const componentCosts = basketComponentCosts(draft, workspace, { allowResaleEstimate: true })
   const summary = (
     <>
       {estimate.cost && (
@@ -171,27 +172,10 @@ export function KitEditor({
       </p>
       {components.map((line, index) => {
         const p = workspace.products.find((p) => p.id === line.productId)
-        let contribution = 'Cost unavailable'
-        let costIssue = p
-          ? ''
-          : 'Product unavailable. Remove this component or choose an available product.'
+        const resolved = componentCosts[index]
+        const contribution = resolved?.cost === undefined ? 'Cost unavailable' : money(resolved.cost)
+        const costIssue = resolved?.issue
         const sourceData = componentSources(p, workspace)
-        try {
-          if (p)
-            contribution = money(
-              productCosting(
-                {
-                  ...draft,
-                  kitComponents: [line],
-                  packagingLines: [],
-                  assemblyMinutes: 0,
-                },
-                workspace,
-              ).perPackage,
-            )
-        } catch (error) {
-          costIssue = (error as Error).message
-        }
         return (
           <section className="kit-editor-component" key={line.productId}>
             <div className="kit-component-row">
@@ -270,8 +254,7 @@ export function KitEditor({
                 </p>
                 <h4>Component cost basis</h4>
                 <p>
-                  {contribution} · Complete component package cost for the
-                  included quantity.
+                  {contribution} {resolved?.source && `· ${resolved.source}`}
                 </p>
                 {costIssue && <p className="warning-text">{costIssue}</p>}
                 <p>

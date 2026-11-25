@@ -1,0 +1,37 @@
+.assortment-labels {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.assortment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+.assortment-line {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line, #ddd9c8);
+  border-radius: 0.6rem;
+}
+.assortment-line legend {
+  padding: 0 0.4rem;
+  font-weight: 600;
+}
+.assortment-labels iframe {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  min-height: 10rem;
+  background: white;
+  border: 1px solid var(--line, #ddd9c8);
+}
+.assortment-labels .button-row {
+  align-items: end;
+}
+.assortment-preview {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}

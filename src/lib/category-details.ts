@@ -8,7 +8,7 @@ export const categoryScopes = {
   'handmade-products': 'Handmade products',
   'handmade-materials': 'Handmade materials & supplies',
   'resale-products': 'Resale products',
-  kits: 'Kits',
+  kits: 'Baskets',
 } as const
 export type CategoryScope = keyof typeof categoryScopes
 export const categoryScopeSchema = z.enum(

@@ -213,10 +213,10 @@ for (const width of [1440, 768, 390]) {
     await expect(dialog.locator('img')).toHaveCSS('object-fit', 'contain')
     const costing = productCosting(kit, workspace),
       pricing = profitability(kit, costing.perPackage, workspace.settings[0])
-    await expect(card(dialog, 'Total cost per kit')).toHaveText(
+    await expect(card(dialog, 'Cost per basket')).toHaveText(
       money(costing.perPackage),
     )
-    await expect(card(dialog, 'Profit per kit')).toHaveText(
+    await expect(card(dialog, 'Profit per basket')).toHaveText(
       money(pricing.profit),
     )
     await expect(card(dialog, 'Margin')).toHaveText(
@@ -228,11 +228,11 @@ for (const width of [1440, 768, 390]) {
     })
     await expect(included.getByRole('listitem')).toHaveCount(2)
     await expect(included).toContainText(`${regularName} ×2`)
-    await expect(included).not.toContainText('per package')
+    await expect(included).toContainText('per included package')
     await expect(
       dialog.getByText('Connected recipe:', { exact: false }),
     ).toHaveCount(0)
-    await expect(dialog.getByRole('button', { name: /label/i })).toHaveCount(0)
+    await expect(dialog.getByRole('button', { name: 'Assortment labels' })).toHaveCount(1)
     expect(writes).toHaveLength(0)
     await page.screenshot({
       path: `${output}/kit-details-${width}.png`,
@@ -300,7 +300,7 @@ for (const width of [1440, 768, 390]) {
       dialog.getByRole('heading', { name: kitName, exact: true }),
     ).toBeVisible()
     await expect(card(dialog, 'Selling price')).toHaveText('$48.25')
-    await expect(card(dialog, 'Total cost per kit')).toHaveText(
+    await expect(card(dialog, 'Cost per basket')).toHaveText(
       money(
         productCosting(
           workspace.products.find((p) => p.id === kit.id)!,
@@ -318,22 +318,22 @@ for (const width of [1440, 768, 390]) {
     await dialog.getByRole('button', { name: 'Close', exact: true }).click()
     await expect(
       page.getByRole('article', { name: kitName, exact: true }),
-    ).toContainText('$48.25 / kit')
+    ).toContainText('$48.25 / basket')
     assertStock()
   })
 
-  test(`Kits tab, search, type filters, hash refresh and Create basket at ${width}`, async ({
+  test(`Baskets tab, search, type filters, hash refresh and Create basket at ${width}`, async ({
     page,
   }) => {
     await page.setViewportSize({ width, height: 950 })
     const { writes } = await setup(page)
     await page
       .locator('.section-tabs')
-      .getByRole('link', { name: 'Kits', exact: true })
+      .getByRole('link', { name: 'Baskets', exact: true })
       .click()
-    await expect(page).toHaveURL(/#Products\/Kits$/)
+    await expect(page).toHaveURL(/#Products\/Baskets$/)
     await expect(page.getByRole('article')).toHaveCount(1)
-    await expect(page.getByRole('article')).toContainText('Kit · active')
+    await expect(page.getByRole('article')).toContainText('Basket · active')
     await page
       .getByLabel('Search products', { exact: true })
       .fill('nonmatching')
@@ -343,7 +343,7 @@ for (const width of [1440, 768, 390]) {
     await page.reload({ waitUntil: 'networkidle' })
     await expect(
       page.locator('.section-tabs a[aria-current="page"]'),
-    ).toHaveText('Kits')
+    ).toHaveText('Baskets')
     await expect(
       page.getByRole('button', { name: 'Create basket', exact: true }),
     ).toHaveCount(1)
@@ -416,13 +416,13 @@ for (const width of [1440, 390]) {
     await expect(dialog.getByRole('status')).toContainText(
       `${kitName}: choose an active category`,
     )
-    await expect(card(dialog, 'Total cost per kit')).toHaveText(
+    await expect(card(dialog, 'Cost per basket')).toHaveText(
       money(productCosting(kit, workspace).perPackage),
     )
     await expect(card(dialog, 'Selling price')).toHaveText('$42.00')
     for (const label of [
-      'Profit per kit',
-      'Tax per kit',
+      'Profit per basket',
+      'Tax per basket',
       'Customer price',
       'Revenue excluding tax',
       'Suggested selling price',
@@ -571,7 +571,7 @@ for (const width of [1440, 390])
       path: `docs/reviews/kit-details/product-${width}.png`,
     })
     await page.keyboard.press('Escape')
-    await page.getByRole('link', { name: 'Kits', exact: true }).click()
+    await page.getByRole('link', { name: 'Baskets', exact: true }).click()
     await expect(page.getByRole('article')).toHaveCount(1)
     await page.getByLabel('Search products').fill('missing')
     await expect(page.getByRole('article')).toHaveCount(0)
@@ -588,7 +588,7 @@ for (const width of [1440, 390])
     ).toContainText(`${component.name} ×2`)
     await expect(
       dialog.getByRole('region', { name: 'Included products' }),
-    ).not.toContainText('per package')
+    ).toContainText('per included package')
     await expect(
       dialog.getByText('Connected recipe:', { exact: false }),
     ).toHaveCount(0)

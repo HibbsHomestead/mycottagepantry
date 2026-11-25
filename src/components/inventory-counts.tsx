@@ -382,7 +382,7 @@ export function InventoryCounts({
           w.settings[0]?.name ||
           "Current business"}{" "}
         · {ovenTimezone(w.settings[0])}. Ingredients, packaging, supplies and
-        craft materials with stock tracking. Compound prep and product/kit
+        craft materials with stock tracking. Compound prep and product/basket
         balances use their existing workflows. Location labels do not represent
         separate balances.
       </p>

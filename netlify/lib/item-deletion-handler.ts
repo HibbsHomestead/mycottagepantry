@@ -51,13 +51,13 @@ export async function handleItemDeletion(
       item.workflow !== 'kit' ||
       data.confirmed !== true
     )
-      throw new Error('Only a confirmed kit archive is supported here.')
+      throw new Error('Only a confirmed basket archive is supported here.')
     await client.query(
       "UPDATE products SET data=jsonb_set(data,'{archived}','true'::jsonb),updated_at=NOW() WHERE business_id=$1 AND id=$2",
       [org, item.id],
     )
     await audit(
-      'Kit archived',
+      'Basket archived',
       `${item.name}: definition, stock, links and history preserved.`,
     )
     return null

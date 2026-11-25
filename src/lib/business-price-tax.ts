@@ -52,7 +52,7 @@ export function planPriceTaxChange(
 ) {
   const business = workspace.settings[0]
   const defaultMode = businessPriceTaxMode(business)
-  const counts = { Food: 0, Handmade: 0, Resale: 0, Kits: 0 }
+  const counts = { Food: 0, Handmade: 0, Resale: 0, Baskets: 0 }
   let overrides = 0,
     overridesReplaced = 0
   const rows = [...workspace.products]
@@ -69,7 +69,7 @@ export function planPriceTaxChange(
           : product.workflow === 'resale'
             ? 'Resale'
             : product.workflow === 'kit'
-              ? 'Kits'
+              ? 'Baskets'
               : 'Food'
       counts[type]++
       const existingMode = product.priceTaxMode || 'configured'

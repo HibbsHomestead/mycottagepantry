@@ -4104,6 +4104,7 @@ export function LabelStudio({
                 <details>
                   <summary>Print history</summary>
                   {(w.label_print_jobs || [])
+                    .filter((job) => !job.assortmentKind)
                     .slice()
                     .reverse()
                     .map((j) => (
@@ -4120,7 +4121,7 @@ export function LabelStudio({
                         </span>
                       </div>
                     ))}
-                  {!w.label_print_jobs?.length && (
+                  {!w.label_print_jobs?.some((job) => !job.assortmentKind) && (
                     <p>No exports recorded yet.</p>
                   )}
                 </details>

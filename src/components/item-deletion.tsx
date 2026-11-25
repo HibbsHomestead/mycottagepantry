@@ -211,7 +211,7 @@ export function ItemDeletionProvider({
                       }
                     }}
                   >
-                    Archive kit instead
+                    Archive basket instead
                   </button>
                 )}
                 <button
@@ -297,7 +297,7 @@ export function ItemDeletionProvider({
             )}
             {canArchive && !!blockers.length && (
               <p>
-                Archive kit instead preserves its definition, stock, links and
+                Archiving the basket preserves its definition, stock, links and
                 history, and marks it archived. It is not permanent deletion.
                 The existing list continues to show archived products.
               </p>
