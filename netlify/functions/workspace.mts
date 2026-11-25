@@ -2659,7 +2659,7 @@ export default async (req: Request, context: Context) => {
       if (!p) throw new Error('Choose a product.')
       if (p.workflow === 'kit')
         throw new Error(
-          'Kit fulfillment is unavailable: finished-package consumption is not supported for every component. No stock or sale was posted.',
+          'Basket fulfillment is unavailable: finished-package consumption is not supported for every component. No stock or sale was posted.',
         )
       if (item.refundOf)
         throw new Error('Use the refund action to reverse a recorded sale.')
@@ -2823,6 +2823,7 @@ export default async (req: Request, context: Context) => {
           'complete',
           'productionComplete',
           'productionRecordActuals',
+          'productionChecklist',
           'receive',
           'adjust',
           'pantrySort',
@@ -2977,7 +2978,7 @@ export default async (req: Request, context: Context) => {
         ].includes(action)
       )
         throw new Error(
-          'Kit stock, production and fulfillment actions are unavailable. Definitions do not move stock.',
+          'This stock or fulfillment action is unavailable for baskets. Use the Production board to plan and assemble baskets.',
         )
       if (
         table === 'batches' &&
@@ -2987,7 +2988,7 @@ export default async (req: Request, context: Context) => {
         )
       )
         throw new Error(
-          'Produce component products separately; kit production is unavailable.',
+          'Use the Production board to plan basket contents and assembly.',
         )
       if (['squareApiImport','squareStage','squareReview','squareCommit','squareUndo'].includes(action)) {
         if (!['Owner','Manager'].includes(role)) throw new Error('Only an Owner or Manager can import or undo sales.')
@@ -5769,6 +5770,7 @@ export default async (req: Request, context: Context) => {
             batch,
             link.allocations || [],
             result,
+            true,
           )
       }
     if (!metadataOnly) rollup(result)

@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyGrocerySources,
   generateGroceryList,
+  groceryEmptyMessage,
   groceryGroups,
   groceryText,
   type GrocerySources,
 } from './grocery-list'
 import { mergeGroceryMarks } from './grocery-sync'
 import { productionDefinition } from './production'
+import { basketProduction } from './basket-production'
+import {
+  groceryBasketFixture,
+  linkGroceryBasketBatch,
+} from '../test/grocery-basket-fixture'
 import type { Workspace } from './domain'
 
 const date = '2026-11-23T13:00:00.000Z'
@@ -153,6 +159,212 @@ const batches = (id: string, amount = 1) => ({
 })
 
 describe('grocery snapshot', () => {
+  it('matches Production for zero stock, make fresh and explicit allocations, and combines materials and prep', () => {
+    const state = groceryBasketFixture()
+    const parent = state.batches[0]
+    const list = generate(state, { runs: [parent.id] })
+    expect(list.warnings).toEqual([])
+    const bun = list.products![0]
+    expect(bun).toMatchObject({
+      required: 6,
+      allocated: 0,
+      unreserved: 0,
+      toProduce: 6,
+      extra: 0,
+    })
+    const line = (name: string) =>
+      list.lines.find((entry) => entry.name === name)
+    expect(line('Bread flour')).toMatchObject({
+      needed: 240,
+      onHand: 100,
+      toBuy: 140,
+      sources: expect.arrayContaining([
+        expect.stringContaining('Jam buns'),
+        expect.stringContaining('Shortbread'),
+      ]),
+    })
+    expect(line('Bun tins')).toMatchObject({
+      needed: 6,
+      toBuy: 5,
+      kind: 'Packaging',
+    })
+    expect(line('Cookie sleeves')).toMatchObject({ needed: 3, toBuy: 3 })
+    expect(line('Outer basket boxes')).toMatchObject({
+      needed: 3,
+      toBuy: 2,
+      kind: 'Packaging',
+    })
+    expect(line('Breakfast tea')).toMatchObject({
+      needed: 3,
+      onHand: 1,
+      toBuy: 2,
+      kind: 'Purchased components',
+      packages: 1,
+      estimate: 12,
+    })
+    expect(line('Jam buns · 2-pack')).toBeUndefined()
+    expect(list.prep[0]).toMatchObject({ needed: 60, onHand: 30, toMake: 30 })
+    expect(line('Strawberries')).toMatchObject({ needed: 45, toBuy: 45 })
+
+    state.products[0].quantity = 5
+    const fresh = generate(state, { runs: [parent.id] }).products![0]
+    expect(fresh).toMatchObject({ allocated: 0, unreserved: 5, toProduce: 6 })
+    parent.lines[0].basketPlan.bun.stock = 2
+    const production = basketProduction(parent.lines[0], state, parent.id)[0]
+    const allocated = generate(state, { runs: [parent.id] }).products![0]
+    expect(allocated).toMatchObject({
+      required: production.required,
+      allocated: production.allocated,
+      unreserved: 3,
+      toProduce: production.unplanned,
+      extra: 2,
+    })
+    expect(allocated.toProduce + allocated.extra).toBe(
+      production.candidate?.quantity,
+    )
+  })
+
+  it('counts a shared physical batch once, including basket-only selection, and skips posted output', () => {
+    const state = groceryBasketFixture()
+    linkGroceryBasketBatch(state)
+    const parentOnly = generate(state, { runs: ['basket-run'] })
+    const allSources = generate(state, {
+      runs: ['basket-run', 'shared-run'],
+      events: ['market'],
+    })
+    const marketOnly = generate(state, { events: ['market'] })
+    for (const list of [parentOnly, allSources, marketOnly]) {
+      expect(
+        list.lines.find((line) => line.name === 'Bread flour'),
+      ).toMatchObject({ needed: 420, toBuy: 320 })
+      expect(list.lines.find((line) => line.name === 'Bun tins')).toMatchObject(
+        {
+          needed: 12,
+          sources: [
+            expect.stringMatching(
+              /Breakfast Basket.*Jam buns.*Shared market buns/,
+            ),
+          ],
+        },
+      )
+      expect(list.products![0]).toMatchObject({
+        toProduce: 6,
+        extra: 0,
+        runs: [{ id: 'shared-run', planned: 12, pending: 6, posted: 0 }],
+      })
+    }
+    state.batches[1].status = 'completed'
+    state.batches[1].lines[0].actualYield = 4
+    state.products[0].quantity = 4
+    const partial = generate(state, { runs: ['basket-run'] })
+    expect(partial.products![0]).toMatchObject({
+      toProduce: 2,
+      extra: 4,
+      runs: [{ pending: 0, posted: 4 }],
+    })
+    state.batches[1].lines[0].actualYield = 12
+    state.products[0].quantity = 12
+    const posted = generate(state, { runs: ['basket-run'] })
+    expect(posted.lines.some((line) => line.name === 'Bun tins')).toBe(false)
+    expect(posted.products![0]).toMatchObject({
+      toProduce: 0,
+      runs: [{ pending: 0, posted: 6 }],
+    })
+  })
+
+  it('does not invent a fresh run when the basket is waiting for an existing-run assignment', () => {
+    const state = groceryBasketFixture()
+    state.batches[0].lines[0].basketPlan.bun.useExistingRun = true
+    const waiting = generate(state, { runs: ['basket-run'] })
+    expect(waiting.products![0].issue).toMatch(/6 packages still to assign/)
+    expect(waiting.lines.some((line) => line.name === 'Bun tins')).toBe(false)
+    linkGroceryBasketBatch(state)
+    const linked = generate(state, { runs: ['basket-run'] })
+    expect(linked.products![0].issue).toBeUndefined()
+    expect(linked.lines.find((line) => line.name === 'Bun tins')?.needed).toBe(
+      12,
+    )
+  })
+
+  it('separates unresolved setup, no matching sources, legacy snapshots and stock coverage', () => {
+    const state = groceryBasketFixture()
+    state.products[0].recipeId = 'missing'
+    state.products[1].contentUnit = 'kg'
+    const bad = generate(state, { runs: ['basket-run'] })
+    expect(bad.warnings.join(' ')).toMatch(/Jam buns.*Missing recipe/)
+    expect(bad.warnings.join(' ')).toMatch(/Shortbread.*kg/)
+    expect(groceryEmptyMessage(bad)).toMatch(/could not be calculated/)
+    expect(
+      groceryEmptyMessage({ ...bad, calculationVersion: undefined }),
+    ).toMatch(/predates basket-content expansion/)
+    expect(
+      groceryEmptyMessage(
+        generate(state, { from: '2026-11-24', to: '2026-11-24' }),
+      ),
+    ).toMatch(/No production sources/)
+
+    const coveredState = groceryBasketFixture()
+    for (const item of coveredState.ingredients) item.quantity = 1000
+    coveredState.products[2].quantity = 3
+    coveredState.batches[0].lines[0].basketPlan.tea.stock = 3
+    const covered = generate(coveredState, { runs: ['basket-run'] })
+    expect(covered.lines.every((row) => row.toBuy === 0)).toBe(true)
+    expect(covered.lines.some((row) => row.name === 'Strawberries')).toBe(false)
+    expect(groceryEmptyMessage(covered)).toBe(
+      'Everything required is covered by stock.',
+    )
+  })
+
+  it('uses prepared lots only for matching demand and never spends them as unportioned stock', () => {
+    const state = groceryBasketFixture()
+    state.ingredients[0].quantity = 280
+    state.lots = [
+      {
+        id: 'prep',
+        name: 'Portioned flour',
+        kind: 'ingredient_prep',
+        ingredientId: 'flour',
+        method: 'Portioned',
+        quantity: 180,
+        unit: 'g',
+        outputUnit: 'g',
+        perPortion: 180,
+        usable: 180,
+        portions: 1,
+        unitCost: 0.01,
+      },
+    ]
+    state.recipes[0].lines[0].prepared = {
+      method: 'Portioned',
+      outputUnit: 'g',
+      perPortion: 180,
+      costPerOutputUnit: 0.01,
+    }
+    const list = generate(state, {
+      runs: ['basket-run'],
+      recipes: [batches('cookie-recipe', 0.5)],
+    })
+    expect(list.lines.find((row) => row.name === 'Bread flour')).toMatchObject({
+      needed: 120,
+      onHand: 100,
+      toBuy: 20,
+    })
+    expect(
+      list.prep.find((row) => row.name === 'Bread flour · Portioned'),
+    ).toMatchObject({ needed: 180, onHand: 180, toMake: 0 })
+    const duplicateDemand = generate(state, {
+      runs: ['basket-run'],
+      recipes: [batches('bun-recipe')],
+    })
+    expect(
+      duplicateDemand.prep.find(
+        (row) => row.name === 'Bread flour · Portioned',
+      ),
+    ).toMatchObject({ needed: 360, onHand: 180, toMake: 180 })
+    expect(duplicateDemand.warnings.join(' ')).toMatch(
+      /prepare more Portioned stock/,
+    )
+  })
   it('rolls across recipe batches, linked bases and nested prep without spending the same stock twice', () => {
     const state = fixture()
     const before = structuredClone(state)

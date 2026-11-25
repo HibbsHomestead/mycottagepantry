@@ -20,12 +20,18 @@ import {
   X,
 } from 'lucide-react'
 import type { Item, Workspace } from '../lib/domain'
+import { marketOutput } from '../lib/production-destinations'
+import { productionRunLines } from '../lib/production-run'
 import {
   emptyGrocerySources,
   groceryAmount,
+  groceryEmptyMessage,
   groceryGroups,
+  groceryLinkedRun,
+  groceryProductSummary,
   groceryQuantity,
   groceryText,
+  groceryWarnings,
   isGroceryRecipe,
   isPlannedGroceryRun,
   isShoppingLine,
@@ -143,13 +149,19 @@ function SourcesEditor({
   const [recipeChoice, setRecipeChoice] = useState('')
   const planned = state.batches.filter(isPlannedGroceryRun)
   const recipes = state.recipes.filter(isGroceryRecipe)
-  const linkedEvents = (state.events || []).filter((event) =>
-    state.event_batch_links?.some(
-      (link) =>
-        link.eventId === event.id &&
-        planned.some((run) => run.id === link.recordId) &&
-        link.allocations?.some((entry: Item) => entry.quantity > 0),
-    ),
+  const linkedEvents = (state.events || []).filter(
+    (event) =>
+      planned.some((run) =>
+        productionRunLines(run).some(
+          (line) => marketOutput(run, line, event.id, state).planned > 0,
+        ),
+      ) ||
+      state.event_batch_links?.some(
+        (link) =>
+          link.eventId === event.id &&
+          planned.some((run) => run.id === link.recordId) &&
+          link.allocations?.some((entry: Item) => entry.quantity > 0),
+      ),
   )
   const update = (patch: Partial<GrocerySources>) =>
     setSources({ ...sources, ...patch })
@@ -479,9 +491,14 @@ function ShoppingRow({
               )}
             </dl>
             {!!line.sources.length && (
-              <p>
-                <strong>Used in:</strong> {line.sources.join('; ')}
-              </p>
+              <div>
+                <strong>Used in:</strong>
+                <ul>
+                  {line.sources.map((source) => (
+                    <li key={source}>{source}</li>
+                  ))}
+                </ul>
+              </div>
             )}
             {line.notes && (
               <p>
@@ -522,7 +539,7 @@ export function GroceryPrepList({
   const [summaries, setSummaries] = useState<Summary[]>([])
   const [sources, setSources] = useState<GrocerySources>(emptyGrocerySources)
   const [editingSources, setEditingSources] = useState(false)
-  const [view, setView] = useState<'shop' | 'prep'>('shop')
+  const [view, setView] = useState<'products' | 'shop' | 'prep'>('shop')
   const [groupBy, setGroupBy] = useState<'vendor' | 'category'>('vendor')
   const [hideChecked, setHideChecked] = useState(false)
   const [checkedLast, setCheckedLast] = useState(false)
@@ -777,7 +794,9 @@ export function GroceryPrepList({
           ...previous.filter((entry) => entry.id !== snapshot.id),
         ])
         activate(snapshot)
-        setNotice('New snapshot saved. Earlier lists are unchanged.')
+        setNotice(
+          'New snapshot saved. Earlier lists are unchanged; checkmarks and manual edits were not copied.',
+        )
         generation.current = undefined
       }
     } catch (error) {
@@ -850,6 +869,12 @@ export function GroceryPrepList({
       ? 'Offline · showing last loaded list'
       : ''
   const prepToMake = display?.prep.filter((prep) => prep.toMake > 1e-8) || []
+  const warnings = display ? groceryWarnings(display) : []
+  const needsReview =
+    !!display &&
+    (!display.calculationVersion ||
+      !!warnings.length ||
+      lines.some((line) => line.review))
   const selectedDialog = typeof dialog === 'object' ? dialog : undefined
   return (
     <section className="grocery-page" aria-labelledby="grocery-title">
@@ -870,6 +895,12 @@ export function GroceryPrepList({
         {notice}
       </span>
       {loading && <p role="status">Loading saved lists…</p>}
+      {!loading && !display && !error && (
+        <p>
+          No production sources selected. Choose runs, dates, events, or recipes
+          to make a list.
+        </p>
+      )}
       {!loading && !display && error && (
         <button
           type="button"
@@ -900,7 +931,12 @@ export function GroceryPrepList({
       {display && (
         <section className="grocery-snapshot" aria-label="Selected sources">
           <strong>Selected sources</strong>
-          <span>Snapshot generated {formatDate(display.generatedAt)}</span>
+          <span>
+            Calculated{' '}
+            <time dateTime={display.generatedAt}>
+              {new Date(display.generatedAt).toLocaleString()}
+            </time>
+          </span>
           {display.labels.length ? (
             <ul>
               {display.labels.map((label, index) => (
@@ -931,6 +967,11 @@ export function GroceryPrepList({
               {editingSources ? 'Cancel source edits' : 'Edit sources'}
             </button>
           </div>
+          <p>
+            Recalculate saves a new snapshot from these sources. Checkmarks,
+            quantity edits, and manual items stay on the original list and are
+            not copied.
+          </p>
           <small>
             Recalculate saves a new snapshot using current stock. Check marks
             and edits stay on this list. Ingredient reservations aren’t tracked.
@@ -952,14 +993,19 @@ export function GroceryPrepList({
       )}
       {display && (
         <>
-          {display.warnings.length > 0 && (
+          {!display.calculationVersion && (
+            <p className="grocery-alert" role="status">
+              {groceryEmptyMessage(display)}
+            </p>
+          )}
+          {warnings.length > 0 && (
             <details className="grocery-warning" open>
               <summary>
-                Review {display.warnings.length} planning{' '}
-                {display.warnings.length === 1 ? 'note' : 'notes'}
+                Review {warnings.length} planning{' '}
+                {warnings.length === 1 ? 'note' : 'notes'}
               </summary>
               <ul>
-                {display.warnings.map((warning) => (
+                {warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
               </ul>
@@ -972,6 +1018,13 @@ export function GroceryPrepList({
           >
             <button
               type="button"
+              aria-pressed={view === 'products'}
+              onClick={() => setView('products')}
+            >
+              Products to make
+            </button>
+            <button
+              type="button"
               aria-pressed={view === 'shop'}
               onClick={() => setView('shop')}
             >
@@ -982,17 +1035,53 @@ export function GroceryPrepList({
               aria-pressed={view === 'prep'}
               onClick={() => setView('prep')}
             >
-              Prep before baking{' '}
+              Prep before production{' '}
               {prepToMake.length ? `· ${prepToMake.length}` : ''}
             </button>
           </div>
-          {view === 'prep' ? (
+          {view === 'products' ? (
+            <section className="grocery-prep" aria-label="Products to make">
+              <h3>Products to make</h3>
+              <p>
+                Basket contents and linked work at the time of calculation.
+                Unreserved stock is not counted as an allocation.
+              </p>
+              {!display.products?.length && (
+                <p>
+                  {needsReview
+                    ? 'No basket product breakdown is available for this snapshot.'
+                    : 'No basket products in the selected sources.'}
+                </p>
+              )}
+              {display.products?.map((product) => (
+                <article key={product.id}>
+                  <h4>{product.name}</h4>
+                  <p>{product.basket}</p>
+                  <p>{groceryProductSummary(product)}</p>
+                  {product.issue && (
+                    <p>
+                      <strong>Review:</strong> {product.issue}
+                    </p>
+                  )}
+                  {product.runs.length > 0 && (
+                    <ul>
+                      {product.runs.map((run) => (
+                        <li key={`${run.id}:${run.lineId}`}>
+                          {groceryLinkedRun(run)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              ))}
+            </section>
+          ) : view === 'prep' ? (
             <section className="grocery-prep">
-              <h3>Prep before baking</h3>
+              <h3>Prep before production</h3>
               <p>
                 Planning only. Nothing is prepared, reserved, or deducted here.
               </p>
-              {!prepToMake.length && (
+              {!display.prep.length && !needsReview && (
                 <p>No additional prep to make from this snapshot.</p>
               )}
               {display.prep.map((prep) => (
@@ -1102,16 +1191,24 @@ export function GroceryPrepList({
                   </button>
                 </div>
               </details>
-              {!!shoppingLines.length && checked === shoppingLines.length && (
-                <p className="grocery-done" role="status">
-                  <Check size={20} /> All done
-                </p>
-              )}
-              {!shoppingLines.length && !lines.some((line) => line.review) && (
-                <p className="grocery-done">
-                  {lines.length || display.prep.length
-                    ? 'Everything on this list is covered by stock.'
-                    : 'No shopping items yet.'}
+              {!needsReview &&
+                !!shoppingLines.length &&
+                checked === shoppingLines.length && (
+                  <p className="grocery-done" role="status">
+                    <Check size={20} /> All done
+                  </p>
+                )}
+              {!shoppingLines.length && !!display.calculationVersion && (
+                <p
+                  className={
+                    needsReview
+                      ? 'grocery-alert'
+                      : display.selectedSourceCount
+                        ? 'grocery-done'
+                        : undefined
+                  }
+                >
+                  {groceryEmptyMessage(display)}
                 </p>
               )}
               {groups.map((group) => {

@@ -4,6 +4,10 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { demoData } from '../src/lib/demo'
 import type { Workspace } from '../src/lib/domain'
 import {
+  groceryBasketFixture,
+  linkGroceryBasketBatch,
+} from '../src/test/grocery-basket-fixture'
+import {
   generateGroceryList,
   newerGroceryMark,
   type GroceryList,
@@ -193,6 +197,110 @@ async function screenshot(page: Page, info: TestInfo, name: string) {
   })
 }
 
+test('expanded basket snapshot on a phone preserves legacy edits and prints the worked list', async ({
+  browser,
+}, info) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  })
+  try {
+    const page = await context.newPage()
+    const storage = fixture()
+    Object.assign(storage.workspace, groceryBasketFixture())
+    linkGroceryBasketBatch(storage.workspace)
+    const original = generateGroceryList(
+      storage.workspace,
+      {
+        runs: ['basket-run', 'shared-run'],
+        events: ['market'],
+        recipes: [],
+        from: '',
+        to: '',
+      },
+      'legacy',
+      '2026-11-22T14:00:00.000Z',
+    )
+    const flourRow = original.lines.find((row) => row.name === 'Bread flour')!
+    original.calculationVersion = undefined
+    original.products = undefined
+    original.warnings = [
+      'Breakfast Basket: check finished stock separately; kit components are not ingredient purchases.',
+    ]
+    original.marks[flourRow.id] = {
+      row: flourRow.id,
+      checked: true,
+      at: 100,
+      token: 'old',
+    }
+    original.overrides[flourRow.id] = 350
+    original.manual.push({
+      id: 'old-manual',
+      name: 'Manual ribbon',
+      unit: 'roll',
+      needed: 1,
+      toBuy: 1,
+      kind: 'Manual',
+      vendor: '',
+      category: '',
+      sources: [],
+      manual: true,
+    })
+    storage.lists.set(original.id, original)
+    const preserved = structuredClone(original)
+    await connect(page, storage)
+    await page.goto(address)
+    await page.getByLabel('Saved snapshots').selectOption('legacy')
+    await expect(
+      page.getByRole('main').getByText(/predates basket-content expansion/),
+    ).toBeVisible()
+    await expect(page.locator('.grocery-print')).toContainText(
+      'predates basket-content expansion',
+    )
+    await page.getByRole('button', { name: 'Recalculate', exact: true }).tap()
+    await expect(
+      page.getByText(/Earlier lists are unchanged/).last(),
+    ).toBeVisible()
+    await page
+      .getByRole('button', { name: 'Products to make', exact: true })
+      .tap()
+    const products = page.getByRole('region', { name: 'Products to make' })
+    await expect(products).toContainText('6 packages to produce')
+    await expect(products).toContainText('Shared market buns')
+    await products.scrollIntoViewIfNeeded()
+    await screenshot(page, info, 'basket-products-390')
+    await page.getByRole('button', { name: 'Shopping list', exact: true }).tap()
+    const checkbox = page.getByRole('checkbox', { name: /Bread flour/ })
+    await expect(checkbox).not.toBeChecked()
+    const row = page.locator('.grocery-row').filter({ has: checkbox })
+    await row.getByText('Bread flour', { exact: true }).tap()
+    await expect(checkbox).toBeChecked()
+    await row.getByText('Bread flour', { exact: true }).tap()
+    await expect(checkbox).not.toBeChecked()
+    await expect(page.getByText('Manual ribbon')).toHaveCount(0)
+    await row.scrollIntoViewIfNeeded()
+    await screenshot(page, info, 'basket-shopping-390')
+    await page.getByRole('button', { name: /Prep before production/ }).tap()
+    await expect(page.getByText('Make 90 g', { exact: true })).toBeVisible()
+    await page.emulateMedia({ media: 'print' })
+    await expect(page.locator('.grocery-print')).toContainText(
+      'Bread flour: 320 g',
+    )
+    await expect(page.locator('.grocery-print')).toContainText(
+      'Shared market buns',
+    )
+    await expect(page.locator('.grocery-print')).toContainText(
+      'Prepared jam: make 90 g; 30 g on hand',
+    )
+    await screenshot(page, info, 'basket-print-390')
+    expect(storage.lists.get(original.id)).toEqual(preserved)
+    expect(storage.writes).not.toContain('unexpected workspace write')
+  } finally {
+    await context.close()
+  }
+})
+
 for (const [width, height] of [
   [360, 800],
   [390, 844],
@@ -366,7 +474,9 @@ for (const [width, height] of [
         await expect(
           page.getByRole('checkbox', { name: /Parchment.*Manual/ }),
         ).toBeVisible()
-        await page.getByRole('button', { name: /Prep before baking/ }).click()
+        await page
+          .getByRole('button', { name: /Prep before production/ })
+          .click()
         const toMake = page.getByText('Make 300 g', { exact: true })
         await expect(toMake).toBeVisible()
         await toMake.scrollIntoViewIfNeeded()
@@ -393,7 +503,7 @@ for (const [width, height] of [
         await page.emulateMedia({ media: 'print' })
         await expect(page.locator('.grocery-print')).toBeVisible()
         await expect(page.locator('.grocery-print')).toContainText(
-          'Prep before baking',
+          'Prep before production',
         )
         await expect(page.locator('.grocery-add')).toBeHidden()
         await page.evaluate(() => window.scrollTo(0, 0))

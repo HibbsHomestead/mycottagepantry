@@ -10,7 +10,7 @@ import {
   workspaceFixtureUrl,
 } from './workspace-fixture'
 
-const screenshots = 'docs/reviews/guided-production'
+const screenshots = 'test-results/guided-production'
 
 for (const width of [1440, 390]) {
   test.describe(`production at ${width}px`, () => {
@@ -175,7 +175,7 @@ for (const width of [1440, 390]) {
       return route.fulfill({ json: { workspace, role: 'Owner', demo: false } })
     })
     await page.goto(workspaceFixtureUrl('Production/Batch runs'))
-    await page.getByRole('button', { name: 'Kanban board' }).click()
+    await page.getByRole('button', { name: 'Board', exact: true }).click()
     const board = page.getByRole('region', { name: 'Production board' })
     const lane = (stage: string) =>
       board.locator('.production-board-lane').filter({
@@ -195,11 +195,13 @@ for (const width of [1440, 390]) {
       fullPage: width === 1440,
       animations: 'disabled',
     })
-    if (width === 1440)
+    if (width === 1440) {
+      await card.locator('.production-board-grip').dragTo(lane('Completed').getByRole('heading'))
+      await expect(board.getByText(/Cannot move directly to Completed/)).toBeVisible()
       await card
         .locator('.production-board-grip')
         .dragTo(lane('In Progress').getByRole('heading'))
-    else await card.getByRole('button', { name: 'Review & start' }).press('Enter')
+    } else await card.getByRole('button', { name: 'Review & start' }).press('Enter')
     const dialog = page.getByRole('dialog')
     await dialog.getByRole('button', { name: 'Start run', exact: true }).click()
     await expect(dialog.getByRole('alert')).toContainText('Fixture: review the current run first.')
@@ -226,6 +228,10 @@ for (const width of [1440, 390]) {
     expect(completes).toBe(0)
     await expect(goodOutput).toHaveValue('')
     await goodOutput.fill('2')
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+    await expect(lane('In Progress').getByRole('button', { name: draft.name })).toBeVisible()
+    await card.getByRole('button', { name: 'Record output' }).click()
+    await expect(goodOutput).toHaveValue('2')
     if (width === 1440) await dialog.screenshot({ path: `${screenshots}/record-output.png`, animations: 'disabled' })
     const allocation = dialog.getByLabel(/Prepared stock · Bananas — Frozen/)
     await expect(allocation.locator('option')).not.toContainText([

@@ -1,6 +1,7 @@
 import { roundMoney, validateDate, type Item, type Workspace } from './domain'
 import { ovenTimezone } from './oven-dates'
 import { productionRunLines } from './production-run'
+import { activeBasketAssignments } from './production-destinations'
 
 export const eventTypes = ['Market / sale event', 'Pickup day', 'Other event']
 export const eventStatuses = ['Draft', 'Scheduled', 'Completed', 'Cancelled']
@@ -129,6 +130,7 @@ export function validateAllocations(
   batch: Item,
   allocations: Item[],
   state: Workspace,
+  preservePlan = false,
 ) {
   if (!Array.isArray(allocations) || allocations.length > 100)
     throw new Error('Invalid allocation list.')
@@ -148,7 +150,11 @@ export function validateAllocations(
         .flatMap((l) => l.allocations || [])
         .filter((a2) => a2.lineId === a.lineId)
         .reduce((n, a2) => n + Number(a2.quantity), 0)
-      const available = output.available
+      const line = productionRunLines(batch).find((entry) => entry.id === a.lineId)
+      const capacity = preservePlan && batch.productionVersion === 2 && batch.status === 'completed'
+        ? Math.max(output.planned, output.available)
+        : output.available
+      const available = capacity - (line ? activeBasketAssignments(line, state).reduce((sum, entry) => sum + entry.quantity, 0) : 0)
       if (
         !Number.isFinite(quantity) ||
         quantity < 0 ||

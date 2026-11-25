@@ -130,6 +130,7 @@ export function requestFeatures({
     case 'productionSave':
     case 'productionComplete':
     case 'productionRecordActuals':
+    case 'productionChecklist':
     case 'productionCancel':
     case 'productionReverse':
     case 'complete':

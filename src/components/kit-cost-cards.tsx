@@ -83,7 +83,7 @@ export function KitCostCards({
         <CostCard
           label="Profit per kit"
           value={amount(p?.profit)}
-          note="Revenue less kit cost; excludes tax"
+          note="Revenue less basket cost; excludes tax"
           tone="green"
         />
       </div>
@@ -177,7 +177,7 @@ export function KitCostCards({
               calculation adds no separate overhead charge.
             </p>
             <p>
-              Total cost per kit = included products ({costMoney(c.ingredient)})
+              Total cost per basket = included products ({costMoney(c.ingredient)})
               + additional packaging ({costMoney(c.packagingCost)}) + assembly (
               {costMoney(c.labor)}) = {costMoney(c.perPackage)}.
             </p>
@@ -186,8 +186,8 @@ export function KitCostCards({
         {p && (
           <>
             <p>
-              Profit per kit = revenue excluding tax ({money(p.revenue)}) −
-              total cost per kit ({money(c!.perPackage)}). Margin = profit ÷
+              Profit per basket = revenue excluding tax ({money(p.revenue)}) −
+              total cost per basket ({money(c!.perPackage)}). Margin = profit ÷
               revenue excluding tax.
             </p>
             <p>
@@ -215,7 +215,7 @@ export function KitCostCards({
           </p>
         )}
         <p>
-          Viewing or editing a kit definition does not assemble products,
+          Viewing or editing a basket definition does not assemble products,
           reserve stock or create stock movements.
         </p>
       </details>

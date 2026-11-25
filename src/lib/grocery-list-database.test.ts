@@ -24,6 +24,8 @@ it('persists tenant-scoped snapshots and last-write checks without writing produ
       'vendors',
       'events',
       'event_batch_links',
+      'lots',
+      'finance_transactions',
       'ledger',
       'orders',
       'journals',
@@ -160,6 +162,22 @@ it('persists tenant-scoped snapshots and last-write checks without writing produ
     expect(saved.marks).toEqual({ [checked.row]: unchecked })
     expect(saved.manual).toHaveLength(1)
     expect(saved.overrides).toEqual({ [checked.row]: 400 })
+    const recalculatedId = randomUUID()
+    const recalc = await post({
+      action: 'generate',
+      id: recalculatedId,
+      sources: saved.sources,
+    })
+    expect(recalc.status).toBe(201)
+    expect((await recalc.json()).list).toMatchObject({
+      id: recalculatedId,
+      calculationVersion: 2,
+      sources: saved.sources,
+      marks: {},
+      manual: [],
+      overrides: {},
+    })
+    expect((await (await read()).json()).list).toEqual(saved)
     expect((await db.query('SELECT data FROM ingredients')).rows).toEqual([
       { data: ingredient },
     ])

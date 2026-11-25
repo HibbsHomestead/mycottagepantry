@@ -122,5 +122,5 @@ it('rejects unsupported contents, fractional packages, missing components, dupli
       },
       w,
     ),
-  ).toThrow(/Kits cannot contain kits/)
+  ).toThrow(/Baskets cannot contain baskets/)
 })

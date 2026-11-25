@@ -8,6 +8,8 @@ import { costBreakdown, type Item } from './domain'
 import { preparedRequirement } from './prepared-requirement'
 import { prepStockBalance } from './stock-prep'
 import { productionReviewIssues } from './production-run'
+import { basketChecklist, type ChecklistStage } from './production-checklist'
+import { marketOutput } from './production-destinations'
 import { planStockPrep, prepReviewKey } from './stock-prep'
 const session = vi.hoisted(() => ({
   client: null as null | {
@@ -239,6 +241,13 @@ beforeAll(async () => {
   seed.ingredients.push({ id: 'isolated-liner', name: 'Test muffin liner', usedAs: 'supply', unit: 'each', quantity: 100, cost: 0.025, currentCost: 0.025 })
   seed.recipes.push({ id: 'isolated-muffins', name: 'Test muffins', yield: 12, yieldUnit: 'each', laborMinutes: 0, laborRate: 0, lines: [{ ingredientId: 'flour', quantity: 120, unit: 'g' }], productionSupplies: [{ ingredientId: 'isolated-liner', quantity: 12, unit: 'each' }] })
   seed.products.push({ id: 'isolated-muffin', name: 'Test muffin', workflow: 'food', recipeId: 'isolated-muffins', unitsPerPackage: 1, price: 3, quantity: 0, cost: 0 })
+  seed.ingredients.push({ id: 'basket-test-flour', name: 'Basket flour', unit: 'g', quantity: 1000, cost: 0.01, currentCost: 0.01 })
+  seed.recipes.push({ id: 'basket-test-bake', name: 'Basket rolls recipe', yield: 4, yieldUnit: 'each', laborMinutes: 12, laborRate: 10, overhead: 0, lines: [{ ingredientId: 'basket-test-flour', quantity: 400, unit: 'g' }] })
+  seed.products.push(
+    { id: 'basket-test-roll', name: 'Basket roll', workflow: 'food', recipeId: 'basket-test-bake', unitsPerPackage: 1, quantity: 0, cost: 0, price: 8, packagingLines: [{ ingredientId: 'bag', quantity: 1, unit: 'each' }] },
+    { id: 'basket-test-tea', name: 'Purchased tea tin', workflow: 'resale', quantity: 0, cost: 0, price: 8 },
+    { id: 'basket-test-set', name: 'Roll and tea basket', workflow: 'kit', quantity: 0, cost: 0, price: 20, assemblyMinutes: 6, assemblyRate: 10, kitComponents: [{ productId: 'basket-test-roll', quantity: 1, basis: 'package' }, { productId: 'basket-test-tea', quantity: 1, basis: 'package' }], packagingLines: [{ ingredientId: 'box', quantity: 1, unit: 'each' }] },
+  )
   seed.ingredients.push(
     { id: 'prep-count', name: 'Bananas by count', unit: 'each', quantity: 20, cost: 0.5 },
     { id: 'prep-weight', name: 'Bananas by weight', unit: 'g', storageUnit: 'kg', quantity: 2000, cost: 0.01 },
@@ -342,12 +351,57 @@ it('fractional scaling receives only requested packages, retry posts once, and h
 })
 it('assembly consumes finished stock and outer packaging once, never component raw materials', async () => {
   const before = await ok()
-  await ok('productionSave', 'batches', plan('assemble-one', 'kit', 1))
-  const done = await ok('productionComplete', 'batches', {
+  const draft = {
     id: 'assemble-one',
-    output: 1,
-    waste: 0,
-  })
+    name: 'Bread basket',
+    status: 'draft',
+    lines: [{ id: 'basket-line', productId: 'kit', quantity: 1 }],
+  }
+  let workspace = await ok('productionSave', 'batches', draft)
+  const saved = () => find(workspace.batches, draft.id)
+  async function mark(stage: ChecklistStage, key: string, checked: boolean, quantity = 0, runId = draft.id) {
+    const run = find(workspace.batches, runId)
+    const line = run.lines[0]
+    const entry = basketChecklist(line, workspace, stage).find((entry) => entry.key === key)!
+    workspace = await ok('productionChecklist', 'batches', {
+      id: runId, expectedRevision: run.revision, lineId: line.id, stage, key, signature: entry.signature, checked, quantity,
+    })
+  }
+  expect((await call('productionSave', 'batches', { ...draft, status: 'scheduled', expectedRevision: 1 })).error).toMatch(/review the basket contents/i)
+  await mark('reviewed', 'product:loaf', true)
+  expect(find((await ok()).batches, draft.id).lines[0].checklist.reviewed['product:loaf'].checked).toBe(true)
+  workspace = await ok('productionSave', 'batches', { ...draft, expectedRevision: saved().revision, lines: [{ ...draft.lines[0], quantity: 2 }] })
+  expect(basketChecklist(saved().lines[0], workspace, 'reviewed')[0]).toMatchObject({ required: 4, reReview: true })
+  workspace = await ok('productionSave', 'batches', { ...draft, expectedRevision: saved().revision })
+  expect(basketChecklist(saved().lines[0], workspace, 'reviewed')[0].mark).toBeUndefined()
+  await mark('reviewed', 'product:loaf', true)
+  await mark('reviewed', 'supply:box', true)
+  workspace = await ok('productionSave', 'batches', { ...draft, status: 'scheduled', expectedRevision: saved().revision })
+  await mark('picked', 'product:loaf', false, 1)
+  expect(basketChecklist(saved().lines[0], workspace, 'picked')[0].mark).toMatchObject({ checked: false, quantity: 1 })
+  expect(basketChecklist(saved().lines[0], workspace, 'packed')[0].mark).toBeUndefined()
+  workspace = await ok('productionRecordActuals', 'batches', { id: draft.id, expectedRevision: saved().revision, lines: [{ id: 'basket-line', output: 1 }] })
+  expect((await call('productionComplete', 'batches', { id: draft.id, expectedRevision: saved().revision })).error).toMatch(/finish the basket checklists/i)
+  for (const stage of ['picked', 'packed'] as const) {
+    await mark(stage, 'product:loaf', true)
+    await mark(stage, 'supply:box', true)
+  }
+  const competing = { ...draft, id: 'assemble-competing', name: 'Competing assembly' }
+  workspace = await ok('productionSave', 'batches', competing)
+  const competitor = () => find(workspace.batches, competing.id)
+  await mark('reviewed', 'product:loaf', true, 0, competing.id)
+  await mark('reviewed', 'supply:box', true, 0, competing.id)
+  workspace = await ok('productionSave', 'batches', { ...competing, status: 'scheduled', expectedRevision: competitor().revision })
+  workspace = await ok('productionRecordActuals', 'batches', { id: competing.id, expectedRevision: competitor().revision, lines: [{ id: 'basket-line', output: 1 }] })
+  for (const stage of ['picked', 'packed'] as const) {
+    await mark(stage, 'product:loaf', true, 0, competing.id)
+    await mark(stage, 'supply:box', true, 0, competing.id)
+  }
+  expect(workspace.ledger).toEqual(before.ledger)
+  const request = { id: draft.id, expectedRevision: saved().revision }
+  const done = await ok('productionComplete', 'batches', request)
+  expect((await call('productionComplete', 'batches', { id: competing.id, expectedRevision: competitor().revision })).error).toMatch(/Bread loaf/)
+  expect((await ok('productionComplete', 'batches', request)).ledger).toEqual(done.ledger)
   expect(find(done.products, 'loaf').quantity).toBe(1)
   expect(find(done.products, 'kit').quantity).toBe(1)
   expect(find(done.ingredients, 'flour').quantity).toBe(
@@ -358,16 +412,7 @@ it('assembly consumes finished stock and outer packaging once, never component r
   )
   expect(find(done.ingredients, 'box').quantity).toBe(19)
   expect(find(done.batches, 'assemble-one').historicalCost).toBeCloseTo(6.4)
-  await ok('productionSave', 'batches', plan('assemble-short', 'kit', 1))
-  expect(
-    (
-      await call('productionComplete', 'batches', {
-        id: 'assemble-short',
-        output: 1,
-        waste: 0,
-      })
-    ).status,
-  ).toBe(400)
+  expect((await call('productionChecklist', 'batches', { id: draft.id, expectedRevision: saved().revision + 1 })).error).toMatch(/read-only/i)
   expect((await ok()).ledger).toEqual(done.ledger)
   expect(
     (await call('productionCancel', 'batches', { id: 'assemble-one' })).status,
@@ -1631,4 +1676,121 @@ it('portions generic materials, packaging and supplies without duplicating stock
   expect(find(completed.ingredients, ribbon.id).quantity).toBe(10)
   expect(find(completed.lots, prepSources[ribbon.id]).balances).toEqual([0, 2])
   expect((await ok('complete', 'batches', actual)).ledger).toEqual(completed.ledger)
+})
+
+it('plans and posts a shared market batch without an order, and keeps stock and customer-order plans separate', async () => {
+  session.user = 'production-owner-a'
+  const day = '2026-11-24'
+  const eventId = 'isolated-board-market'
+  await ok('eventSave', 'events', { id: eventId, name: 'Fixture market', type: 'Market / sale event', status: 'Scheduled', allDay: true, startDate: day, endDate: day })
+  const orderId = 'isolated-board-order'
+  await db.query('INSERT INTO finance_transactions(id,business_id,data) VALUES($1,$2,$3)', [orderId, a, JSON.stringify({ id: orderId, kind: 'invoice', name: 'Fixture customer order', status: 'posted', amount: 10, paid: 0, date: day })])
+  const baseline = await ok()
+  const basketId = 'isolated-board-basket'
+  await ok('productionSave', 'batches', { id: basketId, status: 'draft', eventId, lines: [{ id: 'board-basket-line', productId: 'kit', quantity: 1 }] })
+  const loaf = { id: 'board-loaf-line', productId: 'loaf', quantity: 6, mapping: { quantity: 1, unit: 'each', verified: true } }
+  const market = { id: 'isolated-board-batch', name: 'Shared market bake', status: 'draft', eventId, dueDate: day, lines: [{ ...loaf, basketAssignments: [{ runId: basketId, quantity: 2 }] }] }
+  let workspace = await ok('productionSave', 'batches', market)
+  const draft = find(workspace.batches, market.id)
+  expect(draft).toMatchObject({ eventId, dueDate: day, status: 'draft' })
+  expect(draft.orderId).toBeUndefined()
+  expect(marketOutput(draft, draft.lines[0], eventId, workspace)).toEqual({ planned: 6, completed: 0, forBaskets: 2 })
+  expect((await call('productionSave', 'batches', { ...market, id: 'isolated-excess-bake', lines: [{ ...loaf, basketAssignments: [{ runId: basketId, quantity: 7 }] }] })).error).toMatch(/exceed planned packages/)
+  expect((await call('productionSave', 'batches', { ...market, id: 'isolated-other-order', orderId: 'missing-order' })).error).toMatch(/existing customer order/)
+  for (const link of [{ id: 'isolated-board-stock' }, { id: 'isolated-board-customer', orderId }]) {
+    workspace = await ok('productionSave', 'batches', { ...link, status: 'scheduled', lines: [loaf] })
+    const run = find(workspace.batches, link.id)
+    expect(run.orderId).toBe('orderId' in link ? orderId : undefined)
+    expect(run.eventId).toBeUndefined()
+  }
+  workspace = await ok('eventLink', 'events', { eventId, kind: 'batch', recordId: market.id, allocations: [{ lineId: loaf.id, productId: loaf.productId, quantity: 4 }] })
+  expect(marketOutput(draft, draft.lines[0], eventId, workspace).planned).toBe(6)
+  workspace = await ok('productionSave', 'batches', { ...market, status: 'scheduled', expectedRevision: draft.revision })
+  workspace = await ok('productionRecordActuals', 'batches', { id: market.id, expectedRevision: find(workspace.batches, market.id).revision, lines: [{ id: loaf.id, output: 3 }] })
+  expect(workspace.ledger).toEqual(baseline.ledger)
+  const finalize = { id: market.id, expectedRevision: find(workspace.batches, market.id).revision }
+  const done = await ok('productionComplete', 'batches', finalize)
+  const run = find(done.batches, market.id)
+  expect(marketOutput(run, run.lines[0], eventId, done)).toEqual({ planned: 6, completed: 3, forBaskets: 2 })
+  expect(find(done.products, 'loaf').quantity).toBe(find(baseline.products, 'loaf').quantity + 3)
+  expect(done.sales).toEqual(baseline.sales)
+  expect(done.orders).toEqual(baseline.orders)
+  expect(done.finance_transactions).toEqual(baseline.finance_transactions)
+  expect((await ok('productionComplete', 'batches', finalize)).ledger).toEqual(done.ledger)
+})
+
+it('plans basket contents atomically, allows zero finished stock, and posts partial assembly without repeating component costs', async () => {
+  session.user = 'production-owner-a'
+  const day = '2026-11-24'
+  const eventId = 'fixture-contents-market'
+  await ok('eventSave', 'events', { id: eventId, name: 'Contents market', type: 'Market / sale event', status: 'Scheduled', allDay: true, startDate: day, endDate: day })
+  await ok('receive', 'products', { id: 'basket-test-tea', operationId: 'fixture-tea-receipt', quantity: 3, unit: 'each', itemsPerUnit: 1, price: 12, reason: 'Fixture stock', receivedDate: day })
+  const before = await ok()
+  const parent = { id: 'fixture-contents-parent', name: 'Market roll and tea baskets', status: 'draft', date: day, eventId, expectedRevision: 0, planContents: true,
+    lines: [{ id: 'contents-basket-line', productId: 'basket-test-set', quantity: 3, basketPlan: { 'basket-test-roll': { wholeBatch: true }, 'basket-test-tea': { stock: 3 } } }],
+  }
+  let workspace = await ok('productionSave', 'batches', parent)
+  const saved = () => find(workspace.batches, parent.id)
+  const child = () => workspace.batches.find((run: Item) => run.lines?.some((line: Item) => line.basketAssignments?.some((assignment: Item) => assignment.runId === parent.id)))!
+  const firstChild = child()
+  expect(firstChild).toMatchObject({ eventId, status: 'draft', quantity: 4 })
+  expect(firstChild.lines[0].basketAssignments).toEqual([{ runId: parent.id, quantity: 3 }])
+  expect(saved().orderId).toBeUndefined()
+  expect(workspace.batches).toHaveLength(before.batches.length + 2)
+  expect((await ok('productionSave', 'batches', parent)).batches).toEqual(workspace.batches)
+  expect(workspace.ledger).toEqual(before.ledger)
+  const competing = await call('productionSave', 'batches', { ...parent, id: 'fixture-contents-competing' })
+  expect(competing.error).toMatch(/Purchased tea tin.*0 eligible/)
+  expect((await ok()).batches).toEqual(workspace.batches)
+  async function mark(stage: ChecklistStage) {
+    for (const entry of basketChecklist(saved().lines[0], workspace, stage)) {
+      workspace = await ok('productionChecklist', 'batches', { id: parent.id, lineId: saved().lines[0].id, expectedRevision: saved().revision, stage, key: entry.key, signature: entry.signature, checked: true })
+    }
+  }
+  await mark('reviewed')
+  workspace = await ok('productionSave', 'batches', { ...saved(), status: 'scheduled', expectedRevision: saved().revision })
+  expect(find(workspace.products, 'basket-test-roll').quantity).toBe(0)
+  const missing = basketChecklist(saved().lines[0], workspace, 'picked')[0]
+  expect((await call('productionChecklist', 'batches', { id: parent.id, lineId: saved().lines[0].id, expectedRevision: saved().revision, stage: 'picked', key: missing.key, signature: missing.signature, checked: true })).error).toMatch(/3 packages still needed/)
+  workspace = await ok('productionSave', 'batches', { ...child(), status: 'scheduled', expectedRevision: child().revision })
+  workspace = await ok('productionRecordActuals', 'batches', { id: child().id, expectedRevision: child().revision, lines: [{ id: child().lines[0].id, output: 2, waste: 1, wasteReason: 'Fixture reject' }] })
+  const componentPost = { id: child().id, expectedRevision: child().revision }
+  workspace = await ok('productionComplete', 'batches', componentPost)
+  expect((await ok('productionComplete', 'batches', componentPost)).ledger).toEqual(workspace.ledger)
+  expect(find(workspace.products, 'basket-test-roll').quantity).toBe(2)
+  expect(marketOutput(child(), child().lines[0], eventId, workspace)).toEqual({ planned: 4, completed: 2, forBaskets: 3 })
+  expect((await call('productionSave', 'batches', { id: 'fixture-excess-content', eventId, status: 'draft', lines: [{ id: 'fixture-excess-line', productId: 'basket-test-roll', quantity: 2, mapping, basketAssignments: [{ runId: parent.id, quantity: 2 }] }] })).error).toMatch(/exceed unmet basket demand/)
+  workspace = await ok('productionRecordActuals', 'batches', { id: parent.id, expectedRevision: saved().revision, lines: [{ id: saved().lines[0].id, output: 1 }] })
+  await mark('picked')
+  await mark('packed')
+  const raw = find(workspace.ingredients, 'basket-test-flour').quantity
+  const bags = find(workspace.ingredients, 'bag').quantity
+  const boxes = find(workspace.ingredients, 'box').quantity
+  const rollCost = find(workspace.products, 'basket-test-roll').cost
+  const post = { id: parent.id, expectedRevision: saved().revision }
+  workspace = await ok('productionComplete', 'batches', post)
+  expect(find(workspace.products, 'basket-test-roll').quantity).toBe(1)
+  expect(find(workspace.products, 'basket-test-tea').quantity).toBe(2)
+  expect(find(workspace.products, 'basket-test-set').quantity).toBe(1)
+  expect(find(workspace.ingredients, 'basket-test-flour').quantity).toBe(raw)
+  expect(find(workspace.ingredients, 'bag').quantity).toBe(bags)
+  expect(find(workspace.ingredients, 'box').quantity).toBe(boxes - 1)
+  expect(saved().historicalCost).toBeCloseTo(rollCost + 4 + 1 + 1)
+  expect((await ok('productionComplete', 'batches', post)).ledger).toEqual(workspace.ledger)
+  expect((await ok()).batches).toEqual(workspace.batches)
+
+  const canceledId = 'fixture-cancel-contents'
+  workspace = await ok('productionSave', 'batches', { ...parent, id: canceledId, name: 'Basket to cancel', lines: [{ ...parent.lines[0], quantity: 1, basketPlan: {} }] })
+  const linked = workspace.batches.find((run: Item) => run.lines?.some((line: Item) => line.basketAssignments?.some((assignment: Item) => assignment.runId === canceledId)))
+  expect(linked.quantity).toBe(1)
+  workspace = await ok('productionSave', 'batches', { ...linked, status: 'scheduled', expectedRevision: linked.revision })
+  workspace = await ok('productionRecordActuals', 'batches', { id: linked.id, expectedRevision: find(workspace.batches, linked.id).revision, lines: [{ id: linked.lines[0].id, output: 1 }] })
+  workspace = await ok('productionComplete', 'batches', { id: linked.id, expectedRevision: find(workspace.batches, linked.id).revision })
+  const beforeCancel = workspace
+  workspace = await ok('productionCancel', 'batches', { id: canceledId, expectedRevision: find(workspace.batches, canceledId).revision })
+  expect(find(workspace.batches, linked.id)).toEqual(find(beforeCancel.batches, linked.id))
+  expect(workspace.ledger).toEqual(beforeCancel.ledger)
+  expect(find(workspace.products, 'basket-test-roll').quantity).toBe(2)
+  const postedRun = find(workspace.batches, linked.id)
+  expect(marketOutput(postedRun, postedRun.lines[0], eventId, workspace)).toEqual({ planned: 1, completed: 1, forBaskets: 0 })
 })

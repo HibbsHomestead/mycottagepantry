@@ -394,7 +394,7 @@ export function WorkspaceApp() {
       : selectedRecord
   const [componentPicker, setComponentPicker] = useState(false)
   const [preparedPicker, setPreparedPicker] = useState<{ replace?: number; ingredientId?: string } | null>(null)
-  const [productionView, setProductionView] = useState<'list' | 'board'>('board')
+  const basketReturn = useRef<string | null>(null)
   const [managingRecipeCategories, setManagingRecipeCategories] =
     useState(false)
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState('all')
@@ -438,6 +438,7 @@ export function WorkspaceApp() {
   const routeRef = useRef(route)
   const lastHash = useRef('')
   const [formDirty, setFormDirty] = useState(false)
+  const heldProduction = useRef(new WeakMap<Item, Item>())
   const packagingDraft = isPackaging(draft)
   useEffect(() => {
     if (!modal || (!formDirty && !busy)) return
@@ -901,6 +902,7 @@ export function WorkspaceApp() {
           'stockPrepPost',
           'stockPrepReverse',
           'productRecipeLink',
+          'productionChecklist',
         ].includes(action) &&
         !keepProductionOpen
       )
@@ -938,7 +940,7 @@ export function WorkspaceApp() {
     go('Products', 'All Products')
     open('product-detail', product)
   }
-  function open(kind: string, item?: Item, newDraft = false, prep = false, productionReview = false) {
+  function open(kind: string, item?: Item, newDraft = false, prep = false, productionReview = false, productionBoard = false) {
     if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
 
     if (
@@ -1018,6 +1020,7 @@ export function WorkspaceApp() {
       setDraft({
         productId: product?.id || '',
         productionReview,
+        productionBoard,
         legacyRunId:
           item &&
           !item.productionVersion &&
@@ -1579,7 +1582,6 @@ export function WorkspaceApp() {
               ? 'trade-product-resale'
               : 'product',
       ],
-      ...(sub === 'Grocery & Prep' ? {} : { Production: ['Plan production', 'batch'] }),
       Finances: ['Record a transaction', 'transaction'],
       Labels: ['Print label', 'print'],
       Reports: ['Export report', 'export'],
@@ -2682,14 +2684,13 @@ export function WorkspaceApp() {
                     </>
                   ) : (
                     <>
-                      <div className="button-row" role="group" aria-label="Production view">
-                        <button type="button" className={`btn ${productionView === 'list' ? '' : 'secondary'}`} aria-pressed={productionView === 'list'} onClick={() => setProductionView('list')}>List</button>
-                        <button type="button" className={`btn ${productionView === 'board' ? '' : 'secondary'}`} aria-pressed={productionView === 'board'} onClick={() => setProductionView('board')}>Kanban board</button>
-                      </div>
-                      {productionView === 'board' ? <ProductionBoard state={state} busy={busy}
+                      <ProductionBoard state={state} busy={busy}
+                        mutate={mutate}
+                        plan={(eventId) => { open('batch'); if (eventId) setDraft((previous) => ({ ...previous, initialEventId: eventId })) }}
                         canStart={ready && ['Owner', 'Manager'].includes(role)}
                         canComplete={ready && ['Owner', 'Manager', 'Production Staff'].includes(role)}
-                        open={(run, destination) => open(run.productionVersion || run.status === 'completed' ? 'batch-detail' : ['scheduled', 'planned'].includes(run.status) ? 'production' : 'complete', run, false, false, destination === 'Completed')} /> : <div className="production-layout">
+                        open={(run, destination) => open(run.productionVersion || run.status === 'completed' ? 'batch-detail' : ['scheduled', 'planned'].includes(run.status) ? 'production' : 'complete', run, false, false, destination === 'Completed', true)} />
+                      <details className="production-board-more"><summary>Batch history and compound prep</summary><div className="production-layout">
                         <section className="panel">
                           <div className="panel-heading">
                             <div>
@@ -2883,7 +2884,7 @@ export function WorkspaceApp() {
                             View pantry <ArrowRight size={15} />
                           </Btn>
                         </section>
-                      </div>}
+                      </div></details>
                     </>
                   )}
                 </>
@@ -3771,11 +3772,13 @@ export function WorkspaceApp() {
             if (
               modal === 'production' &&
               formDirty &&
+              !(draft.productionBoard && selected?.productionVersion === 2) &&
               !window.confirm(
                 'Discard unsaved production changes? Save this run to continue editing later.',
               )
             )
               return
+            if (modal === 'production') basketReturn.current = null
             const kit =
               modal === 'product-detail' && selected?.workflow !== 'kit'
                 ? state.products.find((p) => p.id === kitContext)
@@ -3866,6 +3869,8 @@ export function WorkspaceApp() {
                     ? `${modal === 'ingredient' && packagingDraft ? 'Packaging details. ' : ''}Tell us how you bought it. We’ll take care of the unit math.`
                     : modal === 'signin'
                       ? 'Manage your existing oven session.'
+                      : modal === 'production'
+                        ? 'Plan work, record actual output, and review inventory before posting.'
                       : 'Everything you need to keep your business in good order.'}
               </DialogDescription>
             </DialogHeader>
@@ -5754,6 +5759,21 @@ export function WorkspaceApp() {
               productId={draft.productId}
               legacyRunId={draft.legacyRunId}
               initialReview={draft.productionReview}
+              initialEventId={draft.initialEventId}
+              openLinkedRun={selected ? (component) => {
+                basketReturn.current = selected.id
+                open('production', component, false, false, false, true)
+              } : undefined}
+              returnToBasket={basketReturn.current ? () => {
+                const parent = state.batches.find((run) => run.id === basketReturn.current)
+                basketReturn.current = null
+                if (parent) open('production', parent, false, false, false, true)
+              } : undefined}
+              heldDraft={draft.productionBoard && selected ? heldProduction.current.get(selected) : undefined}
+              holdDraft={draft.productionBoard && selected?.productionVersion === 2 ? (draft) => {
+                if (draft) heldProduction.current.set(selected, draft)
+                else heldProduction.current.delete(selected)
+              } : undefined}
               busy={busy}
               mutate={mutate}
               edit={open}

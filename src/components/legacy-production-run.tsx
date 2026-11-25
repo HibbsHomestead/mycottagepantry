@@ -179,7 +179,7 @@ export function LegacyProductionRun({
           <p>
             {run?.definition?.bom
               ? `Bill of materials · version ${run.definition.bom.version}`
-              : run?.definition?.recipe?.name || 'Kit assembly'}{' '}
+              : run?.definition?.recipe?.name || 'Basket assembly'}{' '}
             · definition saved when planned.
           </p>
           <div className="table-scroll">
@@ -292,14 +292,14 @@ export function LegacyProductionRun({
               .map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
-                  {p.workflow === 'kit' ? ' · Kit' : ''}
+                  {p.workflow === 'kit' ? ' · Basket' : ''}
                 </option>
               ))}
           </select>
         </label>
         <label>
           {kit
-            ? 'Kits to assemble'
+            ? 'Baskets to assemble'
             : handmade
               ? 'Finished units to produce'
               : 'Selling packages to produce'}
@@ -323,7 +323,7 @@ export function LegacyProductionRun({
           <span>
             <strong>{p.name}</strong>
             <small>
-              {kit ? 'Kit · Assemble' : `${workflowOf(p)} · Produce`} ·{' '}
+              {kit ? 'Basket · Assemble' : `${workflowOf(p)} · Produce`} ·{' '}
               {quantity} selling packages
             </small>
           </span>

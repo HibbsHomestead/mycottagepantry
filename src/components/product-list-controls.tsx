@@ -32,7 +32,7 @@ export function ProductSummaries({ products }: { products: Item[] }) {
           value: (
             <>
               <span>Resale: {count('resale')}</span>
-              <span>Kits: {count('kit')}</span>
+              <span>Baskets: {count('kit')}</span>
             </>
           ),
           icon: <Gift size={21} />,

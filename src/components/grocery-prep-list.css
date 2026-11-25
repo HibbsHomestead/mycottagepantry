@@ -180,7 +180,7 @@
 }
 .grocery-view {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 9px;
   padding: 4px;
@@ -190,6 +190,7 @@
 }
 .grocery-view button {
   min-height: 44px;
+  padding: 5px;
   border: 1px solid transparent;
   border-radius: 7px;
   font: inherit;

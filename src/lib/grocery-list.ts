@@ -10,7 +10,11 @@ import {
   type Workspace,
 } from './domain'
 import { packageCost } from './ingredients'
+import { basketProduction } from './basket-production'
+import { marketOutput } from './production-destinations'
 import { isPackaging } from './pantry-category'
+import { activePrepLots } from './stock-prep'
+import { stockUnitLabel } from './resale-stock'
 import {
   productionBatchMultiplier,
   productionDefinition,
@@ -35,7 +39,8 @@ export type GroceryLine = {
   id: string
   name: string
   unit: string
-  kind: 'Ingredients' | 'Packaging' | 'Supplies' | 'Manual'
+  kind:
+    'Ingredients' | 'Packaging' | 'Supplies' | 'Purchased components' | 'Manual'
   vendor: string
   category: string
   needed: number
@@ -55,6 +60,28 @@ export type GroceryPrep = Pick<
   GroceryLine,
   'id' | 'name' | 'unit' | 'needed' | 'onHand' | 'sources'
 > & { toMake: number }
+export type GroceryProduct = {
+  id: string
+  name: string
+  basket: string
+  perBasket: number
+  required: number
+  allocated: number
+  unreserved: number
+  toProduce: number
+  extra: number
+  toObtain: number
+  issue?: string
+  runs: {
+    id: string
+    lineId: string
+    name: string
+    status: string
+    planned: number
+    pending: number
+    posted: number
+  }[]
+}
 export type GroceryMark = {
   row: string
   checked: boolean
@@ -68,6 +95,9 @@ export type GroceryList = {
   labels: string[]
   lines: GroceryLine[]
   prep: GroceryPrep[]
+  products?: GroceryProduct[]
+  calculationVersion?: 2
+  selectedSourceCount?: number
   warnings: string[]
   manual: GroceryLine[]
   marks: Record<string, GroceryMark>
@@ -180,6 +210,8 @@ export function generateGroceryList(
     id,
     generatedAt,
     sources,
+    calculationVersion: 2,
+    selectedSourceCount: 0,
     labels: [],
     warnings: [],
     lines: [],
@@ -192,6 +224,10 @@ export function generateGroceryList(
   const prepRows = new Map<string, GroceryPrep>()
   const prepRemaining = new Map<string, number>()
   const directPrepRemaining = new Map<string, number>()
+  const directPrepLots = new Map<string, Set<string>>()
+  const purchasedRows = new Map<string, GroceryLine>()
+  const basketProducts: GroceryProduct[] = []
+  list.products = basketProducts
   const ingredients = state.ingredients || []
   const recipes = state.recipes || []
   const products = state.products || []
@@ -262,6 +298,7 @@ export function generateGroceryList(
     source: string,
     graph: Item[],
     historic: Item[] = [],
+    prepSources: Record<string, string> = {},
   ) => {
     const inputs = recipeInputLines(recipe, graph)
     if (!inputs.length)
@@ -278,6 +315,7 @@ export function generateGroceryList(
         [source, ...bases].join(' → '),
         graph,
         historic,
+        prepSources,
       )
     }
   }
@@ -287,6 +325,7 @@ export function generateGroceryList(
     source: string,
     graph: Item[],
     historic: Item[] = [],
+    prepSources: Record<string, string> = {},
   ) {
     const item = byIngredient.get(input.ingredientId)
     const fallback =
@@ -332,10 +371,56 @@ export function generateGroceryList(
       return
     }
     if (input.prepared) {
-      const eligible = matchingPreparedLots(item, state.lots || [], input.prepared)
-      const selected = eligible.find((lot) => (directPrepRemaining.get(lot.id) ?? lot.quantity) >= normalized - 1e-8)
-      if (selected) directPrepRemaining.set(selected.id, (directPrepRemaining.get(selected.id) ?? selected.quantity) - normalized)
-      else warn(source, `${item.name}: prepare more ${input.prepared.method} stock or review allocation. Unportioned stock is not a substitute.`)
+      const eligible = matchingPreparedLots(
+        item,
+        state.lots || [],
+        input.prepared,
+      )
+      const allowed = prepSources[item.id]
+        ? eligible.filter((lot) => lot.id === prepSources[item.id])
+        : eligible
+      const selected = allowed.find(
+        (lot) =>
+          (directPrepRemaining.get(lot.id) ?? lot.quantity) >=
+          normalized - epsilon,
+      )
+      if (selected)
+        directPrepRemaining.set(
+          selected.id,
+          (directPrepRemaining.get(selected.id) ?? selected.quantity) -
+            normalized,
+        )
+      else
+        warn(
+          source,
+          `${item.name}: prepare more ${input.prepared.method} stock or review allocation. Unportioned stock is not a substitute.`,
+        )
+      const key = JSON.stringify([
+        item.id,
+        input.prepared.method,
+        input.prepared.perPortion,
+        input.prepared.outputUnit,
+      ])
+      const prep = prepRows.get(key) || {
+        id: key,
+        name: `${item.name} · ${input.prepared.method}`,
+        unit: item.unit,
+        needed: 0,
+        onHand: 0,
+        toMake: 0,
+        sources: [],
+      }
+      const counted = directPrepLots.get(key) || new Set<string>()
+      for (const lot of allowed) {
+        if (counted.has(lot.id)) continue
+        prep.onHand = (prep.onHand ?? 0) + amount(lot.quantity)
+        counted.add(lot.id)
+      }
+      directPrepLots.set(key, counted)
+      prep.needed += normalized
+      if (!selected) prep.toMake += normalized
+      addSource(prep.sources, source)
+      prepRows.set(key, prep)
       return
     }
     const componentId = componentSourceId(
@@ -357,7 +442,7 @@ export function generateGroceryList(
       )
       return
     }
-    const onHand = amount(item.quantity)
+    const onHand = item.trackInventory === false ? 0 : amount(item.quantity)
     const available = prepRemaining.get(item.id) ?? onHand
     const used = Math.min(available, normalized)
     const shortage = Math.max(0, normalized - used)
@@ -408,6 +493,7 @@ export function generateGroceryList(
     source: string,
     frozen: Item[] = [],
     historic: Item[] = [],
+    prepSources: Record<string, string> = {},
   ) => {
     const graph = [
       ...frozen,
@@ -420,7 +506,92 @@ export function generateGroceryList(
       { recipes: graph, ingredients },
       true,
     )
-    recipeInputs(recipe, multiplier, source, validated, historic)
+    recipeInputs(recipe, multiplier, source, validated, historic, prepSources)
+  }
+  const productInputs = (
+    definition: Item,
+    output: number,
+    label: string,
+    prepSources?: Record<string, string>,
+  ) => {
+    if (definition.recipe) {
+      const recipe = definition.recipe
+      const source = `${label} (${recipe.name})`
+      runRecipe(
+        recipe,
+        productionBatchMultiplier(
+          recipe,
+          output *
+            number(
+              definition.product.unitsPerPackage,
+              'Output per package',
+              0.000001,
+            ),
+        ),
+        source,
+        definition.recipes,
+        definition.ingredients,
+        prepSources,
+      )
+      for (const input of packagingLines(definition.product))
+        material(
+          { ...input, groceryPackaging: true },
+          output,
+          source,
+          recipes,
+          definition.ingredients,
+        )
+      return
+    }
+    const wholeOutput = Math.ceil(output)
+    const packaging = packagingLines(definition.product)
+    for (const input of productionRequirements(definition, wholeOutput)
+      .requirements) {
+      if (input.kind === 'product') continue
+      material(
+        {
+          ...input,
+          ingredientId: input.itemId,
+          prepared: input.source?.prepared,
+          productionSupply: !!input.supplyQuantity,
+          groceryPackaging: packaging.some(
+            (entry) => entry.ingredientId === input.itemId,
+          ),
+        },
+        output / wholeOutput,
+        label,
+        recipes,
+        definition.ingredients,
+      )
+    }
+  }
+  const purchaseComponent = (
+    item: Item,
+    required: number,
+    covered: number,
+    shortage: number,
+    source: string,
+  ) => {
+    const row = purchasedRows.get(item.id) || {
+      id: `purchased-${purchasedRows.size + 1}`,
+      name: item.name,
+      unit: stockUnitLabel(item, 2),
+      kind: 'Purchased components' as const,
+      vendor:
+        state.vendors?.find((vendor) => vendor.id === item.vendorId)?.name ||
+        item.vendor ||
+        '',
+      category: item.category || '',
+      needed: 0,
+      onHand: 0,
+      toBuy: 0,
+      sources: [],
+    }
+    row.needed += required
+    row.onHand = (row.onHand ?? 0) + covered
+    row.toBuy = (row.toBuy ?? 0) + shortage
+    addSource(row.sources, source)
+    purchasedRows.set(item.id, row)
   }
   const range = !!(sources.from || sources.to)
   if (range) {
@@ -444,6 +615,11 @@ export function generateGroceryList(
   )
   for (const event of events)
     if (
+      !batches.some((run) =>
+        productionRunLines(run).some(
+          (line) => marketOutput(run, line, event.id, state).planned > 0,
+        ),
+      ) &&
       !links.some(
         (link) =>
           link.eventId === event.id &&
@@ -452,29 +628,34 @@ export function generateGroceryList(
       )
     )
       warn(event.name, 'No linked planned output allocations.')
-  for (const run of batches) {
+  const selected = batches.flatMap((run) => {
     const full =
       sources.runs.includes(run.id) ||
       (range && run.date >= sources.from && run.date <= sources.to)
     const linked = links.filter((link) => link.recordId === run.id)
-    if (!full && !linked.length) continue
+    if (!full && !linked.length && !sources.events.length) return []
     const runName = run.name || 'Production run'
     if (full) list.labels.push(`${runName}${run.date ? ` · ${run.date}` : ''}`)
     const modern = productionRunLines(run)
-    for (const line of modern.length ? modern : [run]) {
-      const allocations = linked.flatMap((link) =>
-        (link.allocations || [])
-          .filter(
-            (entry: Item) =>
-              entry.lineId === line.id &&
-              entry.productId === line.productId &&
-              Number(entry.quantity) > 0,
+    return (modern.length ? modern : [run]).flatMap((line) => {
+      const allocations = modern.length
+        ? events.flatMap((event) => {
+            const { planned } = marketOutput(run, line, event.id, state)
+            return planned > 0 ? [{ quantity: planned, event: event.name }] : []
+          })
+        : linked.flatMap((link) =>
+            (link.allocations || [])
+              .filter(
+                (entry: Item) =>
+                  entry.lineId === line.id &&
+                  entry.productId === line.productId &&
+                  Number(entry.quantity) > 0,
+              )
+              .map((entry: Item) => ({
+                quantity: Number(entry.quantity),
+                event: events.find((event) => event.id === link.eventId)?.name,
+              })),
           )
-          .map((entry: Item) => ({
-            quantity: Number(entry.quantity),
-            event: events.find((event) => event.id === link.eventId)?.name,
-          })),
-      )
       const label = [
         full
           ? ''
@@ -494,114 +675,186 @@ export function generateGroceryList(
             Number(line.quantity),
             allocations.reduce((sum, entry) => sum + entry.quantity, 0),
           )
-      if (!full && !(selectedOutput > 0)) continue
-      try {
-        if (modern.length) {
-          const product = products.find((item) => item.id === line.productId)
-          const definition =
-            line.definition ||
-            (product &&
-              productionDefinition(product, state, line.mapping || {}))
-          if (!definition)
-            throw new Error('Production definition is unavailable.')
-          const output = number(
-            selectedOutput,
-            'Planned selling packages',
-            full ? 1 : 0.000001,
-          )
-          if (definition.recipe) {
-            const recipe = definition.recipe
-            const source = `${label} (${recipe.name})`
-            runRecipe(
-              recipe,
-              productionBatchMultiplier(
-                recipe,
-                output *
-                  number(
-                    definition.product.unitsPerPackage,
-                    'Output per package',
-                    0.000001,
-                  ),
-              ),
-              source,
-              definition.recipes,
-              definition.ingredients,
-            )
-            for (const input of packagingLines(definition.product))
-              material(
-                { ...input, groceryPackaging: true },
-                output,
-                source,
-                recipes,
-                definition.ingredients,
-              )
-          } else {
-            const totalOutput = Number(line.quantity)
-            const share = full ? 1 : output / totalOutput
-            const requirements = productionRequirements(
-              definition,
-              totalOutput,
-            ).requirements
-            for (const input of requirements) {
-              if (input.kind === 'product') {
-                const component = products.find(
-                  (product) => product.id === input.itemId,
-                )
-                if (
-                  !component ||
-                  amount(component.quantity) < input.quantity * share
-                )
-                  warn(
-                    label,
-                    `${input.name}: check finished stock separately; kit components are not ingredient purchases.`,
-                  )
-                continue
-              }
-              material(
-                {
-                  ...input,
-                  ingredientId: input.itemId,
-                  prepared: input.source?.prepared,
-                  productionSupply: !!input.supplyQuantity,
-                },
-                share,
+      if (!full && !(selectedOutput > 0)) return []
+      if (!full) addSource(list.labels, label)
+      return [
+        { run, line, full, selectedOutput, label, modern: !!modern.length },
+      ]
+    })
+  })
+  const linkedBaskets = new Map<string, string[]>()
+  const runKey = (run: Item, line: Item) => JSON.stringify([run.id, line.id])
+  const basketLines = new Set<Item>()
+  const selectedKeys = new Set(
+    selected.map(({ run, line }) => runKey(run, line)),
+  )
+  const plannedIds = new Set(batches.map((run) => run.id))
+  for (const { run, line, label, modern } of [...selected]) {
+    if (!modern) continue
+    const product = products.find((item) => item.id === line.productId)
+    if ((product?.workflow || line.definition?.product?.workflow) !== 'kit')
+      continue
+    basketLines.add(line)
+    const basket = `${label} · ${line.quantity} ${Number(line.quantity) === 1 ? 'basket' : 'baskets'}`
+    try {
+      const components = basketProduction(line, state, run.id)
+      if (!components.length)
+        warn(
+          basket,
+          'No included products are available. Review the basket definition.',
+        )
+      for (const entry of components) {
+        const source = `${basket} → ${entry.name}`
+        for (const linked of entry.sources) {
+          if (!linked.pending) continue
+          const key = runKey(linked.run, linked.line)
+          const parents = linkedBaskets.get(key) || []
+          addSource(parents, source)
+          linkedBaskets.set(key, parents)
+          if (!selectedKeys.has(key)) {
+            const label = linked.run.name || linked.line.name
+            if (plannedIds.has(linked.run.id)) {
+              selected.push({
+                run: linked.run,
+                line: linked.line,
+                full: true,
+                selectedOutput: Number(linked.line.quantity),
                 label,
-                recipes,
-                definition.ingredients,
-              )
-            }
-          }
-        } else {
-          const recipe = recipes.find((item) => item.id === run.recipeId)
-          if (!recipe) throw new Error('Recipe is unavailable.')
-          const multiplier =
-            number(run.count, 'Batch count', 0.000001) *
-            (full ? 1 : selectedOutput / Number(line.quantity))
-          const source = `${label} (${recipe.name})`
-          runRecipe(recipe, multiplier, source)
-          const candidates = products.filter(
-            (item) => item.recipeId === recipe.id,
-          )
-          const product =
-            candidates.find((item) => item.id === run.productId) ||
-            (candidates.length === 1 ? candidates[0] : undefined)
-          if (product)
-            for (const input of packagingLines(product))
-              material(
-                { ...input, groceryPackaging: true },
-                (number(recipe.yield, 'Recipe yield', 0.000001) * multiplier) /
-                  number(
-                    product.unitsPerPackage,
-                    'Output per package',
-                    0.000001,
-                  ),
+                modern: true,
+              })
+              selectedKeys.add(key)
+              addSource(list.labels, `${label} · linked component run`)
+            } else
+              warn(
                 source,
-                recipes,
+                `${label}: linked production status requires review.`,
               )
+          }
         }
-      } catch (error) {
-        warn(label, error)
+        const stockGap = Math.max(
+          0,
+          entry.allocated + entry.posted - entry.ready,
+        )
+        const toObtain = entry.resale ? entry.unplanned + stockGap : 0
+        const awaitingAssignment =
+          !entry.resale &&
+          entry.choice.useExistingRun &&
+          entry.unplanned > epsilon
+        const freshPlan = awaitingAssignment
+          ? undefined
+          : entry.requirementCandidate
+        const issue = [
+          entry.item?.archived
+            ? 'Product is archived. Review the basket contents.'
+            : '',
+          awaitingAssignment
+            ? `${entry.unplanned} packages still to assign from an existing run. Link output in Production before calculating those shopping needs.`
+            : entry.setup,
+          stockGap > epsilon && !entry.resale
+            ? `${stockGap} allocated or posted packages are no longer available. Review the production allocation.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+        basketProducts.push({
+          id: JSON.stringify([run.id, line.id, entry.component.productId]),
+          name: entry.name,
+          basket,
+          perBasket: Number(entry.component.quantity),
+          required: entry.required,
+          allocated: entry.allocated,
+          unreserved: Math.max(
+            0,
+            entry.eligible - entry.allocated - entry.posted,
+          ),
+          toProduce: entry.resale ? 0 : entry.pending + entry.unplanned,
+          extra: freshPlan
+            ? Math.max(0, Number(freshPlan.quantity) - entry.unplanned)
+            : 0,
+          toObtain,
+          issue: issue || undefined,
+          runs: entry.sources.map(({ run, line, pending, posted }) => ({
+            id: run.id,
+            lineId: line.id,
+            name: run.name || line.name,
+            status: run.status,
+            planned: Number(line.quantity),
+            pending,
+            posted,
+          })),
+        })
+        if (issue) warn(source, issue)
+        try {
+          if (entry.resale && entry.item && !entry.item.archived)
+            purchaseComponent(
+              entry.item,
+              entry.required,
+              entry.required - toObtain,
+              toObtain,
+              source,
+            )
+          else if (freshPlan)
+            productInputs(
+              freshPlan.definition,
+              Number(freshPlan.quantity),
+              source,
+            )
+        } catch (error) {
+          warn(source, error)
+        }
       }
+    } catch (error) {
+      warn(basket, error)
+    }
+  }
+  list.selectedSourceCount = selected.length + sources.recipes.length
+  for (const { run, line, full, selectedOutput, label, modern } of selected) {
+    try {
+      if (modern) {
+        const product = products.find((item) => item.id === line.productId)
+        const definition =
+          (!basketLines.has(line) && line.definition) ||
+          (product && productionDefinition(product, state, line.mapping || {}))
+        if (!definition)
+          throw new Error('Production definition is unavailable.')
+        const parents = linkedBaskets.get(runKey(run, line))
+        const output = number(
+          parents || basketLines.has(line) ? line.quantity : selectedOutput,
+          'Planned selling packages',
+          full ? 1 : 0.000001,
+        )
+        productInputs(
+          definition,
+          output,
+          parents ? `${parents.join('; ')} → ${label}` : label,
+          line.prepSources,
+        )
+      } else {
+        const recipe = recipes.find((item) => item.id === run.recipeId)
+        if (!recipe) throw new Error('Recipe is unavailable.')
+        const multiplier =
+          number(run.count, 'Batch count', 0.000001) *
+          (full ? 1 : selectedOutput / Number(line.quantity))
+        const source = `${label} (${recipe.name})`
+        runRecipe(recipe, multiplier, source)
+        const candidates = products.filter(
+          (item) => item.recipeId === recipe.id,
+        )
+        const product =
+          candidates.find((item) => item.id === run.productId) ||
+          (candidates.length === 1 ? candidates[0] : undefined)
+        if (product)
+          for (const input of packagingLines(product))
+            material(
+              { ...input, groceryPackaging: true },
+              (number(recipe.yield, 'Recipe yield', 0.000001) * multiplier) /
+                number(product.unitsPerPackage, 'Output per package', 0.000001),
+              source,
+              recipes,
+            )
+      }
+    } catch (error) {
+      warn(label, error)
     }
   }
   for (const choice of sources.recipes) {
@@ -635,26 +888,36 @@ export function generateGroceryList(
     throw new Error(
       'Select at least one production run, date range, linked event, or recipe.',
     )
-  if (
-    !list.labels.length ||
-    (!rows.size && !prepRows.size && !list.warnings.length)
-  )
-    list.warnings.push('No ingredient needs were found for these sources.')
   const remaining = new Map<string, number>()
   for (const [key, row] of rows) {
     if (row.review) continue
     const [, itemId] = JSON.parse(key)
     const item = byIngredient.get(itemId)!
-    const available = remaining.get(itemId) ?? amount(item.quantity)
+    const prepared = activePrepLots(state.lots, itemId).reduce(
+      (sum, lot) => sum + amount(lot.quantity),
+      0,
+    )
+    const available =
+      remaining.get(itemId) ?? Math.max(0, amount(item.quantity) - prepared)
     row.onHand = item.trackInventory === false ? undefined : available
     remaining.set(itemId, Math.max(0, available - row.needed))
     const shortage = Math.max(0, row.needed - (row.onHand ?? 0))
     row.toBuy = shortage > epsilon ? shortage : 0
     purchasingSuggestion(row, item, generatedAt.slice(0, 10))
   }
-  list.lines = [...rows.values()].sort((left, right) =>
-    left.name.localeCompare(right.name),
+  list.lines = [...rows.values(), ...purchasedRows.values()].sort(
+    (left, right) => left.name.localeCompare(right.name),
   )
+  for (const [productId, row] of purchasedRows) {
+    const item = products.find((product) => product.id === productId)
+    const count = Number(item?.purchaseDefaults?.itemsPerPack)
+    const price = Number(item?.purchaseDefaults?.packPrice)
+    if (!row.toBuy || !Number.isSafeInteger(count) || count < 1) continue
+    row.packages = Math.ceil(row.toBuy / count)
+    row.leftover = row.packages * count - row.toBuy
+    if (Number.isFinite(price) && price >= 0)
+      row.estimate = row.packages * price
+  }
   list.prep = [...prepRows.values()].sort((left, right) =>
     left.name.localeCompare(right.name),
   )
@@ -690,12 +953,62 @@ export function groceryGroups(lines: GroceryLine[], by: 'vendor' | 'category') {
   )
 }
 
-export function groceryText(list: GroceryList, by: 'vendor' | 'category') {
+export function groceryEmptyMessage(list: GroceryList) {
+  if (!list.calculationVersion)
+    return 'This saved snapshot predates basket-content expansion. Recalculate to check current needs.'
+  if (list.warnings.length || list.lines.some((line) => line.review))
+    return 'Some requirements could not be calculated. Resolve the planning notes or items needing review before relying on this list.'
+  if (!list.selectedSourceCount)
+    return 'No production sources selected for this snapshot.'
+  if (list.prep.some((entry) => entry.toMake > epsilon))
+    return 'No purchases needed. Check Prep Before Production for work still to do.'
+  return 'Everything required is covered by stock.'
+}
+
+export function groceryProductSummary(product: GroceryProduct) {
+  const packages = (quantity: number, descriptor = '') =>
+    groceryQuantity(
+      quantity,
+      `${descriptor}${quantity === 1 ? 'package' : 'packages'}`,
+    )
   return [
-    `Grocery & Prep — ${list.generatedAt.slice(0, 10)}`,
+    `${packages(product.perBasket)} per basket`,
+    `${packages(product.required)} required`,
+    `${packages(product.allocated)} allocated from finished stock`,
+    `${packages(product.unreserved)} unreserved`,
+    `${packages(product.toProduce)} to produce`,
+    ...(product.extra
+      ? [`${packages(product.extra, 'extra ')} from batch rounding`]
+      : []),
+    ...(product.toObtain ? [`${packages(product.toObtain)} to obtain`] : []),
+  ].join(' · ')
+}
+
+export function groceryLinkedRun(run: GroceryProduct['runs'][number]) {
+  return `${run.name} · ${run.status} · ${groceryQuantity(run.planned, 'packages planned in the batch')} · ${groceryQuantity(run.pending, 'pending for this basket')} · ${groceryQuantity(run.posted, 'posted for this basket')}`
+}
+
+export function groceryText(list: GroceryList, by: 'vendor' | 'category') {
+  const lines = [...list.lines, ...list.manual]
+  return [
+    `Grocery & Prep — ${list.generatedAt}`,
     `Sources: ${list.labels.join('; ')}`,
-    ...list.warnings.map((warning) => `Review: ${warning}`),
-    ...groceryGroups([...list.lines, ...list.manual], by).flatMap((group) => [
+    ...(!list.calculationVersion ? [groceryEmptyMessage(list)] : []),
+    ...groceryWarnings(list).map((warning) => `Review: ${warning}`),
+    '',
+    'Products to make',
+    ...(list.products || []).flatMap((product) => [
+      `${product.name} — ${product.basket}: ${groceryProductSummary(product)}`,
+      ...product.runs.map(groceryLinkedRun),
+      ...(product.issue ? [`Review: ${product.issue}`] : []),
+    ]),
+    '',
+    'Shopping list',
+    ...(list.calculationVersion &&
+    !lines.some((line) => isShoppingLine(line, list.overrides))
+      ? [groceryEmptyMessage(list)]
+      : []),
+    ...groceryGroups(lines, by).flatMap((group) => [
       '',
       group.label,
       ...group.lines.map(
@@ -704,10 +1017,19 @@ export function groceryText(list: GroceryList, by: 'vendor' | 'category') {
       ),
     ]),
     '',
-    'Prep before baking',
+    'Prep before production',
     ...list.prep.map(
       (prep) =>
         `${prep.name}: make ${groceryQuantity(prep.toMake, prep.unit)}; ${groceryQuantity(prep.onHand ?? 0, prep.unit)} on hand`,
     ),
   ].join('\n')
+}
+
+export function groceryWarnings(list: GroceryList) {
+  return list.calculationVersion
+    ? list.warnings
+    : list.warnings.filter(
+        (warning) =>
+          !warning.includes('kit components are not ingredient purchases'),
+      )
 }
