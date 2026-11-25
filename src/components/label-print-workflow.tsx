@@ -11,9 +11,14 @@ import { bridgeConnected, directPrint } from '@/lib/qz-bridge'
 import { checkPrinterSize, type PrinterProfile } from '@/lib/label-printers'
 import { downloadLabel, exportLabelPng } from '@/lib/label-client-export'
 import { validateSheet, type SheetLayout } from '@/lib/label-print-layout'
-import type { LabelDocument, LabelData, LabelSource } from '@/lib/label-studio'
+import type {
+  LabelDocument,
+  LabelData,
+  LabelSource,
+} from '@/lib/label-studio'
 import type { LabelFont } from '@/lib/label-font-catalog'
 import type { Item, Workspace } from '@/lib/domain'
+import { LabelPrintMedia } from './label-print-media'
 
 /**
  * Shared label output workflow used by Label Studio's Print & Export section
@@ -40,11 +45,19 @@ export type LabelOutputRequest = {
   request: (
     action: string,
     payload: Record<string, unknown>,
+    signal?: AbortSignal,
   ) => Promise<Workspace>
+  signal?: AbortSignal
+  timing?: (stage: string, milliseconds: number) => void
   /** Static SVG markup for a prepared job snapshot (same renderer as the canvas). */
-  render: (document: LabelDocument, data: LabelData, assets: Item[]) => string
+  render: (
+    document: LabelDocument,
+    data: LabelData,
+    assets: Item[],
+  ) => string
   setStatus: (status: string) => void
   onWorkspace: (workspace: Workspace) => void
+  onBrowserJob?: (job: Item) => void
   /** Label Studio saves the open design first; the preview never saves. */
   beforeOutput?: () => Promise<boolean>
   /** A read-only preview must print exactly the data and geometry it displayed. */
@@ -90,9 +103,13 @@ export function labelOutputBlocker({
     validateSheet(doc, layout)
     if (!Number.isInteger(copies) || copies < 1 || copies > 200)
       throw new Error('Choose 1–200 labels.')
-    if (type === 'print' && selectedPrinter && layout.mode !== 'sheet')
+    if (type !== 'png' && selectedPrinter && layout.mode !== 'sheet')
       checkPrinterSize(doc, selectedPrinter)
     const direct = type === 'print' && selectedPrinter?.method === 'qz'
+    if (direct && layout.mode === 'sheet')
+      throw new Error(
+        'Use one label per page for this direct printer profile.',
+      )
     if (direct && !bridgeConnected())
       throw new Error(
         'The bridge is disconnected. Set up direct printing or choose browser printing.',
@@ -105,24 +122,39 @@ export function labelOutputBlocker({
 
 /** Runs one output job. Throws with a user-facing message on failure. */
 export async function runLabelOutput(o: LabelOutputRequest) {
+  const started = performance.now()
   if (o.doc.format === 'front-back') return runLabelSetOutput(o)
   const { type, doc, copies, layout, selectedPrinter } = o
   const blocked = labelOutputBlocker(o)
   if (blocked) throw new Error(blocked)
+  o.timing?.('Validate output request', performance.now() - started)
   const direct = type === 'print' && selectedPrinter?.method === 'qz'
   o.setStatus('Preparing label')
   if (o.beforeOutput && !(await o.beforeOutput())) {
     return false
   }
   if (type === 'png' || (type === 'print' && !direct)) {
-    const prepared = await o.request('labelPrint', {
-      templateId: doc.id,
-      source: o.source,
-      brandId: o.brandId,
-      copies: type === 'png' ? 1 : copies,
-      outputType: type === 'png' ? 'png' : 'print',
-      layout,
-    })
+    o.signal?.throwIfAborted()
+    const loading = performance.now()
+    o.setStatus('Checking the saved design and label contents')
+    const prepared = await o.request(
+      'labelPrint',
+      {
+        templateId: doc.id,
+        source: o.source,
+        brandId: o.brandId,
+        copies: type === 'png' ? 1 : copies,
+        outputType: type === 'png' ? 'png' : 'print',
+        layout,
+        compact: type === 'print',
+      },
+      o.signal,
+    )
+    o.timing?.(
+      'Request and validate label snapshot',
+      performance.now() - loading,
+    )
+    const rendering = performance.now()
     const job = prepared.label_print_jobs.at(-1)!
     const markup = o.render(
         job.documentSnapshot,
@@ -133,15 +165,18 @@ export async function runLabelOutput(o: LabelOutputRequest) {
         .documentElement as unknown as SVGSVGElement
     if (o.preview && markup !== o.preview.markup)
       throw new Error(
-        'The saved label or product data changed. Review the refreshed preview before printing again.',
+        'The saved label or product data changed. Refresh and review the preview before printing again.',
       )
+    o.timing?.('Render label artwork', performance.now() - rendering)
     if (type === 'png') {
+      const exporting = performance.now()
       const bytes = await exportLabelPng(
         svg,
         job.documentSnapshot,
         prepared.graphic_assets,
         o.customFonts,
       )
+      o.timing?.('Generate PNG', performance.now() - exporting)
       downloadLabel(bytes, doc.name + '.png', 'image/png')
       o.setStatus('PNG downloaded')
     } else {
@@ -153,12 +188,17 @@ export async function runLabelOutput(o: LabelOutputRequest) {
         copies,
         layout,
         selectedPrinter,
+        undefined,
+        browserOutputOptions(o, started),
       )
       o.setStatus(
         'Print dialog opened · confirm printer, paper size and 100% scaling. Printing is not confirmed.',
       )
+      o.onBrowserJob?.(job)
     }
   } else {
+    o.setStatus('Generating label PDF')
+    const exporting = performance.now()
     const response = await fetch('/api/workspace?labelPdf=1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,6 +209,10 @@ export async function runLabelOutput(o: LabelOutputRequest) {
         copies,
         layout,
         printerProfileId: direct ? selectedPrinter!.id : undefined,
+        mediaProfileId:
+          !direct && layout.mode !== 'sheet'
+            ? selectedPrinter?.id
+            : undefined,
       }),
     })
     if (!response.ok) throw new Error((await response.json()).error)
@@ -177,6 +221,10 @@ export async function runLabelOutput(o: LabelOutputRequest) {
         'Export returned an unexpected document type. Your label is preserved; try again.',
       )
     const bytes = new Uint8Array(await response.arrayBuffer())
+    o.timing?.(
+      'Request and generate label PDF',
+      performance.now() - exporting,
+    )
     if (new TextDecoder().decode(bytes.slice(0, 5)) !== '%PDF-')
       throw new Error(
         'The export response was not a valid PDF. Your label is preserved.',
@@ -184,7 +232,9 @@ export async function runLabelOutput(o: LabelOutputRequest) {
     if (direct) {
       const jobId = response.headers.get('X-Label-Job')
       if (!jobId)
-        throw new Error('Print authorization is missing. No job was submitted.')
+        throw new Error(
+          'Print authorization is missing. No job was submitted.',
+        )
       o.setStatus('Sending to printer')
       await directPrint(jobId)
       o.setStatus('Submitted to print queue · verify the physical labels')
@@ -198,7 +248,39 @@ export async function runLabelOutput(o: LabelOutputRequest) {
   return true
 }
 
+function browserOutputOptions(o: LabelOutputRequest, started: number) {
+  return {
+    signal: o.signal,
+    progress: o.setStatus,
+    timing(stage: string, milliseconds: number) {
+      o.timing?.(stage, milliseconds)
+      if (stage === 'App preparation to print call')
+        o.timing?.(
+          'Output start to browser print call',
+          performance.now() - started,
+        )
+    },
+  }
+}
+
+export function recordLabelPrintTiming(
+  stage: string,
+  milliseconds: number,
+) {
+  const name = `Label print: ${stage}`
+  performance.clearMeasures?.(name)
+  try {
+    performance.measure?.(name, {
+      start: Math.max(0, performance.now() - milliseconds),
+      duration: milliseconds,
+    })
+  } catch {
+    return
+  }
+}
+
 async function runLabelSetOutput(o: LabelOutputRequest) {
+  const started = performance.now()
   const plan = labelSetPlan(o.doc, o.copies, o.parts, o.order)
   const index = o.runIndex || 0
   const run = plan.runs[index]
@@ -209,6 +291,7 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
     copies: run.sequence.length,
   })
   if (blocker) throw new Error(blocker)
+  o.timing?.('Validate output request', performance.now() - started)
   if (o.beforeOutput && !(await o.beforeOutput())) return false
   const direct = o.type === 'print' && o.selectedPrinter?.method === 'qz'
   const payload = {
@@ -223,18 +306,28 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
   }
   o.setStatus(`Preparing ${run.name} · ${run.sequence.length} labels`)
   if (o.type === 'pdf' || direct) {
+    o.setStatus(`Generating ${run.name} PDF`)
+    const exporting = performance.now()
     const response = await fetch('/api/workspace?labelPdf=1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...payload,
         printerProfileId: direct ? o.selectedPrinter!.id : undefined,
+        mediaProfileId:
+          !direct && o.layout.mode !== 'sheet'
+            ? o.selectedPrinter?.id
+            : undefined,
       }),
     })
     if (!response.ok) throw new Error((await response.json()).error)
     if (!response.headers.get('Content-Type')?.includes('application/pdf'))
       throw new Error('The export did not return a PDF.')
     const bytes = new Uint8Array(await response.arrayBuffer())
+    o.timing?.(
+      'Request and generate label PDF',
+      performance.now() - exporting,
+    )
     if (direct) {
       const id = response.headers.get('X-Label-Job')
       if (!id) throw new Error('Print authorization is missing.')
@@ -243,17 +336,33 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
         'Submitted selected run to queue · verify physical output before submitting another run.',
       )
     } else {
-      downloadLabel(bytes, `${o.doc.name} - ${run.name}.pdf`, 'application/pdf')
+      downloadLabel(
+        bytes,
+        `${o.doc.name} - ${run.name}.pdf`,
+        'application/pdf',
+      )
       o.setStatus(
         `${run.name} PDF downloaded · ${run.sequence.length} individual labels`,
       )
     }
     return true
   }
-  const prepared = await o.request('labelPrint', {
-    ...payload,
-    outputType: o.type,
-  })
+  const loading = performance.now()
+  o.setStatus('Checking the saved design and label contents')
+  const prepared = await o.request(
+    'labelPrint',
+    {
+      ...payload,
+      outputType: o.type,
+      compact: o.type === 'print',
+    },
+    o.signal,
+  )
+  o.timing?.(
+    'Request and validate label snapshot',
+    performance.now() - loading,
+  )
+  const rendering = performance.now()
   const job = prepared.label_print_jobs.at(-1)!
   const snapshot = job.documentSnapshot as LabelDocument
   const confirmed = labelSetPlan(snapshot, o.copies, o.parts, o.order).runs[
@@ -290,6 +399,7 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
     })
   }
   if (o.type === 'png') {
+    const exporting = performance.now()
     for (const [side, design] of designs)
       downloadLabel(
         await exportLabelPng(
@@ -304,7 +414,9 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
     o.setStatus(
       'Selected side PNG images downloaded · one image per side, quantities are not duplicated in PNG.',
     )
+    o.timing?.('Generate PNG', performance.now() - exporting)
   } else {
+    o.timing?.('Render label artwork', performance.now() - rendering)
     const first = designs.get(run.sequence[0])!
     await browserPrint(
       first.svg,
@@ -315,10 +427,12 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
       o.layout,
       o.selectedPrinter,
       run.sequence.map((side) => designs.get(side)!),
+      browserOutputOptions(o, started),
     )
     o.setStatus(
       `${run.name} dialog opened · ${run.sequence.length} labels. Confirm stock and 100% scaling; physical printing is not confirmed.`,
     )
+    o.onBrowserJob?.(job)
   }
   return true
 }
@@ -329,7 +443,26 @@ export const outputFailureStatus = (type: LabelOutputType) =>
     : 'Export failed · label work preserved'
 
 /** Saved printer profiles and the profile selected by the printing method. */
-export function printerSelection(w: Workspace, printingMethod: string) {
+export function printRunDesign(
+  doc: LabelDocument,
+  parts: LabelParts,
+  order: LabelOrder,
+  runIndex: number,
+) {
+  try {
+    return doc.format === 'front-back'
+      ? labelSetPlan(doc, 1, parts, order).runs[runIndex]?.document || doc
+      : doc
+  } catch {
+    return doc
+  }
+}
+
+export function printerSelection(
+  w: Workspace,
+  printingMethod: string,
+  design?: LabelDocument | null,
+) {
   const printerProfiles: PrinterProfile[] =
     w.settings[0]?.currentPrinterProfiles || []
   const selectedPrinter = printerProfiles.find(
@@ -337,7 +470,16 @@ export function printerSelection(w: Workspace, printingMethod: string) {
       p.id ===
       (printingMethod === 'browser'
         ? ''
-        : printingMethod || printerProfiles.find((p) => p.preferred)?.id),
+        : printingMethod ||
+          printerProfiles.find((profile) => {
+            if (!profile.preferred) return false
+            try {
+              if (design) checkPrinterSize(design, profile)
+              return true
+            } catch {
+              return false
+            }
+          })?.id),
   )
   return { printerProfiles, selectedPrinter }
 }
@@ -389,6 +531,8 @@ export function LabelPrintOptions({
   layout,
   setLayout,
   onManagePrinters,
+  onSaveMedia,
+  onTestMedia,
 }: {
   doc: LabelDocument
   printerProfiles: PrinterProfile[]
@@ -401,6 +545,8 @@ export function LabelPrintOptions({
   layout: SheetLayout
   setLayout: (layout: SheetLayout) => void
   onManagePrinters?: () => void
+  onSaveMedia?: (profile: PrinterProfile) => Promise<void>
+  onTestMedia?: (profile: PrinterProfile) => Promise<void>
 }) {
   return (
     <>
@@ -429,13 +575,14 @@ export function LabelPrintOptions({
           Set up direct printing / manage printers
         </button>
       )}
-      <p>
-        Label size: {(doc.width / 72).toFixed(2)} ×{' '}
-        {(doc.height / 72).toFixed(2)} in ·{' '}
-        {doc.width > doc.height ? 'Landscape' : 'Portrait'}
+      <p className="studio-small-note">
+        Select the matching paper size and actual size / 100%, not fit to
+        page. Turn off browser headers and footers and any extra driver
+        rotation. Use one driver copy. The app cannot override the driver.
       </p>
       {selectedPrinter &&
-        (selectedPrinter.offsetX !== 0 || selectedPrinter.offsetY !== 0) && (
+        (selectedPrinter.offsetX !== 0 ||
+          selectedPrinter.offsetY !== 0) && (
           <p className="warning-text">
             Calibration offsets can move content outside the printable area.
             Print a test label and review alignment.
@@ -457,9 +604,22 @@ export function LabelPrintOptions({
           <option value="roll">Roll / thermal · one label per page</option>
         </select>
       </Control>
+      {layout.mode !== 'sheet' && (
+        <LabelPrintMedia
+          key={JSON.stringify([doc.width, doc.height, selectedPrinter])}
+          design={doc}
+          profile={selectedPrinter}
+          onSave={onSaveMedia}
+          onTest={onTestMedia}
+        />
+      )}
       {layout.mode === 'sheet' && (
         <details open>
           <summary>Sheet layout (inches)</summary>
+          <p>
+            Sheet output keeps the design orientation and uses the sheet
+            dimensions below.
+          </p>
           <div className="studio-two">
             {number(
               'Paper width',

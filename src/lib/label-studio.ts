@@ -439,6 +439,7 @@ export type LabelSource = {
 }
 export type LabelData = {
   nonFood?: boolean
+  sourceAllergenStatements?: { contains: string[]; advisories: string[] }
   sourceRecords?: Record<string, { kind: 'ingredient' | 'recipe'; id: string }>
   values: Record<string, string>
   warnings: string[]
@@ -467,6 +468,8 @@ export function resolveLabelData(
     values: Record<string, string> = {},
     warnings: string[] = [],
     known = new Set<string>(),
+    sourceContains = new Set<string>(),
+    sourceAdvisories = new Set<string>(),
     parts: LabelData['ingredientParts'] = []
   const batch =
     source.kind === 'batch'
@@ -585,6 +588,8 @@ export function resolveLabelData(
     const statementName =
       String(i.statement || '').trim() || String(i.name || '').trim()
     for (const a of i.allergens || []) known.add(a)
+    if (i.reviewed && String(i.sourceContains || '').trim()) sourceContains.add(String(i.sourceContains).trim())
+    if (i.reviewed && String(i.sourceMayContain || '').trim()) sourceAdvisories.add(String(i.sourceMayContain).trim())
     const hasOwnDeclaration = !!(
       i.statement ||
       i.subingredients ||
@@ -736,6 +741,7 @@ export function resolveLabelData(
     nonFood,
     warnings: [...new Set(warnings)],
     allergens: [...known],
+    ...((sourceContains.size || sourceAdvisories.size) ? { sourceAllergenStatements: { contains: [...sourceContains], advisories: [...sourceAdvisories] } } : {}),
     weightsVerified,
     sourceRecords: {
       ...Object.fromEntries(

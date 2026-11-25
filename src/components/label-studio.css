@@ -708,9 +708,58 @@
 .studio-print-controls .studio-source {
   display: grid;
 }
+.studio-assortments { max-width: 72rem; min-width: 0; }
+.studio-assortments .stack { display: grid; gap: 0.8rem; min-width: 0; }
+.studio-assortments fieldset { min-width: 0; border: 1px solid var(--border); border-radius: 0.65rem; padding: 0.85rem; }
+.studio-assortments legend { padding: 0 0.35rem; font-weight: 600; }
+.studio-assortments label { min-width: 0; }
+.studio-assortments select { max-width: 100%; }
+.studio-assortment-paper { max-width: 100%; overflow: auto; padding: 0.35rem; border: 1px solid var(--border); border-radius: 0.5rem; }
 .studio-print-buttons {
   display: grid;
   gap: 10px;
+}
+.studio-media-setup {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+}
+.studio-media-setup legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+.studio-feed-preview {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.7rem 0;
+}
+.studio-feed-preview svg {
+  display: block;
+  width: min(100%, 11rem);
+  height: auto;
+  max-height: 12rem;
+  border-top: 3px solid currentColor;
+  background: white;
+}
+.studio-roll-artwork {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+}
+.studio-roll-artwork-page {
+  display: block;
+  height: auto;
+  overflow: hidden;
+  background: white;
+  border-top: 3px solid currentColor;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.studio-roll-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 .studio-print-preview {
   background: var(--surface-soft);

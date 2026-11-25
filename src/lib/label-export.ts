@@ -38,6 +38,7 @@ import {
   type LabelData,
 } from './label-studio'
 import type { Item } from './domain'
+import { checkPrinterSize, pdfPrintMatrix, printerSize, type PrinterProfile } from './label-printers'
 import {
   defaultSheet,
   validateSheet,
@@ -67,9 +68,11 @@ export async function exportLabelPdf(
     font: (key: string) => Promise<Uint8Array>
     image: (asset: Item) => Promise<Uint8Array>
   },
+  profile?: PrinterProfile,
 ): Promise<Uint8Array> {
   d = withLabelBackgrounds(d)
   validateSheet(d, layout)
+  if (profile) checkPrinterSize(d, profile)
   const availableFonts = [...labelFonts, ...(loaders?.fonts || [])]
   const pdf = await PDFDocument.create()
   pdf.registerFontkit(fontkit)
@@ -131,12 +134,14 @@ export async function exportLabelPdf(
   }
   assertIngredientFit(d, data)
   const capacity = layout.mode === 'sheet' ? layout.rows * layout.columns : 1
+  const media = profile ? printerSize(profile) : d
   for (let first = 0; first < copies; first += capacity) {
     const page = pdf.addPage(
       layout.mode === 'sheet'
         ? [layout.pageWidth, layout.pageHeight]
-        : [d.width, d.height],
+        : [media.width, media.height],
     )
+    if (profile) page.pushOperators(concatTransformationMatrix(...pdfPrintMatrix(d, profile)))
     for (let j = 0; j < Math.min(capacity, copies - first); j++) {
       const ox =
           (layout.mode === 'sheet'
@@ -147,7 +152,7 @@ export async function exportLabelPdf(
             ? layout.margin +
               Math.floor(j / layout.columns) * (d.height + layout.gutter)
             : 0,
-        top = page.getHeight() - oy - (layout.offsetY || 0)
+        top = (profile ? d.height : page.getHeight()) - oy - (layout.offsetY || 0)
       page.pushOperators(pushGraphicsState())
       if (d.round) {
         const cx = ox + d.width / 2,

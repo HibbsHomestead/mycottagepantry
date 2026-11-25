@@ -41,6 +41,7 @@ export const sectionTabs: Record<string, string[]> = {
   Purchasing: ['Purchases & Receipts', 'Suppliers', 'Purchase Orders'],
   Labels: [
     'Labels',
+    'Assortments',
     'Brand Kit',
     'Graphics Library',
     'Print & Export',

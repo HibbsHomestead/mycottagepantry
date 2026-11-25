@@ -16,16 +16,21 @@ import {
 import { LabelCanvas } from './label-canvas'
 import { withLibraryArtwork } from '@/lib/artwork-library'
 import { LabelPrinterSettings } from './label-printer-settings'
+import { RollArtworkPreview } from './label-print-media'
+import { LabelAssortmentWorkflow } from './label-assortment-workflow'
 import {
   LabelPrintOptions,
   outputFailureStatus,
+  printRunDesign,
   printerSelection,
+  recordLabelPrintTiming,
   runLabelOutput,
   type LabelOutputType,
 } from './label-print-workflow'
 import { browserPrint } from '@/lib/label-browser-print'
 import { bridgeConnected, directPrint } from '@/lib/qz-bridge'
 import { printerSize, type PrinterProfile } from '@/lib/label-printers'
+import { calibrationMarkup } from '@/lib/label-calibration'
 import { LabelColorPicker } from './label-color-picker'
 import {
   LabelTextToolbar,
@@ -126,6 +131,7 @@ import {
 import { DeleteDesignDialog } from './label-library-dialogs'
 const sections = [
   'Labels',
+  'Assortments',
   'Brand Kit',
   'Graphics Library',
   'Print & Export',
@@ -170,6 +176,7 @@ export function LabelStudio({
   initialCreateRequest,
   onCreateRequestHandled,
   initialSection,
+  initialAssortmentRunId,
   onSectionChange,
   onDirtyChange,
   onOpenSource,
@@ -184,6 +191,7 @@ export function LabelStudio({
   initialCreateRequest?: number
   onCreateRequestHandled?: () => void
   initialSection?: string
+  initialAssortmentRunId?: string
   onSectionChange?: (section: string) => void
   onOpenSource?: (kind: string, item?: Item) => void
   onDirtyChange?: (dirty: boolean) => void
@@ -454,6 +462,7 @@ export function LabelStudio({
     action: string,
     payload: Record<string, any>,
     trace?: string,
+    signal?: AbortSignal,
   ) {
     if (!canEdit)
       throw new Error(
@@ -473,13 +482,15 @@ export function LabelStudio({
         action,
         data: { ...payload, expectedScope: initialScope.current },
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
     })
     const result = await response.json()
     if (!response.ok)
       throw new Error(
         result.error || 'The request failed. Keep this editor open and retry.',
       )
+    if (initialScope.current === latestScope.current && result.preparedLabel && action === 'labelPrint' && result.workspace?.label_print_jobs?.length)
+      return result.workspace as Workspace
     if (!result.workspace?.label_templates)
       throw new Error(
         'The server response is incomplete. Keep this editor open and retry.',
@@ -1174,6 +1185,7 @@ export function LabelStudio({
       setBusy(false)
     }
   }
+  const [printCancel, setPrintCancel] = useState<AbortController>()
   async function output(type: LabelOutputType) {
     if (!doc || outputBusy.current || colorEditing) return
     if (doc.workflowVersion === 1 && (dirty || revision.current < 1)) {
@@ -1181,6 +1193,8 @@ export function LabelStudio({
       return
     }
     outputBusy.current = true
+    const controller = type === 'print' && selectedPrinter?.method !== 'qz' ? new AbortController() : undefined
+    setPrintCancel(controller)
     setBusy(true)
     setError('')
     try {
@@ -1195,22 +1209,39 @@ export function LabelStudio({
         issues,
         reviewed,
         customFonts,
-        request,
+        request: (action, data, signal) => request(action, data, undefined, signal),
+        signal: controller?.signal,
+        timing: recordLabelPrintTiming,
         render: (document, data, assets) =>
           renderToStaticMarkup(
             <LabelCanvas document={document} data={data} assets={assets} />,
           ),
-        setStatus,
+        setStatus: (stage) => {
+          if (stage.startsWith('Opening')) setPrintCancel(undefined)
+          setStatus(stage)
+        },
         onWorkspace,
+        onBrowserJob: (job) => {
+          if (initialScope.current !== latestScope.current) return
+          const current = latestWorkspace.current
+          if (current.label_print_jobs?.some((entry) => entry.id === job.id)) return
+          const next = { ...current, label_print_jobs: [...(current.label_print_jobs || []), job] }
+          latestWorkspace.current = next
+          onWorkspace(next)
+        },
         beforeOutput: async () => !dirty,
         parts,
         order,
         runIndex,
       })
     } catch (e) {
-      setError((e as Error).message)
-      setStatus(outputFailureStatus(type))
+      if (controller?.signal.aborted) setStatus('Print preparation canceled. Your label is unchanged.')
+      else {
+        setError((e as Error).message)
+        setStatus(outputFailureStatus(type))
+      }
     } finally {
+      setPrintCancel(undefined)
       setBusy(false)
       outputBusy.current = false
     }
@@ -1232,32 +1263,9 @@ export function LabelStudio({
         if (!res.ok) throw new Error(result.error)
         await directPrint(result.jobId)
       } else {
-        const size = printerSize(profile),
-          test = {
-            ...blankLabel(),
-            ...size,
-            name: 'Printer calibration test',
-            elements: [
-              {
-                ...newElement('border'),
-                x: 4,
-                y: 4,
-                width: size.width - 8,
-                height: size.height - 8,
-              },
-              {
-                ...newElement('text', 'Cottage Pantry — test label'),
-                font: 'DM Sans',
-                fontSize: Math.min(12, size.width / 16),
-                x: 8,
-                y: 8,
-                width: size.width - 16,
-                height: size.height - 16,
-              },
-            ],
-          }
+        const test = { ...blankLabel(), ...printerSize(profile) }
         const svg = new DOMParser().parseFromString(
-          renderToStaticMarkup(<LabelCanvas document={test} data={data} />),
+          calibrationMarkup(profile),
           'image/svg+xml',
         ).documentElement as unknown as SVGSVGElement
         await browserPrint(
@@ -1267,7 +1275,6 @@ export function LabelStudio({
           [],
           1,
           { ...defaultSheet, mode: 'roll' },
-          profile,
         )
       }
     } finally {
@@ -1419,9 +1426,11 @@ export function LabelStudio({
       element.locked || (textToolbar && element.type !== 'text'),
     )
   }
+  const runDesign = doc && printRunDesign(doc, parts, order, runIndex)
   const { printerProfiles, selectedPrinter } = printerSelection(
     w,
     printingMethod,
+    runDesign,
   )
   const sourceControls = (
     <div className="studio-source">
@@ -3917,7 +3926,7 @@ export function LabelStudio({
                     setRunIndex={setRunIndex}
                   />
                   <LabelPrintOptions
-                    doc={doc}
+                    doc={runDesign || doc}
                     printerProfiles={printerProfiles}
                     selectedPrinter={selectedPrinter}
                     printingMethod={printingMethod}
@@ -3937,6 +3946,29 @@ export function LabelStudio({
                       updatePrint({ layout: v })
                     }}
                     onManagePrinters={() => setSection('Label Settings')}
+                    onSaveMedia={
+                      canEdit
+                        ? async (profile) => {
+                            if (outputBusy.current)
+                              throw new Error('Wait for the current print action to finish.')
+                            const id = profile.id || crypto.randomUUID()
+                            await request('labelPrinterProfile', {
+                              operation: 'save',
+                              profile: { ...profile, id },
+                            })
+                            setPrintingMethod(id)
+                            setStatus('Media settings saved for this print profile.')
+                          }
+                        : undefined
+                    }
+                    onTestMedia={async (profile) => {
+                      await testPrinter(profile)
+                      setStatus(
+                        profile.method === 'qz'
+                          ? 'One test label submitted. Check the physical output.'
+                          : 'Test print dialog opened. Use one copy and check the physical output.',
+                      )
+                    }}
                   />
                   <div className="studio-print-buttons">
                     <button
@@ -3976,6 +4008,8 @@ export function LabelStudio({
                     before the print dialog opens. Screen RGB colors are not
                     guaranteed CMYK or exact printed matches.
                   </p>
+                  {printCancel && <button type="button" className="btn secondary" onClick={() => printCancel.abort()}>Cancel preparation</button>}
+                  {status && <p className="studio-small-note" role="status">{status}</p>}
                   {labelCheck}
                 </section>
                 <div className="studio-print-preview">
@@ -3987,8 +4021,9 @@ export function LabelStudio({
                     />
                   )}
                   <span className="eyebrow">
-                    ACTUAL LABEL: {(editorDoc.width / 72).toFixed(2)} ×{' '}
-                    {(editorDoc.height / 72).toFixed(2)} IN
+                    {layout.mode === 'sheet'
+                      ? 'Sheet preview'
+                      : 'Roll artwork preview · current print settings'}
                   </span>
                   {layout.mode === 'sheet' ? (
                     <div
@@ -4019,19 +4054,19 @@ export function LabelStudio({
                       )}
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        maxWidth: Math.min(520, editorDoc.width * 1.6),
-                        margin: 'auto',
-                      }}
+                    <RollArtworkPreview
+                      design={runDesign || doc}
+                      profile={selectedPrinter}
                     >
                       <LabelCanvas
-                        document={editorDoc}
+                        document={{
+                          ...(runDesign || doc),
+                          id: `${doc.id}-roll-artwork`,
+                        }}
                         data={data}
                         assets={assets}
-                        svgRef={svgRef}
                       />
-                    </div>
+                    </RollArtworkPreview>
                   )}
                   <p>
                     {copies} copies ·{' '}
@@ -4054,6 +4089,16 @@ export function LabelStudio({
                 </button>
               </div>
             ))}
+          {section === 'Assortments' && (
+            <LabelAssortmentWorkflow
+              key={`${scope}:${initialAssortmentRunId || ''}`}
+              workspace={w}
+              profiles={printerProfiles}
+              canEdit={canEdit}
+              initialRunId={initialAssortmentRunId}
+              onWorkspace={onWorkspace}
+            />
+          )}
           {section === 'Label Settings' && (
             <>
               <LabelPrinterSettings
