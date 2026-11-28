@@ -9,6 +9,7 @@ import {
   type LabelDocument,
 } from './label-studio'
 import { productionRunLines } from './production-run'
+import { mergePrintIssue } from './label-sets'
 
 export type AssortmentLine = {
   productId: string
@@ -335,7 +336,7 @@ export function assortmentReview(
         `${name}: reviewed ingredient and allergen information is missing.`,
       )
     warnings.push(
-      ...source.warnings
+      ...[...source.warnings, mergePrintIssue(source)].filter(Boolean)
         .filter(
           (warning) => !warning.startsWith('Net weight needs review:'),
         )

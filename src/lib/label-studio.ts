@@ -194,6 +194,7 @@ export type LabelDocument = {
   /** Explicit-save labels; legacy documents remain preserved until conversion review. */
   workflowVersion?: 1
   productId?: string
+  ingredientMerge?: { productId: string } & IngredientMergeOptions
   source?: LabelSource
   brandId?: string
   manualTextReviewedFor?: string
@@ -469,9 +470,29 @@ export type LabelSource = {
   id: string
   productId?: string
 }
+export type IngredientMergeOptions = {
+  mode: 'parenthetical' | 'merged'
+  standardIds: string[]
+}
+export type StandardIngredientOutput = { all?: boolean; ingredientIds: string[] }
+
+export function validIngredientIds(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= 500 &&
+    value.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 200) &&
+    new Set(value).size === value.length
+}
+
+export function validateStandardIngredientOutput(value: unknown): StandardIngredientOutput | undefined {
+  if (value === undefined) return undefined
+  const option = value as Partial<StandardIngredientOutput> | null
+  if (!option || !validIngredientIds(option.ingredientIds) || (option.all !== undefined && typeof option.all !== 'boolean'))
+    throw new Error('Choose valid ingredients for the standard print format.')
+  return option as StandardIngredientOutput
+}
+
 export type LabelData = {
-  ingredientMerge?: {
-    mode: 'parenthetical' | 'merged'
+  ingredientMerge?: IngredientMergeOptions & {
+    compounds: { id: string; name: string; issue?: string }[]
     groupSmall: boolean
     parenthetical: string
     merged: string
@@ -506,6 +527,8 @@ export function resolveLabelData(
   w: Workspace,
   source: LabelSource,
   brand?: Item,
+  designMerge?: LabelDocument['ingredientMerge'],
+  standardOutput?: StandardIngredientOutput,
 ): LabelData {
   const business = {
       ...w.settings[0],
@@ -538,11 +561,15 @@ export function resolveLabelData(
   )
   const weighted: WeightedIngredient[] = []
   const mergeIssues = new Set<string>()
+  const compounds = new Map<string, NonNullable<LabelData['ingredientMerge']>['compounds'][number]>()
   const evidence: AllergenEvidence[] = []
   const declaredAllergenSources = new Set<string>()
   const allergenSource: Record<string, string> = {}
+  const override = designMerge && designMerge.productId === product?.id ? designMerge : undefined
+  const mergeMode = !standardOutput?.all && (override?.mode || product?.labelIngredientMode) === 'merged' ? 'merged' : 'parenthetical'
+  const mergeOn = mergeMode === 'merged'
   const groupSmall = product?.labelGroupSmallIngredients === true
-  const mergeMode = product?.labelIngredientMode === 'merged' ? 'merged' : 'parenthetical'
+  const standardIds = [...new Set<string>([...(override?.standardIds ?? product?.labelStandardIngredientIds ?? []), ...(standardOutput?.ingredientIds || [])])]
   const aliases = product?.allergenAliases || {}
   const root = [...new Set([product?.name, recipe?.name, ingredient?.name].filter((name): name is string => Boolean(name)))]
   const visits = new Map<string, number>()
@@ -634,7 +661,7 @@ export function resolveLabelData(
   if (batch?.netQuantity) values['product.netQuantity'] = batch.netQuantity
   const sourceRecords: NonNullable<LabelData['sourceRecords']> = {}
   function ingredientWarning(i: Item, message: string) {
-    if (/missing information|missing or cyclic|not edible|unavailable or invalid/i.test(message)) mergeIssues.add(message)
+    if (mergeOn && /missing information|missing or cyclic|not edible|unavailable or invalid/i.test(message)) mergeIssues.add(message)
     const text = `${message} [${i.id}]`
     warnings.push(text)
     sourceRecords[text] = { kind: 'ingredient', id: i.id }
@@ -715,7 +742,7 @@ export function resolveLabelData(
       if (!i.reviewed && naturalFlavor)
         ingredientWarning(i, `Needs review: verify allergens for ${i.name}; check the natural flavor with the supplier.`)
       if (missingComponents)
-        ingredientWarning(i, `Missing information: subingredients for ${i.name}; add the supplier’s component list.`)
+        ingredientWarning(i, `Missing information: subingredients for ${i.name || i.id}; ${i.reviewed ? 'saved review does not supply the missing wording; ' : ''}add the supplier’s component list.`)
       if (!statementName)
         ingredientWarning(
           i,
@@ -723,7 +750,7 @@ export function resolveLabelData(
         )
     }
     if (i.compoundRecipeId) {
-      if (subingredients) mergeIssues.add(`${i.name}: supplier subingredients are also recorded on this prepared ingredient; reconcile them with its recipe before merging.`)
+      if (mergeOn && subingredients) mergeIssues.add(`${i.name}: supplier subingredients are also recorded on this prepared ingredient; reconcile them with its recipe before merging.`)
       const prep = w.recipes.find((r) => r.id === i.compoundRecipeId)
       if (!prep || path.includes(prep.id)) {
         ingredientWarning(
@@ -744,7 +771,7 @@ export function resolveLabelData(
           i,
           `Needs review: verified weight conversion for ${i.name} is missing.`,
         )
-        mergeIssues.add(`${i.name}: verified prep quantity or conversion is missing.`)
+        if (mergeOn) mergeIssues.add(`${i.name}: verified prep quantity or conversion is missing.`)
         scale = NaN
       }
       let prepLines: ReturnType<typeof effectiveRecipeLines>
@@ -801,15 +828,24 @@ export function resolveLabelData(
         `Needs review: verified weight conversion for ${i.name} is missing.`,
       )
     }
-    if (weight === null) mergeIssues.add(`${i.name}: verified weight in grams is missing.`)
-    else if (subingredients) {
+    const compound = subingredients ? { id: i.id, name: i.name, issue: undefined as string | undefined } : undefined
+    if (compound) compounds.set(i.id, compounds.get(i.id) || compound)
+    if (mergeOn && subingredients && !standardIds.includes(i.id)) {
       const savedWeights = i.labelComponentWeights
-      const expanded = nodes && savedWeights && (savedWeights.sourceRef || '') === componentWeightSource(i) && weightedComponents(nodes, savedWeights, subingredients, weight, names)
+      let issue = !nodes ? 'The supplier component list could not be split reliably.'
+        : !savedWeights ? 'Supplier component percentages are missing.'
+          : 'Saved percentages are for a different supplier declaration.'
+      const expanded = weight !== null && nodes && savedWeights && (savedWeights.sourceRef || '') === componentWeightSource(i) && weightedComponents(nodes, savedWeights, subingredients, weight, names, (message) => { issue = message })
       if (expanded) weighted.push(...expanded)
-      else mergeIssues.add(`${i.name}: verify every component’s weight percentage against the supplier declaration.`)
-    } else if (statementName && !i.requiresSubingredients) {
-      weighted.push({ name: statementName, weight, contributions: [{ path: names, grams: weight }] })
+      else if (weight !== null && compound) {
+        compounds.set(i.id, { ...compound, issue })
+        mergeIssues.add(`${i.name}: ${issue}`)
+      }
+    } else if (mergeOn && weight !== null && statementName && (!i.requiresSubingredients || subingredients)) {
+      const name = subingredients ? `${statementName} (${subingredients})` : statementName
+      weighted.push({ name, weight, contributions: [{ path: names, grams: weight }] })
     }
+    if (mergeOn && weight === null) mergeIssues.add(`${i.name}: verified weight in grams is missing.`)
     const existing = parts.find(
       (p) =>
         p.name === statementName &&
@@ -839,7 +875,7 @@ export function resolveLabelData(
       return effectiveRecipeLines(recipe, w.recipes)
     } catch {
       warnings.push(`Needs review: the base recipe for ${recipe.name} is unavailable or invalid.`)
-      mergeIssues.add('The recipe base could not be expanded.')
+      if (mergeOn) mergeIssues.add('The recipe base could not be expanded.')
       incomplete(root)
       return []
     }
@@ -866,7 +902,7 @@ export function resolveLabelData(
     (product?.workflow === 'resale' && classification === 'non_food')
   if (!nonFood && recipe && !lines.length) {
     incomplete(root)
-    mergeIssues.add('The source recipe has no available ingredient lines.')
+    if (mergeOn) mergeIssues.add('The source recipe has no available ingredient lines.')
   }
   if (nonFood) values['business.disclaimer'] = product?.disclaimer || ''
   if (nonFood) {
@@ -895,7 +931,7 @@ export function resolveLabelData(
           root,
         )
       else {
-        mergeIssues.add(`Ingredient ${l.ingredientId} is missing.`)
+        if (mergeOn) mergeIssues.add(`Ingredient ${l.ingredientId} is missing.`)
         incomplete([...root, l.ingredientId])
         warnings.push(
           `Missing information: recipe ingredient ${l.ingredientId} is unavailable in ${recipe?.name || 'the selected recipe'}.`,
@@ -916,16 +952,13 @@ export function resolveLabelData(
         )
         .join(', ')
     : ''
-  const merged = mergeWeightedIngredients(weighted, groupSmall)
+  const merged = mergeOn ? mergeWeightedIngredients(weighted, groupSmall) : undefined
   const ingredientMerge: LabelData['ingredientMerge'] = !nonFood && product && recipe && !supplier ? {
-    mode: mergeMode, groupSmall, parenthetical: values['recipe.ingredients'],
-    merged: mergeIssues.size ? '' : merged.text,
-    issues: [...mergeIssues], parts: merged.parts,
+    mode: mergeMode, standardIds, compounds: [...compounds.values()], groupSmall, parenthetical: values['recipe.ingredients'],
+    merged: mergeIssues.size ? '' : merged?.text || '',
+    issues: [...mergeIssues], parts: merged?.parts || [],
   } : undefined
-  if (ingredientMerge?.mode === 'merged') {
-    if (ingredientMerge.merged) values['recipe.ingredients'] = ingredientMerge.merged
-    else warnings.push('Merged ingredient order is unconfirmed. Add verified weights or switch the product to parenthetical mode before finalizing.')
-  }
+  if (ingredientMerge?.merged) values['recipe.ingredients'] = ingredientMerge.merged
   values['recipe.allergens'] = known.size
     ? 'CONTAINS: ' + [...known].map((a) => a.toUpperCase()).join(', ')
     : ''
@@ -1513,6 +1546,11 @@ export function validateLabelDocument(
     throw new Error('Label dimensions must be between 0.5 and 14 inches.')
   if (!Array.isArray(input.elements) || input.elements.length > 100)
     throw new Error('Use up to 100 label elements.')
+  if (input.ingredientMerge !== undefined && (
+    !input.ingredientMerge || !validIngredientIds([input.ingredientMerge.productId]) ||
+    !['parenthetical', 'merged'].includes(input.ingredientMerge.mode) ||
+    !validIngredientIds(input.ingredientMerge.standardIds)
+  )) throw new Error('Choose a product and valid compound ingredient settings for this design.')
   if (input.assortmentLayout !== undefined) {
     const layout = input.assortmentLayout
     if (

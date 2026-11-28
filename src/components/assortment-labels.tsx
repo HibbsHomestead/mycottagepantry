@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   assortmentJobCurrent,
   assortmentLabel,
@@ -21,7 +21,7 @@ import {
 } from '@/lib/domain'
 import { productionRunLines } from '@/lib/production-run'
 import { supplierLabelSource } from '@/lib/supplier-label-source'
-import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
+import { LabelMergeReview, LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import { printPlacement, printRotations, type PrintRotation } from '@/lib/label-printers'
 import './assortment-labels.css'
 
@@ -72,10 +72,10 @@ export function AssortmentLabels({
   onOpenSource?: (kind: string, item?: Item) => void
 }) {
   const [spec, setSpec] = useState(() => initialSpec(workspace, context))
-  const [preview, setPreview] = useState<ReturnType<typeof assortmentLabel>>()
+  const [initialPreview, setPreview] = useState<ReturnType<typeof assortmentLabel>>()
   const [previewVersion, setPreviewVersion] = useState(0)
-  const [fit, setFit] = useState<boolean>()
-  const [reviewed, setReviewed] = useState(false)
+  const [fitResult, setFit] = useState<{ signature: string; fits: boolean }>()
+  const [reviewedSignature, setReviewed] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -109,23 +109,23 @@ export function AssortmentLabels({
   )
   const selectedStock = stock.find((item) => item.id === spec.templateId)
   const media = selectedStock && printPlacement({ width: Number(selectedStock.width), height: Number(selectedStock.height) }, undefined, spec.rotation).media
-  const previewCurrent =
-    preview &&
-    (() => {
-      try {
-        return (
-          assortmentSignature(assortmentLabel(workspace, spec).snapshot) ===
-          assortmentSignature(preview.snapshot)
-        )
-      } catch {
-        return false
-      }
-    })()
+  const freshPreview = useMemo(() => {
+    if (!initialPreview) return undefined
+    try {
+      return assortmentLabel(workspace, spec)
+    } catch {
+      return undefined
+    }
+  }, [initialPreview, workspace, spec])
+  const preview = freshPreview || initialPreview
+  const signature = preview ? assortmentSignature(preview.snapshot) : ''
+  const fit = fitResult?.signature === signature ? fitResult.fits : undefined
+  const reviewed = Boolean(signature && signature === reviewedSignature)
   function change(patch: Partial<AssortmentSpec>) {
     setSpec((value) => ({ ...value, ...patch }))
     setPreview(undefined)
     setFit(undefined)
-    setReviewed(false)
+    setReviewed('')
     setNotice('')
   }
   function changeLine(index: number, patch: Partial<PackedLine>) {
@@ -577,7 +577,7 @@ export function AssortmentLabels({
           onClick={() => {
             setNotice('')
             setFit(undefined)
-            setReviewed(false)
+            setReviewed('')
             try {
               setPreview(assortmentLabel(workspace, spec))
               setPreviewVersion((version) => version + 1)
@@ -613,7 +613,7 @@ export function AssortmentLabels({
           <h3>Actual-size preview · {preview.snapshot.stock.name}</h3>
           <p className="form-hint">Scroll inside the preview if the actual-size label is wider than your screen.</p>
           <iframe
-            key={previewVersion}
+            key={`${previewVersion}:${signature}`}
             title="Actual-size assortment label"
             sandbox="allow-same-origin"
             srcDoc={assortmentPrintHtml(
@@ -628,13 +628,10 @@ export function AssortmentLabels({
               ),
             }}
             onLoad={(event) =>
-              setFit(
-                !!event.currentTarget.contentDocument &&
-                  assortmentPrintFits(event.currentTarget.contentDocument),
-              )
+              setFit({ signature, fits: !!event.currentTarget.contentDocument && assortmentPrintFits(event.currentTarget.contentDocument) })
             }
           />
-          {!previewCurrent && (
+          {!freshPreview && (
             <p role="alert">
               Source information changed. Build a fresh preview.
             </p>
@@ -655,7 +652,10 @@ export function AssortmentLabels({
             </div>
           )}
           {[...new Set(preview.snapshot.sections.map(({ productId }) => productId))].map((id) => (
-            <LabelSourceAllergenReview key={id} workspace={workspace} source={{ kind: 'product', id }} mutate={canManage ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
+            <div key={id}>
+              <LabelMergeReview workspace={workspace} source={{ kind: 'product', id }} mutate={canManage ? onReviewAllergens : undefined} onOpenSource={canManage ? onOpenSource : undefined} />
+              <LabelSourceAllergenReview workspace={workspace} source={{ kind: 'product', id }} mutate={canManage ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
+            </div>
           ))}
           {canManage && (
             <div className="button-row">
@@ -663,7 +663,7 @@ export function AssortmentLabels({
                 <input
                   type="checkbox"
                   checked={reviewed}
-                  onChange={(event) => setReviewed(event.target.checked)}
+                  onChange={(event) => setReviewed(event.target.checked ? signature : '')}
                 />{' '}
                 I reviewed the actual contents, source information, layout, and
                 applicable packaging requirements.
@@ -673,7 +673,7 @@ export function AssortmentLabels({
                 className="btn"
                 disabled={
                   busy ||
-                  !previewCurrent ||
+                  !freshPreview ||
                   fit !== true ||
                   !reviewed ||
                   !!preview.snapshot.warnings.length
@@ -685,7 +685,7 @@ export function AssortmentLabels({
                       spec,
                       reviewed,
                       revises,
-                      signature: assortmentSignature(preview.snapshot),
+                      signature,
                     },
                     'New label job approved. Earlier snapshots are unchanged.',
                   )

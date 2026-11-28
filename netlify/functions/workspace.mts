@@ -204,6 +204,8 @@ import {
   systemLabelTemplates,
   validateLabelDocument,
   resolveLabelData,
+  validIngredientIds,
+  validateStandardIngredientOutput,
   labelFonts,
   assertIngredientFit,
   labelTextRuns,
@@ -849,6 +851,8 @@ export default async (req: Request, context: Context) => {
           throw new Error('Choose a supported ingredient statement mode.')
         if (item.labelGroupSmallIngredients !== undefined && typeof item.labelGroupSmallIngredients !== 'boolean')
           throw new Error('Choose whether to group verified ingredients under 2%.')
+        if (item.labelStandardIngredientIds !== undefined && !validIngredientIds(item.labelStandardIngredientIds))
+          throw new Error('Choose valid compound ingredients for the standard format.')
         const previous = state.products?.find((product) => product.id === item.id)
         for (const key of ['allergenReview', 'allergenAliases']) {
           if (previous?.[key]) item[key] = previous[key]
@@ -882,7 +886,7 @@ export default async (req: Request, context: Context) => {
       }
       if (table === 'ingredients') {
         const previous = state.ingredients.find((entry) => entry.id === item.id)
-        const sourceFields = ['name', 'statement', 'subingredients', 'allergens', 'sourceContains', 'sourceMayContain', 'reviewed', 'requiresSubingredients', 'compoundRecipeId', 'labelComponentWeights']
+        const sourceFields = ['name', 'statement', 'subingredients', 'allergens', 'sourceContains', 'sourceMayContain', 'reviewed', 'requiresSubingredients', 'compoundRecipeId']
         item.allergenSourceRevision = previous && sourceFields.some((key) => JSON.stringify(item[key]) !== JSON.stringify(previous[key]))
           ? randomUUID()
           : previous?.allergenSourceRevision
@@ -1995,8 +1999,9 @@ export default async (req: Request, context: Context) => {
     async function validateAutoFitOutput(
       document: LabelDocument,
       snapshot: ReturnType<typeof resolveLabelData>,
+      sides = labelSides(document),
     ) {
-      for (const side of labelSides(document)) {
+      for (const side of new Set(sides)) {
         const layout = labelSide(document, side)
         for (const element of layout.elements.filter((e) => e.autoFit)) {
           const names = new Set(
@@ -2563,6 +2568,8 @@ export default async (req: Request, context: Context) => {
           state,
           source,
           state.brand_kits.find((b) => b.id === data.brandId),
+          masterDocument.ingredientMerge,
+          validateStandardIngredientOutput(data.standardIngredientOutput),
         ),
         copies = number(data.copies, 'Label copies', 1),
         layout = { ...(data.layout || defaultSheet) }
@@ -2577,8 +2584,8 @@ export default async (req: Request, context: Context) => {
       const sequence =
         selectedRun?.sequence ||
         Array.from({ length: copies }, () => 'front' as const)
-      await validateAutoFitOutput(masterDocument, snapshot)
       validateLabelRunContent(masterDocument, snapshot, sequence)
+      await validateAutoFitOutput(masterDocument, snapshot, sequence)
       const deviceProfiles =
         state.settings[0].printerProfilesByDevice?.[deviceKey] || []
       const printerProfile = data.printerProfileId
@@ -2916,6 +2923,20 @@ export default async (req: Request, context: Context) => {
         for (const key of fields) updated[key] = data[key].trim()
         await save('ingredients', updated)
         await audit('Ingredient allergen source reviewed', ingredient.name, { ingredientId: ingredient.id, previousVersion: ingredient.updatedAt, reviewed: updated.reviewed })
+      } else if (action === 'labelProductStandardFormat') {
+        if (table !== 'products' || !['Owner', 'Manager'].includes(role)) throw new Error('Only an Owner or Manager can change the product’s label format.')
+        const product = state.products.find((entry) => entry.id === data?.id && !entry.archived)
+        if (!product) throw new Error('Choose a saved product in this oven.')
+        const merge = resolveLabelData(state, { kind: 'product', id: product.id }).ingredientMerge
+        if (merge?.mode !== 'merged') throw new Error('This product already uses the standard format. Refresh the product to see its current settings.')
+        if (data.ingredientId !== undefined && !merge.compounds.some((entry) => entry.id === data.ingredientId))
+          throw new Error('Choose a compound ingredient in this product.')
+        const patch = data.ingredientId === undefined
+          ? { labelIngredientMode: 'parenthetical' }
+          : { labelStandardIngredientIds: [...new Set([...merge.standardIds, data.ingredientId])] }
+        await client.query('UPDATE products SET data=data || $3::jsonb, updated_at=NOW() WHERE business_id=$1 AND id=$2', [org, product.id, JSON.stringify(patch)])
+        productReviewSaved = true
+        await audit('Product label format updated', product.name, { productId: product.id, ...patch })
       } else if (action === 'productAllergenReview' || action === 'productAllergenMapping') {
         if (table !== 'products' || !['Owner', 'Manager'].includes(role)) throw new Error('Only an Owner or Manager can review product allergens.')
         const product = state.products.find((entry) => entry.id === data?.id && !entry.archived)
@@ -4428,14 +4449,11 @@ export default async (req: Request, context: Context) => {
         )
         const sourceStarted = performance.now()
         const brand = state.brand_kits.find((b) => b.id === data.brandId),
-          snapshot = resolveLabelData(state, source, brand)
+          snapshot = resolveLabelData(state, source, brand, document.ingredientMerge, validateStandardIngredientOutput(data.standardIngredientOutput))
         const fitStarted = performance.now()
-        await validateAutoFitOutput(document, snapshot)
-        validateLabelRunContent(
-          document,
-          snapshot,
-          selectedRun?.sequence || ['front'],
-        )
+        const sides = selectedRun?.sequence || ['front'] as const
+        validateLabelRunContent(document, snapshot, [...sides])
+        await validateAutoFitOutput(document, snapshot, [...sides])
         const saveStarted = performance.now()
         const job = {
           id: randomUUID(),

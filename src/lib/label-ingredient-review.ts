@@ -234,6 +234,7 @@ export function weightedComponents(
   text: string,
   grams: number,
   path: string[],
+  reportIssue?: (message: string) => void,
 ): WeightedIngredient[] | null {
   if (!shares || shares.text !== text || !Number.isFinite(grams) || grams <= 0)
     return null
@@ -250,12 +251,23 @@ export function weightedComponents(
         ? Number(value)
         : NaN
     })
-    if (
-      !rows.length ||
-      values.some((value) => !Number.isFinite(value) || value <= 0) ||
-      Math.abs(values.reduce((sum, value) => sum + value, 0) - 100) > 1e-9
-    )
+    const missing = rows.filter((row) => {
+      const value = shares?.shares?.[row.key]
+      return value === undefined || (typeof value === 'string' && !value.trim())
+    })
+    const at = parents.join(' → ')
+    if (missing.length) {
+      reportIssue?.(`Missing percentages in ${at}: ${missing.map((row) => row.name).join(', ')}.`)
       return false
+    }
+    if (!rows.length || values.some((value) => !Number.isFinite(value) || value <= 0 || value > 100)) {
+      reportIssue?.(`Enter valid positive percentages for the listed components in ${at}.`)
+      return false
+    }
+    if (Math.abs(values.reduce((sum, value) => sum + value, 0) - 100) > 1e-9) {
+      reportIssue?.(`Percentages in ${at} do not total 100%.`)
+      return false
+    }
     return rows.every((row, index) => {
       const amount = weight * (values[index] / 100)
       const next = [...parents, row.name]

@@ -157,7 +157,9 @@ export function IngredientDetail({
   onWorkspace,
   initialEditing = false,
   initialReviewSection,
+  openComponentWeights = false,
 }: {
+  openComponentWeights?: boolean
   initialReviewSection?: InventoryReviewReason
   isOwner?: boolean
   initialEditing?: boolean
@@ -210,6 +212,7 @@ export function IngredientDetail({
     ) {
       edit()
       if (initialReviewSection === 'conversion') setEditTab('conversions')
+      if (openComponentWeights) setEditTab('allergens')
     } else setEditing(false)
     setCalculationOpen(false)
     setDetailTab('inventory')
@@ -240,6 +243,10 @@ export function IngredientDetail({
       }
     }
   }, [editing, offerEdit, editTab, error])
+  useLayoutEffect(() => {
+    if (editing && editTab === 'allergens' && openComponentWeights)
+      contentRef.current?.querySelector<HTMLElement>('[data-label-component-weights]')?.focus()
+  }, [editing, editTab, openComponentWeights])
   useLayoutEffect(() => {
     if (!discard) return
     if (contentRef.current) contentRef.current.scrollTop = 0
@@ -1379,7 +1386,7 @@ export function IngredientDetail({
                                 }
                               />
                             </Field>
-                            <ComponentWeightFields draft={draft} change={change} />
+                            <ComponentWeightFields draft={draft} change={change} open={openComponentWeights} />
                             <Field label="Source Contains statement">
                               <textarea
                                 value={draft.sourceContains || ''}

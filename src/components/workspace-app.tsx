@@ -963,7 +963,7 @@ export function WorkspaceApp() {
           (checkpointKind === 'receive' && action === 'receive')) void formCheckpoint.clear()
       if (keepProductionOpen) setSelected(savedProduction)
       setState(result.workspace)
-      if (!['ingredientAllergenSource', 'productAllergenReview', 'productAllergenMapping'].includes(action)) setFormDirty(false)
+      if (!['ingredientAllergenSource', 'productAllergenReview', 'productAllergenMapping', 'labelProductStandardFormat'].includes(action)) setFormDirty(false)
       if (
         ![
           'ingredientBarcode',
@@ -985,6 +985,7 @@ export function WorkspaceApp() {
           'productRecipeLink',
           'productAllergenReview',
           'productAllergenMapping',
+          'labelProductStandardFormat',
           'productionChecklist',
         ].includes(action) &&
         !keepProductionOpen
@@ -3852,6 +3853,7 @@ export function WorkspaceApp() {
           key={selected.id}
           initialEditing={selected.startEditing === true}
           initialReviewSection={selected.reviewSetup}
+          openComponentWeights={selected.openComponentWeights === true}
           isOwner={role === 'Owner'}
           ingredient={ingredients.find((i) => i.id === selected.id) || selected}
           workspace={state}
@@ -6561,7 +6563,7 @@ export function WorkspaceApp() {
           onWorkspace={setState}
           onReviewAllergens={mutate}
           onOpenSource={(kind, item) => {
-            setPreviewProduct(null)
+            if (!item?.openComponentWeights) setPreviewProduct(null)
             open(kind, item)
           }}
           onOpenChange={(next) => {

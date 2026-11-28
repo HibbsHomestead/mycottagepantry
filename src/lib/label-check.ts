@@ -5,7 +5,7 @@ import {
   type LabelData,
   type LabelDocument,
 } from './label-studio'
-import { labelSide, labelSides, type LabelSide } from './label-sets'
+import { labelRunDeclarations, labelSide, labelSides, type LabelSide } from './label-sets'
 import type { Item } from './domain'
 import type { LabelFont } from './label-font-catalog'
 
@@ -146,3 +146,18 @@ export function checkLabelSet(
 }
 const normalize = (text: string) =>
   text.trim().replace(/\s+/g, ' ').toLowerCase()
+
+export function labelOutputIssues(doc: LabelDocument, data: LabelData, sides: LabelSide[], issues: LabelCheckIssue[]) {
+  const usage = labelRunDeclarations(doc, data, sides)
+  const usesNetWeight = [...new Set(sides)].some((side) => labelSide(doc, side).elements.some((element) => element.binding === 'product.netQuantity' && elementVisible(element, data)))
+  return issues.filter((issue) => {
+    if (issue.side && !sides.includes(issue.side)) return false
+    if (issue.group === 'Source data') {
+      if (issue.message.includes('Net weight needs review:')) return usesNetWeight
+      if (issue.message.includes('ingredient order is unverified') || issue.message.includes('verified weight conversion')) return usage.ingredients
+      return usage.allergens
+    }
+    if (issue.id === 'missing:allergens') return usage.allergens
+    return true
+  }).map((issue) => issue.message)
+}

@@ -12,6 +12,7 @@ import {
 import { productionRunLines } from './production-run'
 import { printRotations, type PrintRotation } from './label-printers'
 import { formatNetWeight, productNetWeight } from './net-weight'
+import { mergePrintIssue } from './label-sets'
 
 export type PackedLine = {
   productId: string
@@ -272,12 +273,12 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
     const contains = usesProductSource
       ? source.values['recipe.allergens']
       : line.contains
-    if (!source.nonFood) {
+    if (!source.nonFood && (!spec.componentId || (line.productId === spec.componentId && line.unit === 'package'))) {
       if (!declaration)
         warnings.push(`${name}: ingredient statement is missing.`)
       if (usesProductSource)
         warnings.push(
-          ...source.warnings
+          ...[...source.warnings, mergePrintIssue(source)].filter(Boolean)
             .filter(
               (warning) => !warning.startsWith('Net weight needs review:'),
             )
@@ -444,11 +445,13 @@ export function assortmentJobCurrent(workspace: Workspace, job: Item) {
       )
     )
       return false
-    const snapshot = assortmentLabel(workspace, job.assortmentSpec).snapshot
+    const { spec, snapshot } = assortmentLabel(workspace, job.assortmentSpec)
+    const outputSignature = (value: AssortmentSnapshot) => assortmentSignature(spec.componentId
+      ? { ...value, allSections: undefined, contentsSummary: undefined }
+      : value)
     return (
       !snapshot.warnings.length &&
-      assortmentSignature(snapshot) ===
-        assortmentSignature(job.assortmentSnapshot)
+      outputSignature(snapshot) === outputSignature(job.assortmentSnapshot)
     )
   } catch {
     return false

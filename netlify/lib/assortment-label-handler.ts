@@ -51,43 +51,28 @@ export async function handleAssortmentLabel(
         (job) =>
           job.batchId === spec.batchId && job.productId === spec.productId,
       )
-      const groupJobs = outputJobs.filter(
-        (job) => !job.assortmentSpec.componentId,
-      )
+      const samePacking = (job: Item) =>
+        assortmentSignature([spec.lines, spec.containers]) ===
+        assortmentSignature([job.assortmentSpec.lines, job.assortmentSpec.containers])
       assortmentSupersedes = outputJobs
         .filter(
           (job) =>
             job.assortmentSpec.group === spec.group &&
-            (!spec.componentId ||
-              job.assortmentSpec.componentId === spec.componentId),
+            (job.assortmentSpec.componentId === spec.componentId ||
+              (!spec.componentId && !samePacking(job))),
         )
         .map((job) => job.id)
       const byGroup = new Map(
-        groupJobs.map((job) => [job.assortmentSpec.group, job]),
+        outputJobs.map((job) => [job.assortmentSpec.group, job]),
       )
-      if (spec.componentId) {
-        const outer = byGroup.get(spec.group)
-        if (
-          !outer ||
-          !assortmentJobCurrent(state, outer) ||
-          assortmentSignature([spec.lines, spec.containers]) !==
-            assortmentSignature([
-              outer.assortmentSpec.lines,
-              outer.assortmentSpec.containers,
-            ])
-        )
-          throw new Error(
-            'Approve the matching outer assortment for this packing group before its component labels.',
-          )
-      } else {
-        const other = [...byGroup.entries()].reduce(
-          (sum, [group, job]) =>
-            sum + (group === spec.group ? 0 : job.assortmentSpec.containers),
-          0,
-        )
-        if (other + spec.containers > limit)
-          throw new Error('Packing groups together exceed the run output.')
-      }
+      if (spec.componentId && outputJobs.some((job) => job.assortmentSpec.group === spec.group && !samePacking(job)))
+        throw new Error('Match the saved contents and container count for this packing group, or choose a different group.')
+      const other = [...byGroup.entries()].reduce(
+        (sum, [group, job]) => sum + (group === spec.group ? 0 : job.assortmentSpec.containers),
+        0,
+      )
+      if (other + spec.containers > limit)
+        throw new Error('Packing groups together exceed the run output.')
     } else if (!fixed && data.revises) {
       const previous = active.find(
         (job) =>

@@ -15,6 +15,7 @@ import type {
   LabelDocument,
   LabelData,
   LabelSource,
+  StandardIngredientOutput,
 } from '@/lib/label-studio'
 import type { LabelFont } from '@/lib/label-font-catalog'
 import type { Item, Workspace } from '@/lib/domain'
@@ -34,6 +35,7 @@ export type LabelOutputRequest = {
   runIndex?: number
   doc: LabelDocument
   source: LabelSource
+  standardIngredientOutput?: StandardIngredientOutput
   brandId: string
   copies: number
   layout: SheetLayout
@@ -151,6 +153,7 @@ export async function runLabelOutput(o: LabelOutputRequest) {
       {
         templateId: doc.id,
         source: o.source,
+        standardIngredientOutput: o.standardIngredientOutput,
         brandId: o.brandId,
         copies: type === 'png' ? 1 : copies,
         outputType: type === 'png' ? 'png' : 'print',
@@ -214,6 +217,7 @@ export async function runLabelOutput(o: LabelOutputRequest) {
       body: JSON.stringify({
         templateId: doc.id,
         source: o.source,
+        standardIngredientOutput: o.standardIngredientOutput,
         brandId: o.brandId,
         copies,
         layout,
@@ -306,6 +310,7 @@ async function runLabelSetOutput(o: LabelOutputRequest) {
   const payload = {
     templateId: o.doc.id,
     source: o.source,
+    standardIngredientOutput: o.standardIngredientOutput,
     brandId: o.brandId,
     copies: o.copies,
     parts: o.parts || 'both',

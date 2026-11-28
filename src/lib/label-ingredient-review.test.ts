@@ -33,16 +33,17 @@ describe('shared ingredient declaration and allergen review', () => {
     expect(original.values['recipe.ingredients']).toContain(
       'Muffin mix (Wheat flour, cane sugar, leavening (baking soda, cornstarch), soy lecithin (soy))',
     )
-    expect(original.ingredientMerge?.merged).toBe(
+    expect(original.ingredientMerge).toMatchObject({ mode: 'parenthetical', merged: '', issues: [], parts: [] })
+    product.labelIngredientMode = 'merged'
+    const pending = resolveLabelData(workspace, source)
+    expect(pending.ingredientMerge?.merged).toBe(
       'Ingredients: Wheat flour, cane sugar, Eggs, Oil. Contains less than 2% of: baking soda, cornstarch, soy lecithin (soy), Natural flavor',
     )
-    expect(original.ingredientMerge?.parts[0]).toMatchObject({
+    expect(pending.ingredientMerge?.parts[0]).toMatchObject({
       name: 'Wheat flour',
       weight: 85,
       contributions: [{ grams: 65 }, { grams: 20 }],
     })
-    product.labelIngredientMode = 'merged'
-    const pending = resolveLabelData(workspace, source)
     expect(pending.values['recipe.allergens']).toBe('')
     expect(() => validateLabelRunContent(document, pending, ['front'])).toThrow(
       /not confirmed/,
@@ -55,7 +56,7 @@ describe('shared ingredient declaration and allergen review', () => {
     )
     const confirmed = resolveLabelData(workspace, source)
     expect(confirmed.values['recipe.ingredients']).toBe(
-      original.ingredientMerge?.merged,
+      pending.ingredientMerge?.merged,
     )
     expect(confirmed.allergens).toEqual(
       expect.arrayContaining(['Eggs', 'Wheat', 'Soybeans']),
@@ -67,6 +68,36 @@ describe('shared ingredient declaration and allergen review', () => {
       validateLabelRunContent(document, confirmed, ['front']),
     ).not.toThrow()
     expect(original.ingredientMerge?.mode).toBe('parenthetical')
+  })
+
+  it('opts in per design and can retain a nested supplier mix without weights', () => {
+    const { workspace, product, mix } = labelIngredientReviewFixture()
+    const source = { kind: 'product', id: product.id } as const
+    delete product.labelIngredientMode
+    mix.name = mix.statement = 'Peanut Butter Cookie Mix'
+    mix.subingredients = 'Peanuts, enriched flour (wheat flour, niacin), sugar'
+    delete mix.labelComponentWeights
+    confirmFixtureAllergens(workspace, product, ['Peanuts', 'Wheat', 'Eggs', 'Soybeans'])
+    const standard = resolveLabelData(workspace, source)
+    expect(standard.values['recipe.ingredients']).toContain('Peanut Butter Cookie Mix (Peanuts, enriched flour (wheat flour, niacin), sugar)')
+    expect(standard.ingredientMerge).toMatchObject({ mode: 'parenthetical', issues: [], parts: [] })
+    expect(() => validateLabelRunContent(document, standard, ['front'])).not.toThrow()
+
+    const design = { productId: product.id, mode: 'merged' as const, standardIds: [] }
+    const blocked = resolveLabelData(workspace, source, undefined, design)
+    expect(() => validateLabelRunContent(document, blocked, ['front'])).toThrow(/Peanut Butter Cookie Mix.*Enter percentages.*Print with the standard format/)
+    const allergensOnly = { ...document, elements: [newElement('text', '', 'recipe.allergens')] }
+    expect(() => validateLabelRunContent(allergensOnly, blocked, ['front'])).not.toThrow()
+    const fallback = resolveLabelData(workspace, source, undefined, design, { ingredientIds: [mix.id] })
+    expect(fallback.values['recipe.ingredients']).toContain('Peanut Butter Cookie Mix (Peanuts, enriched flour (wheat flour, niacin), sugar)')
+    expect(() => validateLabelRunContent(document, fallback, ['front'])).not.toThrow()
+    expect(fallback.allergenReview).toEqual(standard.allergenReview)
+    mix.labelComponentWeights = { text: mix.subingredients, shares: { '1': '50', '2': '40', '3': '10', '2.1': '99', '2.2': '1' } }
+    const merged = resolveLabelData(workspace, source, undefined, design)
+    expect(merged.ingredientMerge?.merged).toContain('wheat flour')
+    expect(merged.ingredientMerge?.merged).not.toContain('enriched flour')
+    expect(merged.allergenReview).toEqual(standard.allergenReview)
+    expect(resolveLabelData(workspace, source).values['recipe.ingredients']).toBe(standard.values['recipe.ingredients'])
   })
 
   it('retains the fallback when supplier shares are missing or stale and blocks merged printing', () => {
@@ -222,6 +253,13 @@ describe('shared ingredient declaration and allergen review', () => {
         confirmedAllergens: ['Wheat', 'Milk'],
       },
     ])
+    delete ingredients[1].labelComponentWeights
+    const missing = assortmentLabel(workspace, spec).snapshot
+    expect(missing.warnings).toEqual([expect.stringMatching(/Blueberry muffins: Merged ingredient order is unconfirmed/)] )
+    expect(missing.sections[1].declaration).toBe(snapshot.sections[1].declaration)
+    outputs[0].labelStandardIngredientIds = [ingredients[1].id]
+    expect(assortmentLabel(workspace, spec).snapshot.warnings).toEqual([])
+    outputs[0].labelStandardIngredientIds = []
     ingredients[1].compoundRecipeId = recipes[0].id
     const cyclic = resolveLabelData(workspace, {
       kind: 'product',
