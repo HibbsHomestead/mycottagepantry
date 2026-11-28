@@ -5,6 +5,7 @@ import {
   labelSide,
   labelSides,
   labelSetPlan,
+  validateLabelRunContent,
   type LabelSide,
 } from '@/lib/label-sets'
 import { LabelSetControls } from './label-set-controls'
@@ -27,6 +28,7 @@ import {
   DialogTitle,
 } from './ui/dialog'
 import { LabelCanvas } from './label-studio'
+import { RollArtworkPreview } from './label-print-media'
 import {
   LabelPrintOptions,
   labelOutputBlocker,
@@ -199,13 +201,18 @@ export function LabelPreviewDialog({
   let setBlock = ''
   let runDocument = doc
   let runCopies = copies
-  if (doc?.format === 'front-back') {
+  let firstRunSide = 'front'
+  if (doc) {
     try {
-      const plan = labelSetPlan(doc, copies, parts, order)
-      const run = plan.runs[runIndex]
-      if (!run) throw new Error('Choose a print run.')
-      runDocument = run.document
-      runCopies = run.sequence.length
+      if (doc.format === 'front-back') {
+        const plan = labelSetPlan(doc, copies, parts, order)
+        const run = plan.runs[runIndex]
+        if (!run) throw new Error('Choose a print run.')
+        runDocument = run.document
+        runCopies = run.sequence.length
+        firstRunSide = run.sequence[0]
+        validateLabelRunContent(doc, data, run.sequence)
+      } else validateLabelRunContent(doc, data, ['front'])
     } catch (error) {
       setBlock = (error as Error).message
     }
@@ -228,6 +235,7 @@ export function LabelPreviewDialog({
                 copies: runCopies,
                 layout,
                 selectedPrinter,
+                printingMethod,
                 issues,
                 reviewed,
               })
@@ -412,6 +420,7 @@ export function LabelPreviewDialog({
         copies,
         layout,
         selectedPrinter,
+        printingMethod,
         issues,
         reviewed,
         customFonts,
@@ -603,7 +612,8 @@ export function LabelPreviewDialog({
             )}
           </div>
           <p className="table-note">
-            Zoom changes only this view. Printing uses the saved physical size.
+            This is the design view. Zoom changes only this view, not the
+            printed size.
           </p>
         </div>
         <div className="label-preview-side">
@@ -652,6 +662,23 @@ export function LabelPreviewDialog({
           {doc && (
             <section className="label-preview-print" aria-label="Print setup">
               <h3>Print setup</h3>
+              {runDocument &&
+                selectedPrinter &&
+                layout.mode !== 'sheet' &&
+                !setBlock &&
+                !rendering &&
+                !renderError && (
+                <RollArtworkPreview
+                  design={runDocument}
+                  profile={selectedPrinter}
+                >
+                  <image
+                    width={runDocument.width}
+                    height={runDocument.height}
+                    href={firstRunSide === 'back' ? backUrl : rendered.url}
+                  />
+                </RollArtworkPreview>
+              )}
               <LabelSetControls
                 document={doc}
                 products={copies}

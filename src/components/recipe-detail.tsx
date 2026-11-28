@@ -20,6 +20,8 @@ import { preparedEstimateRate, preparedLabel } from '@/lib/prepared-requirement'
 import { recipeComponentUsage } from '@/lib/recipe-type'
 import { RecipeTypeBadge } from './recipe-type-badge'
 import { PantryPhoto } from './pantry-photo'
+import { resolveRecipeAllergens } from '@/lib/label-studio'
+import { ProductAllergenReview } from './label-ingredient-review'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -58,6 +60,7 @@ export function RecipeDetail({
     [error, setError] = useState('')
   const pending = useRef(false)
   const prepStock = w.ingredients.filter((i) => i.compoundRecipeId === r.id)
+  const allergenReview = stage === 'details' ? resolveRecipeAllergens(w, r) : undefined
   const usedIn = recipeComponentUsage(w).get(r.id) || []
   const linked = w.products.filter((p) => p.recipeId === r.id)
   const product = w.products.find((p) => p.id === chosen?.id)
@@ -349,6 +352,11 @@ export function RecipeDetail({
                 </tbody>
               </table>
             </section>
+            {allergenReview && <section className="recipe-method">
+              <h3>Allergen suggestions</h3>
+              <p>Review and confirm this evidence on each linked product before using it on labels.</p>
+              <ProductAllergenReview product={r} review={allergenReview} />
+            </section>}
             <section className="recipe-method">
               <h3>Method</h3>
               {Array.isArray(r.instructions) ? (

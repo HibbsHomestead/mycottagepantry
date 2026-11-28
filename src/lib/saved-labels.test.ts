@@ -9,6 +9,7 @@ import {
 } from './label-studio'
 import { labelLayout, labelSide } from './label-sets'
 import { defaultSheet } from './label-print-layout'
+import { confirmFixtureAllergens } from '../test/fixtures/label-ingredient-review'
 import {
   assertSavedLabelOutput,
   duplicateSavedLabel,
@@ -63,6 +64,8 @@ function fixture() {
     },
     { id: 'p2', name: 'Almond loaf', recipeId: 'nuts', labelMainName: ' \t ' },
   ]
+  confirmFixtureAllergens(w, w.products[0], ['Milk'])
+  confirmFixtureAllergens(w, w.products[1], ['Tree nuts'])
   const source = { kind: 'product' as const, id: 'p1' }
   const document: LabelDocument = {
     ...blankLabel(),

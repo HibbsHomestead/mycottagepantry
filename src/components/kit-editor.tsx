@@ -1,4 +1,5 @@
 import { ProductDescriptionField } from './product-description-field'
+import { ProductIngredients } from './product-ingredients'
 import { ProductPriceTaxField } from './business-price-tax'
 import { ItemRemoveButton } from './item-remove-button'
 import { ItemDeleteButton } from './item-deletion'
@@ -7,6 +8,7 @@ import { ItemEditorShell } from './item-editor-shell'
 import { ProductArtworkFields } from './product-artwork-fields'
 import {
   basketComponentCosts,
+  basketAssemblyCosts,
   isMixedPack,
   packagingLines,
   effectiveRecipeLines,
@@ -85,24 +87,49 @@ export function KitEditor({
     )
   const estimate = kitEstimate(draft, workspace)
   const componentCosts = basketComponentCosts(draft, workspace, { allowResaleEstimate: true })
-  const summary = (
+  const assembly = basketAssemblyCosts(draft, workspace)
+  const knownComponents = componentCosts.filter((row) => row.cost !== undefined)
+  const contentsCost = knownComponents.reduce((total, row) => total + row.cost!, 0)
+  const completeContentsCost = knownComponents.length === components.length
+  const priceSet = Number.isFinite(estimate.price) && estimate.price >= 0
+  const noContents = components.length === 0
+  const costIssues = [
+    noContents ? `Add contents to calculate the ${subject} cost.` : estimate.costError,
+    ...componentCosts.map((row) => row.issue),
+    assembly.packagingIssue,
+    assembly.laborIssue,
+  ]
+  const pricingIssue = estimate.pricingError === `Selling price is not configured for this ${subject}.`
+    ? ''
+    : estimate.pricingError
+  const guidance = [...new Set([
+    ...costIssues,
+    !priceSet && 'Set a selling price to calculate profit and margin.',
+    pricingIssue,
+  ].filter((issue): issue is string => Boolean(issue)))]
+  const emptyEstimate = noContents && !priceSet && !item && !packaging.length && !assembly.labor && !assembly.overhead && !assembly.laborIssue
+  const summary = emptyEstimate ? (
+    <p>Add contents and set a selling price to calculate cost and margin.</p>
+  ) : (
     <>
+      {knownComponents.length > 0 && (
+        <p>
+          {completeContentsCost ? (mixed ? 'Contents cost' : 'Included packages') : 'Known contents subtotal'}: {money(contentsCost)}
+        </p>
+      )}
+      {assembly.packagingCost !== undefined && (packaging.length > 0 || estimate.cost) && (
+        <p>{mixed ? 'Outer packaging and labels' : 'Additional basket packaging'}: {money(assembly.packagingCost)}</p>
+      )}
+      {!assembly.laborIssue && assembly.labor !== undefined && (assembly.labor > 0 || estimate.cost) && (
+        <p>Additional assembly: {money(assembly.labor)}</p>
+      )}
+      {mixed && !assembly.laborIssue && assembly.overhead > 0 && <p>Packing overhead: {money(assembly.overhead)}</p>}
       {estimate.cost && (
-        <>
-          <p>{mixed ? 'Contents cost' : 'Included packages'}: {money(estimate.cost.ingredient)}</p>
-          <p>{mixed ? 'Outer packaging and labels' : 'Additional basket packaging'}: {money(estimate.cost.packagingCost)}</p>
-          <p>Additional assembly: {money(estimate.cost.labor)}</p>
-          {mixed && estimate.cost.overhead > 0 && <p>Packing overhead: {money(estimate.cost.overhead)}</p>}
-          <p>
-            <strong>
-              Total / {subject}: {money(estimate.cost.perPackage)}
-            </strong>
-          </p>
-        </>
+        <p><strong>Total / {subject}: {money(estimate.cost.perPackage)}</strong></p>
       )}
       <p>
         Selling price:{' '}
-        {Number.isFinite(estimate.price) ? money(estimate.price) : 'Not set'}
+        {priceSet ? money(estimate.price) : 'Not set'}
       </p>
       {estimate.pricing && (
         <p>
@@ -110,22 +137,9 @@ export function KitEditor({
           {estimate.pricing.margin.toFixed(1)}%
         </p>
       )}
-      {(estimate.costError || estimate.pricingError) && (
+      {guidance.length > 0 && (
         <div role="status">
-          {estimate.costError && (
-            <p>Estimate incomplete: {estimate.costError}</p>
-          )}
-          {estimate.pricingError && (
-            <p>Estimate incomplete: {estimate.pricingError}</p>
-          )}
-          <p>{estimate.explanation}</p>
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => setTab('contents')}
-          >
-            Review contents &amp; details
-          </button>
+          {guidance.map((issue) => <p key={issue}>{issue}</p>)}
         </div>
       )}
     </>
@@ -471,6 +485,11 @@ export function KitEditor({
       description="Fixed contents, one selling price. Current estimates follow current component costs."
       tabs={[
         { id: 'contents', label: 'Contents & details', content: contents },
+        {
+          id: 'ingredients',
+          label: 'Ingredients & allergens',
+          content: <ProductIngredients workspace={workspace} product={draft} isDraft />,
+        },
         { id: 'cost', label: 'Packaging & cost', content: pricing },
         {
           id: 'photo',

@@ -2,6 +2,7 @@ import { demoData } from '../../lib/demo'
 import { blankLabel } from '../../lib/label-studio'
 import type { AssortmentSpec } from '../../lib/assortment-labels'
 import type { Item } from '../../lib/domain'
+import { confirmFixtureAllergens } from './label-ingredient-review'
 
 export function assortmentFixture() {
   const workspace = demoData()
@@ -21,7 +22,7 @@ export function assortmentFixture() {
       id: `input-${index}`,
       name: `${name} blend`,
       statement: `${name} blend`,
-      subingredients: index === 1 ? 'cocoa, chips (sugar, milk)' : '',
+      subingredients: index === 1 ? 'cocoa, chips (sugar, milk)' : index === 0 ? 'Blueberries, flour' : 'Lemon, flour',
       requiresSubingredients: index === 1,
       allergens: index === 1 ? ['Milk'] : ['Wheat'],
       reviewed: true,
@@ -118,6 +119,7 @@ export function assortmentFixture() {
     lines: [{ ingredientId: flavor.ingredient.id, quantity: 60, unit: 'g' }],
   }))
   workspace.products = [...flavors, craft, tea, basket]
+  flavors.forEach((product, index) => confirmFixtureAllergens(workspace, product, index === 1 ? ['Milk'] : ['Wheat']))
   workspace.batches = [
     {
       id: 'fixture-run',

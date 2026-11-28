@@ -448,7 +448,7 @@ for (const width of [1440, 390]) {
       .click()
     await expect(
       dialog
-        .getByText('Estimate incomplete: Product category not configured.', {
+        .getByText('Product category not configured.', {
           exact: true,
         })
         .first(),

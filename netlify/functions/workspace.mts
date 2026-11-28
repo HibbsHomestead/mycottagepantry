@@ -53,6 +53,7 @@ import {
   validateSavedLabelContext,
 } from '../../src/lib/saved-labels'
 import { exportCalibrationPdf, exportSvgLabelPdf } from '../lib/label-svg-output'
+import { componentSources, componentWeightSource, majorAllergens, validateAllergenDecisions } from '../../src/lib/label-ingredient-review'
 import {
   labelSide,
   labelSides,
@@ -785,6 +786,7 @@ export default async (req: Request, context: Context) => {
     const state: Workspace = {}
     const lastIngredientStock = new Map<string, { unit: string; quantity: number; usedAs: string }>()
     const preparedWrites = new Set<string>()
+    let productReviewSaved = false
     const authorizePreparedWrite = (id: string) => {
       preparedWrites.add(id)
     }
@@ -803,6 +805,31 @@ export default async (req: Request, context: Context) => {
 
       if (table === 'ingredients' && typeof item.category === 'string')
         item.category = canonicalCategoryName(item.category)
+      if (table === 'products') {
+        if (item.labelIngredientMode !== undefined && !['parenthetical', 'merged'].includes(item.labelIngredientMode))
+          throw new Error('Choose a supported ingredient statement mode.')
+        if (item.labelGroupSmallIngredients !== undefined && typeof item.labelGroupSmallIngredients !== 'boolean')
+          throw new Error('Choose whether to group verified ingredients under 2%.')
+        const previous = state.products?.find((product) => product.id === item.id)
+        for (const key of ['allergenReview', 'allergenAliases']) {
+          if (previous?.[key]) item[key] = previous[key]
+          else delete item[key]
+        }
+      }
+      if (table === 'ingredients' && item.labelComponentWeights) {
+        const text = String(item.subingredients || '').trim()
+        const weights = item.labelComponentWeights
+        const nodes = componentSources(text)
+        const keys: string[] = []
+        const collect = (rows: NonNullable<typeof nodes>) => rows.forEach((row) => {
+          keys.push(row.key)
+          collect(row.children)
+        })
+        if (nodes) collect(nodes)
+        if (weights.text !== text || (weights.sourceRef || '') !== componentWeightSource(item) || !nodes) delete item.labelComponentWeights
+        else if (!weights.shares || typeof weights.shares !== 'object' || Array.isArray(weights.shares) || Object.entries(weights.shares).some(([key, value]) => !keys.includes(key) || typeof value !== 'string' || value.length > 11 || (value !== '' && (!/^(?:\d{1,3}(?:\.\d{1,6})?|\.\d{1,6})$/.test(value) || Number(value) > 100))))
+          throw new Error('Enter supplier weight percentages from 0 to 100.')
+      }
       assertSectionCategoryAssignment(
         item,
         state[table]?.find((r) => r.id === item.id),
@@ -2830,7 +2857,33 @@ export default async (req: Request, context: Context) => {
           type: action,
           actor: user?.id || 'Demo owner',
         })
-      if (['priceTaxDefault', 'priceTaxPreview', 'priceTaxApply'].includes(action)) {
+      if (action === 'productAllergenReview' || action === 'productAllergenMapping') {
+        if (table !== 'products' || !['Owner', 'Manager'].includes(role)) throw new Error('Only an Owner or Manager can review product allergens.')
+        const product = state.products.find((entry) => entry.id === data?.id && !entry.archived)
+        if (!product) throw new Error('Choose a saved food product in this oven.')
+        const review = resolveLabelData(state, { kind: 'product', id: product.id }).allergenReview
+        if (!review) throw new Error('Link a food recipe to review this product’s allergens.')
+        if (!data.source || JSON.stringify(data.source) !== JSON.stringify(review.source) || (data.reviewedAt || '') !== (product.allergenReview?.reviewedAt || ''))
+          throw new Error('The product source or review changed. Refresh before saving your review.')
+        const updateReview = async (patch: Record<string, unknown>) => {
+          await client.query('UPDATE products SET data=data || $3::jsonb, updated_at=NOW() WHERE business_id=$1 AND id=$2', [org, product.id, JSON.stringify(patch)])
+          productReviewSaved = true
+        }
+        if (action === 'productAllergenMapping') {
+          if (!majorAllergens.includes(data.allergen) || typeof data.aliases !== 'string' || data.aliases.length > 400)
+            throw new Error('Choose an allergen and enter up to 400 characters of ingredient names.')
+          const aliases = [...new Set<string>(data.aliases.split(',').map((name: string) => name.trim()).filter(Boolean))]
+          if (aliases.length > 15) throw new Error('Use up to 15 added names per allergen.')
+          await updateReview({ allergenAliases: { ...product.allergenAliases, [data.allergen]: aliases } })
+          await audit('Product allergen mapping updated', product.name, { productId: product.id, allergen: data.allergen, aliases })
+        } else {
+          const decisions = validateAllergenDecisions(data.decisions, review.evidence)
+          if (typeof data.advisory !== 'string' || data.advisory.length > 500) throw new Error('Cross-contact advisory allows up to 500 characters.')
+          const saved = { source: review.source, decisions, advisory: data.advisory.trim(), reviewedAt: new Date().toISOString(), actor: user?.id || 'Demo owner' }
+          await updateReview({ allergenReview: saved })
+          await audit('Product allergens reviewed', product.name, { productId: product.id, before: product.allergenReview || null, after: saved })
+        }
+      } else if (['priceTaxDefault', 'priceTaxPreview', 'priceTaxApply'].includes(action)) {
         if (table !== 'settings' || !['Owner', 'Manager'].includes(role))
           throw new Error('Only an Owner or Manager can manage price tax treatment.')
         const business = state.settings[0]
@@ -2980,8 +3033,8 @@ export default async (req: Request, context: Context) => {
         }
       } else if (String(action).startsWith('event')) {
         await handleEvent(action, data, { client, org, role, state, audit })
-      } else if (priceTaxResult) {
-        // Price treatment changes were validated and written under the business lock.
+      } else if (priceTaxResult || productReviewSaved) {
+        // These changes were validated and written under the business lock.
       } else if (['stockPrepPost', 'stockPrepReverse'].includes(action)) {
         if (table !== 'ingredients' || !['Owner', 'Manager'].includes(role))
           throw new Error('Only an Owner or Manager can prepare or reverse this item’s stock.')
@@ -5850,7 +5903,7 @@ export default async (req: Request, context: Context) => {
           )
       }
     if (!metadataOnly) rollup(result)
-    if (!metadataOnly && !priceTaxResult)
+    if (!metadataOnly && !priceTaxResult && !productReviewSaved)
       for (const i of result.ingredients.filter((i) => i.compoundRecipeId))
         await save('ingredients', i)
     if (result.settings[0]) {

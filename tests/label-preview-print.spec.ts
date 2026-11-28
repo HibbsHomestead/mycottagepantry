@@ -20,6 +20,9 @@ test('previews and prints the same product in one app tab, retaining context aft
     ...blankLabel(),
     id: 'sample-label',
     name: 'Sample product label',
+    workflowVersion: 1 as const,
+    recordKind: 'label' as const,
+    source: { kind: 'product' as const, id: product.id },
     revision: 1,
     width: 216,
     height: 144,
@@ -100,13 +103,13 @@ test('previews and prints the same product in one app tab, retaining context aft
   await installWorkspaceFixture(page)
   await page.goto(workspaceFixtureUrl('Products/Food'))
   const card = page.getByRole('article', { name: product.name })
-  await card.getByRole('button', { name: 'View details', exact: true }).click()
+  await card.getByRole('button', { name: product.name, exact: true }).click()
   const detail = page.getByRole('dialog', { name: product.name, exact: true })
   await expect(detail.locator('.product-detail-photo img')).toHaveAttribute(
     'src',
     '/brand/cottage-pantry-logo.webp',
   )
-  await detail.getByRole('button', { name: 'Print Label', exact: true }).click()
+  await detail.getByRole('button', { name: 'Preview Label', exact: true }).click()
   const preview = page.getByRole('dialog', {
     name: `Preview Label · ${product.name}`,
     exact: true,
@@ -169,9 +172,10 @@ test('previews and prints the same product in one app tab, retaining context aft
   ).toBe(false)
   expect(printed.fonts.length).toBeGreaterThan(0)
   expect(printed.fonts.every((status) => status === 'loaded')).toBe(true)
-  expect(
-    printed.images.every((src) => src.startsWith('data:image/png;base64,')),
-  ).toBe(true)
+  expect(printed.images).toHaveLength(7)
+  expect([...new Set(printed.images)]).toEqual([
+    expect.stringMatching(/^blob:/),
+  ])
   await preview
     .getByRole('button', { name: 'Close', exact: true })
     .first()
@@ -187,8 +191,14 @@ test('previews and prints the same product in one app tab, retaining context aft
     doc.name,
   )
   await expect(
-    page.getByRole('combobox', { name: 'Choose record', exact: true }),
+    page.getByRole('combobox', { name: 'Product', exact: true }).first(),
   ).toHaveValue(product.id)
+  await page
+    .getByText('Outer label · repeating contents block', { exact: true })
+    .click()
+  await expect(page.getByLabel('Minimum assortment text (pt)')).toHaveValue(
+    '10',
+  )
 })
 
 for (const workflow of ['food', 'handmade', 'resale']) {
@@ -223,9 +233,11 @@ for (const workflow of ['food', 'handmade', 'resale']) {
     await page.goto(workspaceFixtureUrl(`Products/${section}`))
     await page
       .getByRole('article', { name: product.name })
-      .getByRole('button', { name: 'View details', exact: true })
+      .getByRole('button', { name: `View details for ${product.name}`, exact: true })
       .click()
     const detail = page.getByRole('dialog', { name: product.name, exact: true })
+    if (workflow === 'handmade')
+      await expect(detail.getByRole('region', { name: 'Ingredients & allergens' })).toHaveCount(0)
     const photo = detail.locator('.product-detail-photo'),
       info = detail.locator('.product-detail-information')
     const desktop = {
@@ -261,7 +273,10 @@ for (const workflow of ['food', 'handmade', 'resale']) {
       .getByRole('button', { name: 'Edit Product', exact: true })
       .click()
     await expect(
-      page.getByRole('dialog', { name: 'Edit Product', exact: true }),
+      page.getByRole('dialog', {
+        name: workflow === 'handmade' ? 'Handmade product' : 'Edit Product',
+        exact: true,
+      }),
     ).toBeVisible()
     await expect(page.getByLabel('Product name', { exact: true })).toHaveValue(
       product.name,

@@ -38,6 +38,7 @@ export type LabelOutputRequest = {
   copies: number
   layout: SheetLayout
   selectedPrinter?: PrinterProfile
+  printingMethod?: string
   issues: string[]
   reviewed: boolean
   customFonts: LabelFont[]
@@ -71,6 +72,7 @@ export function labelOutputBlocker({
   copies,
   layout,
   selectedPrinter,
+  printingMethod,
   issues,
   reviewed,
 }: Pick<
@@ -80,6 +82,7 @@ export function labelOutputBlocker({
   | 'copies'
   | 'layout'
   | 'selectedPrinter'
+  | 'printingMethod'
   | 'issues'
   | 'reviewed'
 >): string | null {
@@ -103,8 +106,14 @@ export function labelOutputBlocker({
     validateSheet(doc, layout)
     if (!Number.isInteger(copies) || copies < 1 || copies > 200)
       throw new Error('Choose 1–200 labels.')
-    if (type !== 'png' && selectedPrinter && layout.mode !== 'sheet')
-      checkPrinterSize(doc, selectedPrinter)
+    if (type !== 'png' && layout.mode !== 'sheet') {
+      const missingProfile = missingPrinterProfile(
+        printingMethod,
+        selectedPrinter,
+      )
+      if (missingProfile) throw new Error(missingProfile)
+      if (selectedPrinter) checkPrinterSize(doc, selectedPrinter)
+    }
     const direct = type === 'print' && selectedPrinter?.method === 'qz'
     if (direct && layout.mode === 'sheet')
       throw new Error(
@@ -484,6 +493,15 @@ export function printerSelection(
   return { printerProfiles, selectedPrinter }
 }
 
+export function missingPrinterProfile(
+  method?: string,
+  profile?: PrinterProfile,
+) {
+  return method && method !== 'browser' && !profile
+    ? 'The saved print profile is unavailable on this device. Select or save a matching profile to restore rotation, or explicitly select browser printing to use the design size without rotation.'
+    : null
+}
+
 function Control({
   label,
   children,
@@ -548,6 +566,7 @@ export function LabelPrintOptions({
   onSaveMedia?: (profile: PrinterProfile) => Promise<void>
   onTestMedia?: (profile: PrinterProfile) => Promise<void>
 }) {
+  const missingProfile = missingPrinterProfile(printingMethod, selectedPrinter)
   return (
     <>
       <Control label="Printer / printing method">
@@ -556,6 +575,11 @@ export function LabelPrintOptions({
           onChange={(e) => setPrintingMethod(e.target.value)}
         >
           <option value="browser">Use browser printing</option>
+          {missingProfile && (
+            <option value={printingMethod} disabled>
+              Saved print profile unavailable
+            </option>
+          )}
           {printerProfiles.map((p) => (
             <option value={p.id} key={p.id}>
               {p.method === 'qz' ? 'Direct' : 'Browser'} · {p.name}
@@ -563,6 +587,11 @@ export function LabelPrintOptions({
           ))}
         </select>
       </Control>
+      {layout.mode !== 'sheet' && missingProfile && (
+        <p className="warning-text" role="alert">
+          {missingProfile}
+        </p>
+      )}
       <p className="studio-small-note">
         {selectedPrinter?.method === 'qz'
           ? connected && bridgeConnected()
@@ -578,7 +607,9 @@ export function LabelPrintOptions({
       <p className="studio-small-note">
         Select the matching paper size and actual size / 100%, not fit to
         page. Turn off browser headers and footers and any extra driver
-        rotation. Use one driver copy. The app cannot override the driver.
+        rotation. Use one driver copy. The browser or driver can ignore the
+        page size, rotate or scale independently. A physical test label is
+        required before printing a run.
       </p>
       {selectedPrinter &&
         (selectedPrinter.offsetX !== 0 ||

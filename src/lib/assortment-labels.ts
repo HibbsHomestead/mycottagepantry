@@ -1,6 +1,17 @@
-import { isMixedPack, mixedLabelQuantity, packagingLines, type Item, type Workspace } from './domain'
-import { resolveLabelData } from './label-studio'
+import {
+  isMixedPack,
+  packagingLines,
+  type Item,
+  type Workspace,
+} from './domain'
+import {
+  defaultAssortmentLayout,
+  resolveLabelData,
+  type AssortmentLayout,
+} from './label-studio'
 import { productionRunLines } from './production-run'
+import { printRotations, type PrintRotation } from './label-printers'
+import { formatNetWeight, productNetWeight } from './net-weight'
 
 export type PackedLine = {
   productId: string
@@ -25,20 +36,49 @@ export type AssortmentSpec = {
   containers: number
   copies: number
   componentId: string
+  rotation?: PrintRotation
   lines: PackedLine[]
 }
 
 export function fixedAssortmentContents(definition?: Item) {
-  const lines: PackedLine[] = (definition?.kitComponents || []).map((line: Item) => ({
-    productId: line.productId,
-    quantity: Number(line.quantity),
-    unit: line.basis === 'unpackaged' ? 'loose' : 'package',
-  }))
+  const lines: PackedLine[] = (definition?.kitComponents || []).map(
+    (line: Item) => ({
+      productId: line.productId,
+      quantity: Number(line.quantity),
+      unit: line.basis === 'unpackaged' ? 'loose' : 'package',
+    }),
+  )
   return {
     lines,
-    expectedLoose: lines.reduce((sum, line) => sum + (line.unit === 'loose' ? line.quantity : 0), 0),
-    expectedPackages: lines.reduce((sum, line) => sum + (line.unit === 'package' ? line.quantity : 0), 0),
+    expectedLoose: lines.reduce(
+      (sum, line) => sum + (line.unit === 'loose' ? line.quantity : 0),
+      0,
+    ),
+    expectedPackages: lines.reduce(
+      (sum, line) => sum + (line.unit === 'package' ? line.quantity : 0),
+      0,
+    ),
   }
+}
+
+export function assortmentRunDefinition(owner?: Item, run?: Item) {
+  if (!run || !owner) return owner
+  const outputs = productionRunLines(run).filter(
+    (line) => line.productId === owner.id,
+  )
+  const definitions = outputs.map((line) => line.definition?.product)
+  const first = definitions[0]
+  if (
+    !first ||
+    definitions.some(
+      (definition) =>
+        !definition ||
+        assortmentSignature(fixedAssortmentContents(definition)) !==
+          assortmentSignature(fixedAssortmentContents(first)),
+    )
+  )
+    return undefined
+  return first
 }
 
 function text(value: unknown, max = 300, required = false) {
@@ -74,6 +114,8 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
     throw new Error(
       'Select 1 to 30 actual products or flavors before previewing.',
     )
+  if (input.rotation !== undefined && !printRotations.includes(input.rotation))
+    throw new Error('Choose a supported output rotation.')
   const spec: AssortmentSpec = {
     name: text(input.name, 120, true),
     templateId: text(input.templateId, 200, true),
@@ -90,6 +132,7 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
     ),
     containers: count(input.containers, 'Outer containers', 1),
     copies: count(input.copies, 'Label copies', 1),
+    rotation: input.rotation ?? 0,
     lines: input.lines.map((line) => {
       if (!line || !['loose', 'package'].includes(line.unit))
         throw new Error('Choose how each product is packed.')
@@ -159,18 +202,18 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
       'Actual contents must match the intended loose-item and individually packaged counts per container.',
     )
   const keys = new Set<string>()
-  const definition = posted ? output[0]?.definition?.product : owner
+  const definition = assortmentRunDefinition(owner, run)
   const mixed = isMixedPack(owner)
   const basketDefinition = definition?.kitComponents
-  if (mixed) {
-    const labels = mixedLabelQuantity(definition)
-    if (spec.mode !== 'fixed') throw new Error('Use the saved fixed contents for a mixed-pack label.')
-    if (definition?.mixedLabelTemplateId && spec.templateId !== definition.mixedLabelTemplateId)
-      throw new Error('Use the label template saved on the mixed pack.')
-    if (!spec.componentId && labels && (spec.packagingId !== definition.mixedLabelStockId || spec.copies !== spec.containers * labels))
-      throw new Error(`Use the saved label material and ${labels} label(s) per mixed pack.`)
-  }
+  if (mixed && spec.mode !== 'fixed' && !run)
+    throw new Error(
+      'Use the saved mixed-pack contents, or select a production run to review a different actual packing group.',
+    )
   if (owner?.workflow === 'kit' && spec.mode === 'fixed') {
+    if (!definition)
+      throw new Error(
+        'This run has no single saved packing combination. Enter and review the actual contents for this packing group.',
+      )
     const expected = Array.isArray(basketDefinition) ? basketDefinition : []
     if (
       expected.length !== spec.lines.length ||
@@ -179,15 +222,19 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
           (!mixed && component.basis !== 'package') ||
           !spec.lines.some(
             (line) =>
-              line.unit === (mixed && component.basis === 'unpackaged' ? 'loose' : 'package') &&
+              line.unit ===
+                (mixed && component.basis === 'unpackaged'
+                  ? 'loose'
+                  : 'package') &&
               line.productId === component.productId &&
               line.quantity === Number(component.quantity),
           ),
       )
     )
       throw new Error(
-        mixed ? 'Label contents changed. Reload the saved mixed-pack combination and review it again.' :
-          'Fixed basket contents must match its configured selling packages. Use an actual selection for a variable packing mix.',
+        mixed
+          ? 'Label contents changed. Reload the saved mixed-pack combination and review it again.'
+          : 'Fixed basket contents must match its configured selling packages. Use an actual selection for a variable packing mix.',
       )
   }
   const warnings: string[] = []
@@ -214,21 +261,21 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
       kind: 'product',
       id: product.id,
     })
-    const hasRecipe = Boolean(product.recipeId)
+    const usesProductSource = Boolean(product.recipeId || source.supplierLabelSource)
     if (line.unit === 'loose' && source.nonFood)
       throw new Error(
         'Select individually packaged units for non-food products.',
       )
-    const declaration = hasRecipe
+    const declaration = usesProductSource
       ? source.values['recipe.ingredients']
       : line.declaration
-    const contains = hasRecipe
+    const contains = usesProductSource
       ? source.values['recipe.allergens']
       : line.contains
     if (!source.nonFood) {
       if (!declaration)
         warnings.push(`${name}: ingredient statement is missing.`)
-      if (hasRecipe)
+      if (usesProductSource)
         warnings.push(
           ...source.warnings
             .filter(
@@ -251,15 +298,26 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
       contains:
         source.nonFood || !contains
           ? ''
-          : hasRecipe
+          : usesProductSource
             ? contains
             : `Contains: ${contains}`,
-      advisory: source.nonFood ? '' : line.advisory,
+      advisory: source.nonFood ? '' : source.values['recipe.allergenAdvisory'] || line.advisory,
+      confirmedAllergens: source.allergenReview?.status === 'confirmed' ? source.allergens : source.supplierLabelSource?.reviewed && source.supplierLabelSource.noMajorAllergens ? [] : undefined,
+      nonFood: Boolean(source.nonFood),
+      supplierContains:
+        !source.nonFood && product.recipeId && !source.supplierLabelSource && !source.allergenReview
+          ? source.sourceAllergenStatements?.contains || []
+          : [],
       storage: source.values['product.storage'],
       sourceRevision: {
         recipeId: product.recipeId || '',
         parts: source.ingredientParts,
         allergens: source.allergens,
+        supplierStatements: source.sourceAllergenStatements,
+        ingredientMode: source.ingredientMerge?.mode || 'parenthetical',
+        groupSmallIngredients: source.ingredientMerge?.groupSmall || false,
+        allergenReview: source.allergenReview,
+        ...(source.supplierLabelSource ? { supplierLabelSource: source.supplierLabelSource } : {}),
       },
     }
   })
@@ -271,23 +329,75 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
     throw new Error(
       'Component labels require an individually packaged product in this assortment.',
     )
-  const settings = workspace.settings[0] || {}
+  const layout: AssortmentLayout =
+    stock.assortmentLayout || defaultAssortmentLayout
+  const parent = definition || owner
+  const brand = workspace.brand_kits?.find((item) => item.id === stock.brandId)
+  const parentData = resolveLabelData(
+    workspace,
+    { kind: 'product', id: parent?.id || '' },
+    brand,
+  )
+  if (parent) {
+    parentData.values['product.storage'] =
+      parent.storage || brand?.defaultStorage || ''
+    parentData.values['business.disclaimer'] =
+      parent.disclaimer ||
+      brand?.defaultDisclaimer ||
+      workspace.settings[0]?.disclaimer ||
+      ''
+  }
+  if (!selectedComponent && layout.parentFields.includes('assortment.allergens')) {
+    const food = sections.filter((section) => !section.nonFood)
+    if (food.some((section) => !section.confirmedAllergens))
+      warnings.push('Overall Contains requires structured confirmed allergen information for each food. Review the sources or use a template with per-product declarations only.')
+    else {
+      const confirmed = [...new Set(food.flatMap((section) => section.confirmedAllergens || []))]
+      if (confirmed.length) parentData.values['assortment.allergens'] = `Contains: ${confirmed.join(', ')}`
+    }
+  }
+  if (layout.parentFields.includes('product.netQuantity')) {
+    const weight = parent ? productNetWeight(parent) : undefined
+    if (weight?.review) warnings.push(`${parent?.name}: ${weight.review}`)
+    parentData.values['product.netQuantity'] = formatNetWeight(weight?.ounces)
+  }
+  parentData.values['batch.packedDate'] = run?.packedDate || ''
+  parentData.values['batch.bestBy'] = run?.bestBy || ''
   const snapshot = {
     name: selectedComponent?.name || spec.name,
-    ...(mixed ? {
-      contentsSummary: sections.map((section) => `${section.quantity} ${section.name.toLowerCase()}${section.unit === 'package' ? ' (finished packages)' : ''}`).join(' + '),
-      fixedRevision: [definition?.name, definition?.expectedContents, definition?.mixedLabelTemplateId, definition?.mixedLabelStockId, packagingLines(definition || {}), basketDefinition],
-    } : {}),
+    contentsSummary: sections
+      .map(
+        (section) => section.unit === 'package'
+          ? `${section.quantity} selling package${section.quantity === 1 ? '' : 's'} of ${section.name}`
+          : `${section.quantity} ${section.name}`,
+      )
+      .join(' · '),
+    fixedRevision: [
+      definition?.name,
+      definition?.expectedContents,
+      definition?.mixedLabelTemplateId,
+      definition?.mixedLabelStockId,
+      packagingLines(definition || {}),
+      basketDefinition,
+    ],
+    packingRevision: {
+      containers: spec.containers,
+      copies: spec.copies,
+      group: spec.group,
+      batchId: spec.batchId,
+      mode: spec.mode,
+      outputs: output.map((line) => [
+        line.id,
+        posted ? line.actualYield : line.quantity,
+        line.definition?.product?.kitComponents,
+      ]),
+    },
     sections: selectedComponent ? [selectedComponent] : sections,
     allSections: sections,
     fields: [
       ...new Set(
-        [
-          owner?.storage,
-          owner?.disclaimer || settings.disclaimer,
-          settings.name,
-          settings.address,
-        ]
+        layout.parentFields
+          .map((field) => parentData.values[field])
           .filter(Boolean)
           .map(String),
       ),
@@ -296,6 +406,12 @@ export function assortmentLabel(workspace: Workspace, input: AssortmentSpec) {
       width: stock.width as number,
       height: stock.height as number,
       name: stock.name,
+      revision: stock.revision || 0,
+    },
+    layout: {
+      version: 1 as const,
+      minimumFontSize: layout.minimumFontSize,
+      rotation: spec.rotation ?? 0,
     },
     material: material ? { id: material.id, name: material.name } : null,
     warnings: [...new Set(warnings)],
@@ -310,6 +426,7 @@ export function assortmentSignature(value: unknown): string {
     return `[${value.map(assortmentSignature).join(',')}]`
   if (value && typeof value === 'object')
     return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(
         ([key, entry]) =>
@@ -349,6 +466,7 @@ export function assortmentLabelText(
       component ? '' : `${section.name} — ${section.contents}`,
       section.declaration,
       section.contains,
+      ...(section.supplierContains || []),
       section.advisory,
       section.storage,
     ]),

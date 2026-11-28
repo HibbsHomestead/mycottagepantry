@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { createCanvas } from '@napi-rs/canvas'
 import { toBuffer } from 'bwip-js/node'
 import {
@@ -15,7 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, it } from 'vitest'
 import { LabelCanvas } from '../components/label-canvas'
 import { RollArtworkPreview } from '../components/label-print-media'
-import { printerSelection } from '../components/label-print-workflow'
+import { labelOutputBlocker, printerSelection } from '../components/label-print-workflow'
 import {
   exportCalibrationPdf,
   exportSvgLabelPdf,
@@ -204,19 +205,19 @@ async function prepareBrowserFixture(
   )
 }
 
-function profileFor(rotation: PrintRotation) {
+function profileFor(rotation: PrintRotation, design = doc) {
   const swapped = rotation === 90 || rotation === 270
   return validatePrinterProfile({
     id: `roll-${rotation}`,
     name: 'Roll printer',
     method: 'qz',
     unit: 'in',
-    width: swapped ? 4 : 3,
-    height: swapped ? 3 : 4,
+    width: (swapped ? design.height : design.width) / 72,
+    height: (swapped ? design.width : design.height) / 72,
     orientation: 'landscape',
     rotation,
-    designWidth: doc.width,
-    designHeight: doc.height,
+    designWidth: design.width,
+    designHeight: design.height,
     offsetX: 0,
     offsetY: 0,
     preferred: true,
@@ -246,27 +247,64 @@ async function artwork() {
   }
 }
 
-function expectedPoint(rotation: PrintRotation, x: number, y: number) {
+function expectedPoint(rotation: PrintRotation, x: number, y: number, design = doc) {
   switch (rotation) {
     case 90:
-      return [288 - y, x]
+      return [design.height - y, x]
     case 180:
-      return [216 - x, 288 - y]
+      return [design.width - x, design.height - y]
     case 270:
-      return [y, 216 - x]
+      return [y, design.width - x]
     default:
       return [x, y]
   }
 }
 
+const evidenceDir = process.env.LABEL_ROTATION_EVIDENCE_DIR
+
+async function evidenceFile(name: string) {
+  if (!evidenceDir) return undefined
+  await mkdir(evidenceDir, { recursive: true })
+  return join(evidenceDir, name)
+}
+
+function resizedFixture(width: number, height: number) {
+  return {
+    ...doc,
+    width,
+    height,
+    elements: doc.elements.map((element, index) => {
+      if (index === 0) return { ...element, width: width - 4, height: height - 4 }
+      if (index > markers.length) return element
+      return {
+        ...element,
+        x: element.x + (index % 2 === 0 ? width - doc.width : 0),
+        y: element.y + (index >= 3 ? height - doc.height : 0),
+      }
+    }),
+  }
+}
+
+const rotationsToVerify = [
+  ...([0, 90, 180, 270] as const).map((rotation) => ({ design: doc, rotation })),
+  { design: resizedFixture(288, 216), rotation: 270 as const },
+  { design: resizedFixture(216, 216), rotation: 0 as const },
+  { design: resizedFixture(216, 216), rotation: 180 as const },
+].map((fixture) => ({
+  ...fixture,
+  name: `${fixture.design.width / 72}x${fixture.design.height / 72}-${fixture.rotation}`,
+}))
+
 async function inspectPdf(
   bytes: Uint8Array,
   count: number,
   rotation: PrintRotation,
+  design = doc,
+  evidence?: string,
 ) {
   const pdf = await PDFDocument.load(bytes)
   expect(pdf.getPageCount()).toBe(count)
-  const profile = profileFor(rotation)
+  const profile = profileFor(rotation, design)
   const task = getDocument({
     data: Uint8Array.from(bytes),
     useSystemFonts: true,
@@ -286,13 +324,16 @@ async function inspectPdf(
       }).promise
       const context = canvas.getContext('2d')
       const pixel = (x: number, y: number) => {
-        const [px, py] = expectedPoint(rotation, x, y)
+        const [px, py] = expectedPoint(rotation, x, y, design)
         return [...context.getImageData(px * 2, py * 2, 1, 1).data].slice(
           0,
           3,
         )
       }
-      for (const { x, y, rgb } of markers) expect(pixel(x, y)).toEqual(rgb)
+      for (const [markerIndex, { rgb }] of markers.entries()) {
+        const { x, y } = design.elements[markerIndex + 1]
+        expect(pixel(x + 5, y + 5)).toEqual(rgb)
+      }
       expect(pixel(97, 200)).toEqual([255, 255, 255])
       const darkness = (x: number, y: number) => pixel(x, y)[0] < 100
       const textInk = Array.from({ length: 100 }, (_, x) =>
@@ -309,26 +350,29 @@ async function inspectPdf(
           (black, index) => index && black !== barcode[index - 1],
         ).length,
       ).toBeGreaterThan(18)
+      const path = evidence && index === 0 ? await evidenceFile(evidence) : undefined
+      if (path) await writeFile(path, canvas.toBuffer('image/png'))
     }
   } finally {
     await task.destroy()
   }
 }
 
-it.each([0, 90, 180, 270] as const)(
-  'renders both PDF engines at %i degrees without changing the source label',
-  async (rotation) => {
-    const before = structuredClone(doc)
+it.each(rotationsToVerify)(
+  'renders both PDF engines for $name without changing the source label',
+  async ({ design, rotation, name }) => {
+    const before = structuredClone(design)
     const { assets, loaders } = await artwork()
-    const profile = profileFor(rotation)
+    const profile = profileFor(rotation, design)
     await inspectPdf(
-      await exportLabelPdf(doc, data, assets, 2, layout, loaders, profile),
+      await exportLabelPdf(design, data, assets, 2, layout, loaders, profile),
       2,
       rotation,
+      design,
     )
     await inspectPdf(
       await exportSvgLabelPdf(
-        [doc, doc],
+        [design, design],
         data,
         assets,
         layout,
@@ -337,8 +381,10 @@ it.each([0, 90, 180, 270] as const)(
       ),
       2,
       rotation,
+      design,
+      `pdf-${name}.png`,
     )
-    expect(doc).toEqual(before)
+    expect(design).toEqual(before)
     expect(qzPrintOptions(profile)).toMatchObject({
       orientation: 'portrait',
       rotation: 0,
@@ -363,14 +409,14 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
         'src/components/label-studio.css',
         'utf8',
       )
-      const markup = renderToStaticMarkup(
-        <LabelCanvas document={doc} data={data} assets={assets} />,
-      )
-      for (const rotation of [0, 90, 180, 270] as const) {
-        const profile = profileFor(rotation)
+      for (const { name, design, rotation } of rotationsToVerify) {
+        const profile = profileFor(rotation, design)
+        const markup = renderToStaticMarkup(
+          <LabelCanvas document={design} data={data} assets={assets} />,
+        )
         const preview = renderToStaticMarkup(
-          <RollArtworkPreview design={doc} profile={profile}>
-            <LabelCanvas document={doc} data={data} assets={assets} />
+          <RollArtworkPreview design={design} profile={profile}>
+            <LabelCanvas document={design} data={data} assets={assets} />
           </RollArtworkPreview>,
         )
         await page.setContent(`<style>${styles}</style>${preview}`)
@@ -380,7 +426,7 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
         expect(await artwork.getAttribute('viewBox')).toBe(
           `0 0 ${profile.width * 72} ${profile.height * 72}`,
         )
-        for (const [index, marker] of markers.entries()) {
+        for (const [index, marker] of design.elements.slice(1, markers.length + 1).entries()) {
           const position = await artwork.evaluate(
             (outer, markerId) => {
               const markerGroup = outer.querySelector<SVGGElement>(
@@ -395,19 +441,20 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
                 .matrixTransform(toPage)
               return [point.x, point.y]
             },
-            doc.elements[index + 1].id,
+            design.elements[index + 1].id,
           )
           const [expectedX, expectedY] = expectedPoint(
             rotation,
-            marker.x,
-            marker.y,
+            marker.x + 5,
+            marker.y + 5,
+            design,
           )
           expect(position[0]).toBeCloseTo(expectedX)
           expect(position[1]).toBeCloseTo(expectedY)
         }
         const output = await prepareBrowserFixture(
           page,
-          [{ markup, document: doc }],
+          [{ markup, document: design }],
           assets,
           3,
           profile,
@@ -417,6 +464,13 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
         expect(output.imageUrl).toMatch(/^blob:/)
         contents.set('/output', output.html)
         await rendered.goto('https://print-fixture.test/output')
+        if (rotation === 90 || rotation === 270) {
+          const path = await evidenceFile(`browser-print-preview-${name}.png`)
+          if (path) {
+            await rendered.emulateMedia({ media: 'print' })
+            await rendered.locator('.page').first().screenshot({ path })
+          }
+        }
         await inspectPdf(
           await rendered.pdf({
             preferCSSPageSize: true,
@@ -424,6 +478,8 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
           }),
           3,
           rotation,
+          design,
+          `chromium-print-${name}.png`,
         )
       }
     } finally {
@@ -462,7 +518,8 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
           ),
         }
       })
-      const output = await prepareBrowserFixture(page, entries, [], 2)
+      const profile = profileFor(90, entries[0].document)
+      const output = await prepareBrowserFixture(page, entries, [], 2, profile)
       expect(output.pages).toBe(2)
       expect(output.fonts).toEqual(['DM Sans:loaded', 'DM Sans:loaded'])
       contents.set('/output', output.html)
@@ -474,8 +531,8 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
       })
       const physical = await PDFDocument.load(bytes)
       expect(physical.getPages().map((sheet) => sheet.getSize())).toEqual([
-        { width: 288, height: 432 },
-        { width: 288, height: 432 },
+        { width: 432, height: 288 },
+        { width: 432, height: 288 },
       ])
       const task = getDocument({ data: Uint8Array.from(bytes) })
       const renderedPdf = await task.promise
@@ -492,6 +549,20 @@ it.runIf(process.env.RUN_LABEL_CHROMIUM === '1')(
         expect(morning).not.toContain('Lemon')
         expect(afternoon).toMatch(/Chocolate[\s\S]*Lemon[\s\S]*tree nuts/i)
         expect(afternoon).not.toContain('Blueberry')
+        for (const number of [1, 2]) {
+          const sheet = await renderedPdf.getPage(number)
+          const item = (await sheet.getTextContent()).items.find((item) => 'str' in item && item.str.trim())
+          expect(item).toHaveProperty('transform.0', 0)
+          expect(item).toHaveProperty('transform.1', expect.any(Number))
+          expect(item && 'str' in item && item.transform[1]).toBeLessThan(0)
+          const path = await evidenceFile(`chromium-print-mixed-${number}.png`)
+          if (path) {
+            const viewport = sheet.getViewport({ scale: 2 })
+            const canvas = createCanvas(viewport.width, viewport.height)
+            await sheet.render({ canvas: canvas as unknown as HTMLCanvasElement, viewport }).promise
+            await writeFile(path, canvas.toBuffer('image/png'))
+          }
+        }
       } finally {
         await task.destroy()
       }
@@ -538,6 +609,15 @@ it('keeps rotation on the selected profile and validates the saved design size',
   expect(() => validatePrinterProfile({ ...turned, rotation: 45 })).toThrow(
     /valid design size and output rotation/,
   )
+})
+
+it('blocks missing device media for Print and PDF but allows an explicit unprofiled choice', () => {
+  const options = { doc, copies: 1, layout, issues: [], reviewed: true, printingMethod: 'missing' }
+  for (const type of ['print', 'pdf'] as const) {
+    expect(labelOutputBlocker({ ...options, type })).toMatch(/unavailable on this device/)
+    expect(labelOutputBlocker({ ...options, type, printingMethod: 'browser' })).toBeNull()
+  }
+  expect(labelOutputBlocker({ ...options, type: 'png' })).toBeNull()
 })
 
 it('generates one media-sized calibration page and shows the marks in the SVG preview', async () => {

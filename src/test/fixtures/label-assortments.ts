@@ -1,6 +1,7 @@
 import { blankLabel } from '../../lib/label-studio'
 import type { AssortmentPlan } from '../../lib/label-assortments'
 import type { Workspace } from '../../lib/domain'
+import { confirmFixtureAllergens } from './label-ingredient-review'
 
 export function assortmentFixture() {
   const names = ['Blueberry', 'Chocolate', 'Lemon']
@@ -51,6 +52,7 @@ export function assortmentFixture() {
     quantity: 10,
     cost: 1,
   })
+  workspace.products.forEach((product, index) => confirmFixtureAllergens(workspace, product, index === 1 ? ['Milk'] : ['Wheat']))
   const plan: AssortmentPlan = {
     name: 'Market assortment',
     templateId: 'test-stock',

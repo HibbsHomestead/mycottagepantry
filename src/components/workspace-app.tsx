@@ -79,6 +79,8 @@ import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
 import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
 import { KitIncludedProducts } from './kit-included-products'
+import { ProductIngredients } from './product-ingredients'
+import { labelsForProduct } from '@/lib/saved-labels'
 import { ProductLabelsInfo } from './product-labels'
 import { RecipeComponentPicker } from './recipe-component-picker'
 import { PreparedPortionQuantity, PreparedStockPicker } from './prepared-stock-picker'
@@ -377,6 +379,8 @@ export function WorkspaceApp() {
     [receiptRevision, setReceiptRevision] = useState(0),
     [financeReceiptEntry, setFinanceReceiptEntry] = useState(''),
     [formError, setFormError] = useState('')
+  const kitEditorOpen = modal === 'kit' || modal === 'mixed-pack'
+  const helpTrigger = useRef<HTMLButtonElement | null>(null)
   const inventoryDetailReturn = useRef<{ item: Item; kind: 'ingredient-detail' | 'fabric-detail' } | null>(null)
   function setModal(next: string | null) {
     if (next === null && inventoryDetailReturn.current) {
@@ -934,6 +938,8 @@ export function WorkspaceApp() {
           'stockPrepPost',
           'stockPrepReverse',
           'productRecipeLink',
+          'productAllergenReview',
+          'productAllergenMapping',
           'productionChecklist',
         ].includes(action) &&
         !keepProductionOpen
@@ -971,6 +977,11 @@ export function WorkspaceApp() {
     setFormDirty(false)
     go('Products', 'All Products')
     open('product-detail', product)
+  }
+  function openHelp(trigger: HTMLButtonElement) {
+    if (modal) return
+    helpTrigger.current = trigger
+    setModal('help')
   }
   function open(kind: string, item?: Item, newDraft = false, prep = false, productionReview = false, productionBoard = false) {
     if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
@@ -1698,7 +1709,7 @@ export function WorkspaceApp() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <button className="nav-item" onClick={() => open('help')}>
+          <button type="button" className="nav-item" onClick={(event) => openHelp(event.currentTarget)}>
             <CircleHelp size={19} />
             Help & support
             <ArrowUpRight size={14} />
@@ -1778,9 +1789,10 @@ export function WorkspaceApp() {
               <i />
             </button>
             <button
+              type="button"
               className="icon-button top-help"
               aria-label="Help and guides"
-              onClick={() => open('help')}
+              onClick={(event) => openHelp(event.currentTarget)}
             >
               <CircleHelp size={20} />
             </button>
@@ -3660,7 +3672,7 @@ export function WorkspaceApp() {
           }}
         />
       )}
-      {(modal === 'kit' || modal === 'mixed-pack') && (
+      {kitEditorOpen && (
         <KitEditor
           key={selected?.id || 'new'}
           kind="kit"
@@ -3819,10 +3831,11 @@ export function WorkspaceApp() {
       <Dialog
         open={
           !!modal &&
+          !kitEditorOpen &&
           modal !== 'signin' &&
           !modal.startsWith('trade-') &&
           !modal.startsWith('fabric-') &&
-          !['ingredient-detail', 'stock-prep', 'recipe-import', 'add-item', 'kit'].includes(
+          !['ingredient-detail', 'stock-prep', 'recipe-import', 'add-item'].includes(
             modal,
           )
         }
@@ -3850,6 +3863,13 @@ export function WorkspaceApp() {
         }}
       >
         <DialogContent
+          onCloseAutoFocus={(event) => {
+            const trigger = helpTrigger.current
+            if (!trigger) return
+            helpTrigger.current = null
+            event.preventDefault()
+            trigger.focus()
+          }}
           showCloseButton={modal !== 'product-detail'}
           ingredient={modal === 'ingredient'}
           presentation={modal === 'ingredient' ? 'detail' : 'modal'}
@@ -4906,6 +4926,7 @@ export function WorkspaceApp() {
                       Details & Pricing
                     </Tabs.Trigger>
                     <Tabs.Trigger value="images">Images & Labels</Tabs.Trigger>
+                    <Tabs.Trigger value="ingredients">Ingredients &amp; allergens</Tabs.Trigger>
                     <Tabs.Trigger value="stock">
                       Stock & Other Details
                     </Tabs.Trigger>
@@ -4997,6 +5018,15 @@ export function WorkspaceApp() {
                       ingredients={ingredients}
                       onUnpackedChange={(value) => change('unpacked', value)}
                       onChange={(lines) => change('packagingLines', lines)}
+                    />
+                  </Tabs.Content>
+                  <Tabs.Content value="ingredients" className="product-form-panel">
+                    <ProductIngredients
+                      workspace={state}
+                      product={{ ...draft, id: draft.id || 'preview', name: draft.name || 'New product' }}
+                      onReviewRecipeLink={() => setProductTab('details')}
+                      onIngredientOptionsChange={change}
+                      isDraft
                     />
                   </Tabs.Content>
                   <Tabs.Content
@@ -6058,8 +6088,32 @@ export function WorkspaceApp() {
                 />
               ) : undefined}
               lowerDetails={
-                selected.workflow === 'kit' ? (
-                  <>
+                <>
+                  <ProductIngredients
+                    workspace={state}
+                    product={state.products.find((product) => product.id === selected.id) || selected}
+                    onReviewAllergens={ready && ['Owner', 'Manager'].includes(role) ? mutate : undefined}
+                    onReviewIngredient={(item) => open('ingredient-detail', item)}
+                    onReviewProduct={(product) => {
+                      if (product.id !== selected.id) {
+                        setKitContext(selected.id)
+                        open('product-detail', product)
+                      } else {
+                        open(
+                          product.workflow === 'resale' ? 'trade-product-source' : 'product',
+                          product,
+                        )
+                      }
+                    }}
+                    onOpenLabels={() => {
+                      if (selected.workflow === 'kit') openAssortment(selected.id)
+                      else setDetailLabelFlow({
+                        productId: selected.id,
+                        labelId: labelsForProduct(state, selected)[0]?.id || '',
+                      })
+                    }}
+                  />
+                  {selected.workflow === 'kit' && <>
                     <KitIncludedProducts
                       product={selected}
                       workspace={state}
@@ -6078,8 +6132,8 @@ export function WorkspaceApp() {
                         {isMixedPack(selected) ? 'Edit mixed pack' : 'Edit basket'}
                       </Btn>
                     </div>
-                  </>
-                ) : undefined
+                  </>}
+                </>
               }
             >
               {selected.workflow === 'kit' ? (

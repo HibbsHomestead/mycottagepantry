@@ -1,4 +1,5 @@
 import { SubmissionForm } from './submission-form'
+import { FeatureBoardLink } from './feature-board-link'
 import { FormErrorNotice } from './form-error-notice'
 import { adminRequest } from '@/lib/admin-client'
 export { adminRequest } from '@/lib/admin-client'
@@ -372,6 +373,7 @@ export function AdminPortal() {
               <span>Support inbox</span>
             </Link>
           )}
+          {authenticated && <FeatureBoardLink moderator />}
         </nav>
         <div className="admin-sidebar-footer">
           <LockKeyhole size={17} />

@@ -32,6 +32,8 @@ export default async (request: Request) => {
     url.pathname === '/api/admin' ||
     url.pathname === '/platform-support' ||
     url.pathname === '/api/support' ||
+    (['/feature-requests', '/api/feature-requests'].includes(url.pathname) &&
+      (url.searchParams.get('admin') === '1' || url.searchParams.get('availability') === '1')) ||
     url.pathname === '/.netlify/functions/platform-admin'
   // The provider enforces its own authentication. Blocking its namespace also
   // blocks password verification, recovery and SDK session cleanup on this host.

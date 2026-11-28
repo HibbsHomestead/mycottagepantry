@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   assortmentJobCurrent,
   assortmentLabel,
+  assortmentRunDefinition,
   assortmentSignature,
   fixedAssortmentContents,
   type AssortmentSpec,
@@ -14,12 +15,13 @@ import {
 import {
   knownCurrentIngredientCost,
   isMixedPack,
-  mixedLabelQuantity,
   money,
   type Item,
   type Workspace,
 } from '@/lib/domain'
 import { productionRunLines } from '@/lib/production-run'
+import { supplierLabelSource } from '@/lib/supplier-label-source'
+import { printPlacement, printRotations, type PrintRotation } from '@/lib/label-printers'
 import './assortment-labels.css'
 
 const emptyLine: PackedLine = { productId: '', quantity: 1, unit: 'loose' }
@@ -30,31 +32,26 @@ function initialSpec(workspace: Workspace, context?: Context): AssortmentSpec {
     (item) => item.id === context?.productId,
   )
   const run = workspace.batches.find((item) => item.id === context?.batchId)
-  const output = productionRunLines(run).find((line) => line.productId === product?.id)
-  const definition = run?.status === 'completed' ? output?.definition?.product : product
-  const containers = isMixedPack(product) && output ? Math.max(1, Number(run?.status === 'completed' ? output.actualYield : output.quantity)) : 1
+  const definition = assortmentRunDefinition(product, run)
+  const completed = run?.status?.toLowerCase() === 'completed'
+  const available = productionRunLines(run).filter((line) => line.productId === product?.id)
+    .reduce((sum, line) => sum + (Number(completed ? line.actualYield : line.quantity) || 0), 0)
+  const containers = Number.isInteger(available) ? Math.min(200, Math.max(1, available)) : 1
   return {
-    name: product?.name || '',
-    templateId: '',
+    name: definition?.name || product?.name || '',
+    templateId: definition?.mixedLabelTemplateId || '',
     productId: context?.productId || '',
     batchId: context?.batchId || '',
-    group: '',
-    packagingId: '',
-    mode: product?.workflow === 'kit' ? 'fixed' : 'variable',
+    group: run && product?.workflow === 'kit' ? product.name.slice(0, 80) : '',
+    packagingId: definition?.mixedLabelStockId || '',
+    mode: product?.workflow === 'kit' && definition ? 'fixed' : 'variable',
     expectedLoose: 0,
     expectedPackages: 0,
-    containers: 1,
-    copies: 1,
+    containers,
+    copies: containers,
     componentId: '',
     lines: [{ ...emptyLine }],
-    ...(isMixedPack(product) ? {
-      ...fixedAssortmentContents(definition),
-      templateId: definition?.mixedLabelTemplateId || '',
-      packagingId: definition?.mixedLabelStockId || '',
-      group: run ? 'Mixed pack' : '',
-      containers,
-      copies: containers * (mixedLabelQuantity(definition) || 1),
-    } : {}),
+    ...(definition?.workflow === 'kit' ? fixedAssortmentContents(definition) : {}),
   }
 }
 
@@ -71,6 +68,7 @@ export function AssortmentLabels({
 }) {
   const [spec, setSpec] = useState(() => initialSpec(workspace, context))
   const [preview, setPreview] = useState<ReturnType<typeof assortmentLabel>>()
+  const [previewVersion, setPreviewVersion] = useState(0)
   const [fit, setFit] = useState<boolean>()
   const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -104,6 +102,8 @@ export function AssortmentLabels({
   const runProductIds = new Set(
     productionRunLines(run).map((line) => line.productId),
   )
+  const selectedStock = stock.find((item) => item.id === spec.templateId)
+  const media = selectedStock && printPlacement({ width: Number(selectedStock.width), height: Number(selectedStock.height) }, undefined, spec.rotation).media
   const previewCurrent =
     preview &&
     (() => {
@@ -192,9 +192,10 @@ export function AssortmentLabels({
           min={min}
           max="200"
           value={spec[key]}
-          onChange={(event) =>
-            change({ [key]: event.target.valueAsNumber || 0 })
-          }
+          onChange={(event) => {
+            const value = event.target.valueAsNumber || 0
+            change({ [key]: value, ...(key === 'containers' && !spec.componentId && spec.copies === spec.containers ? { copies: value } : {}) })
+          }}
         />
       </label>
     )
@@ -270,11 +271,19 @@ export function AssortmentLabels({
           Outer container product
           <select
             value={spec.productId}
-            onChange={(event) => change({ productId: event.target.value })}
+            onChange={(event) => {
+              const productId = event.target.value
+              const product = workspace.products.find((item) => item.id === productId)
+              setRevises(undefined)
+              if (product?.workflow === 'kit') {
+                const selection = initialSpec(workspace, { productId, batchId: spec.batchId })
+                change({ ...selection, templateId: selection.templateId || spec.templateId })
+              } else change({ productId })
+            }}
           >
             <option value="">No catalog product</option>
             {workspace.products
-              .filter((item) => !spec.batchId || runProductIds.has(item.id))
+              .filter((item) => !item.archived && (!spec.batchId || runProductIds.has(item.id)))
               .map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.name}
@@ -296,19 +305,18 @@ export function AssortmentLabels({
           Contents type
           <select
             value={spec.mode}
-            onChange={(event) =>
-              change({
-                mode: event.target.value === 'fixed' ? 'fixed' : 'variable',
-                lines: [{ ...emptyLine }],
-                expectedLoose: 0,
-                expectedPackages: 0,
-                componentId: '',
-              })
-            }
+            onChange={(event) => change({ mode: event.target.value === 'fixed' ? 'fixed' : 'variable' })}
           >
-            <option value="variable">Actual variable selection</option>
+            <option value="variable" disabled={isMixedPack(outer) && !spec.batchId}>Actual production packing selection</option>
             <option value="fixed">Fixed assortment</option>
           </select>
+        </label>
+        <label className="field">
+          Output rotation
+          <select value={spec.rotation ?? 0} onChange={(event) => change({ rotation: Number(event.target.value) as PrintRotation })}>
+            {printRotations.map((rotation) => <option key={rotation} value={rotation}>{rotation}°</option>)}
+          </select>
+          {media && <small>Physical media (across × feed): {Number((media.width / 72).toFixed(2))} × {Number((media.height / 72).toFixed(2))} in</small>}
         </label>
         <label className="field">
           Label stock size
@@ -358,17 +366,15 @@ export function AssortmentLabels({
         {field('Outer containers in this packing group', 'containers', 1)}
         {field('Total label copies for this job', 'copies', 1)}
       </div>
+      {outer?.workflow === 'kit' && spec.batchId && (
+        <p className="form-hint">Fixed contents come from the saved production output, not the current catalog. If this group was packed differently, choose Actual production packing selection, enter that group’s contents, and review a new preview.</p>
+      )}
       {outer?.workflow === 'kit' && spec.mode === 'fixed' && (
         <button
           type="button"
           className="btn secondary"
           onClick={() => {
-            const definition =
-              run?.status === 'completed'
-                ? productionRunLines(run).find(
-                    (line) => line.productId === spec.productId,
-                  )?.definition?.product
-                : outer
+            const definition = assortmentRunDefinition(outer, run)
             change(fixedAssortmentContents(definition))
           }}
         >
@@ -378,6 +384,7 @@ export function AssortmentLabels({
       <h3>Actual contents per outer container</h3>
       {spec.lines.map((line, index) => {
         const product = products.find((item) => item.id === line.productId)
+        const supplier = supplierLabelSource(product)
         return (
           <fieldset key={index} className="assortment-line">
             <legend>Included product {index + 1}</legend>
@@ -442,6 +449,7 @@ export function AssortmentLabels({
               </label>
               {product &&
                 !product.recipeId &&
+                !supplier &&
                 product.workflow !== 'handmade' && (
                   <>
                     <label className="field">
@@ -482,7 +490,8 @@ export function AssortmentLabels({
                     </label>
                   </>
                 )}
-              {product && (
+              {supplier && <p>Manufacturer wording comes from the product’s Ingredients &amp; allergens section.</p>}
+              {product && !supplier && (
                 <label className="field">
                   Reviewed cross-contact advisory (optional)
                   <input
@@ -553,7 +562,7 @@ export function AssortmentLabels({
             change({ copies: spec.containers * multiplier })
           }}
         >
-          Set one copy per selected package
+          {spec.componentId ? 'Set one copy per included selling package' : 'Set one copy per outer container'}
         </button>
       </div>
       <div className="button-row">
@@ -566,6 +575,7 @@ export function AssortmentLabels({
             setReviewed(false)
             try {
               setPreview(assortmentLabel(workspace, spec))
+              setPreviewVersion((version) => version + 1)
             } catch (error) {
               setPreview(undefined)
               setNotice((error as Error).message)
@@ -596,7 +606,9 @@ export function AssortmentLabels({
       {preview && (
         <div className="assortment-preview">
           <h3>Actual-size preview · {preview.snapshot.stock.name}</h3>
+          <p className="form-hint">Scroll inside the preview if the actual-size label is wider than your screen.</p>
           <iframe
+            key={previewVersion}
             title="Actual-size assortment label"
             sandbox="allow-same-origin"
             srcDoc={assortmentPrintHtml(
@@ -607,7 +619,7 @@ export function AssortmentLabels({
             style={{
               height: Math.min(
                 650,
-                (preview.snapshot.stock.height * 4) / 3 + 20,
+                (printPlacement(preview.snapshot.stock, undefined, preview.snapshot.layout.rotation).media.height * 4) / 3 + 20,
               ),
             }}
             onLoad={(event) =>
@@ -624,13 +636,12 @@ export function AssortmentLabels({
           )}
           {fit === false && (
             <p role="alert">
-              Content overflows this stock. Choose a larger saved rectangular
-              size; text is not shortened or shrunk.
+              Content overflows this stock. Choose a larger label or another reviewed template. Text is not shortened or shrunk below the configured minimum.
             </p>
           )}
           {preview.snapshot.warnings.length > 0 && (
             <div role="alert">
-              <strong>Needs ingredient or allergen review</strong>
+              <strong>Label information needs review</strong>
               <ul>
                 {preview.snapshot.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>

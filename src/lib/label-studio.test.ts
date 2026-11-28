@@ -16,6 +16,7 @@ import {
 } from './label-studio'
 import { exportLabelPdf, defaultSheet, validateSheet } from './label-export'
 import type { Workspace } from './domain'
+import { confirmFixtureAllergens } from '../test/fixtures/label-ingredient-review'
 const workspace = (): Workspace => ({
   settings: [
     {
@@ -68,8 +69,9 @@ const workspace = (): Workspace => ({
   batches: [],
 })
 it('orders verified weights and preserves subingredients without making an allergen-free claim', () => {
-  const w = workspace(),
-    data = resolveLabelData(w, { kind: 'product', id: 'loaf' })
+  const w = workspace()
+  confirmFixtureAllergens(w, w.products[0], ['Wheat'])
+  const data = resolveLabelData(w, { kind: 'product', id: 'loaf' })
   expect(data.values['recipe.ingredients']).toBe(
     'Ingredients: Bread flour (wheat flour, malt), Cane sugar',
   )
@@ -188,13 +190,17 @@ it('validates editable structure and flags print risks', () => {
   expect(() => validateLabelDocument({ ...d, elements: [e, e] })).toThrow()
 })
 it('conditions hide blank, batch-only, and undeclared allergen elements', () => {
-  const data = resolveLabelData(workspace(), { kind: 'product', id: 'loaf' }),
+  const w = workspace()
+  const pending = resolveLabelData(w, { kind: 'product', id: 'loaf' })
+  confirmFixtureAllergens(w, w.products[0], ['Wheat'])
+  const data = resolveLabelData(w, { kind: 'product', id: 'loaf' }),
     e = {
       ...newElement('text', '', 'product.subtitle'),
       condition: 'nonempty' as const,
     }
   expect(elementVisible(e, data)).toBe(false)
   expect(elementVisible({ ...e, condition: 'batch' }, data)).toBe(false)
+  expect(elementVisible({ ...e, condition: 'allergens' }, pending)).toBe(false)
   expect(elementVisible({ ...e, condition: 'allergens' }, data)).toBe(true)
 })
 it('all original templates pass document validation and fit their label', () => {

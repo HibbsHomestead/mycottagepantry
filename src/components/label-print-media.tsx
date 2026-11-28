@@ -215,7 +215,7 @@ export function LabelPrintMedia({
           Label Studio.
         </p>
       )}
-      {onSave && swapped && (
+      {onSave && swapped && draft.rotation !== 90 && draft.rotation !== 270 && (
         <p className="studio-small-note">
           The dimensions are swapped. Choose a quarter turn: 90° clockwise
           or 270° counterclockwise.
@@ -228,8 +228,8 @@ export function LabelPrintMedia({
       )}
       {onSave && !saved && (
         <p className="studio-small-note">
-          Changes apply to Print and PDF only after you save and select this
-          profile. The label design stays unchanged.
+          Save these media settings to select this profile for Print and PDF.
+          This does not resize the label artwork.
         </p>
       )}
       <FormErrorNotice message={error} />

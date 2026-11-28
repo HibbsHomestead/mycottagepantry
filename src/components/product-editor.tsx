@@ -7,6 +7,8 @@ import {
 } from './resale-purchase-cost'
 import { resaleCostBasis } from '@/lib/resale-cost'
 import { ProductDescriptionField } from './product-description-field'
+import { ProductIngredients } from './product-ingredients'
+import { resolveLabelData } from '@/lib/label-studio'
 import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductLabelsInfo } from './product-labels'
@@ -113,7 +115,9 @@ export function ProductEditor({
   const current = editing
     ? workspace.products.find((p) => p.id === editId.current) || stored
     : null
-  const [tab, setTab] = useState<string>('details')
+  const [tab, setTab] = useState<string>(
+    kind === 'trade-product-source' ? 'ingredients' : 'details',
+  )
   const [errorTabs, setErrorTabs] = useState<string[]>([])
   const [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
@@ -125,6 +129,11 @@ export function ProductEditor({
   const canManage = ['Owner', 'Manager'].includes(role)
   const working = busy || uploadBusy || categoryBusy || importBusy
   const resale = draft.workflow === 'resale'
+  const foodResale =
+    resale &&
+    !resolveLabelData({ ...workspace, products: [draft] }, {
+      kind: 'product', id: draft.id,
+    }).nonFood
 
   useEffect(() => {
     onDirty(dirty)
@@ -520,10 +529,24 @@ export function ProductEditor({
       photoTab="images"
       tabs={[
         { id: 'details', label: 'Details', content: details },
+        ...(foodResale
+          ? [{
+              id: 'ingredients',
+              label: 'Ingredients & allergens',
+              content: (
+                <ProductIngredients
+                  workspace={workspace}
+                  product={draft}
+                  isDraft
+                  onSupplierChange={(value) => change('supplierLabelSource', value)}
+                />
+              ),
+            }]
+          : []),
         { id: 'images', label: 'Images & Labels', content: images },
         { id: 'pricing', label: 'Pricing & Stock', content: pricing },
       ]}
-      tab={tab}
+      tab={tab === 'ingredients' && !foodResale ? 'details' : tab}
       onTab={setTab}
       errorTabs={errorTabs}
       summary={summary}

@@ -346,7 +346,11 @@ export function assortmentReview(
       line,
       ingredients: source.values['recipe.ingredients'],
       allergens: source.values['recipe.allergens'],
-      sourceAllergenStatements: source.sourceAllergenStatements,
+      sourceAllergenStatements: source.allergenReview
+        ? { contains: [], advisories: [...new Set([source.values['recipe.allergenAdvisory'], ...(source.sourceAllergenStatements?.advisories || [])].filter(Boolean))] }
+        : source.sourceAllergenStatements,
+      ingredientMode: source.ingredientMerge?.mode || 'parenthetical',
+      ...(source.supplierLabelSource ? { supplierLabelSource: source.supplierLabelSource } : {}),
       parts: source.ingredientParts,
       netQuantity:
         line.unit === 'package' ? source.values['product.netQuantity'] : '',
