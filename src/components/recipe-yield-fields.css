@@ -29,6 +29,13 @@
 .recipe-yield-fields p {
   margin: 0;
 }
+.recipe-yield-fields .recipe-type-setting {
+  display: grid;
+  gap: 4px;
+}
+.recipe-type-setting .form-hint {
+  padding-inline-start: 24px;
+}
 @media (max-width: 480px) {
   .recipe-yield-inputs {
     grid-template-columns: 1fr;

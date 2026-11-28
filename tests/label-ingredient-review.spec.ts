@@ -100,7 +100,9 @@ for (const width of [1440, 390]) {
     await dialog
       .getByText('Major allergen review · Not confirmed', { exact: true })
       .click()
-    const review = dialog.locator('details.label-review-section')
+    const review = dialog.locator('details.label-review-section').filter({
+      has: page.getByRole('list', { name: 'Ingredient evidence' }),
+    })
     await expect(review).toContainText('Muffin mix → soy lecithin (soy)')
     await expect(review).toContainText(
       'needs review · Blueberry muffins → Blueberry muffin recipe → Natural flavor',

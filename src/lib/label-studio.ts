@@ -488,6 +488,7 @@ export type LabelData = {
   nonFood?: boolean
   supplierLabelSource?: SupplierLabelSource
   ingredientStatementOverrides?: { id: string; name: string }[]
+  declaredAllergenSourceIds?: string[]
   sourceAllergenStatements?: { contains: string[]; advisories: string[] }
   sourceRecords?: Record<string, { kind: 'ingredient' | 'recipe'; id: string }>
   values: Record<string, string>
@@ -538,6 +539,7 @@ export function resolveLabelData(
   const weighted: WeightedIngredient[] = []
   const mergeIssues = new Set<string>()
   const evidence: AllergenEvidence[] = []
+  const declaredAllergenSources = new Set<string>()
   const allergenSource: Record<string, string> = {}
   const groupSmall = product?.labelGroupSmallIngredients === true
   const mergeMode = product?.labelIngredientMode === 'merged' ? 'merged' : 'parenthetical'
@@ -666,7 +668,7 @@ export function resolveLabelData(
     const key = [...path, i.id].join(' → ')
     const occurrence = (visits.get(key) || 0) + 1
     visits.set(key, occurrence)
-    allergenSource[`${key} (${occurrence})`] = JSON.stringify([names.join(' → '), i.name, statementName, subingredients, i.allergens, i.sourceContains, i.sourceMayContain, i.reviewed, i.requiresSubingredients, i.compoundRecipeId, componentWeightSource(i), q, u])
+    allergenSource[`${key} (${occurrence})`] = JSON.stringify([names.join(' → '), i.name, statementName, subingredients, i.allergens, i.sourceContains, i.sourceMayContain, i.reviewed, i.requiresSubingredients, i.compoundRecipeId, componentWeightSource(i), q, u, ...(i.allergenSourceRevision ? [i.allergenSourceRevision] : [])])
     scan(names, statementName)
     const declared = allergenEvidence(names, (i.allergens || []).join(', '))
     evidence.push(...declared.map((entry) => i.reviewed && entry.allergen ? { ...entry, sourceDeclaration: true } : entry))
@@ -674,6 +676,7 @@ export function resolveLabelData(
     const supplierEvidence = allergenEvidence(names, supplierContainsText)
     const affirmative = i.reviewed && !/\b(?:no|not|without|free|may|traces?)\b/i.test(supplierContainsText)
     evidence.push(...supplierEvidence.map((entry) => affirmative && entry.allergen ? { ...entry, sourceDeclaration: true } : entry))
+    if ((i.reviewed && declared.some((entry) => entry.allergen)) || (affirmative && supplierEvidence.some((entry) => entry.allergen))) declaredAllergenSources.add(i.id)
     const scanNodes = (rows: NonNullable<typeof nodes>, prefix: string[]) => {
       for (const row of rows) {
         const next = [...prefix, row.name]
@@ -686,7 +689,10 @@ export function resolveLabelData(
       scan([...names, subingredients], subingredients)
       evidence.push({ path: names, confidence: 'needs review' })
     }
-    if (!subingredients && (i.requiresSubingredients || (!i.compoundRecipeId && /\b(?:mix(?:es)?|blends?)\b/i.test(statementName)))) incomplete(names)
+    const purchasedMix = !i.compoundRecipeId && /\b(?:mix(?:es)?|blends?)\b/i.test(`${i.name} ${statementName}`)
+    const naturalFlavor = !i.compoundRecipeId && /\bnatural flavou?r(?:s|ing)?\b/i.test(`${i.name} ${statementName} ${subingredients}`)
+    const missingComponents = !subingredients && (i.requiresSubingredients || purchasedMix)
+    if (missingComponents || (!i.reviewed && (purchasedMix || naturalFlavor || i.requiresSubingredients || i.allergens?.length || supplierContainsText.trim()))) incomplete(names)
     if (!i.compoundRecipeId && statementName !== String(i.name || '').trim())
       statementOverrides.set(i.id, { id: i.id, name: i.name })
     for (const a of i.allergens || []) known.add(a)
@@ -706,15 +712,14 @@ export function resolveLabelData(
           i,
           `Needs review: verify allergens for ${i.name}; ${i.labelReviewReason || 'supplier ingredient/allergen review is not saved.'}`,
         )
+      if (!i.reviewed && naturalFlavor)
+        ingredientWarning(i, `Needs review: verify allergens for ${i.name}; check the natural flavor with the supplier.`)
+      if (missingComponents)
+        ingredientWarning(i, `Missing information: subingredients for ${i.name}; add the supplier’s component list.`)
       if (!statementName)
         ingredientWarning(
           i,
           `Missing information: ingredient statement name for ${i.id}.`,
-        )
-      if (i.requiresSubingredients && !String(i.subingredients || '').trim())
-        ingredientWarning(
-          i,
-          `Missing information: subingredients for ${i.name}; saved review does not supply the required wording.`,
         )
     }
     if (i.compoundRecipeId) {
@@ -969,6 +974,7 @@ export function resolveLabelData(
     nonFood,
     ...(ingredientMerge ? { ingredientMerge } : {}),
     ...(allergenReview ? { allergenReview } : {}),
+    ...(allergenReview?.status !== 'confirmed' && declaredAllergenSources.size ? { declaredAllergenSourceIds: [...declaredAllergenSources] } : {}),
     ...(!nonFood && supplier && !batch ? { supplierLabelSource: supplier } : {}),
     ...(statementOverrides.size ? { ingredientStatementOverrides: [...statementOverrides.values()] } : {}),
     warnings: [...new Set(warnings)],

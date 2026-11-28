@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@netlify/identity@2.0.0':
-    hash: 99fab1e0730d60b762889a13f4da666274e10997ef4831b4183c757e6b9f33f3
+    hash: 51b71abb085b55b745aefdf34b804e99ffe12c88551f052f7e4595ced798475d
     path: patches/@netlify__identity@2.0.0.patch
   gotrue-js@1.0.1:
     hash: e3804d834b32cb7ecefac4d0271d7b134ab98f82180fb3ad01b46575afe8532b
@@ -39,7 +39,7 @@ importers:
         version: 6.0.3
       '@netlify/identity':
         specifier: ^2.0.0
-        version: 2.0.0(patch_hash=99fab1e0730d60b762889a13f4da666274e10997ef4831b4183c757e6b9f33f3)
+        version: 2.0.0(patch_hash=51b71abb085b55b745aefdf34b804e99ffe12c88551f052f7e4595ced798475d)
       '@pdf-lib/fontkit':
         specifier: ^1.1.1
         version: 1.1.1
@@ -6509,7 +6509,7 @@ snapshots:
     dependencies:
       '@netlify/headers-parser': 10.1.1
 
-  '@netlify/identity@2.0.0(patch_hash=99fab1e0730d60b762889a13f4da666274e10997ef4831b4183c757e6b9f33f3)':
+  '@netlify/identity@2.0.0(patch_hash=51b71abb085b55b745aefdf34b804e99ffe12c88551f052f7e4595ced798475d)':
     dependencies:
       gotrue-js: 1.0.1(patch_hash=e3804d834b32cb7ecefac4d0271d7b134ab98f82180fb3ad01b46575afe8532b)
 

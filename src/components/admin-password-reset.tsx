@@ -1,5 +1,6 @@
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
+import { signOutIdentity } from '@/lib/identity-session'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
 export function AdminPasswordReset({
@@ -66,7 +67,7 @@ export function AdminPasswordReset({
       setConfirmation('')
       // Recovery establishes only a provider session. Clear it and return to
       // the separate administrator email-and-password sign-in flow.
-      await identity.logout().catch(() => {})
+      await signOutIdentity('password_reset').catch(() => {})
       onComplete()
     } catch {
       setError(
@@ -122,8 +123,7 @@ export function AdminPasswordReset({
         disabled={busy}
         onClick={async () => {
           setBusy(true)
-          const identity = await import('@netlify/identity')
-          await identity.logout().catch(() => {})
+          await signOutIdentity('password_reset').catch(() => {})
           onRequestLink()
         }}
       >

@@ -10,7 +10,7 @@ import {
   type SupplierLabelSource,
 } from '@/lib/supplier-label-source'
 import './product-ingredients.css'
-import { IngredientModeReview, ProductAllergenReview, type ReviewMutation } from './label-ingredient-review'
+import { IngredientModeReview, LabelSourceAllergenReview, ProductAllergenReview, type ReviewMutation } from './label-ingredient-review'
 
 const recipeUrl = (id: string) =>
   `/oven?recipe=${encodeURIComponent(id)}#Recipes`
@@ -239,7 +239,8 @@ function SourceDetails({
           ))}
         </div>
       )}
-      {data?.allergenReview && product && <ProductAllergenReview
+      {data && product && !props.isDraft && <LabelSourceAllergenReview workspace={workspace} source={{ kind: 'product', id: product.id }} data={data} mutate={props.onReviewAllergens} actionLabel="Major allergen review" onOpenSource={onReviewProduct ? (_, item) => { if (item) onReviewProduct(item) } : undefined} />}
+      {data?.allergenReview?.status === 'confirmed' && product && <ProductAllergenReview
         key={`${product.id}:${product.allergenReview?.reviewedAt || ''}:${JSON.stringify(data.allergenReview.source)}`}
         review={data.allergenReview} product={product}
         mutate={section.quantity || props.isDraft ? undefined : props.onReviewAllergens}

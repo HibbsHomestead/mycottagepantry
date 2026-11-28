@@ -2123,6 +2123,16 @@ export function IngredientDetail({
                               : 'Needs label/allergen review'}
                           </span>
                           <p>{i.labelReviewReason}</p>
+                          {canEdit && (
+                            <button type="button" className="btn secondary" onClick={() => { edit(); setEditTab('allergens') }}>
+                              Review ingredient allergen source
+                            </button>
+                          )}
+                          {w.products.filter((product) => !product.archived && usage.some((recipe) => recipe.id === product.recipeId)).map((product) => (
+                            <button key={product.id} type="button" className="text-button" onClick={() => open('product-detail', product)}>
+                              Review allergens for {product.name}
+                            </button>
+                          ))}
                         </section>
                       )}
                     </>

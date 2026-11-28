@@ -21,7 +21,7 @@ import { recipeComponentUsage } from '@/lib/recipe-type'
 import { RecipeTypeBadge } from './recipe-type-badge'
 import { PantryPhoto } from './pantry-photo'
 import { resolveRecipeAllergens } from '@/lib/label-studio'
-import { ProductAllergenReview } from './label-ingredient-review'
+import { LabelSourceAllergenReview, ProductAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -37,6 +37,7 @@ export function RecipeDetail({
   open,
   close,
   save,
+  onReviewAllergens,
 }: {
   recipe: Item
   workspace: Workspace
@@ -45,6 +46,7 @@ export function RecipeDetail({
   open: (kind: string, item?: Item) => void
   close: () => void
   save: (data: any) => Promise<void>
+  onReviewAllergens?: ReviewMutation
 }) {
   const [stage, setStage] = useState<
       'details' | 'picker' | 'review' | 'unlink'
@@ -356,6 +358,9 @@ export function RecipeDetail({
               <h3>Allergen suggestions</h3>
               <p>Review and confirm this evidence on each linked product before using it on labels.</p>
               <ProductAllergenReview product={r} review={allergenReview} />
+              {linked.filter((product) => !product.archived).map((product) => (
+                <LabelSourceAllergenReview key={product.id} workspace={w} source={{ kind: 'product', id: product.id }} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={open} />
+              ))}
             </section>}
             <section className="recipe-method">
               <h3>Method</h3>

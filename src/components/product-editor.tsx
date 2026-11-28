@@ -13,6 +13,7 @@ import { ItemDeleteButton } from './item-deletion'
 import { inventoryQuantity } from '@/lib/inventory-quantity'
 import { ProductLabelsInfo } from './product-labels'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { checkpointMessage, useEditorCheckpoint } from '@/lib/editor-checkpoint'
 import { ItemEditorShell, invalidEditorTabs } from './item-editor-shell'
 import { NetWeightField } from './net-weight-field'
 import { ItemImagesPanel } from './item-images-panel'
@@ -127,6 +128,12 @@ export function ProductEditor({
     [error, setError] = useState('')
   const saving = useRef(false)
   const canManage = ['Owner', 'Manager'].includes(role)
+  const checkpoint = useEditorCheckpoint({
+    kind: canManage ? 'product' : null,
+    target: editId.current || `new-${kind}`,
+    scope: workspace.settings[0]?.labelEditorScope,
+    snapshot: { draft }, dirty,
+  })
   const working = busy || uploadBusy || categoryBusy || importBusy
   const resale = draft.workflow === 'resale'
   const foodResale =
@@ -253,6 +260,7 @@ export function ProductEditor({
         throw new Error(conflictMessage(conflict))
       }
       await mutate('save', 'products', payload)
+      void checkpoint.clear()
       setDirty(false)
       close()
     } catch (e) {
@@ -557,6 +565,12 @@ export function ProductEditor({
       error={error}
       notice={
         <>
+          {checkpoint.available && <button type="button" onClick={() => {
+            if (dirty && !window.confirm('Replace this tab’s edits with the saved recovery draft?')) return
+            const snapshot = checkpoint.accept()
+            if (snapshot) { setDraft(snapshot.draft); setDirty(true) }
+          }}>Restore recovery draft</button>}
+          <p role="status">{checkpointMessage(checkpoint.status)}</p>
           {editing && item && (
             <ItemDeleteButton table="products" item={item} draft={dirty} />
           )}

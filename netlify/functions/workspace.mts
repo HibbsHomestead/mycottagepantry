@@ -441,6 +441,12 @@ export default async (req: Request, context: Context) => {
     )
       throw new Error('Your oven role is not authorized.')
     const org = business.id
+    const editorScope = createHash('sha256').update(org + ':' + user!.id).digest('hex')
+    const expectedEditorScope = req.headers.get('X-Workspace-Editor-Scope')
+    if (expectedEditorScope && editorScope !== expectedEditorScope) {
+      await client.query('ROLLBACK')
+      return Response.json({ code: 'EDITOR_SCOPE_CHANGED', error: 'Reopen the original account and oven before saving.' }, { status: 409, headers: { 'Cache-Control': 'private, no-store' } })
+    }
     if (importTrace) importStage = 'workspace_authorization'
     await client.query("SELECT set_config('app.business_id',$1,true)", [org])
     if (requestUrl.searchParams.has('bakingConverter')) {
@@ -478,6 +484,41 @@ export default async (req: Request, context: Context) => {
       manualGrant,
       business.identity_owner,
     )
+    if (requestUrl.searchParams.has('editorDraft')) {
+      const kind = requestUrl.searchParams.get('editorDraft') || ''
+      const target = requestUrl.searchParams.get('target') || ''
+      const headers = { 'Cache-Control': 'private, no-store' }
+      const rejectDraft = async (error: string, status: number) => {
+        await client.query('ROLLBACK')
+        return Response.json({ error }, { status, headers })
+      }
+      if (!['recipe', 'product', 'receive', 'prep-list'].includes(kind) ||
+          !/^(new|[a-z0-9_-]{1,100})$/i.test(target)) {
+        return rejectDraft('Invalid draft reference.', 400)
+      }
+      if (!expectedEditorScope || resolvedAccess.suspended ||
+          !(role === 'Owner' || role === 'Manager' || (role === 'Production Staff' && kind === 'prep-list'))) {
+        return rejectDraft('Draft access unavailable.', 403)
+      }
+      const store = getStore({ name: 'workspace-editor-checkpoints', consistency: 'strong' })
+      const key = `${requestUrl.hostname}/${editorScope}/${kind}/${target}.json`
+      if (req.method === 'GET') {
+        const entry = await store.getWithMetadata(key, { type: 'json' })
+        await client.query('COMMIT')
+        return Response.json({ revision: entry?.etag || null, snapshot: entry?.data?.snapshot ?? null }, { headers })
+      }
+      if (req.method !== 'POST') return rejectDraft('Draft method not supported.', 405)
+      const raw = await req.text()
+      if (raw.length > 500_000) return rejectDraft('Draft is too large.', 413)
+      let payload
+      try { payload = JSON.parse(raw) } catch { return rejectDraft('Invalid draft checkpoint.', 400) }
+      if (!payload || !(payload.revision === null || (typeof payload.revision === 'string' && payload.revision.length < 200)) ||
+          !(payload.snapshot === null || (payload.snapshot && typeof payload.snapshot === 'object' && !Array.isArray(payload.snapshot))))
+        return rejectDraft('Invalid draft checkpoint.', 400)
+      const result = await store.setJSON(key, { snapshot: payload.snapshot }, payload.revision ? { onlyIfMatch: payload.revision } : { onlyIfNew: true })
+      await client.query('COMMIT')
+      return Response.json({ revision: result.etag }, { status: result.modified ? 200 : 409, headers })
+    }
     let moduleAccess: import('../lib/billing-state').AccessResult | undefined
     let moduleContinuation = false
     // Ovens without a billing row (legacy/owner ovens, including complimentary
@@ -718,9 +759,7 @@ export default async (req: Request, context: Context) => {
           const view: Item = {
             ...s,
             effectiveAccess: resolvedAccess,
-            labelEditorScope: createHash('sha256')
-              .update(org + ':' + user!.id)
-              .digest('hex'),
+            labelEditorScope: editorScope,
             currentPrinterProfiles:
               s.printerProfilesByDevice?.[deviceKey] || [],
             receiptReading: {
@@ -840,6 +879,13 @@ export default async (req: Request, context: Context) => {
         const previous = state.ingredients.find((i) => i.id === item.id)
         if (previous?.countPackages) item.countPackages = previous.countPackages
         else delete item.countPackages
+      }
+      if (table === 'ingredients') {
+        const previous = state.ingredients.find((entry) => entry.id === item.id)
+        const sourceFields = ['name', 'statement', 'subingredients', 'allergens', 'sourceContains', 'sourceMayContain', 'reviewed', 'requiresSubingredients', 'compoundRecipeId', 'labelComponentWeights']
+        item.allergenSourceRevision = previous && sourceFields.some((key) => JSON.stringify(item[key]) !== JSON.stringify(previous[key]))
+          ? randomUUID()
+          : previous?.allergenSourceRevision
       }
       const { assertPlanRecordWrite } =
         await import('../lib/plan-feature-gates')
@@ -2857,7 +2903,20 @@ export default async (req: Request, context: Context) => {
           type: action,
           actor: user?.id || 'Demo owner',
         })
-      if (action === 'productAllergenReview' || action === 'productAllergenMapping') {
+      if (action === 'ingredientAllergenSource') {
+        if (table !== 'ingredients' || !['Owner', 'Manager'].includes(role))
+          throw new Error('Only an Owner or Manager can review ingredient sources.')
+        const ingredient = state.ingredients.find((entry) => entry.id === data?.id && !entry.archived && !['packaging', 'supply', 'material', 'fabric'].includes(entry.usedAs))
+        if (!ingredient || data.expectedUpdatedAt !== ingredient.updatedAt)
+          throw new Error('The ingredient source changed or is unavailable. Reopen the review before saving.')
+        const fields = ['subingredients', 'sourceContains', 'sourceMayContain'] as const
+        if (typeof data.reviewed !== 'boolean' || !Array.isArray(data.allergens) || data.allergens.length > allergens.length || data.allergens.some((name: string) => !allergens.includes(name)) || fields.some((key) => typeof data[key] !== 'string' || data[key].length > (key === 'subingredients' ? 8000 : 1000)))
+          throw new Error('Check the supplier wording and ingredient review status.')
+        const updated: Item = { ...ingredient, reviewed: data.reviewed, allergens: [...new Set(data.allergens)] }
+        for (const key of fields) updated[key] = data[key].trim()
+        await save('ingredients', updated)
+        await audit('Ingredient allergen source reviewed', ingredient.name, { ingredientId: ingredient.id, previousVersion: ingredient.updatedAt, reviewed: updated.reviewed })
+      } else if (action === 'productAllergenReview' || action === 'productAllergenMapping') {
         if (table !== 'products' || !['Owner', 'Manager'].includes(role)) throw new Error('Only an Owner or Manager can review product allergens.')
         const product = state.products.find((entry) => entry.id === data?.id && !entry.archived)
         if (!product) throw new Error('Choose a saved food product in this oven.')

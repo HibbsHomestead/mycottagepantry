@@ -2,7 +2,8 @@ import { SquareIntegration } from './square-integration'
 import { ProductionSupplies } from './production-supplies'
 import { SquareSalesImport } from './square-sales-import'
 import { DemoBanner } from './demo-banner'
-import { activeDemoSession } from '@/lib/demo-client'
+import { WorkspaceSessionGate } from './workspace-session-gate'
+import { checkpointMessage, hasDirtyEditor, useEditorCheckpoint } from '@/lib/editor-checkpoint'
 import { BakingConverter } from './baking-converter'
 import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
@@ -74,7 +75,7 @@ import './workspace-standard.css'
 import './inventory-refinement.css'
 import { WorkspaceBackground } from './workspace-background'
 import { OvenLoading } from './oven-loading'
-import { restoreIdentitySession } from '@/lib/identity-session'
+import { identitySubject, restoreIdentitySession, sessionDiagnostic, signOutIdentity, watchIdentitySession } from '@/lib/identity-session'
 import { planGateDecision } from '../../netlify/lib/plan-feature-gates'
 import { KitEditor } from './kit-editor'
 import { KitCostCards } from './kit-cost-cards'
@@ -445,6 +446,14 @@ export function WorkspaceApp() {
   const routeRef = useRef(route)
   const lastHash = useRef('')
   const [formDirty, setFormDirty] = useState(false)
+  const checkpointKind = modal === 'recipe' || modal === 'receive' || modal === 'product' ? modal : null
+  const formCheckpoint = useEditorCheckpoint({
+    kind: checkpointKind,
+    target: selected?.id,
+    scope: ready ? state.settings[0]?.labelEditorScope : undefined,
+    snapshot: { draft, lines },
+    dirty: formDirty,
+  })
   const heldProduction = useRef(new WeakMap<Item, Item>())
   const packagingDraft = isPackaging(draft)
   useEffect(() => {
@@ -661,6 +670,7 @@ export function WorkspaceApp() {
     if (
       ((labelUnsaved.current && next.section !== 'Labels') ||
         workflowDirty.current ||
+        hasDirtyEditor() ||
         (modal && formDirty)) &&
       destinationHash(next) !== destinationHash(routeRef.current) &&
       !window.confirm(
@@ -690,7 +700,7 @@ export function WorkspaceApp() {
     document.title = `${route.tab || route.section} | My Oven | Cottage Pantry`
   }, [route.section, route.tab])
   navigationGuard.current = () =>
-    labelUnsaved.current || workflowDirty.current || !!(modal && formDirty)
+    labelUnsaved.current || workflowDirty.current || hasDirtyEditor() || !!(modal && formDirty)
   useEffect(() => {
     const navigate = () => {
       if (lastHash.current && lastHash.current === window.location.hash) return
@@ -776,8 +786,15 @@ export function WorkspaceApp() {
   }, [ready, route, state.products])
   const loadingWorkspace = useRef<Promise<void> | null>(null)
   const hasLoadedWorkspace = useRef(false)
+  const loadedIdentity = useRef<string | undefined>(undefined)
+  const [workspaceSubject, setWorkspaceSubject] = useState<string>()
+  const [sessionGate, setSessionGate] = useState<'expired' | 'signed-out' | 'changed'>()
+  const [sessionRetrying, setSessionRetrying] = useState(false)
+  const reopening = useRef<Promise<void> | null>(null)
+  const queuedSave = useRef<{ action: string; table: string; data: Record<string, any> } | null>(null)
   const [logoutBusy, setLogoutBusy] = useState(false)
   const [logoutError, setLogoutError] = useState('')
+  const [logoutOpen, setLogoutOpen] = useState(false)
   function load() {
     loadingWorkspace.current ??= loadWorkspace().finally(() => {
       loadingWorkspace.current = null
@@ -788,16 +805,25 @@ export function WorkspaceApp() {
     setError('')
     try {
       await restoreIdentitySession()
+      const subject = identitySubject()
+      if (loadedIdentity.current && loadedIdentity.current !== subject) return
       const res = await fetchWorkspaceWithDiagnostics({
         credentials: 'same-origin',
         cache: 'no-store',
+        headers: loadedIdentity.current && state.settings[0]?.labelEditorScope ? { 'X-Workspace-Editor-Scope': state.settings[0].labelEditorScope } : {},
         signal: AbortSignal.timeout(20000),
       })
       const json = await readWorkspaceJsonWithDiagnostics(res)
+      if (res.status === 409 && json.code === 'EDITOR_SCOPE_CHANGED') setSessionGate('changed')
       if (!res.ok) throw new Error(json.error)
+      if (!json.demo && subject !== identitySubject()) return
       setState(json.workspace)
       setRole(json.role)
       setDemo(json.demo)
+      if (!json.demo && !loadedIdentity.current) {
+        loadedIdentity.current = subject
+        setWorkspaceSubject(subject)
+      }
       hasLoadedWorkspace.current = true
       setReady(true)
     } catch (e) {
@@ -805,25 +831,21 @@ export function WorkspaceApp() {
       if (!hasLoadedWorkspace.current) setReady(false)
     }
   }
+  const observeIdentityState = useEffectEvent((status: import('@/lib/identity-session').SessionState) => {
+      if (!loadedIdentity.current) return
+      setSessionRetrying(status === 'retrying')
+      if (status === 'expired' || status === 'signed-out') setSessionGate(status)
+      else if (status === 'active' && loadedIdentity.current !== identitySubject()) {
+        sessionDiagnostic('workspace_account_changed')
+        setSessionGate('changed')
+      } else if (status === 'active' && sessionGate) void resumeWorkspace().catch(() => {})
+  })
   useEffect(() => {
     void load()
-    let active = true
-    let unsubscribe = () => {}
-    import('@netlify/identity').then((identity) => {
-      if (!active) return
-      unsubscribe = identity.onAuthChange((event) => {
-        if (event === 'logout') void activeDemoSession().then(active => {
-          if (!active) window.location.replace('/login?signedOut=1')
-        })
-      })
-    })
-    return () => {
-      active = false
-      unsubscribe()
-    }
+    return watchIdentitySession((status) => observeIdentityState(status))
   }, [])
   const refreshAccessOnReturn = useEffectEvent(() => {
-    if (ready && !modal && !busy) void load()
+    if (ready && !modal && !busy && !sessionGate && !navigationGuard.current()) void load()
   })
   useEffect(() => {
     const refresh = () => {
@@ -851,10 +873,11 @@ export function WorkspaceApp() {
     try {
       const ingredientTrace =
         action === 'save' && table === 'ingredients' ? crypto.randomUUID() : ''
-      const res = await fetchWorkspaceWithDiagnostics({
+      const request = () => fetchWorkspaceWithDiagnostics({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(state.settings[0]?.labelEditorScope ? { 'X-Workspace-Editor-Scope': state.settings[0].labelEditorScope } : {}),
           ...(action === 'save' && table === 'ingredients'
             ? { 'X-Ingredient-Save-Trace': ingredientTrace }
             : {}),
@@ -867,6 +890,7 @@ export function WorkspaceApp() {
           )
         throw error
       })
+      let res = await request()
       let result
       try {
         result = await readWorkspaceJsonWithDiagnostics(res)
@@ -875,6 +899,23 @@ export function WorkspaceApp() {
           'Your business could not be loaded. Your draft is still here. Please retry or contact support.',
         )
       }
+      if (res.status === 401 && result.code === 'SIGN_IN_REQUIRED' && !demo) {
+        sessionDiagnostic('workspace_request_sign_in_required', 401)
+        const renewal = await restoreIdentitySession(true)
+        if (renewal === 'active' && loadedIdentity.current === identitySubject()) {
+          res = await request()
+          result = await readWorkspaceJsonWithDiagnostics(res)
+        }
+        if (res.status === 401 && result.code === 'SIGN_IN_REQUIRED') {
+          if (renewal === 'expired' || renewal === 'absent' || (identitySubject() && identitySubject() !== loadedIdentity.current)) {
+            setSessionGate(renewal === 'expired' ? 'expired' : identitySubject() && identitySubject() !== loadedIdentity.current ? 'changed' : 'signed-out')
+            if (['save', 'receive'].includes(action)) queuedSave.current = { action, table, data }
+            throw new Error('Sign in to continue. Your draft is still here.')
+          }
+          throw new Error('Could not verify this save. Your draft is still open; retry when the connection returns.')
+        }
+      }
+      if (res.status === 409 && result.code === 'EDITOR_SCOPE_CHANGED') setSessionGate('changed')
       if (!res.ok)
         throw new Error(
           customerMessage(result.error) + ' Your draft is preserved.',
@@ -917,9 +958,12 @@ export function WorkspaceApp() {
         throw new Error(
           'The response did not confirm this run. Retry this form; its stable ID prevents duplicate posting.',
         )
+      if ((checkpointKind === 'recipe' && action === 'save' && table === 'recipes') ||
+          (checkpointKind === 'product' && action === 'save' && table === 'products') ||
+          (checkpointKind === 'receive' && action === 'receive')) void formCheckpoint.clear()
       if (keepProductionOpen) setSelected(savedProduction)
       setState(result.workspace)
-      setFormDirty(false)
+      if (!['ingredientAllergenSource', 'productAllergenReview', 'productAllergenMapping'].includes(action)) setFormDirty(false)
       if (
         ![
           'ingredientBarcode',
@@ -933,6 +977,7 @@ export function WorkspaceApp() {
           'pantrySort',
           'pantryView',
           'ingredientUpdate',
+          'ingredientAllergenSource',
           'inventoryMarkReviewed',
           'ingredientOffer',
           'stockPrepPost',
@@ -962,6 +1007,28 @@ export function WorkspaceApp() {
       setBusy(false)
     }
   }
+  async function resumeWorkspace() {
+    reopening.current ??= reopenOriginalWorkspace().finally(() => { reopening.current = null })
+    return reopening.current
+  }
+  async function reopenOriginalWorkspace() {
+    const scope = state.settings[0]?.labelEditorScope
+    const response = await fetchWorkspaceWithDiagnostics({
+      cache: 'no-store', credentials: 'same-origin',
+      headers: scope ? { 'X-Workspace-Editor-Scope': scope } : {},
+      signal: AbortSignal.timeout(20_000),
+    })
+    if (!response.ok || identitySubject() !== loadedIdentity.current) throw new Error('Original oven not verified')
+    setSessionGate(undefined)
+    setSessionRetrying(false)
+    const save = queuedSave.current
+    queuedSave.current = null
+    if (save) {
+      try { await mutate(save.action, save.table, save.data) }
+      catch { setFormError('The queued save did not complete. Your changes are still open; review them and select Save again.') }
+    }
+    window.dispatchEvent(new Event('cottage.workspace.reconnected'))
+  }
   function returnToProductDetails() {
     const product = state.products.find((p) => p.id === productDetailReturn)
     if (!product) return
@@ -984,6 +1051,11 @@ export function WorkspaceApp() {
     setModal('help')
   }
   function open(kind: string, item?: Item, newDraft = false, prep = false, productionReview = false, productionBoard = false) {
+    if (kind === 'signin') {
+      setLogoutError('')
+      setLogoutOpen(true)
+      return
+    }
     if ((modal === 'ingredient-detail' || modal === 'fabric-detail') && selected && ['receive', 'adjust', 'fabric-receive', 'fabric-adjust'].includes(kind)) inventoryDetailReturn.current = { item: selected, kind: modal }
 
     if (
@@ -1652,6 +1724,7 @@ export function WorkspaceApp() {
       setModal(null); setFormDirty(false); workflowDirty.current = false; setSelected(null)
     }}>
     <div className="app-shell stage-one-shell">
+      {sessionRetrying && !sessionGate && <p className="workspace-reconnecting" role="status">Reconnecting your session. Your edits are still here.</p>}
       <WorkspaceBackground />
       <aside
         className={`sidebar ${mobile ? 'is-open' : ''}`}
@@ -2956,11 +3029,14 @@ export function WorkspaceApp() {
                   workspace={state}
                   canManage={ready && ['Owner', 'Manager'].includes(role)}
                   save={(data) => mutate('assortmentLabel', 'label_print_jobs', data)}
+                  onReviewAllergens={mutate}
+                  onOpenSource={open}
                 />
               )}
               {page === 'Labels' && sub !== 'Assortments' && (
                 <LabelStudio
                   onOpenSource={open}
+                  onReviewAllergens={mutate}
                   initialProductId={labelProduct}
                   initialLabelId={labelDesign}
                   initialCreateRequest={labelCreateRequest}
@@ -3787,9 +3863,9 @@ export function WorkspaceApp() {
         />
       )}
       <Dialog
-        open={modal === 'signin'}
+        open={logoutOpen}
         onOpenChange={(value) => {
-          if (!value) setModal(null)
+          if (!value && !logoutBusy) setLogoutOpen(false)
         }}
       >
         <DialogContent className="app-dialog logout-dialog">
@@ -3799,7 +3875,7 @@ export function WorkspaceApp() {
           </DialogDescription>
           <FormErrorNotice message={logoutError} />
           <div className="button-row">
-            <Btn secondary disabled={logoutBusy} onClick={() => setModal(null)}>
+            <Btn secondary disabled={logoutBusy} onClick={() => setLogoutOpen(false)}>
               Cancel
             </Btn>
             <Btn
@@ -3812,10 +3888,12 @@ export function WorkspaceApp() {
                   if (demo) {
                     const response = await fetch('/api/demo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'exit' }) })
                     if (!response.ok) throw new Error('Unable to leave demo')
+                    sessionDiagnostic('demo_exit', response.status)
                     window.location.replace('/login')
                   } else {
-                    const identity = await import('@netlify/identity')
-                    await identity.logout()
+                    await signOutIdentity()
+                    setLogoutOpen(false)
+                    setLogoutBusy(false)
                   }
                 } catch {
                   setLogoutError('Log out could not complete. Please retry.')
@@ -4699,6 +4777,11 @@ export function WorkspaceApp() {
                         </button>
                       </div>
                     </div>
+                    {!!lines.length && (
+                      <div className="recipe-line-headings" aria-hidden="true">
+                        <span>Ingredient</span><span>Quantity</span><span>Unit</span><span>Cost</span>
+                      </div>
+                    )}
                     {lines.map((line, index) => {
                       const prep = recipeIngredients.find(
                         (i) => i.id === line.ingredientId,
@@ -4709,6 +4792,10 @@ export function WorkspaceApp() {
                       )
                       return (
                         <div className="recipe-line-editor" key={index}>
+                          <span className="recipe-line-mobile-heading ingredient" aria-hidden="true">Ingredient</span>
+                          <span className="recipe-line-mobile-heading quantity" aria-hidden="true">Quantity</span>
+                          <span className="recipe-line-mobile-heading unit" aria-hidden="true">Unit</span>
+                          <span className="recipe-line-mobile-heading cost" aria-hidden="true">Cost</span>
                           {line.prepared && prep ? (
                             <div className="recipe-component-source">
                               <strong>{preparedLabel(prep, line.prepared)}</strong>
@@ -4739,7 +4826,8 @@ export function WorkspaceApp() {
                             <select
                               aria-label={`Ingredient ${index + 1}`}
                               value={line.ingredientId}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                setFormDirty(true)
                                 setLines((ls) =>
                                   ls.map((l, i) =>
                                     i === index
@@ -4747,7 +4835,7 @@ export function WorkspaceApp() {
                                       : l,
                                   ),
                                 )
-                              }
+                              }}
                             >
                               {!line.ingredientId && <option value="">Choose an ingredient</option>}
                               {purchasedRecipeInputs.map((i) => (
@@ -4767,29 +4855,33 @@ export function WorkspaceApp() {
                               setLines((current) => current.map((entry, position) => position === index ? { ...entry, quantity } : entry))
                             }} />
                           ) : <><input
+                            className="recipe-line-quantity"
                             type="text"
                             aria-label="Ingredient quantity"
                             min="0.000001"
                             step="any"
                             value={line.quantity}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              setFormDirty(true)
                               setLines((ls) =>
                                 ls.map((l, i) =>
                                   i === index ? { ...l, quantity: e.target.value } : l,
                                 ),
                               )
-                            }
+                            }}
                           />
                           <select
+                            className="recipe-line-unit"
                             aria-label="Recipe unit"
                             value={line.unit}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              setFormDirty(true)
                               setLines((ls) =>
                                 ls.map((l, i) =>
                                   i === index ? { ...l, unit: e.target.value } : l,
                                 ),
                               )
-                            }
+                            }}
                           >
                             {Object.keys(
                               ingredientUnits(
@@ -5732,6 +5824,12 @@ export function WorkspaceApp() {
               </ProductFormBody>
               <div className="form-footer item-dialog-actions">
                 <FormErrorNotice message={formError} />
+                {checkpointKind && formCheckpoint.available && <Btn secondary onClick={() => {
+                  if (formDirty && !window.confirm('Replace this tab’s edits with the saved recovery draft?')) return
+                  const snapshot = formCheckpoint.accept()
+                  if (snapshot) { setDraft(snapshot.draft); setLines(snapshot.lines); setFormDirty(true) }
+                }}>Restore recovery draft</Btn>}
+                {checkpointKind && <p role="status">{checkpointMessage(formCheckpoint.status)}</p>}
                 {modal === 'recipe' && selected && <ItemDeleteButton table="recipes" item={selected} draft={formDirty} />}
                 {modal === 'product' && (
                   <div className="product-footer-navigation">
@@ -5744,7 +5842,9 @@ export function WorkspaceApp() {
                   </div>
                 )}
 
-                <Btn secondary onClick={() => setModal(null)}>
+                <Btn secondary onClick={() => {
+                  if (!formDirty || window.confirm('Close this editor? Changes since the last recovery checkpoint may be lost.')) setModal(null)
+                }}>
                   Cancel
                 </Btn>
                 <Btn
@@ -5980,6 +6080,7 @@ export function WorkspaceApp() {
               open={open}
               close={() => setModal(null)}
               save={(data) => mutate('productRecipeLink', 'products', data)}
+              onReviewAllergens={mutate}
             />
           )}
           {modal === 'product-detail' && selected && (
@@ -6443,7 +6544,7 @@ export function WorkspaceApp() {
           {modal === 'help' && <SupportHelper />}
         </DialogContent>
       </Dialog>
-      {detailLabelFlow && <ProductLabelFlow productId={detailLabelFlow.productId} labelId={detailLabelFlow.labelId} workspace={state} onWorkspace={setState} ready={ready} role={role} close={() => setDetailLabelFlow(null)} />}
+      {detailLabelFlow && <ProductLabelFlow productId={detailLabelFlow.productId} labelId={detailLabelFlow.labelId} workspace={state} onWorkspace={setState} ready={ready} role={role} onReviewAllergens={mutate} onOpenSource={open} close={() => setDetailLabelFlow(null)} />}
 
       {previewProduct && (
         <LabelPreviewDialog
@@ -6458,6 +6559,11 @@ export function WorkspaceApp() {
           ready={ready}
           role={role}
           onWorkspace={setState}
+          onReviewAllergens={mutate}
+          onOpenSource={(kind, item) => {
+            setPreviewProduct(null)
+            open(kind, item)
+          }}
           onOpenChange={(next) => {
             if (!next) setPreviewProduct(null)
           }}
@@ -6488,6 +6594,7 @@ export function WorkspaceApp() {
           }}
         />
       )}
+      {sessionGate && workspaceSubject && <WorkspaceSessionGate reason={sessionGate} subject={workspaceSubject} resume={resumeWorkspace} />}
       {modal === 'sale-detail' && selected && (
         <article className="sale-receipt">
           <h1>{business.name}</h1>

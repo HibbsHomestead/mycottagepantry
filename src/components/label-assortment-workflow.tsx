@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { LabelCanvas } from './label-canvas'
 import { RollArtworkPreview } from './label-print-media'
+import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import { recordLabelPrintTiming } from './label-print-workflow'
 import {
   assortmentReview,
@@ -38,12 +39,16 @@ export function LabelAssortmentWorkflow({
   canEdit,
   initialRunId,
   onWorkspace,
+  onReviewAllergens,
+  onOpenSource,
 }: {
   workspace: Workspace
   profiles: PrinterProfile[]
   canEdit: boolean
   initialRunId?: string
   onWorkspace: (workspace: Workspace) => void
+  onReviewAllergens?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
 }) {
   const [plan, setPlan] = useState<AssortmentPlan>(() => ({
     name: '',
@@ -772,6 +777,9 @@ export function LabelAssortmentWorkflow({
             <p key={warning} className="warning-text">
               {warning}
             </p>
+          ))}
+          {[...new Set(review.products.map(({ line }) => line.productId))].map((id) => (
+            <LabelSourceAllergenReview key={id} workspace={workspace} source={{ kind: 'product', id }} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
           ))}
           <div
             className="studio-assortment-paper"

@@ -184,14 +184,14 @@ describe('shared ingredient declaration and allergen review', () => {
       shares: { '1': '90', '2': '10' },
     }
     confirmFixtureAllergens(workspace, outputs[0], ['Wheat'])
-    confirmFixtureAllergens(workspace, outputs[1], ['Wheat', 'Milk'])
-    const { snapshot } = assortmentLabel(workspace, {
+    delete outputs[1].allergenReview
+    const spec = {
       productId: pack.id,
       batchId: '',
       group: '',
       templateId: template.id,
       packagingId: labels.id,
-      mode: 'fixed',
+      mode: 'fixed' as const,
       expectedLoose: 6,
       expectedPackages: 0,
       containers: 10,
@@ -201,9 +201,15 @@ describe('shared ingredient declaration and allergen review', () => {
       lines: outputs.map((output) => ({
         productId: output.id,
         quantity: 3,
-        unit: 'loose',
+        unit: 'loose' as const,
       })),
-    })
+    }
+    const blocked = assortmentLabel(workspace, spec).snapshot
+    expect(blocked.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/Cranberry muffins: Allergen information not confirmed/)]))
+    expect(blocked.warnings.every((warning) => !warning.includes('Blueberry muffins: Allergen information not confirmed'))).toBe(true)
+    confirmFixtureAllergens(workspace, outputs[1], ['Wheat', 'Milk'])
+    const { snapshot } = assortmentLabel(workspace, spec)
+    expect(snapshot.warnings).toHaveLength(0)
     expect(snapshot.sections).toMatchObject([
       {
         declaration: 'Ingredients: Muffin flour, blueberries, cane sugar',

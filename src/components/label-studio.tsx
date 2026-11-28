@@ -6,6 +6,7 @@ import {
   labelSide,
   labelSides,
   layoutKeys,
+  validateLabelRunContent,
   type LabelSide,
 } from '@/lib/label-sets'
 import {
@@ -18,6 +19,7 @@ import { withLibraryArtwork } from '@/lib/artwork-library'
 import { LabelPrinterSettings } from './label-printer-settings'
 import { RollArtworkPreview } from './label-print-media'
 import { LabelAssortmentWorkflow } from './label-assortment-workflow'
+import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import {
   LabelPrintOptions,
   missingPrinterProfile,
@@ -40,6 +42,7 @@ import {
 import { recentColorList, type LabelColor } from '@/lib/label-colors'
 import { downloadLabel } from '@/lib/label-client-export'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { withWorkspaceIdentity } from '@/lib/identity-session'
 import { FontUploadPanel } from './label-font-upload'
 import {
   fontFileUrl,
@@ -183,6 +186,7 @@ export function LabelStudio({
   onSectionChange,
   onDirtyChange,
   onOpenSource,
+  onReviewAllergens,
 }: {
   workspace: Workspace
   onWorkspace: (w: Workspace) => void
@@ -197,6 +201,7 @@ export function LabelStudio({
   initialAssortmentRunId?: string
   onSectionChange?: (section: string) => void
   onOpenSource?: (kind: string, item?: Item) => void
+  onReviewAllergens?: ReviewMutation
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const backgroundPress = useRef<{
@@ -475,10 +480,11 @@ export function LabelStudio({
       throw new Error(
         'Oven changed. Export this label before reopening the correct oven.',
       )
-    const response = await fetch('/api/workspace', {
+    const response = await withWorkspaceIdentity(() => fetch('/api/workspace', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(initialScope.current ? { 'X-Workspace-Editor-Scope': initialScope.current } : {}),
         ...(trace ? { 'X-Label-Save-Trace': trace } : {}),
       },
       body: JSON.stringify({
@@ -486,7 +492,7 @@ export function LabelStudio({
         data: { ...payload, expectedScope: initialScope.current },
       }),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(25000)]) : AbortSignal.timeout(25000),
-    })
+    }))
     const result = await response.json()
     if (!response.ok)
       throw new Error(
@@ -1435,6 +1441,14 @@ export function LabelStudio({
     )
   }
   const runDesign = doc && printRunDesign(doc, parts, order, runIndex)
+  let sourcePrintBlock = ''
+  if (doc && section === 'Print & Export') {
+    try {
+      validateLabelRunContent(doc, data, parts === 'both' ? labelSides(doc) : [parts])
+    } catch (cause) {
+      sourcePrintBlock = (cause as Error).message
+    }
+  }
   const { printerProfiles, selectedPrinter } = printerSelection(
     w,
     printingMethod,
@@ -4020,10 +4034,12 @@ export function LabelStudio({
                       )
                     }}
                   />
+                  {sourcePrintBlock && <p className="warning-text" role="status">Printing blocked: {sourcePrintBlock}</p>}
+                  <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
                   <div className="studio-print-buttons">
                     <button
                       className="btn"
-                      disabled={busy || !canEdit || colorEditing}
+                      disabled={busy || !canEdit || colorEditing || !!sourcePrintBlock}
                       onClick={() => void output('print')}
                     >
                       <Printer size={18} />
@@ -4035,7 +4051,7 @@ export function LabelStudio({
                     </button>
                     <button
                       className="btn secondary"
-                      disabled={busy || !canEdit}
+                      disabled={busy || !canEdit || !!sourcePrintBlock}
                       onClick={() => void output('pdf')}
                     >
                       <Download size={18} />
@@ -4043,7 +4059,7 @@ export function LabelStudio({
                     </button>
                     <button
                       className="btn secondary"
-                      disabled={busy || !canEdit}
+                      disabled={busy || !canEdit || !!sourcePrintBlock}
                       onClick={() => void output('png')}
                     >
                       <Download size={18} />
@@ -4143,6 +4159,8 @@ export function LabelStudio({
               canEdit={canEdit}
               initialRunId={initialAssortmentRunId}
               onWorkspace={onWorkspace}
+              onReviewAllergens={onReviewAllergens}
+              onOpenSource={onOpenSource}
             />
           )}
           {section === 'Label Settings' && (

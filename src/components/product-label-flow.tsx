@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import type { Workspace } from '@/lib/domain'
+import type { Item, Workspace } from '@/lib/domain'
+import type { ReviewMutation } from './label-ingredient-review'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ export function ProductLabelFlow({
   onWorkspace,
   ready,
   role,
+  onReviewAllergens,
+  onOpenSource,
   close,
 }: {
   productId: string
@@ -25,6 +28,8 @@ export function ProductLabelFlow({
   onWorkspace: (workspace: Workspace) => void
   ready: boolean
   role: string
+  onReviewAllergens?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
   close: () => void
 }) {
   const dirty = useRef(false)
@@ -60,6 +65,12 @@ export function ProductLabelFlow({
           onWorkspace={onWorkspace}
           ready={ready}
           role={role}
+          onReviewAllergens={onReviewAllergens}
+          onOpenSource={onOpenSource && ((kind, item) => {
+            if (dirty.current && !window.confirm('Leave this label editor with unsaved changes?')) return
+            close()
+            onOpenSource(kind, item)
+          })}
           initialProductId={productId}
           initialLabelId={labelId}
           initialCreateRequest={createRequest}

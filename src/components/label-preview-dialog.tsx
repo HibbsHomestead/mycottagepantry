@@ -1,5 +1,6 @@
 import { ingredientOverflowMessage } from '@/lib/label-studio'
 import { FormErrorNotice } from './form-error-notice'
+import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import { checkLabelSet } from '@/lib/label-check'
 import {
   labelSide,
@@ -70,6 +71,8 @@ export function LabelPreviewDialog({
   onEditLabel,
   onCreateLabel,
   labelId,
+  onReviewAllergens,
+  onOpenSource,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -81,6 +84,8 @@ export function LabelPreviewDialog({
   onWorkspace: (workspace: Workspace) => void
   onEditLabel: (labelId: string) => void
   onCreateLabel: () => void
+  onReviewAllergens?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
 }) {
   const initialAssignment = assignedLabel(w, product, labelId)
   const initialDocument =
@@ -733,6 +738,7 @@ export function LabelPreviewDialog({
               Printing blocked: {printBlocked}
             </p>
           )}
+          <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
         </div>
       </div>
     )
