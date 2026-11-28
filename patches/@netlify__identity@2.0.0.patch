@@ -1,7 +1,34 @@
 diff --git a/dist/main.js b/dist/main.js
 --- a/dist/main.js
 +++ b/dist/main.js
-@@ -605,6 +605,22 @@
+@@ -248,25 +248,1 @@
+-var startTokenRefresh = () => {
+-  if (!isBrowser()) return;
+-  stopTokenRefresh();
+-  const client = getGoTrueClient();
+-  const user = client?.currentUser();
+-  if (!user) return;
+-  const token = user.tokenDetails();
+-  if (!token?.expires_at) return;
+-  const nowS = Math.floor(Date.now() / 1e3);
+-  const expiresAtS = typeof token.expires_at === "number" && token.expires_at > 1e12 ? Math.floor(token.expires_at / 1e3) : token.expires_at;
+-  const delayMs = Math.max(0, expiresAtS - nowS - REFRESH_MARGIN_S) * 1e3;
+-  refreshTimer = setTimeout(() => {
+-    void (async () => {
+-      try {
+-        const freshJwt = await user.jwt(true);
+-        const freshDetails = user.tokenDetails();
+-        setBrowserAuthCookies(freshJwt, freshDetails?.refresh_token);
+-        emitAuthEvent(AUTH_EVENTS.TOKEN_REFRESH, toUser(user));
+-        startTokenRefresh();
+-      } catch {
+-        stopTokenRefresh();
+-      }
+-    })();
+-  }, delayMs);
+-};
++var startTokenRefresh = () => {};
+@@ -605,6 +581,22 @@
    const client = getClient();
    const currentUser = client.currentUser();
    if (currentUser) {
@@ -24,7 +51,7 @@ diff --git a/dist/main.js b/dist/main.js
      startTokenRefresh();
      return toUser(currentUser);
    }
-@@ -626,9 +642,12 @@
+@@ -626,9 +618,12 @@
        },
        persistSession
      );
@@ -40,7 +67,7 @@ diff --git a/dist/main.js b/dist/main.js
    }
    const user = toUser(gotrueUser);
    startTokenRefresh();
-@@ -728,13 +747,7 @@
+@@ -728,13 +723,7 @@
      const currentUser = client?.currentUser() ?? null;
      if (currentUser) {
        const jwt2 = getCookie(NF_JWT_COOKIE);
@@ -58,7 +85,34 @@ diff --git a/dist/main.js b/dist/main.js
 diff --git a/dist/main.cjs b/dist/main.cjs
 --- a/dist/main.cjs
 +++ b/dist/main.cjs
-@@ -656,6 +656,22 @@
+@@ -299,25 +299,1 @@
+-var startTokenRefresh = () => {
+-  if (!isBrowser()) return;
+-  stopTokenRefresh();
+-  const client = getGoTrueClient();
+-  const user = client?.currentUser();
+-  if (!user) return;
+-  const token = user.tokenDetails();
+-  if (!token?.expires_at) return;
+-  const nowS = Math.floor(Date.now() / 1e3);
+-  const expiresAtS = typeof token.expires_at === "number" && token.expires_at > 1e12 ? Math.floor(token.expires_at / 1e3) : token.expires_at;
+-  const delayMs = Math.max(0, expiresAtS - nowS - REFRESH_MARGIN_S) * 1e3;
+-  refreshTimer = setTimeout(() => {
+-    void (async () => {
+-      try {
+-        const freshJwt = await user.jwt(true);
+-        const freshDetails = user.tokenDetails();
+-        setBrowserAuthCookies(freshJwt, freshDetails?.refresh_token);
+-        emitAuthEvent(AUTH_EVENTS.TOKEN_REFRESH, toUser(user));
+-        startTokenRefresh();
+-      } catch {
+-        stopTokenRefresh();
+-      }
+-    })();
+-  }, delayMs);
+-};
++var startTokenRefresh = () => {};
+@@ -656,6 +632,22 @@
    const client = getClient();
    const currentUser = client.currentUser();
    if (currentUser) {
@@ -81,7 +135,7 @@ diff --git a/dist/main.cjs b/dist/main.cjs
      startTokenRefresh();
      return toUser(currentUser);
    }
-@@ -677,9 +693,12 @@
+@@ -677,9 +669,12 @@
        },
        persistSession
      );
@@ -97,7 +151,7 @@ diff --git a/dist/main.cjs b/dist/main.cjs
    }
    const user = toUser(gotrueUser);
    startTokenRefresh();
-@@ -779,13 +798,7 @@
+@@ -779,13 +774,7 @@
      const currentUser = client?.currentUser() ?? null;
      if (currentUser) {
        const jwt2 = getCookie(NF_JWT_COOKIE);

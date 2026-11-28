@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { prepYieldUnits, supportedPrepYieldUnit } from '@/lib/prep-yield'
 import { unitLabel } from '@/lib/domain'
 import './recipe-yield-fields.css'
@@ -14,6 +15,7 @@ export function RecipeYieldFields({
   typeLocked?: boolean
 }) {
   const unit = recipe.yieldUnit || ''
+  const typeHelp = useId()
   return (
     <fieldset className="recipe-yield-fields">
       <legend>Finished yield</legend>
@@ -59,26 +61,25 @@ export function RecipeYieldFields({
           )}
         </label>
       </div>
-      <label className="check-label">
-        <input
-          type="checkbox"
-          checked={recipe.compound === true}
-          disabled={typeLocked}
-          onChange={(event) => onChange('compound', event.target.checked)}
-        />
-        Recipe type: Compound prep
-      </label>
-      <p className="form-hint">
-        {recipe.compound
-          ? 'Produces a component that can be used in another recipe.'
-          : 'Recipe — used to make a finished product.'}
-      </p>
-      {typeLocked && (
-        <p className="form-hint">
-          This recipe has a prepared-stock or component link. Its type is
-          protected to keep that link intact.
+      <div className="recipe-type-setting">
+        <label className="check-label">
+          <input
+            type="checkbox"
+            checked={recipe.compound === true}
+            disabled={typeLocked}
+            aria-describedby={typeHelp}
+            onChange={(event) => onChange('compound', event.target.checked)}
+          />
+          Recipe type: Compound prep
+        </label>
+        <p className="form-hint" id={typeHelp}>
+          {recipe.compound
+            ? 'Produces a component that can be used in another recipe.'
+            : 'Recipe — used to make a finished product.'}
+          {typeLocked &&
+            ' This recipe’s type is locked because it is linked to prepared stock or another recipe.'}
         </p>
-      )}
+      </div>
       {recipe.compound && !supportedPrepYieldUnit(unit) && (
         <p role="status">
           Choose a supported weight, volume or count unit. Your draft quantity

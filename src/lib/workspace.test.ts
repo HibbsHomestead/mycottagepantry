@@ -28,12 +28,21 @@ vi.mock('@google/genai', () => ({
   },
 }))
 const labelFiles = vi.hoisted(() => new Map<string, ArrayBuffer>())
+const editorFiles = vi.hoisted(() => new Map<string, { data: unknown; etag: string }>())
 vi.mock('@netlify/blobs', () => ({
   getStore: () => ({
     set: async (key: string, bytes: ArrayBuffer) => {
       labelFiles.set(key, bytes)
     },
     get: async (key: string) => labelFiles.get(key) || null,
+    getWithMetadata: async (key: string) => editorFiles.get(key) || null,
+    setJSON: async (key: string, data: unknown, options: { onlyIfNew?: boolean; onlyIfMatch?: string }) => {
+      const previous = editorFiles.get(key)
+      if (previous ? options.onlyIfNew || options.onlyIfMatch !== previous.etag : !options.onlyIfNew) return { modified: false }
+      const etag = String(Number(previous?.etag || 0) + 1)
+      editorFiles.set(key, { data, etag })
+      return { etag, modified: true }
+    },
   }),
 }))
 vi.mock('@netlify/identity', () => ({
@@ -102,6 +111,30 @@ vi.mock('@netlify/database', () => ({
   }),
 }))
 import handler from '../../netlify/functions/workspace.mts'
+
+it('keeps editor checkpoints private, rejects stale overwrites, and does not mutate business records', async () => {
+  const scope = createHash('sha256').update('private-business:verified-owner').digest('hex')
+  const checkpoint = (options?: { revision: string | null; snapshot: object | null }, host = 'cottage-pantry.test') => handler(new Request(`https://${host}/api/workspace?editorDraft=recipe&target=fixture-recipe`, {
+    headers: { 'X-Workspace-Editor-Scope': scope, 'Content-Type': 'application/json' },
+    ...(options ? { method: 'POST', body: JSON.stringify(options) } : {}),
+  }), context)
+  editorFiles.clear()
+  const records = structuredClone(database.records)
+  expect(await (await checkpoint()).json()).toEqual({ revision: null, snapshot: null })
+  const snapshot = { directions: 'Draft fixture instructions' }
+  const created = await checkpoint({ snapshot, revision: null })
+  expect(created.status).toBe(200)
+  const { revision } = await created.json()
+  expect((await checkpoint({ snapshot: { directions: 'Stale change' }, revision: null })).status).toBe(409)
+  expect(await (await checkpoint()).json()).toEqual({ revision, snapshot })
+  expect(await (await checkpoint(undefined, 'different-preview.test')).json()).toEqual({ revision: null, snapshot: null })
+  database.userId = 'different-owner'
+  expect((await checkpoint()).status).toBe(409)
+  database.expired = true
+  expect((await checkpoint()).status).toBe(401)
+  expect(database.records).toEqual(records)
+})
+
 function shoppingRuntime(apiKey?: string) {
   return {
     env: {

@@ -1,8 +1,7 @@
 // @vitest-environment node
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
-const sdk = vi.hoisted(() => ({ refresh: vi.fn(), config: vi.fn() }))
+const sdk = vi.hoisted(() => ({ config: vi.fn() }))
 vi.mock('@netlify/identity', () => ({
-  refreshSession: sdk.refresh,
   getIdentityConfig: sdk.config,
 }))
 import { verifiedSession } from '../../netlify/lib/verified-session'
@@ -14,8 +13,6 @@ const request = () =>
 beforeEach(() => {
   vi.stubGlobal('fetch', transport)
   transport.mockReset()
-  sdk.refresh.mockReset()
-  sdk.refresh.mockResolvedValue(null)
   sdk.config.mockReset()
 })
 afterEach(() => {
@@ -45,12 +42,14 @@ it('validates the session against this origin and uses only provider identity an
     'https://example.netlify.app/.netlify/identity/user',
   )
 })
-it('uses refreshed sessions before provider verification', async () => {
-  sdk.refresh.mockResolvedValue('rotated-session')
+it('verifies the supplied access cookie without rotating the refresh cookie', async () => {
   transport.mockResolvedValue(Response.json({ id: 'verified-owner' }))
-  await verifiedSession(request())
+  await verifiedSession(new Request('https://example.netlify.app/workspace', {
+    headers: { cookie: 'nf_jwt=test-session; nf_refresh=unused-fixture' },
+  }))
+  expect(transport).toHaveBeenCalledTimes(1)
   expect(transport.mock.calls[0][1].headers.Authorization).toBe(
-    'Bearer rotated-session',
+    'Bearer test-session',
   )
 })
 it('treats rejected or expired sessions as signed out', async () => {
@@ -73,15 +72,7 @@ it('keeps network failure distinct from signed out', async () => {
     code: 'IDENTITY_UNAVAILABLE',
   })
 })
-it('returns to login when an expired refresh session is rejected', async () => {
-  sdk.refresh.mockRejectedValue(
-    Object.assign(new Error('Refresh rejected'), { status: 400 }),
-  )
-  expect(await verifiedSession(request())).toBeNull()
-  expect(transport).not.toHaveBeenCalled()
-})
 it.each([
-  { stage: 'refresh', status: 503 },
   { stage: 'network', status: undefined },
   { stage: 'http', status: 429 },
   { stage: 'json', status: 200 },
@@ -91,11 +82,7 @@ it.each([
   async ({ stage, status }) => {
     const diagnostic = vi.fn()
     const privateMessage = 'private-provider-body-and-session-details'
-    if (stage === 'refresh')
-      sdk.refresh.mockRejectedValue(
-        Object.assign(new Error(privateMessage), { status }),
-      )
-    else if (stage === 'network')
+    if (stage === 'network')
       transport.mockRejectedValue(new Error(privateMessage))
     else if (stage === 'http')
       transport.mockResolvedValue(new Response(privateMessage, { status }))
@@ -162,7 +149,7 @@ it('uses the platform Identity endpoint for a custom-domain request and never it
   )
 })
 
-it('recovers once from a connection reset without repeating SDK refresh', async () => {
+it('recovers once from a connection reset without rotating credentials', async () => {
   vi.useFakeTimers()
   const diagnostic = vi.fn()
   transport
@@ -174,7 +161,6 @@ it('recovers once from a connection reset without repeating SDK refresh', async 
   await vi.advanceTimersByTimeAsync(200)
   expect(await result).toMatchObject({ id: 'verified-owner' })
   expect(transport).toHaveBeenCalledTimes(2)
-  expect(sdk.refresh).toHaveBeenCalledOnce()
   expect(diagnostic).toHaveBeenCalledWith(
     expect.objectContaining({
       category: 'connection',
@@ -283,7 +269,6 @@ it.each(['ECONNREFUSED', 'ECONNRESET', 'EAI_AGAIN', 'ETIMEDOUT'])(
       'https://mycottagepantry.com/.netlify/identity/user',
       'https://mycottagepantry.netlify.app/.netlify/identity/user',
     ])
-    expect(sdk.refresh).toHaveBeenCalledOnce()
     expect(transport.mock.calls[1][1]).toMatchObject({
       headers: { Authorization: 'Bearer test-session' },
       redirect: 'error',

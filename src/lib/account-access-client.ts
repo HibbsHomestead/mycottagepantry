@@ -1,4 +1,4 @@
-import { restoreIdentitySession } from './identity-session'
+import { restoreIdentitySession, sessionDiagnostic } from './identity-session'
 import { useRouter } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 import { resumeSelectedPlan } from './signup-plan-client'
@@ -21,8 +21,9 @@ export function accessTraceId() {
 }
 export async function readAccountAccess(
   traceId: string,
+  canRenew = true,
 ): Promise<AccountAccess> {
-  await restoreIdentitySession()
+  const session = await restoreIdentitySession()
   const response = await fetch('/api/account-access', {
     credentials: 'same-origin',
     cache: 'no-store',
@@ -51,6 +52,14 @@ export async function readAccountAccess(
     !Array.isArray(value.events)
   )
     throw new Error('ACCESS_RESPONSE_INVALID')
+  if (value.status === 'signed_out') {
+    if (session === 'active' && canRenew) {
+      const renewed = await restoreIdentitySession(true)
+      if (renewed === 'active') return readAccountAccess(traceId, false)
+      if (renewed === 'expired' || renewed === 'absent') return value
+    }
+    if (session === 'retrying' || session === 'active') throw new Error('IDENTITY_SESSION_UNCONFIRMED')
+  }
   return value
 }
 export const accountNavigation = {
@@ -100,6 +109,7 @@ export function navigateAccount(
   )
   if (url.origin !== location.origin || !allowed.includes(url.pathname))
     throw new Error('INVALID_ACCESS_DESTINATION')
+  if (url.pathname === '/login') sessionDiagnostic('account_gate_login')
   if (['/workspace', '/workspace/billing'].includes(url.pathname))
     url.pathname = url.pathname.replace('/workspace', '/oven')
   url.searchParams.set('accessTrace', traceId)
@@ -123,6 +133,7 @@ export function useAccountAccess(page: AccountPage) {
     // Callback fragments must reach the provider handler before any access decision,
     // including routes whose loading view intentionally omits the public header.
     if (hasIdentityCallback(location.hash)) {
+      sessionDiagnostic('identity_callback_login')
       accountNavigation.replace('/login' + location.search + location.hash)
       return
     }

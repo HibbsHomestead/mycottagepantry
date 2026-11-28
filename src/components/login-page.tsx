@@ -4,7 +4,7 @@ import { SubmissionForm } from './submission-form'
 import { FormErrorNotice } from './form-error-notice'
 import { useRouter } from '@tanstack/react-router'
 import { OvenLoading } from './oven-loading'
-import { restoreIdentitySession } from '@/lib/identity-session'
+import { handleIdentityCallback, identitySubject, restoreIdentitySession, signInIdentity, signOutIdentity } from '@/lib/identity-session'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { CallbackResult } from '@netlify/identity'
 import { PublicSite } from './public-site'
@@ -136,8 +136,7 @@ export function LoginPage() {
     async function initialize() {
       try {
         if (await activeDemoSession()) { window.location.replace('/oven'); return }
-        const identity = await import('@netlify/identity')
-        callback.current ??= identity.handleAuthCallback()
+        callback.current ??= handleIdentityCallback()
         const result = await callback.current
         if (!active) return
         setTraceId(reference.current)
@@ -154,7 +153,7 @@ export function LoginPage() {
         } else {
           // SDK hydration starts refresh handling, but its cache is not an access decision.
           await restoreIdentitySession()
-          const browserUser = result?.user || (await identity.getUser())
+          const browserUser = result?.user || identitySubject()
           if (!active) return
           record('browser_session', browserUser ? 'ready' : 'absent')
           await openWorkspace(Boolean(browserUser))
@@ -204,7 +203,7 @@ export function LoginPage() {
       const identity = await import('@netlify/identity')
       if (recovery) {
         await identity.updateUser({ password: String(fields.get('password')) })
-        await identity.logout().catch(() => {})
+        await signOutIdentity('password_reset').catch(() => {})
         form.reset()
         setRecovery(false)
         setRecoveryComplete(true)
@@ -212,7 +211,7 @@ export function LoginPage() {
         sessionReported.current = false
         return
       } else
-        await identity.login(
+        await signInIdentity(
           String(fields.get('email')),
           String(fields.get('password')),
         )

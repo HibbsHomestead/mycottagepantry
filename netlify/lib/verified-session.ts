@@ -1,5 +1,5 @@
 import { demoRequested } from './demo-session'
-import { getIdentityConfig, refreshSession } from '@netlify/identity'
+import { getIdentityConfig } from '@netlify/identity'
 
 export class SessionError extends Error {
   constructor(
@@ -213,35 +213,7 @@ export async function verifiedSession(
   if (demoRequested(request)) return null
   const cookie = request.headers.get('cookie') || ''
   if (!/(?:^|;\s*)nf_jwt=/.test(cookie)) return null
-  let token = cookie.match(/(?:^|;\s*)nf_jwt=([^;]*)/)?.[1]
-  let httpStatus: number | undefined
-  try {
-    // The SDK refreshes near-expiry sessions and writes rotated cookies through Netlify.
-    const refreshed = await refreshSession()
-    if (refreshed) token = refreshed
-  } catch (error) {
-    // Never forward provider messages, bodies, headers, cookies, or identity data.
-    const status = (error as { status?: unknown } | null)?.status
-    if (
-      typeof status === 'number' &&
-      Number.isInteger(status) &&
-      status >= 100 &&
-      status <= 599
-    )
-      httpStatus = status
-    diagnose?.({
-      stage: 'refresh',
-      ...(httpStatus === undefined ? {} : { httpStatus }),
-      category: verificationFailure(error),
-    })
-    if ([400, 401, 403].includes((error as { status?: number }).status || 0))
-      return null
-    throw new SessionError(
-      503,
-      'IDENTITY_UNAVAILABLE',
-      'Your session could not be checked. Please retry on this site.',
-    )
-  }
+  const token = cookie.match(/(?:^|;\s*)nf_jwt=([^;]*)/)?.[1]
   const user = await verificationGet(request, token, diagnose)
   if (!user) return null
   return {

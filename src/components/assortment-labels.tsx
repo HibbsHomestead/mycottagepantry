@@ -21,6 +21,7 @@ import {
 } from '@/lib/domain'
 import { productionRunLines } from '@/lib/production-run'
 import { supplierLabelSource } from '@/lib/supplier-label-source'
+import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
 import { printPlacement, printRotations, type PrintRotation } from '@/lib/label-printers'
 import './assortment-labels.css'
 
@@ -60,11 +61,15 @@ export function AssortmentLabels({
   context,
   canManage,
   save,
+  onReviewAllergens,
+  onOpenSource,
 }: {
   workspace: Workspace
   context?: Context
   canManage: boolean
   save: (data: Record<string, unknown>) => Promise<unknown>
+  onReviewAllergens?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
 }) {
   const [spec, setSpec] = useState(() => initialSpec(workspace, context))
   const [preview, setPreview] = useState<ReturnType<typeof assortmentLabel>>()
@@ -649,6 +654,9 @@ export function AssortmentLabels({
               </ul>
             </div>
           )}
+          {[...new Set(preview.snapshot.sections.map(({ productId }) => productId))].map((id) => (
+            <LabelSourceAllergenReview key={id} workspace={workspace} source={{ kind: 'product', id }} mutate={canManage ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
+          ))}
           {canManage && (
             <div className="button-row">
               <label>

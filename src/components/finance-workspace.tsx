@@ -1,4 +1,6 @@
 import { FormErrorNotice } from './form-error-notice'
+import { withWorkspaceIdentity } from '@/lib/identity-session'
+import { useEditorLeaveGuard } from '@/lib/editor-checkpoint'
 import { useWorkspaceFilter } from '@/lib/use-workspace-filter'
 import { RecordLink, purchaseTransactions } from './linked-purchase-records'
 import { customerMessage } from '@/lib/customer-message'
@@ -271,11 +273,12 @@ export function FinanceWorkspace({
     data: Record<string, any> = {},
     publish = true,
   ) {
-    const response = await fetch('/api/workspace', {
+    const scope = w.settings[0]?.labelEditorScope
+    const response = await withWorkspaceIdentity(() => fetch('/api/workspace', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(scope ? { 'X-Workspace-Editor-Scope': scope } : {}) },
         body: JSON.stringify({ action, data }),
-      }),
+      })),
       result = response.headers
         .get('content-type')
         ?.includes('application/json')
@@ -2599,6 +2602,21 @@ function ReceiptReview({
   const autosaveCallback = useRef(onAutosave)
   autosaveCallback.current = onAutosave
   const phase = draftStatus.version === version ? draftStatus.phase : 'idle'
+  const receiptDirty = r.status === 'draft' && JSON.stringify(r) !== draft.current.saved
+  useEditorLeaveGuard(receiptDirty)
+  useEffect(() => {
+    function retryCheckpoint() {
+      if (!draft.current.failed) return
+      draft.current.failed = ''
+      setDraftStatus({ version, phase: 'idle' })
+    }
+    window.addEventListener('online', retryCheckpoint)
+    window.addEventListener('cottage.workspace.reconnected', retryCheckpoint)
+    return () => {
+      window.removeEventListener('online', retryCheckpoint)
+      window.removeEventListener('cottage.workspace.reconnected', retryCheckpoint)
+    }
+  }, [version])
   useEffect(() => {
     const current = draft.current
     const signature = JSON.stringify(r)

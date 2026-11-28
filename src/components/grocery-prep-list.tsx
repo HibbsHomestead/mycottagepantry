@@ -47,6 +47,8 @@ import {
   readGroceryOutbox,
 } from '../lib/grocery-sync'
 import './grocery-prep-list.css'
+import { checkpointMessage, useEditorCheckpoint } from '@/lib/editor-checkpoint'
+import { withWorkspaceIdentity } from '@/lib/identity-session'
 
 type Summary = Pick<GroceryList, 'id' | 'labels' | 'generatedAt'>
 type ListResult = {
@@ -69,17 +71,18 @@ const formatDate = (date: string) =>
 async function requestList(
   id?: string,
   data?: Record<string, unknown>,
+  scope?: string,
 ): Promise<ListResult> {
-  const result = await fetch(
+  const result = await withWorkspaceIdentity(() => fetch(
     endpoint + (id && !data ? `&list=${encodeURIComponent(id)}` : ''),
     data
       ? {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(scope ? { 'X-Workspace-Editor-Scope': scope } : {}) },
           body: JSON.stringify({ ...data, id }),
         }
       : { cache: 'no-store' },
-  )
+  ))
   const payload = (await result.json()) as ListResult
   if (!result.ok)
     throw new Error(
@@ -539,6 +542,12 @@ export function GroceryPrepList({
   const [summaries, setSummaries] = useState<Summary[]>([])
   const [sources, setSources] = useState<GrocerySources>(emptyGrocerySources)
   const [editingSources, setEditingSources] = useState(false)
+  const [sourcesDirty, setSourcesDirty] = useState(false)
+  const scope = state.settings[0]?.labelEditorScope
+  const checkpoint = useEditorCheckpoint({
+    kind: allowed && (editingSources || !list) ? 'prep-list' : null,
+    target: list?.id, scope, snapshot: { sources }, dirty: sourcesDirty,
+  })
   const [view, setView] = useState<'products' | 'shop' | 'prep'>('shop')
   const [groupBy, setGroupBy] = useState<'vendor' | 'category'>('vendor')
   const [hideChecked, setHideChecked] = useState(false)
@@ -598,6 +607,7 @@ export function GroceryPrepList({
     setPending(outbox(snapshot.id))
     setSources(snapshot.sources)
     setEditingSources(false)
+    setSourcesDirty(false)
     setView('shop')
     setQuery('')
     setCollapsed({})
@@ -785,9 +795,10 @@ export function GroceryPrepList({
       const payload = await requestList(generation.current.id, {
         action: 'generate',
         sources: selected,
-      })
+      }, scope)
       clock(payload)
       if (payload.list) {
+        void checkpoint.clear()
         const snapshot = payload.list
         setSummaries((previous) => [
           snapshot,
@@ -960,8 +971,10 @@ export function GroceryPrepList({
               className="grocery-button"
               aria-expanded={editingSources}
               onClick={() => {
+                if (sourcesDirty && !window.confirm('Close source editing? Changes since the last recovery checkpoint may be lost.')) return
                 setSources(display.sources)
                 setEditingSources(!editingSources)
+                setSourcesDirty(false)
               }}
             >
               {editingSources ? 'Cancel source edits' : 'Edit sources'}
@@ -979,10 +992,17 @@ export function GroceryPrepList({
         </section>
       )}
       {((!display && !loading) || editingSources) && (
+        <>
+        {checkpoint.available && <button type="button" className="grocery-button" onClick={() => {
+          if (sourcesDirty && !window.confirm('Replace this tab’s edits with the saved recovery draft?')) return
+          const snapshot = checkpoint.accept()
+          if (snapshot) { setSources(snapshot.sources); setSourcesDirty(true) }
+        }}>Restore recovery draft</button>}
+        <p role="status">{checkpointMessage(checkpoint.status)}</p>
         <SourcesEditor
           state={state}
           sources={sources}
-          setSources={setSources}
+          setSources={(next) => { setSources(next); setSourcesDirty(true) }}
           submit={(event) => {
             event.preventDefault()
             void generate(sources)
@@ -990,6 +1010,7 @@ export function GroceryPrepList({
           busy={busy}
           current={!!display}
         />
+        </>
       )}
       {display && (
         <>

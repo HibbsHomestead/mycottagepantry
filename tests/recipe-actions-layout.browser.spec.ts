@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
 import { breadBaseFixture } from '../src/test/fixtures/bread-base'
 import {
   installWorkspaceFixture,
@@ -11,7 +10,7 @@ for (const [width, height] of [
   [820, 900],
   [390, 844],
 ]) {
-  test(`recipe layout and unsaved copy ${width}`, async ({ page }) => {
+  test(`recipe layout and unsaved copy ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height })
     await installWorkspaceFixture(page)
     const workspace = breadBaseFixture()
@@ -58,6 +57,20 @@ for (const [width, height] of [
       })
       .click()
     const dialog = page.getByRole('dialog')
+    const ingredientSection = dialog.locator('.recipe-editor-components')
+    const actions = ingredientSection.getByRole('button', { name: /^Add (ingredient|compound \/ prep|prepared stock)$/ })
+    await expect(actions).toHaveCount(3)
+    const actionPositions = await actions.evaluateAll((buttons) => buttons.map((button) => {
+      const { top, width } = button.getBoundingClientRect()
+      return { top, width, available: button.parentElement!.clientWidth }
+    }))
+    const tops = actionPositions.map(({ top }) => top)
+    if (width >= 820) expect(Math.max(...tops) - Math.min(...tops), JSON.stringify(actionPositions)).toBeLessThan(1)
+    const heading = width <= 640 ? '.recipe-line-mobile-heading' : '.recipe-line-headings span'
+    await expect(ingredientSection.locator(heading).first()).toBeVisible()
+    await expect(dialog.getByRole('checkbox', {name: 'Recipe type: Compound prep'})).toHaveAccessibleDescription(/used to make|used in another recipe/)
+    await ingredientSection.locator('.recipe-add-actions').evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await page.screenshot({ path: testInfo.outputPath(`recipe-ingredients-${width}.png`) })
     await dialog
       .getByRole('combobox', { name: 'Category', exact: true })
       .selectOption(category.id)
@@ -114,9 +127,8 @@ for (const [width, height] of [
     await dialog
       .getByRole('textbox', { name: 'Instructions', exact: true })
       .fill('Final instructions remain reachable')
-    await mkdir('docs/reviews/recipe-actions', { recursive: true })
     await overhead.scrollIntoViewIfNeeded()
-    await page.screenshot({path:`docs/reviews/recipe-actions/overhead-${width}.png`})
+    await page.screenshot({path:testInfo.outputPath(`overhead-${width}.png`)})
     const instructions = dialog.getByRole('textbox', { name: 'Instructions', exact: true })
     await instructions.focus()
     await page.keyboard.press('Tab')
@@ -126,7 +138,7 @@ for (const [width, height] of [
       .locator('.food-product-scroll')
       .evaluate((el) => (el.scrollTop = 0))
     await page.screenshot({
-      path: `docs/reviews/recipe-actions/recipe-${width}.png`,
+      path: testInfo.outputPath(`recipe-${width}.png`),
     })
     await dialog
       .getByRole('button', { name: 'Save recipe', exact: true })

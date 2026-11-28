@@ -1,6 +1,10 @@
 import { useState } from 'react'
-import type { Item } from '@/lib/domain'
-import type { LabelData } from '@/lib/label-studio'
+import { allergens, type Item, type Workspace } from '@/lib/domain'
+import {
+  resolveLabelData,
+  type LabelData,
+  type LabelSource,
+} from '@/lib/label-studio'
 import {
   componentSources,
   componentWeightSource,
@@ -175,14 +179,269 @@ export type ReviewMutation = (
   data: Record<string, unknown>,
 ) => Promise<unknown>
 
+function IngredientSourceReview({
+  item,
+  mutate,
+}: {
+  item: Item
+  mutate: ReviewMutation
+}) {
+  const [source, setSource] = useState(() => ({
+    subingredients: String(item.subingredients || ''),
+    sourceContains: String(item.sourceContains || ''),
+    sourceMayContain: String(item.sourceMayContain || ''),
+    reviewed: item.reviewed === true,
+    allergens: (item.allergens || []) as string[],
+  }))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function save() {
+    setBusy(true)
+    setError('')
+    try {
+      await mutate('ingredientAllergenSource', 'ingredients', {
+        ...source,
+        id: item.id,
+        expectedUpdatedAt: item.updatedAt,
+      })
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Ingredient source not saved.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <details className="label-review-section">
+      <summary>Edit allergen source for {item.name}</summary>
+      <p>
+        Copy the verified supplier wording, including any nested components.
+        Leave unknown information unconfirmed.
+      </p>
+      <fieldset disabled={busy}>
+        {(
+          [
+            ['subingredients', 'Supplier subingredients'],
+            ['sourceContains', 'Supplier Contains statement'],
+            ['sourceMayContain', 'Supplier May contain statement'],
+          ] as const
+        ).map(([key, label]) => (
+          <label className="field" key={key}>
+            <span>{label}</span>
+            <textarea
+              maxLength={key === 'subingredients' ? 8000 : 1000}
+              value={source[key]}
+              onChange={(event) =>
+                setSource({
+                  ...source,
+                  [key]: event.target.value,
+                  reviewed: false,
+                })
+              }
+            />
+          </label>
+        ))}
+        <fieldset>
+          <legend>Allergens explicitly declared by this source</legend>
+          <div className="allergen-options">
+            {allergens.map((allergen) => (
+              <label key={allergen}>
+                <input
+                  type="checkbox"
+                  checked={source.allergens.includes(allergen)}
+                  onChange={(event) =>
+                    setSource({
+                      ...source,
+                      reviewed: false,
+                      allergens: event.target.checked
+                        ? [...source.allergens, allergen]
+                        : source.allergens.filter((name) => name !== allergen),
+                    })
+                  }
+                />
+                {allergen}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <label>
+          <input
+            type="checkbox"
+            checked={source.reviewed}
+            onChange={(event) =>
+              setSource({ ...source, reviewed: event.target.checked })
+            }
+          />{' '}
+          I verified the ingredient and allergen information against the
+          supplier source.
+        </label>
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => void save()}
+        >
+          Save ingredient source
+        </button>
+      </fieldset>
+      {error && <p role="alert">{error}</p>}
+    </details>
+  )
+}
+
+export function LabelSourceAllergenReview({
+  workspace,
+  source,
+  data = resolveLabelData(workspace, source),
+  mutate,
+  onOpenSource,
+  actionLabel,
+}: {
+  workspace: Workspace
+  source: LabelSource
+  data?: LabelData
+  mutate?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
+  actionLabel?: string
+}) {
+  const product = workspace.products.find(
+    (entry) =>
+      entry.id === (source.kind === 'product' ? source.id : source.productId),
+  )
+  const record =
+    product ||
+    (source.kind === 'batch' ? workspace.batches : workspace.ingredients).find(
+      (entry) => entry.id === source.id,
+    )
+  const name = record
+    ? [
+        ...new Set(
+          [record.name, record.flavor, record.variant].filter(Boolean),
+        ),
+      ].join(' · ')
+    : 'Selected label source'
+  const review = data.allergenReview
+  const sourceIssues = data.warnings.filter((warning) =>
+    /verify allergens|subingredients|manufacturer ingredient and allergen|allergen information not confirmed by the manufacturer/i.test(
+      warning,
+    ),
+  )
+  const productNeedsReview = review && review.status !== 'confirmed'
+  const ingredientIds = new Set(
+    sourceIssues.flatMap((warning) => {
+      const issue = data.sourceRecords?.[warning]
+      return issue?.kind === 'ingredient' ? [issue.id] : []
+    }),
+  )
+  if (productNeedsReview)
+    for (const id of data.declaredAllergenSourceIds || []) ingredientIds.add(id)
+  const ingredients = workspace.ingredients.filter((entry) =>
+    ingredientIds.has(entry.id),
+  )
+  const manufacturerNeedsReview =
+    product?.workflow === 'resale' &&
+    sourceIssues.some((warning) => /manufacturer/i.test(warning))
+  const batchHasDifferentEvidence = Boolean(
+    source.kind === 'batch' &&
+    product &&
+    review &&
+    JSON.stringify(review.source) !==
+      JSON.stringify(
+        resolveLabelData(workspace, { kind: 'product', id: product.id })
+          .allergenReview?.source,
+      ),
+  )
+  if (data.nonFood || (!productNeedsReview && !sourceIssues.length)) return null
+  const pending =
+    review &&
+    majorAllergens.filter(
+      (name) =>
+        !['present', 'absent'].includes(review.decisions[name]?.status || ''),
+    )
+  return (
+    <section
+      aria-label={`Allergen review for ${name}`}
+      className="label-review-section"
+    >
+      <h4>{name}: allergen information needs review</h4>
+      {review?.status === 'changed' && (
+        <p>Source changes need confirmation: {review.changed.join('; ')}.</p>
+      )}
+      {productNeedsReview && !!pending?.length && (
+        <p>Not confirmed: {pending.join(', ')}.</p>
+      )}
+      {!!review?.evidence.some(
+        (entry) => entry.confidence === 'incomplete data',
+      ) && (
+        <ul aria-label="Incomplete allergen sources">
+          {review.evidence
+            .filter((entry) => entry.confidence === 'incomplete data')
+            .map((entry) => (
+              <li key={entry.path.join(' → ')}>
+                {entry.path.join(' → ')}: source incomplete
+              </li>
+            ))}
+        </ul>
+      )}
+      {!!sourceIssues.length && (
+        <ul>
+          {sourceIssues.map((warning) => (
+            <li key={warning}>{warning.replace(/ \[[^\]]+\]$/, '')}</li>
+          ))}
+        </ul>
+      )}
+      {manufacturerNeedsReview && onOpenSource && product && (
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => onOpenSource('trade-product-source', product)}
+        >
+          Review manufacturer allergen declaration
+        </button>
+      )}
+      {productNeedsReview && product && !batchHasDifferentEvidence && (
+        <ProductAllergenReview
+          key={`${product.id}:${product.allergenReview?.reviewedAt || ''}:${JSON.stringify(review.source)}`}
+          product={product}
+          review={review}
+          mutate={mutate}
+          actionLabel={actionLabel || 'Review and confirm major allergens'}
+        />
+      )}
+      {mutate &&
+        ingredients.map((item) => (
+          <IngredientSourceReview
+            key={`${item.id}:${item.updatedAt || ''}`}
+            item={item}
+            mutate={mutate}
+          />
+        ))}
+      {productNeedsReview && batchHasDifferentEvidence && (
+        <p>
+          The recorded batch ingredients differ from the current product source.
+          A product review cannot confirm this batch’s declaration.
+        </p>
+      )}
+      {productNeedsReview && !product && (
+        <p>
+          Choose a packaged product linked to this batch’s recipe, then review
+          its allergens.
+        </p>
+      )}
+    </section>
+  )
+}
+
 export function ProductAllergenReview({
   review,
   product,
   mutate,
+  actionLabel = 'Major allergen review',
 }: {
   review: NonNullable<LabelData['allergenReview']>
   product: Item
   mutate?: ReviewMutation
+  actionLabel?: string
 }) {
   const [decisions, setDecisions] = useState<AllergenDecisions>(() =>
     review.status === 'changed' ? {} : review.decisions,
@@ -242,7 +501,7 @@ export function ProductAllergenReview({
   return (
     <details className="label-review-section">
       <summary>
-        Major allergen review ·{' '}
+        {actionLabel} ·{' '}
         {review.status === 'confirmed'
           ? 'Confirmed'
           : review.status === 'changed'
@@ -257,6 +516,13 @@ export function ProductAllergenReview({
       {!!review.changed.length && (
         <p>Changed sources: {review.changed.join('; ')}</p>
       )}
+      {review.status === 'confirmed' && product.allergenReview?.reviewedAt && (
+        <p>
+          Confirmed{' '}
+          {new Date(product.allergenReview.reviewedAt).toLocaleString()} against
+          this source version.
+        </p>
+      )}
       {!!review.evidence.length && (
         <ul aria-label="Ingredient evidence">
           {review.evidence.map((entry, index) => (
@@ -270,6 +536,30 @@ export function ProductAllergenReview({
               · {entry.path.join(' → ')}
             </li>
           ))}
+        </ul>
+      )}
+      {!mutate && (
+        <ul aria-label="Major allergen states">
+          {majorAllergens.map((allergen) => {
+            const decision = decisions[allergen]?.status
+            const state =
+              decision === 'present'
+                ? 'Confirmed present'
+                : decision === 'absent'
+                  ? 'Confirmed absent'
+                  : decision === 'review'
+                    ? 'Needs review'
+                    : review.evidence.some(
+                          (entry) => entry.allergen === allergen,
+                        )
+                      ? 'Suggested · not confirmed'
+                      : 'Unknown'
+            return (
+              <li key={allergen}>
+                {allergen}: {state}
+              </li>
+            )
+          })}
         </ul>
       )}
       {mutate && (

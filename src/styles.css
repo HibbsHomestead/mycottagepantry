@@ -3535,12 +3535,6 @@ main > .recipe-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-.recipe-add-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 12px;
-}
 
 /* Product details use the available desktop width; one dialog scroll surface. */
 .app-dialog.wide-dialog.item-detail-dialog {
@@ -3674,7 +3668,7 @@ main > .recipe-grid {
 .recipe-editor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 20px;
+  gap: 12px 20px;
 }
 .recipe-editor-layout > * { min-width: 0; }
 .recipe-editor-identity { grid-area: identity; }
@@ -3684,7 +3678,7 @@ main > .recipe-grid {
 .recipe-editor-notes { grid-area: notes; }
 .recipe-editor-summary { display: contents; align-self: start; }
 .recipe-editor-layout { grid-template-areas: 'identity' 'components' 'supplies' 'labor' 'overhead' 'summary' 'notes'; }
-.recipe-identity-fields { display: grid; gap: 16px; min-width: 0; }
+.recipe-identity-fields { display: grid; gap: 12px; min-width: 0; }
 .recipe-editor-overhead .form-grid { grid-template-columns: minmax(0, 1fr); }
 .recipe-editor-overhead select { width: 100%; min-width: 0; }
 .recipe-editor-overhead h3 { margin-top: 0; }
@@ -3692,6 +3686,7 @@ main > .recipe-grid {
 @media (min-width: 1100px) {
   .recipe-editor-layout {
     grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr);
+    grid-template-rows: repeat(4, min-content) minmax(min-content, 1fr);
     grid-template-areas: 'identity sidebar' 'components sidebar' 'supplies sidebar' 'labor sidebar' 'notes sidebar';
     align-items: start;
   }
@@ -3700,19 +3695,47 @@ main > .recipe-grid {
 @media (min-width: 1100px) {
   .recipe-editor-summary { grid-area: sidebar; display: flex; flex-direction: column; gap: 20px; }
 }
-.recipe-editor-identity { display: grid; gap: 16px; }
+.recipe-editor-identity { display: grid; gap: 12px; }
 .recipe-editor-overhead { display: grid; gap: 16px; }
 .recipe-editor-overhead > h3 { margin: 0; }
-.recipe-editor-components > .form-section-title { flex-wrap: wrap; }
-.recipe-editor-components .recipe-add-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
-.recipe-editor-components .recipe-line-editor {
-  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, auto) 44px;
+.recipe-editor-components { display: grid; gap: 8px; }
+.recipe-editor-components > .form-section-title { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.recipe-editor-components .recipe-add-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.recipe-add-actions .text-button { display: inline-flex; align-items: center; min-height: 44px; margin: 0; gap: 4px; }
+.recipe-editor-components .recipe-line-editor,
+.recipe-line-headings {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(54px, 1fr) 44px;
+  gap: 8px;
 }
-.recipe-line-editor .prepared-portion-quantity { grid-column: span 2; }
-@media (max-width: 1023px) {
-  .recipe-editor-components .recipe-line-editor { grid-template-columns: minmax(0, 1fr) 75px 65px 44px; }
-  .recipe-editor-components .recipe-line-cost { grid-column: 1 / -1; grid-row: 2; }
-  .recipe-editor-components .item-remove-button { grid-column: 4; grid-row: 1; }
+.recipe-line-headings, .recipe-line-mobile-heading { color: var(--muted); font-size: max(var(--interface-text-min, 0px), 12px); font-weight: 650; }
+.recipe-line-headings > :last-child { text-align: right; }
+.recipe-line-mobile-heading { display: none; }
+.recipe-editor-components .recipe-line-editor > * { min-width: 0; }
+.recipe-editor-components .recipe-line-cost { grid-column: 4; grid-row: 1; }
+.recipe-editor-components .recipe-line-editor > .icon-button { grid-column: 5; grid-row: 1; justify-self: end; }
+.recipe-editor-components .recipe-line-editor input,
+.recipe-editor-components .recipe-line-editor select { width: 100%; font-size: max(var(--interface-text-min, 0px), 13px); }
+.recipe-editor-components .prepared-portion-quantity { grid-column: 2 / 4; }
+@media (max-width: 640px) {
+  .recipe-line-headings { display: none; }
+  .recipe-editor-components .recipe-line-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(0, 1.1fr) 44px;
+    padding-block: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .recipe-line-mobile-heading { display: block; }
+  .recipe-line-mobile-heading.ingredient { grid-area: 1 / 1 / 2 / 4; }
+  .recipe-editor-components .recipe-component-source { grid-area: 2 / 1 / 3 / 4; }
+  .recipe-line-mobile-heading.quantity { grid-area: 3 / 1; }
+  .recipe-line-mobile-heading.unit { grid-area: 3 / 2; }
+  .recipe-line-mobile-heading.cost { grid-area: 3 / 3; text-align: right; }
+  .recipe-line-quantity { grid-area: 4 / 1; }
+  .recipe-line-unit { grid-area: 4 / 2; }
+  .recipe-editor-components .recipe-line-cost { grid-area: 4 / 3; }
+  .recipe-editor-components .recipe-line-editor > .icon-button { grid-area: 2 / 4; }
+  .recipe-editor-components .prepared-portion-quantity { grid-area: 4 / 1 / 5 / 3; }
+  .recipe-line-editor:has(.prepared-portion-quantity) .recipe-line-mobile-heading:is(.quantity, .unit) { display: none; }
 }
 
 /* Compact product packaging assignments; values remain part of the product draft. */
@@ -3932,3 +3955,16 @@ main > .recipe-grid {
 .production-supply-line { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(90px, 1fr) minmax(75px, 1fr) auto; gap: 12px; align-items: end; padding-block: 12px; border-bottom: 1px solid var(--border); }
 .production-supply-line > p { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 600px) { .production-supply-line { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .production-supply-line > :first-child { grid-column: 1 / -1; } }
+.workspace-reconnecting {
+  position: fixed;
+  z-index: 35;
+  inset: auto 1rem 1rem auto;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: .75rem 1rem;
+  border: 1px solid currentColor;
+  border-radius: .5rem;
+  background: var(--background);
+  color: var(--foreground);
+}
+.workspace-session-overlay[data-slot='dialog-overlay'] { z-index: 1999; background: rgb(24 31 24 / 98%); }
+.workspace-session-gate[data-slot='dialog-content'] { z-index: 2000; }

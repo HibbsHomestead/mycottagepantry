@@ -2,6 +2,7 @@ import { FormErrorNotice } from './form-error-notice'
 import { useState } from 'react'
 import type { AccountAccess } from '@/lib/access-state'
 import { OvenLoading } from './oven-loading'
+import { signOutIdentity } from '@/lib/identity-session'
 
 export function SignOutAccountButton() {
   const [error, setError] = useState('')
@@ -10,8 +11,7 @@ export function SignOutAccountButton() {
     setBusy(true)
     setError('')
     try {
-      const identity = await import('@netlify/identity')
-      await identity.logout()
+      await signOutIdentity()
       window.location.replace('/login?signedOut=1')
     } catch {
       setError('Sign out could not complete. Please retry.')
