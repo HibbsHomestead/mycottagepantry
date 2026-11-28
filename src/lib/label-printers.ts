@@ -111,9 +111,7 @@ export const samePrintSize = (first: Size, second: Size) =>
   Math.abs(first.width - second.width) <= 0.1 &&
   Math.abs(first.height - second.height) <= 0.1
 
-export function printPlacement(design: Size, profile?: PrinterProfile) {
-  const media = profile ? printerSize(profile) : design
-  const rotation = profile?.rotation ?? 0
+export function printPlacement(design: Size, profile?: PrinterProfile, rotation: PrintRotation = profile?.rotation ?? 0) {
   const { width, height } = design
   const rotated = rotation === 90 || rotation === 270
   const matrix: [number, number, number, number, number, number] =
@@ -128,11 +126,8 @@ export function printPlacement(design: Size, profile?: PrinterProfile) {
     matrix[4] += points(profile.offsetX, profile.unit)
     matrix[5] += points(profile.offsetY, profile.unit)
   }
-  return {
-    media,
-    matrix,
-    size: rotated ? { width: height, height: width } : design,
-  }
+  const size = rotated ? { width: height, height: width } : design
+  return { media: profile ? printerSize(profile) : size, matrix, size }
 }
 
 export function checkPrinterSize(d: Size, p: PrinterProfile) {

@@ -1,5 +1,6 @@
 import type { Item } from '../../lib/domain'
 import { assortmentFixture } from './assortment'
+import { confirmFixtureAllergens } from './label-ingredient-review'
 
 export function mixedPackFixture() {
   const { workspace } = assortmentFixture()
@@ -30,5 +31,8 @@ export function mixedPackFixture() {
   workspace.ingredients.push(...ingredients)
   workspace.recipes.push(...recipes)
   workspace.products.push(...outputs, wrapped, pack)
+  confirmFixtureAllergens(workspace, outputs[0], ['Wheat'])
+  confirmFixtureAllergens(workspace, outputs[1], ['Wheat', 'Milk'])
+  confirmFixtureAllergens(workspace, wrapped, ['Wheat'])
   return { workspace, pack, outputs, wrapped, ingredients, recipes, flour, container, labels, wrap, template }
 }

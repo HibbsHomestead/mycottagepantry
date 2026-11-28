@@ -1,0 +1,125 @@
+.product-ingredients {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: clamp(14px, 2.5vw, 24px);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow-wrap: anywhere;
+}
+.product-ingredients header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+}
+.product-ingredients h3,
+.product-ingredients h4,
+.product-ingredients p {
+  margin: 0;
+}
+.product-ingredients p {
+  line-height: 1.55;
+}
+.product-ingredients h4 {
+  margin-bottom: 5px;
+}
+.product-ingredients header p,
+.product-ingredients-origin {
+  font-size: 0.9rem;
+}
+.product-ingredients-source {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+.product-ingredients .text-button {
+  min-height: 36px;
+  padding: 4px 0;
+}
+.product-ingredients h4 {
+  font-weight: 650;
+}
+.product-ingredients-statement {
+  white-space: pre-wrap;
+}
+.product-ingredients-status {
+  border-inline-start: 3px solid #a6723a;
+  padding-inline: 14px 8px;
+  margin: 0;
+}
+ul.product-ingredients-status {
+  padding-inline-start: 28px;
+}
+.product-ingredients-entry {
+  width: 100%;
+  border-top: 1px solid var(--border);
+  padding-block: 10px 0;
+}
+.product-ingredients-entry > .product-ingredients-source {
+  margin-top: 10px;
+}
+.product-ingredients summary {
+  cursor: pointer;
+}
+.product-ingredients summary small {
+  margin-inline-start: 6px;
+}
+.product-supplier-source {
+  margin: 18px 0 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  padding: 12px;
+}
+.product-supplier-source .field {
+  margin-block: 10px;
+}
+.product-supplier-source textarea {
+  max-width: 100%;
+}
+.label-review-section,
+.label-review-comparison > div {
+  border: 1px solid var(--border, #d9d4c7);
+  border-radius: 12px;
+  padding: 1rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.label-review-section summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.label-review-comparison,
+.label-review-decisions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 0.75rem;
+  margin-block: 0.75rem;
+}
+.label-review-comparison > div {
+  background: var(--paper, #fffdf7);
+}
+.label-review-comparison h5 {
+  margin-top: 0;
+}
+.label-review-decisions fieldset {
+  min-width: 0;
+  margin: 0;
+}
+.label-review-nested {
+  padding-inline-start: 0.75rem;
+  border-inline-start: 1px solid var(--border, #d9d4c7);
+}
+.label-review-component label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-block: 0.4rem;
+}
+.label-review-component input {
+  width: 8rem;
+}

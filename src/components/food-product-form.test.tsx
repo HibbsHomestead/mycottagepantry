@@ -58,7 +58,12 @@ it('keeps one draft across food product tabs with the summary outside them', asy
     within(tabs)
       .getAllByRole('tab')
       .map((t) => t.textContent),
-  ).toEqual(['Details & Pricing', 'Images & Labels', 'Stock & Other Details'])
+  ).toEqual([
+    'Details & Pricing',
+    'Images & Labels',
+    'Ingredients & allergens',
+    'Stock & Other Details',
+  ])
   // The cost summary is a sibling of the tabs, not inside a tab panel.
   const summary = dialog.querySelector(
     '.food-product-scroll > .pricing-summary',

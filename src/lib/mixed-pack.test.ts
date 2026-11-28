@@ -29,12 +29,16 @@ it('requires fresh review for a changed combination or reviewed ingredient sourc
   const spec: AssortmentSpec = { name: pack.name, productId: pack.id, batchId: '', group: '', componentId: '', templateId: template.id, packagingId: labels.id, mode: 'fixed', containers: 10, copies: 20, ...fixedAssortmentContents(pack) }
   const { snapshot } = assortmentLabel(workspace, spec)
   const text = assortmentLabelText(snapshot).join('\n')
-  expect(text).toContain('3 blueberry muffins + 3 cranberry muffins')
+  expect(text).toContain('3 Blueberry muffins · 3 Cranberry muffins')
   expect(text).toMatch(/Ingredients:.*blueberry fruit/)
   expect(text).toMatch(/Ingredients:.*cranberry fruit/)
   expect(text).toContain('MILK')
   expect(snapshot.warnings).toEqual([])
-  const job = { id: 'mixed-job', name: pack.name, assortmentSpec: spec, assortmentSnapshot: snapshot }
+  const job = JSON.parse(JSON.stringify({ id: 'mixed-job', name: pack.name, assortmentSpec: spec, assortmentSnapshot: snapshot }))
+  expect(assortmentJobCurrent(workspace, job)).toBe(true)
+  template.revision++
+  expect(assortmentJobCurrent(workspace, job)).toBe(false)
+  template.revision--
   expect(assortmentJobCurrent(workspace, job)).toBe(true)
   flour.reviewed = false
   expect(assortmentJobCurrent(workspace, job)).toBe(false)

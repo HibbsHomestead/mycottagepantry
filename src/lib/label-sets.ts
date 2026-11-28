@@ -131,6 +131,15 @@ export function validateLabelRunContent(
   data: LabelData,
   sides: LabelSide[],
 ) {
+  const outputUsesFoodDeclarations = sides.some((side) => labelSide(document, side).elements.some((element) =>
+    !element.hidden && (['recipe.ingredients', 'recipe.allergens', 'recipe.allergenAdvisory'].includes(element.binding || '') || (!element.binding && element.type === 'text' && /\b(?:ingredients|contains)\s*:/i.test(element.text))),
+  ))
+  if (outputUsesFoodDeclarations) {
+    if (data.ingredientMerge?.mode === 'merged' && !data.ingredientMerge.merged)
+      throw new Error('Merged ingredient order is unconfirmed. Verify component weights or use the parenthetical statement before printing.')
+    if ((data.allergenReview && data.allergenReview.status !== 'confirmed') || (data.supplierLabelSource && (!data.supplierLabelSource.reviewed || (!data.supplierLabelSource.contains && !data.supplierLabelSource.noMajorAllergens))))
+      throw new Error('Allergen information not confirmed. Review the product source before printing a food declaration.')
+  }
   if (document.format !== 'front-back') return
   for (const side of new Set(sides)) {
     const layout = labelSide(document, side)

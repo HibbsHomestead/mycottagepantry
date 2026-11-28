@@ -5,6 +5,11 @@ import type { LabelFont } from './label-font-catalog'
 import { labelFontMetrics } from './label-font-metrics'
 import { ingredientStatementRuns } from './label-ingredient-statement'
 import {
+  allergenEvidence, componentSources, componentWeightSource, majorAllergens, mergeWeightedIngredients,
+  weightedComponents, type AllergenDecisions, type AllergenEvidence,
+  type WeightedIngredient,
+} from './label-ingredient-review'
+import {
   convert,
   money,
   effectiveRecipeLines,
@@ -13,6 +18,10 @@ import {
 } from './domain'
 import { productNetWeight, productNetWeightText } from './net-weight'
 import { labelFonts } from './label-font-catalog'
+import {
+  supplierLabelSource,
+  type SupplierLabelSource,
+} from './supplier-label-source'
 export { labelFonts } from './label-font-catalog'
 export const labelTypes = [
   'Finished-product front label',
@@ -104,6 +113,7 @@ export const bindings = [
   'recipe.name',
   'recipe.ingredients',
   'recipe.allergens',
+  'recipe.allergenAdvisory',
   'recipe.yield',
   'batch.number',
   'batch.date',
@@ -158,6 +168,27 @@ export type LabelElement = {
   graphic?: string
   fit: 'contain' | 'cover'
 }
+export const assortmentParentFields = {
+  'product.storage': 'Storage instructions',
+  'product.netQuantity': 'Recorded net weight',
+  'business.name': 'Business name',
+  'business.address': 'Business address',
+  'business.website': 'Website',
+  'business.disclaimer': 'Configured disclaimer',
+  'batch.packedDate': 'Recorded packed date',
+  'batch.bestBy': 'Recorded best-by date',
+  'assortment.allergens': 'Overall Contains (confirmed contents only)',
+} as const
+type AssortmentParentField = keyof typeof assortmentParentFields
+export type AssortmentLayout = {
+  minimumFontSize: number
+  parentFields: AssortmentParentField[]
+}
+export const defaultAssortmentLayout: AssortmentLayout = {
+  minimumFontSize: 10,
+  parentFields: ['product.storage', 'business.disclaimer', 'business.name', 'business.address'],
+}
+
 export type LabelDocument = {
   id: string
   /** Explicit-save labels; legacy documents remain preserved until conversion review. */
@@ -176,6 +207,7 @@ export type LabelDocument = {
   recordKind?: 'label' | 'template'
   sourceTemplateId?: string
   format?: 'single' | 'front-back'
+  assortmentLayout?: AssortmentLayout
   renderVersion?: 2
   back?: LabelLayout
   deletedAt?: string
@@ -438,7 +470,24 @@ export type LabelSource = {
   productId?: string
 }
 export type LabelData = {
+  ingredientMerge?: {
+    mode: 'parenthetical' | 'merged'
+    groupSmall: boolean
+    parenthetical: string
+    merged: string
+    issues: string[]
+    parts: WeightedIngredient[]
+  }
+  allergenReview?: {
+    status: 'unconfirmed' | 'confirmed' | 'changed'
+    source: Record<string, string>
+    evidence: AllergenEvidence[]
+    decisions: AllergenDecisions
+    changed: string[]
+  }
   nonFood?: boolean
+  supplierLabelSource?: SupplierLabelSource
+  ingredientStatementOverrides?: { id: string; name: string }[]
   sourceAllergenStatements?: { contains: string[]; advisories: string[] }
   sourceRecords?: Record<string, { kind: 'ingredient' | 'recipe'; id: string }>
   values: Record<string, string>
@@ -470,6 +519,7 @@ export function resolveLabelData(
     known = new Set<string>(),
     sourceContains = new Set<string>(),
     sourceAdvisories = new Set<string>(),
+    statementOverrides = new Map<string, { id: string; name: string }>(),
     parts: LabelData['ingredientParts'] = []
   const batch =
     source.kind === 'batch'
@@ -485,6 +535,18 @@ export function resolveLabelData(
   const recipe = w.recipes.find(
     (r) => r.id === (batch?.recipeId || product?.recipeId),
   )
+  const weighted: WeightedIngredient[] = []
+  const mergeIssues = new Set<string>()
+  const evidence: AllergenEvidence[] = []
+  const allergenSource: Record<string, string> = {}
+  const groupSmall = product?.labelGroupSmallIngredients === true
+  const mergeMode = product?.labelIngredientMode === 'merged' ? 'merged' : 'parenthetical'
+  const aliases = product?.allergenAliases || {}
+  const root = [...new Set([product?.name, recipe?.name, ingredient?.name].filter((name): name is string => Boolean(name)))]
+  const visits = new Map<string, number>()
+  const scan = (path: string[], text: string) => evidence.push(...allergenEvidence(path, text, aliases))
+  const incomplete = (path: string[]) => evidence.push({ path, confidence: 'incomplete data' })
+  const supplier = supplierLabelSource(product)
   if (
     source.id &&
     !(source.kind === 'product'
@@ -570,11 +632,14 @@ export function resolveLabelData(
   if (batch?.netQuantity) values['product.netQuantity'] = batch.netQuantity
   const sourceRecords: NonNullable<LabelData['sourceRecords']> = {}
   function ingredientWarning(i: Item, message: string) {
+    if (/missing information|missing or cyclic|not edible|unavailable or invalid/i.test(message)) mergeIssues.add(message)
     const text = `${message} [${i.id}]`
     warnings.push(text)
     sourceRecords[text] = { kind: 'ingredient', id: i.id }
   }
-  if (
+  if (product?.workflow === 'kit')
+    warnings.push('Review each included product in Label Studio → Assortments.')
+  else if (
     !recipe &&
     product &&
     product.workflow !== 'resale' &&
@@ -582,11 +647,48 @@ export function resolveLabelData(
   )
     warnings.push('The product’s connected recipe is unavailable.')
   let weightsVerified = true
-  function visit(i: Item, q: number, u: string, path: string[]) {
+  function visit(i: Item, q: number, u: string, path: string[], parents: string[]) {
+    if (source.kind !== 'ingredient' && ['packaging', 'supply', 'material'].includes(i.usedAs)) {
+      incomplete([...parents, i.name])
+      ingredientWarning(
+        i,
+        `Needs review: ${i.name} is not an edible ingredient and was excluded.`,
+      )
+      return
+    }
     // These are the same saved fields used by IngredientDetail. An explicit
     // statement overrides the saved name; an empty override uses that name.
     const statementName =
       String(i.statement || '').trim() || String(i.name || '').trim()
+    const names = [...parents, statementName || i.id]
+    const subingredients = String(i.subingredients || '').trim()
+    const nodes = componentSources(subingredients)
+    const key = [...path, i.id].join(' → ')
+    const occurrence = (visits.get(key) || 0) + 1
+    visits.set(key, occurrence)
+    allergenSource[`${key} (${occurrence})`] = JSON.stringify([names.join(' → '), i.name, statementName, subingredients, i.allergens, i.sourceContains, i.sourceMayContain, i.reviewed, i.requiresSubingredients, i.compoundRecipeId, componentWeightSource(i), q, u])
+    scan(names, statementName)
+    const declared = allergenEvidence(names, (i.allergens || []).join(', '))
+    evidence.push(...declared.map((entry) => i.reviewed && entry.allergen ? { ...entry, sourceDeclaration: true } : entry))
+    const supplierContainsText = String(i.sourceContains || '')
+    const supplierEvidence = allergenEvidence(names, supplierContainsText)
+    const affirmative = i.reviewed && !/\b(?:no|not|without|free|may|traces?)\b/i.test(supplierContainsText)
+    evidence.push(...supplierEvidence.map((entry) => affirmative && entry.allergen ? { ...entry, sourceDeclaration: true } : entry))
+    const scanNodes = (rows: NonNullable<typeof nodes>, prefix: string[]) => {
+      for (const row of rows) {
+        const next = [...prefix, row.name]
+        scan(next, row.name)
+        scanNodes(row.children, next)
+      }
+    }
+    if (nodes) scanNodes(nodes, names)
+    else if (subingredients) {
+      scan([...names, subingredients], subingredients)
+      evidence.push({ path: names, confidence: 'needs review' })
+    }
+    if (!subingredients && (i.requiresSubingredients || (!i.compoundRecipeId && /\b(?:mix(?:es)?|blends?)\b/i.test(statementName)))) incomplete(names)
+    if (!i.compoundRecipeId && statementName !== String(i.name || '').trim())
+      statementOverrides.set(i.id, { id: i.id, name: i.name })
     for (const a of i.allergens || []) known.add(a)
     if (i.reviewed && String(i.sourceContains || '').trim()) sourceContains.add(String(i.sourceContains).trim())
     if (i.reviewed && String(i.sourceMayContain || '').trim()) sourceAdvisories.add(String(i.sourceMayContain).trim())
@@ -616,6 +718,7 @@ export function resolveLabelData(
         )
     }
     if (i.compoundRecipeId) {
+      if (subingredients) mergeIssues.add(`${i.name}: supplier subingredients are also recorded on this prepared ingredient; reconcile them with its recipe before merging.`)
       const prep = w.recipes.find((r) => r.id === i.compoundRecipeId)
       if (!prep || path.includes(prep.id)) {
         ingredientWarning(
@@ -623,37 +726,84 @@ export function resolveLabelData(
           `Needs review: compound recipe ${i.compoundRecipeId} is missing or cyclic.`,
         )
         weightsVerified = false
+        incomplete(names)
         return
       }
+      let scale: number
       try {
-        const scale = convert(q, u, prep.yieldUnit, i.conversions) / prep.yield
-        for (const line of effectiveRecipeLines(prep, w.recipes)) {
-          const child = w.ingredients.find((x) => x.id === line.ingredientId)
-          if (child)
-            visit(child, line.quantity * scale, line.unit, [...path, prep.id])
-          else
-            warnings.push(
-              'Missing information: compound ingredient is unavailable.',
-            )
-        }
+        scale = convert(q, u, prep.yieldUnit, i.conversions) / prep.yield
+        if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid prep yield')
       } catch {
         weightsVerified = false
         ingredientWarning(
           i,
           `Needs review: verified weight conversion for ${i.name} is missing.`,
         )
+        mergeIssues.add(`${i.name}: verified prep quantity or conversion is missing.`)
+        scale = NaN
+      }
+      let prepLines: ReturnType<typeof effectiveRecipeLines>
+      try {
+        prepLines = effectiveRecipeLines(prep, w.recipes)
+      } catch {
+        incomplete(names)
+        ingredientWarning(
+          i,
+          `Needs review: the base recipe for ${prep.name} is unavailable or invalid.`,
+        )
+        return
+      }
+      const firstChild = weighted.length
+      for (const line of prepLines) {
+        const child = w.ingredients.find((entry) => entry.id === line.ingredientId)
+        if (child)
+          visit(child, line.quantity * scale, line.unit, [
+            ...new Set([...path, prep.id, ...(line.sourceRecipePath || [])]),
+          ], names)
+        else {
+          incomplete([...names, line.ingredientId])
+          ingredientWarning(
+            i,
+            `Missing information: a compound ingredient in ${prep.name} is unavailable.`,
+          )
+        }
+      }
+      if (weighted.length > firstChild) {
+        try {
+          const used = convert(q, u, 'g', i.conversions)
+          const total = weighted.slice(firstChild).reduce((sum, part) => sum + part.weight, 0)
+          if (!Number.isFinite(used) || used <= 0 || !total) throw new Error('Invalid prep weight')
+          const factor = used / total
+          for (const part of weighted.slice(firstChild)) {
+            part.weight *= factor
+            part.contributions = part.contributions.map(({ path, grams }) => ({ path, grams: grams * factor }))
+          }
+        } catch {
+          mergeIssues.add(`${i.name}: verified weight of the prepared ingredient is missing.`)
+        }
       }
       return
     }
     let weight: number | null = null
     try {
       weight = convert(q, u, 'g', i.conversions)
+      if (!Number.isFinite(weight) || weight <= 0) throw new Error('Invalid weight')
     } catch {
+      weight = null
       weightsVerified = false
       ingredientWarning(
         i,
         `Needs review: verified weight conversion for ${i.name} is missing.`,
       )
+    }
+    if (weight === null) mergeIssues.add(`${i.name}: verified weight in grams is missing.`)
+    else if (subingredients) {
+      const savedWeights = i.labelComponentWeights
+      const expanded = nodes && savedWeights && (savedWeights.sourceRef || '') === componentWeightSource(i) && weightedComponents(nodes, savedWeights, subingredients, weight, names)
+      if (expanded) weighted.push(...expanded)
+      else mergeIssues.add(`${i.name}: verify every component’s weight percentage against the supplier declaration.`)
+    } else if (statementName && !i.requiresSubingredients) {
+      weighted.push({ name: statementName, weight, contributions: [{ path: names, grams: weight }] })
     }
     const existing = parts.find(
       (p) =>
@@ -678,6 +828,17 @@ export function resolveLabelData(
   }
   const actual =
     batch?.costSnapshot?.lines || batch?.costSnapshot?.ingredientLines
+  function currentRecipeLines() {
+    if (!recipe) return []
+    try {
+      return effectiveRecipeLines(recipe, w.recipes)
+    } catch {
+      warnings.push(`Needs review: the base recipe for ${recipe.name} is unavailable or invalid.`)
+      mergeIssues.add('The recipe base could not be expanded.')
+      incomplete(root)
+      return []
+    }
+  }
   const lines =
     Array.isArray(actual) &&
     actual.every(
@@ -686,9 +847,9 @@ export function resolveLabelData(
         (l.quantity !== undefined || l.inventoryQuantity !== undefined),
     )
       ? actual
-      : recipe
-        ? effectiveRecipeLines(recipe, w.recipes)
-        : []
+      : supplier && !batch
+        ? []
+        : currentRecipeLines()
   // Only new explicit workflows bypass food ingredient/allergen review. Legacy labels retain their existing behavior.
   const classification = (business.productCategories || []).find(
     (c: Item) => c.id === product?.productCategoryId,
@@ -698,10 +859,23 @@ export function resolveLabelData(
     recipe?.workflow === 'handmade' ||
     product?.workflow === 'handmade' ||
     (product?.workflow === 'resale' && classification === 'non_food')
+  if (!nonFood && recipe && !lines.length) {
+    incomplete(root)
+    mergeIssues.add('The source recipe has no available ingredient lines.')
+  }
   if (nonFood) values['business.disclaimer'] = product?.disclaimer || ''
   if (nonFood) {
     /* Craft materials never become food ingredient statements. */
-  } else if (ingredient) visit(ingredient, 1, ingredient.unit, [])
+  } else if (supplier && !batch) {
+    if (!supplier.reviewed)
+      warnings.push('Needs review: verify the manufacturer ingredient and allergen statement.')
+    if (!supplier.contains && !supplier.noMajorAllergens)
+      warnings.push('Allergen information not confirmed by the manufacturer statement.')
+    if (supplier.reviewed && supplier.advisory)
+      sourceAdvisories.add(supplier.advisory)
+  } else if (!recipe && product?.workflow === 'resale') {
+    warnings.push('Missing information: no manufacturer ingredient and allergen statement on file.')
+  } else if (ingredient) visit(ingredient, 1, ingredient.unit, [], [])
   else
     for (const l of lines) {
       const i = w.ingredients.find((i) => i.id === l.ingredientId)
@@ -713,11 +887,15 @@ export function resolveLabelData(
             ? l.storageUnit
             : l.unit,
           l.sourceRecipePath || (recipe ? [recipe.id] : []),
+          root,
         )
-      else
+      else {
+        mergeIssues.add(`Ingredient ${l.ingredientId} is missing.`)
+        incomplete([...root, l.ingredientId])
         warnings.push(
           `Missing information: recipe ingredient ${l.ingredientId} is unavailable in ${recipe?.name || 'the selected recipe'}.`,
         )
+      }
     }
   if (weightsVerified) parts.sort((a, b) => (b.weight || 0) - (a.weight || 0))
   else
@@ -733,14 +911,68 @@ export function resolveLabelData(
         )
         .join(', ')
     : ''
+  const merged = mergeWeightedIngredients(weighted, groupSmall)
+  const ingredientMerge: LabelData['ingredientMerge'] = !nonFood && product && recipe && !supplier ? {
+    mode: mergeMode, groupSmall, parenthetical: values['recipe.ingredients'],
+    merged: mergeIssues.size ? '' : merged.text,
+    issues: [...mergeIssues], parts: merged.parts,
+  } : undefined
+  if (ingredientMerge?.mode === 'merged') {
+    if (ingredientMerge.merged) values['recipe.ingredients'] = ingredientMerge.merged
+    else warnings.push('Merged ingredient order is unconfirmed. Add verified weights or switch the product to parenthetical mode before finalizing.')
+  }
   values['recipe.allergens'] = known.size
     ? 'CONTAINS: ' + [...known].map((a) => a.toUpperCase()).join(', ')
     : ''
+  if (!nonFood && supplier && !batch) {
+    values['recipe.ingredients'] = supplier.declaration
+    values['recipe.allergens'] = supplier.reviewed && supplier.contains
+      ? /^contains\s*:/i.test(supplier.contains)
+        ? supplier.contains
+        : `Contains: ${supplier.contains}`
+      : ''
+    values['recipe.allergenAdvisory'] = supplier.reviewed ? supplier.advisory : ''
+  }
+  let allergenReview: LabelData['allergenReview']
+  let resolvedAllergens = [...known]
+  if (ingredient && !ingredient.reviewed) {
+    resolvedAllergens = []
+    values['recipe.allergens'] = ''
+  }
+  if (!nonFood && (product || batch) && recipe && !supplier) {
+    const saved = product?.allergenReview
+    allergenSource.recipe = JSON.stringify([recipe.name, recipe.id, recipe.baseRecipeId, product?.recipeId, aliases])
+    for (const entry of evidence.filter((entry) => entry.confidence === 'incomplete data'))
+      allergenSource[`incomplete:${entry.path.join(' → ')}`] = JSON.stringify(entry.path)
+    const previous = saved?.source || {}
+    const changed = [...new Set([...Object.keys(previous), ...Object.keys(allergenSource)])].filter((key) => previous[key] !== allergenSource[key]).map((key) => {
+      try { return JSON.parse(allergenSource[key] || previous[key])[0] || key } catch { return key }
+    }).filter((key): key is string => typeof key === 'string')
+    const decisions: AllergenDecisions = saved?.decisions || {}
+    const confirmed = Boolean(saved && !changed.length && majorAllergens.every((name) => ['present', 'absent'].includes(decisions[name]?.status || '')) && !evidence.some((entry) => entry.confidence === 'incomplete data' || (entry.sourceDeclaration && entry.allergen && decisions[entry.allergen]?.status !== 'present')))
+    allergenReview = {
+      status: confirmed ? 'confirmed' : saved && changed.length ? 'changed' : 'unconfirmed',
+      source: allergenSource,
+      evidence: [...new Map(evidence.map((entry) => [JSON.stringify(entry), entry])).values()],
+      changed: saved ? [...new Set(changed)] : [], decisions,
+    }
+    if (!confirmed) warnings.push(allergenReview.status === 'changed' ? 'Allergen information not confirmed: source changes need re-review.' : `Allergen information not confirmed: ${product ? 'review all nine major allergens.' : 'select a linked product with a reviewed source.'}`)
+    const order = [...known].map((name) => name.toLowerCase())
+    const position = (name: string) => order.includes(name.toLowerCase()) ? order.indexOf(name.toLowerCase()) : order.length
+    const declarationOrder = [...majorAllergens].sort((first, second) => position(first) - position(second))
+    resolvedAllergens = confirmed ? declarationOrder.flatMap((name) => decisions[name]?.status === 'present' ? [decisions[name]?.name || name] : []) : []
+    values['recipe.allergens'] = resolvedAllergens.length ? `CONTAINS: ${resolvedAllergens.map((name) => name.toUpperCase()).join(', ')}` : ''
+    values['recipe.allergenAdvisory'] = confirmed ? saved.advisory || '' : ''
+  }
   return {
     values,
     nonFood,
+    ...(ingredientMerge ? { ingredientMerge } : {}),
+    ...(allergenReview ? { allergenReview } : {}),
+    ...(!nonFood && supplier && !batch ? { supplierLabelSource: supplier } : {}),
+    ...(statementOverrides.size ? { ingredientStatementOverrides: [...statementOverrides.values()] } : {}),
     warnings: [...new Set(warnings)],
-    allergens: [...known],
+    allergens: resolvedAllergens,
     ...((sourceContains.size || sourceAdvisories.size) ? { sourceAllergenStatements: { contains: [...sourceContains], advisories: [...sourceAdvisories] } } : {}),
     weightsVerified,
     sourceRecords: {
@@ -753,6 +985,11 @@ export function resolveLabelData(
     },
     ingredientParts: parts,
   }
+}
+
+export function resolveRecipeAllergens(workspace: Workspace, recipe: Item) {
+  const product = { ...recipe, id: `recipe-review:${recipe.id}`, recipeId: recipe.id, name: recipe.name }
+  return resolveLabelData({ ...workspace, products: [product] }, { kind: 'product', id: product.id }).allergenReview
 }
 export function elementText(e: LabelElement, data: LabelData) {
   let t = e.binding ? data.values[e.binding] || '' : e.text
@@ -1270,6 +1507,18 @@ export function validateLabelDocument(
     throw new Error('Label dimensions must be between 0.5 and 14 inches.')
   if (!Array.isArray(input.elements) || input.elements.length > 100)
     throw new Error('Use up to 100 label elements.')
+  if (input.assortmentLayout !== undefined) {
+    const layout = input.assortmentLayout
+    if (
+      !layout ||
+      !Number.isFinite(layout.minimumFontSize) ||
+      layout.minimumFontSize < 7 || layout.minimumFontSize > 36 ||
+      !Array.isArray(layout.parentFields) ||
+      layout.parentFields.length > Object.keys(assortmentParentFields).length ||
+      layout.parentFields.some((field: unknown) => typeof field !== 'string' || !Object.hasOwn(assortmentParentFields, field)) ||
+      new Set(layout.parentFields).size !== layout.parentFields.length
+    ) throw new Error('Choose a 7–36 pt minimum and supported outer-label fields for the repeating contents block.')
+  }
   // Preserve invalid-color validation while allowing legacy unset backgrounds.
   if (typeof input.background === 'string' || input.background == null)
     input = withLabelBackgrounds(input)

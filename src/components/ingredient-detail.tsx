@@ -69,6 +69,7 @@ import {
   type Item,
   type Workspace,
 } from '@/lib/domain'
+import { ComponentWeightFields } from './label-ingredient-review'
 import {
   affectedRecipes,
   compareOffer,
@@ -1378,6 +1379,7 @@ export function IngredientDetail({
                                 }
                               />
                             </Field>
+                            <ComponentWeightFields draft={draft} change={change} />
                             <Field label="Source Contains statement">
                               <textarea
                                 value={draft.sourceContains || ''}

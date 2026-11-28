@@ -139,10 +139,11 @@ it('names a genuine SKU conflict with another product and saves nothing', async 
   )
 })
 
-it('uses Details, Images & Labels and Pricing & Stock tabs with a cost summary beside the form', async () => {
+it('uses the product tabs with a cost summary beside the form', async () => {
   const { mutate } = setup()
   expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
     'Details',
+    'Ingredients & allergens',
     'Images & Labels',
     'Pricing & Stock',
   ])

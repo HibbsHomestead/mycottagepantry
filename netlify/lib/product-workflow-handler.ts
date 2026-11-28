@@ -1,5 +1,9 @@
 import { minimumOrder } from '../../src/lib/item-restocking'
 import { validatePurchaseDefaults } from '../../src/lib/resale-cost'
+import {
+  supplierLabelLimits,
+  supplierLabelSource,
+} from '../../src/lib/supplier-label-source'
 import { validateHandmadeBom } from '../../src/lib/handmade'
 import { applyProductTemplateDraft } from '../../src/lib/label-preview'
 import { libraryArtwork } from '../../src/lib/artwork-library'
@@ -384,6 +388,26 @@ export async function handleProductWorkflow(
     // One supplier reference: keep the Add Item vendor fields in step.
     if (item.workflow === 'resale') {
       item.purchaseDefaults = validatePurchaseDefaults(data.purchaseDefaults)
+      if (data.supplierLabelSource !== undefined) {
+        const value = data.supplierLabelSource
+        if (
+          !value ||
+          typeof value !== 'object' ||
+          Array.isArray(value) ||
+          typeof value.reviewed !== 'boolean' ||
+          (value.noMajorAllergens !== undefined && typeof value.noMajorAllergens !== 'boolean') ||
+          Object.entries(supplierLabelLimits).some(
+            ([key, limit]) => typeof value[key] !== 'string' || value[key].length > limit,
+          )
+        )
+          throw new Error('Enter manufacturer source text within the field limits.')
+        const source = supplierLabelSource(item)!
+        if (value.reviewed && !source.reviewed)
+          throw new Error('A reviewed manufacturer statement needs a reference and ingredient wording.')
+        item.supplierLabelSource = source
+      } else if (existingProduct?.supplierLabelSource) {
+        item.supplierLabelSource = existingProduct.supplierLabelSource
+      }
       item.supplierId = item.supplierId || ''
       item.vendorId = item.supplierId
       item.vendor =

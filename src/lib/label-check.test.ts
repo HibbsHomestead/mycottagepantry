@@ -9,6 +9,7 @@ import {
 import { labelLayout } from './label-sets'
 import { checkLabelSet } from './label-check'
 import type { Workspace } from './domain'
+import { confirmFixtureAllergens } from '../test/fixtures/label-ingredient-review'
 
 function fixture() {
   const w = {
@@ -43,6 +44,7 @@ function fixture() {
     ],
     batches: [],
   } as unknown as Workspace
+  confirmFixtureAllergens(w, w.products[0], ['Wheat'])
   const doc: LabelDocument = {
     ...blankLabel(),
     format: 'front-back',
@@ -82,9 +84,18 @@ it('uses exact ingredient IDs, deduplicates source issues, and respects saved re
   expect(issues()).toEqual([])
   w.ingredients[0].reviewed = false
   const source = issues().filter((i) => i.group === 'Source data')
-  expect(source).toHaveLength(1)
-  expect(source[0].record).toEqual({ kind: 'ingredient', id: 'flour' })
-  expect(source[0].side).toBeUndefined()
+  const ingredientIssues = source.filter(
+    (issue) => issue.record?.kind === 'ingredient',
+  )
+  expect(ingredientIssues).toHaveLength(1)
+  expect(ingredientIssues[0].record).toEqual({
+    kind: 'ingredient',
+    id: 'flour',
+  })
+  expect(ingredientIssues[0].side).toBeUndefined()
+  expect(
+    source.some((issue) => /source changes need re-review/.test(issue.message)),
+  ).toBe(true)
 })
 it('keeps genuinely missing names and required subingredients visible despite saved review', () => {
   const { w, issues } = fixture()
@@ -125,6 +136,7 @@ it('expands a generated subrecipe stock record without demanding redundant wrapp
   w.recipes[0].lines = [
     { ingredientId: 'prep-stock', quantity: 100, unit: 'g' },
   ]
+  confirmFixtureAllergens(w, w.products[0], ['Wheat'])
   expect(data().values['recipe.ingredients']).toBe(
     'Ingredients: Flour (wheat, malt)',
   )

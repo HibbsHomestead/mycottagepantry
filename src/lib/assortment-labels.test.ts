@@ -9,7 +9,17 @@ import {
 } from './assortment-labels'
 import { basketComponentCosts, type Item } from './domain'
 import { kitEstimate } from './kit-estimate'
+import { blankLabel, validateLabelDocument } from './label-studio'
 import { productListMetrics } from './product-list'
+
+it('validates repeating-block template settings independently of ordinary designs', () => {
+  const document = blankLabel()
+  expect(validateLabelDocument(document).assortmentLayout).toBeUndefined()
+  const assortmentLayout = { minimumFontSize: 11, parentFields: ['business.name', 'product.netQuantity'] }
+  expect(validateLabelDocument({ ...document, assortmentLayout }).assortmentLayout).toEqual(assortmentLayout)
+  expect(() => validateLabelDocument({ ...document, assortmentLayout: { ...assortmentLayout, minimumFontSize: 6 } })).toThrow('7–36 pt')
+  expect(() => validateLabelDocument({ ...document, assortmentLayout: { ...assortmentLayout, parentFields: ['date'] } })).toThrow('supported outer-label fields')
+})
 
 it('uses recipe, BOM and resale costs once; cards and details update together and never value missing components at zero', () => {
   const { workspace, basket, flavors, craft, tea } = assortmentFixture()

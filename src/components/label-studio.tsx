@@ -20,6 +20,7 @@ import { RollArtworkPreview } from './label-print-media'
 import { LabelAssortmentWorkflow } from './label-assortment-workflow'
 import {
   LabelPrintOptions,
+  missingPrinterProfile,
   outputFailureStatus,
   printRunDesign,
   printerSelection,
@@ -83,6 +84,8 @@ import {
   newElement,
   blankLabel,
   withLabelBackgrounds,
+  assortmentParentFields,
+  defaultAssortmentLayout,
   systemLabelTemplates,
   bindings,
   bakeryGraphics,
@@ -779,6 +782,10 @@ export function LabelStudio({
         },
       })
   }
+  function selectPrintingMethod(printingMethod: string) {
+    setPrintingMethod(printingMethod)
+    updatePrint({ printingMethod })
+  }
   async function deleteDesigns() {
     if (!deleteTargets?.length) return
     if (saveInFlight.current) await saveInFlight.current
@@ -1206,6 +1213,7 @@ export function LabelStudio({
         copies,
         layout,
         selectedPrinter,
+        printingMethod,
         issues,
         reviewed,
         customFonts,
@@ -3295,6 +3303,46 @@ export function LabelStudio({
                         }),
                         true,
                       )}
+                      {!doc.round && doc.format !== 'front-back' && (
+                        <details className="studio-recovery-panel studio-check">
+                          <summary>Outer label · repeating contents block</summary>
+                          <p className="form-hint">
+                            Assortments uses this layout in place of the
+                            single-product artwork. It prints the pack name,
+                            quantities, and one reviewed section per included
+                            product. Save the design, then select it under
+                            Labels → Assortments for an actual-size preview.
+                          </p>
+                          {number(
+                            'Minimum assortment text (pt)',
+                            (doc.assortmentLayout || defaultAssortmentLayout).minimumFontSize,
+                            (minimumFontSize) => change({ assortmentLayout: {
+                              ...(doc.assortmentLayout || defaultAssortmentLayout),
+                              minimumFontSize,
+                            } }),
+                            7,
+                            36,
+                          )}
+                          {(Object.keys(assortmentParentFields) as (keyof typeof assortmentParentFields)[]).map((field) => {
+                            const layout = doc.assortmentLayout || defaultAssortmentLayout
+                            return (
+                              <label key={field} className="studio-assortment-field">
+                                <input
+                                  type="checkbox"
+                                  checked={layout.parentFields.includes(field)}
+                                  onChange={(event) => change({ assortmentLayout: {
+                                    ...layout,
+                                    parentFields: event.target.checked
+                                      ? [...layout.parentFields, field]
+                                      : layout.parentFields.filter((entry) => entry !== field),
+                                  } })}
+                                />
+                                {assortmentParentFields[field]}
+                              </label>
+                            )
+                          })}
+                        </details>
+                      )}
                       {sourceControls}
                       <Control label="Brand kit">
                         <select
@@ -3930,10 +3978,7 @@ export function LabelStudio({
                     printerProfiles={printerProfiles}
                     selectedPrinter={selectedPrinter}
                     printingMethod={printingMethod}
-                    setPrintingMethod={(value) => {
-                      setPrintingMethod(value)
-                      updatePrint({ printingMethod: value })
-                    }}
+                    setPrintingMethod={selectPrintingMethod}
                     connected={connected}
                     copies={copies}
                     setCopies={(v) => {
@@ -3956,8 +4001,13 @@ export function LabelStudio({
                               operation: 'save',
                               profile: { ...profile, id },
                             })
-                            setPrintingMethod(id)
-                            setStatus('Media settings saved for this print profile.')
+                            if (current.current !== doc) return
+                            selectPrintingMethod(id)
+                            setStatus(
+                              doc.workflowVersion === 1
+                                ? 'Media settings saved. Save the label to keep this profile selected.'
+                                : 'Media settings saved and selected for this print session.',
+                            )
                           }
                         : undefined
                     }
@@ -4001,12 +4051,8 @@ export function LabelStudio({
                     </button>
                   </div>
                   <p className="studio-small-note">
-                    Match your printer paper size and use actual size / 100%
-                    scaling. Set driver copies to 1: the document already
-                    contains the requested labels. Browser code cannot force
-                    every driver option. Fonts and graphics finish loading
-                    before the print dialog opens. Screen RGB colors are not
-                    guaranteed CMYK or exact printed matches.
+                    Fonts and graphics finish loading before the print dialog
+                    opens. Screen colors may not match printed colors.
                   </p>
                   {printCancel && <button type="button" className="btn secondary" onClick={() => printCancel.abort()}>Cancel preparation</button>}
                   {status && <p className="studio-small-note" role="status">{status}</p>}
@@ -4053,7 +4099,7 @@ export function LabelStudio({
                         ),
                       )}
                     </div>
-                  ) : (
+                  ) : missingPrinterProfile(printingMethod, selectedPrinter) ? null : (
                     <RollArtworkPreview
                       design={runDesign || doc}
                       profile={selectedPrinter}

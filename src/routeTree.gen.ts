@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/_admin'
+import { Route as FeatureRequestsRouteImport } from './routes/feature-requests'
 import { Route as FeaturesRouteImport } from './routes/features'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as LoginRouteImport } from './routes/login'
@@ -28,6 +29,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as AdminAdminRouteImport } from './routes/_admin.admin'
 import { Route as AdminPlatformSupportRouteImport } from './routes/_admin.platform-support'
+import { Route as ApiFeatureRequestsRouteImport } from './routes/api.feature-requests'
 import { Route as OvenBillingRouteImport } from './routes/oven_.billing'
 import { Route as WorkspaceBillingRouteImport } from './routes/workspace_.billing'
 
@@ -38,6 +40,11 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/_admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeatureRequestsRoute = FeatureRequestsRouteImport.update({
+  id: '/feature-requests',
+  path: '/feature-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeaturesRoute = FeaturesRouteImport.update({
@@ -125,6 +132,11 @@ const AdminPlatformSupportRoute = AdminPlatformSupportRouteImport.update({
   path: '/platform-support',
   getParentRoute: () => AdminRoute,
 } as any)
+const ApiFeatureRequestsRoute = ApiFeatureRequestsRouteImport.update({
+  id: '/api/feature-requests',
+  path: '/api/feature-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OvenBillingRoute = OvenBillingRouteImport.update({
   id: '/oven_/billing',
   path: '/oven/billing',
@@ -138,6 +150,7 @@ const WorkspaceBillingRoute = WorkspaceBillingRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/feature-requests': typeof FeatureRequestsRoute
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -155,11 +168,13 @@ export interface FileRoutesByFullPath {
   '/workspace': typeof WorkspaceRoute
   '/admin': typeof AdminAdminRoute
   '/platform-support': typeof AdminPlatformSupportRoute
+  '/api/feature-requests': typeof ApiFeatureRequestsRoute
   '/oven/billing': typeof OvenBillingRoute
   '/workspace/billing': typeof WorkspaceBillingRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/feature-requests': typeof FeatureRequestsRoute
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -177,6 +192,7 @@ export interface FileRoutesByTo {
   '/workspace': typeof WorkspaceRoute
   '/admin': typeof AdminAdminRoute
   '/platform-support': typeof AdminPlatformSupportRoute
+  '/api/feature-requests': typeof ApiFeatureRequestsRoute
   '/oven/billing': typeof OvenBillingRoute
   '/workspace/billing': typeof WorkspaceBillingRoute
 }
@@ -184,6 +200,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_admin': typeof AdminRouteWithChildren
+  '/feature-requests': typeof FeatureRequestsRoute
   '/features': typeof FeaturesRoute
   '/help': typeof HelpRoute
   '/login': typeof LoginRoute
@@ -201,6 +218,7 @@ export interface FileRoutesById {
   '/workspace': typeof WorkspaceRoute
   '/_admin/admin': typeof AdminAdminRoute
   '/_admin/platform-support': typeof AdminPlatformSupportRoute
+  '/api/feature-requests': typeof ApiFeatureRequestsRoute
   '/oven_/billing': typeof OvenBillingRoute
   '/workspace_/billing': typeof WorkspaceBillingRoute
 }
@@ -208,6 +226,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/feature-requests'
     | '/features'
     | '/help'
     | '/login'
@@ -225,11 +244,13 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/admin'
     | '/platform-support'
+    | '/api/feature-requests'
     | '/oven/billing'
     | '/workspace/billing'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/feature-requests'
     | '/features'
     | '/help'
     | '/login'
@@ -247,12 +268,14 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/admin'
     | '/platform-support'
+    | '/api/feature-requests'
     | '/oven/billing'
     | '/workspace/billing'
   id:
     | '__root__'
     | '/'
     | '/_admin'
+    | '/feature-requests'
     | '/features'
     | '/help'
     | '/login'
@@ -270,6 +293,7 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/_admin/admin'
     | '/_admin/platform-support'
+    | '/api/feature-requests'
     | '/oven_/billing'
     | '/workspace_/billing'
   fileRoutesById: FileRoutesById
@@ -277,6 +301,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  FeatureRequestsRoute: typeof FeatureRequestsRoute
   FeaturesRoute: typeof FeaturesRoute
   HelpRoute: typeof HelpRoute
   LoginRoute: typeof LoginRoute
@@ -292,6 +317,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   WorkspaceRoute: typeof WorkspaceRoute
+  ApiFeatureRequestsRoute: typeof ApiFeatureRequestsRoute
   OvenBillingRoute: typeof OvenBillingRoute
   WorkspaceBillingRoute: typeof WorkspaceBillingRoute
 }
@@ -310,6 +336,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feature-requests': {
+      id: '/feature-requests'
+      path: '/feature-requests'
+      fullPath: '/feature-requests'
+      preLoaderRoute: typeof FeatureRequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/features': {
@@ -431,6 +464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPlatformSupportRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/api/feature-requests': {
+      id: '/api/feature-requests'
+      path: '/api/feature-requests'
+      fullPath: '/api/feature-requests'
+      preLoaderRoute: typeof ApiFeatureRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oven_/billing': {
       id: '/oven_/billing'
       path: '/oven/billing'
@@ -463,6 +503,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  FeatureRequestsRoute: FeatureRequestsRoute,
   FeaturesRoute: FeaturesRoute,
   HelpRoute: HelpRoute,
   LoginRoute: LoginRoute,
@@ -478,6 +519,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   WorkspaceRoute: WorkspaceRoute,
+  ApiFeatureRequestsRoute: ApiFeatureRequestsRoute,
   OvenBillingRoute: OvenBillingRoute,
   WorkspaceBillingRoute: WorkspaceBillingRoute,
 }

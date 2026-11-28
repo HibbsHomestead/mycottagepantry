@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { FormErrorNotice } from "./form-error-notice";
+import { FeatureBoardLink } from "./feature-board-link";
 import { SectionNavigation } from "./section-navigation";
 import { billingRequest } from "@/lib/billing-client";
 import { CategoryTaxSettings } from "./product-categories";
@@ -144,6 +145,7 @@ export function SettingsWorkspace({
   return (
     <div className="settings-workspace">
       <SectionNavigation name="Settings" active={selected}>
+        <FeatureBoardLink />
         {isOwner && (
           <a className="public-text-link" href="/oven/billing">
             Subscription & Billing

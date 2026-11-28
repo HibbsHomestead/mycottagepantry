@@ -321,6 +321,8 @@ export function updateIngredient(
     if (input[key] !== undefined) next[key] = input[key]
   if (input.catalogSource !== undefined)
     next.catalogSource = input.catalogSource
+  if (input.labelComponentWeights !== undefined)
+    next.labelComponentWeights = input.labelComponentWeights
   if (input.listedOnlinePrice !== undefined)
     next.listedOnlinePrice = number(
       input.listedOnlinePrice,

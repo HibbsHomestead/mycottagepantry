@@ -18,6 +18,12 @@
   cursor: pointer;
   font-weight: 600;
 }
+.studio-assortment-field {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
 .studio-recovery-panel p {
   margin: 12px 0;
   color: var(--muted);
