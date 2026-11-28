@@ -1,8 +1,10 @@
-import { checkLabelSet } from '@/lib/label-check'
+import { checkLabelSet, labelOutputIssues } from '@/lib/label-check'
 import { FormErrorNotice } from './form-error-notice'
 import { SectionNavigation } from './section-navigation'
 import {
   labelLayout,
+  labelRunDeclarations,
+  labelSetPlan,
   labelSide,
   labelSides,
   layoutKeys,
@@ -19,7 +21,7 @@ import { withLibraryArtwork } from '@/lib/artwork-library'
 import { LabelPrinterSettings } from './label-printer-settings'
 import { RollArtworkPreview } from './label-print-media'
 import { LabelAssortmentWorkflow } from './label-assortment-workflow'
-import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
+import { LabelMergeReview, LabelSourceAllergenReview, MergeCompoundChoices, useLabelStandardOutput, type ReviewMutation } from './label-ingredient-review'
 import {
   LabelPrintOptions,
   missingPrinterProfile,
@@ -384,9 +386,10 @@ export function LabelStudio({
     [w.font_assets],
   )
   const availableFonts = [...fontCatalog, ...customFonts]
+  const standardOutput = useLabelStandardOutput(JSON.stringify([doc?.id, doc?.revision, doc?.ingredientMerge, source]))
   const assets = withLibraryArtwork(w.graphic_assets),
     brand = (w.brand_kits || []).find((b) => b.id === brandId),
-    data = resolveLabelData(w, source, brand),
+    data = resolveLabelData(w, source, brand, doc?.ingredientMerge, standardOutput.value),
     checkItems = doc ? checkLabelSet(doc, data, assets, customFonts) : [],
     issues = checkItems.map((i) => i.message),
     element = editorDoc?.elements.find((e) => e.id === selected),
@@ -770,6 +773,7 @@ export function LabelStudio({
       change({
         source: next,
         productId: sourceProductId(next) || undefined,
+        ingredientMerge: doc.ingredientMerge?.productId === sourceProductId(next) ? doc.ingredientMerge : undefined,
         manualTextReviewedFor: undefined,
       })
   }
@@ -1215,12 +1219,13 @@ export function LabelStudio({
         type,
         doc,
         source,
+        standardIngredientOutput: standardOutput.value,
         brandId,
         copies,
         layout,
         selectedPrinter,
         printingMethod,
-        issues,
+        issues: outputIssues,
         reviewed,
         customFonts,
         request: (action, data, signal) => request(action, data, undefined, signal),
@@ -1442,9 +1447,15 @@ export function LabelStudio({
   }
   const runDesign = doc && printRunDesign(doc, parts, order, runIndex)
   let sourcePrintBlock = ''
+  let outputIssues = issues
+  let printUsage = { ingredients: false, allergens: false }
   if (doc && section === 'Print & Export') {
     try {
-      validateLabelRunContent(doc, data, parts === 'both' ? labelSides(doc) : [parts])
+      const sides = doc.format === 'front-back' ? labelSetPlan(doc, copies, parts, order).runs[runIndex]?.sequence : ['front'] as LabelSide[]
+      if (!sides) throw new Error('Choose a print run.')
+      printUsage = labelRunDeclarations(doc, data, sides)
+      outputIssues = labelOutputIssues(doc, data, sides, checkItems)
+      validateLabelRunContent(doc, data, sides)
     } catch (cause) {
       sourcePrintBlock = (cause as Error).message
     }
@@ -1454,10 +1465,12 @@ export function LabelStudio({
     printingMethod,
     runDesign,
   )
+  const mergeProductId = sourceProductId(source)
+  const designMerge = doc?.ingredientMerge?.productId === mergeProductId ? doc?.ingredientMerge : undefined
   const sourceControls = (
     <div className="studio-source">
       <Control label="Populate from">
-        <select
+        <select data-label-output-source={section === 'Print & Export' ? '' : undefined}
           value={source.kind}
           onChange={(e) => {
             const kind = e.target.value as LabelSource['kind']
@@ -1509,6 +1522,22 @@ export function LabelStudio({
               ))}
           </select>
         </Control>
+      )}
+      {doc?.workflowVersion === 1 && mergeProductId && data.ingredientMerge && (
+        <div>
+          <Control label="Merge compound ingredients for this design">
+            <select disabled={!canEdit} value={designMerge?.mode || 'product'} onChange={(event) => {
+              const mode = event.target.value
+              standardOutput.reset()
+              change({ ingredientMerge: mode === 'merged' || mode === 'parenthetical' ? { productId: mergeProductId, mode, standardIds: data.ingredientMerge!.standardIds } : undefined })
+            }}>
+              <option value="product">Use product setting</option>
+              <option value="parenthetical">Off · Mix (parts)</option>
+              <option value="merged">On · Merge by verified weight</option>
+            </select>
+          </Control>
+          {canEdit && !standardOutput.value && <MergeCompoundChoices preview={data.ingredientMerge} change={(standardIds) => change({ ingredientMerge: { productId: mergeProductId, mode: 'merged', standardIds } })} />}
+        </div>
       )}
     </div>
   )
@@ -1885,6 +1914,7 @@ export function LabelStudio({
                     w,
                     linkedSource,
                     w.brand_kits?.find((b) => b.id === t.brandId),
+                    t.ingredientMerge,
                   )
                   const product = w.products.find(
                     (p) => p.id === sourceProductId(linkedSource),
@@ -3932,7 +3962,7 @@ export function LabelStudio({
                   <h2>Preview and print</h2>
                   <FormErrorNotice
                     message={
-                      issues.some((i) => i.includes(ingredientOverflowMessage))
+                      outputIssues.some((i) => i.includes(ingredientOverflowMessage))
                         ? ingredientOverflowMessage
                         : ''
                     }
@@ -4035,7 +4065,9 @@ export function LabelStudio({
                     }}
                   />
                   {sourcePrintBlock && <p className="warning-text" role="status">Printing blocked: {sourcePrintBlock}</p>}
-                  <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
+                  {printUsage.ingredients && <LabelMergeReview workspace={w} source={source} data={data} onStandard={canEdit ? standardOutput.standard : undefined} onStandardAll={canEdit ? standardOutput.standardAll : undefined} onOpenSource={canEdit ? onOpenSource : undefined} />}
+                  {standardOutput.value && <p>Using the selected standard format for this output only. <button type="button" className="btn secondary" onClick={standardOutput.reset}>Restore saved format</button></p>}
+                  {printUsage.allergens && <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} onChangeBatchSource={canEdit ? () => document.querySelector<HTMLSelectElement>('[data-label-output-source]')?.focus() : undefined} />}
                   <div className="studio-print-buttons">
                     <button
                       className="btn"

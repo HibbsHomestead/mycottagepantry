@@ -66,7 +66,7 @@ for (const width of [1440, 390]) {
     dialog = page.getByRole('dialog')
     await dialog.getByRole('tab', { name: 'Ingredients & allergens' }).click()
     await dialog
-      .getByLabel('Product’s label ingredient mode')
+      .getByLabel('Merge compound ingredients')
       .selectOption('merged')
     const comparison = dialog.locator('.label-review-comparison')
     await expect(comparison).toContainText(

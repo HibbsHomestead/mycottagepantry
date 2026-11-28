@@ -10,7 +10,27 @@ import {
 import { blankLabel, newElement, resolveLabelData } from '@/lib/label-studio'
 import { validateLabelRunContent } from '@/lib/label-sets'
 import { labelIngredientReviewFixture } from '@/test/fixtures/label-ingredient-review'
-import { LabelSourceAllergenReview } from './label-ingredient-review'
+import { ComponentWeightFields, LabelSourceAllergenReview } from './label-ingredient-review'
+
+it('keeps supplier weights optional, groups nested components, and applies only the pasted values', async () => {
+  const { mix } = labelIngredientReviewFixture()
+  const draft = { ...mix, subingredients: 'Peanuts, enriched flour (wheat flour, niacin), sugar', labelComponentWeights: undefined }
+  const change = vi.fn()
+  const user = userEvent.setup()
+  render(<ComponentWeightFields draft={draft} change={change} />)
+  const summary = screen.getByText('Supplier component weights for merged labels (optional)')
+  expect(summary.closest('details')).not.toHaveAttribute('open')
+  await user.click(summary)
+  expect(screen.getByLabelText('Peanuts · % by weight')).toHaveValue('')
+  const nested = screen.getByText('enriched flour components').closest('details')!
+  expect(nested).not.toHaveAttribute('open')
+  await user.click(within(nested).getByText('enriched flour components'))
+  expect(within(nested).getByLabelText('niacin · % by weight')).toHaveValue('')
+  await user.click(within(nested).getByText('Paste percentages for this level'))
+  await user.type(within(nested).getByLabelText('In the order listed above, separated by commas; leave unknown entries blank.'), '98,')
+  await user.click(within(nested).getByRole('button', { name: 'Apply known values' }))
+  expect(change).toHaveBeenCalledWith('labelComponentWeights', { text: draft.subingredients, sourceRef: '', shares: { '2.1': '98' } })
+})
 
 it('fixes missing mix evidence in place, confirms each allergen, and unlocks print until the source changes', async () => {
   const { workspace, product, mix } = labelIngredientReviewFixture()

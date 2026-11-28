@@ -1,11 +1,12 @@
 import { ingredientOverflowMessage } from '@/lib/label-studio'
 import { FormErrorNotice } from './form-error-notice'
-import { LabelSourceAllergenReview, type ReviewMutation } from './label-ingredient-review'
-import { checkLabelSet } from '@/lib/label-check'
+import { LabelMergeReview, LabelSourceAllergenReview, useLabelStandardOutput, type ReviewMutation } from './label-ingredient-review'
+import { checkLabelSet, labelOutputIssues } from '@/lib/label-check'
 import {
   labelSide,
   labelSides,
   labelSetPlan,
+  labelRunDeclarations,
   validateLabelRunContent,
   type LabelSide,
 } from '@/lib/label-sets'
@@ -156,9 +157,10 @@ export function LabelPreviewDialog({
         : { kind: 'product', id: product.id },
     [product.id, doc],
   )
+  const standardOutput = useLabelStandardOutput(JSON.stringify([open, doc?.id, doc?.revision, source]))
   const data = useMemo(
-    () => resolveLabelData(w, source, brand),
-    [w, source, brand],
+    () => resolveLabelData(w, source, brand, doc?.ingredientMerge, standardOutput.value),
+    [w, source, brand, doc, standardOutput.value],
   )
   const assets = useMemo(
     () => withLibraryArtwork(w.graphic_assets),
@@ -166,13 +168,12 @@ export function LabelPreviewDialog({
   )
   const validation = useMemo(() => {
     try {
+      const checks = doc ? checkLabelSet(doc, data, assets, customFonts) : []
       return {
-        issues: doc
-          ? checkLabelSet(doc, data, assets, customFonts).map(
-              (i) =>
-                `${i.group}${i.side ? ` · ${i.side === 'front' ? 'Front' : 'Back'}` : ''}: ${i.message}`,
-            )
-          : [],
+        checks,
+        issues: checks.map(
+          (i) => `${i.group}${i.side ? ` · ${i.side === 'front' ? 'Front' : 'Back'}` : ''}: ${i.message}`,
+        ),
         missing: doc
           ? labelSides(doc).flatMap((side) =>
               missingLabelFields(labelSide(doc, side), data).map((field) =>
@@ -185,6 +186,7 @@ export function LabelPreviewDialog({
     } catch (failure) {
       return {
         issues: [],
+        checks: [],
         missing: [],
         error:
           (failure as Error).message || 'The saved label design is incomplete.',
@@ -207,6 +209,8 @@ export function LabelPreviewDialog({
   let runDocument = doc
   let runCopies = copies
   let firstRunSide = 'front'
+  let printUsage = { ingredients: false, allergens: false }
+  let outputIssues = issues
   if (doc) {
     try {
       if (doc.format === 'front-back') {
@@ -216,8 +220,14 @@ export function LabelPreviewDialog({
         runDocument = run.document
         runCopies = run.sequence.length
         firstRunSide = run.sequence[0]
+        printUsage = labelRunDeclarations(doc, data, run.sequence)
+        outputIssues = labelOutputIssues(doc, data, run.sequence, validation.checks)
         validateLabelRunContent(doc, data, run.sequence)
-      } else validateLabelRunContent(doc, data, ['front'])
+      } else {
+        printUsage = labelRunDeclarations(doc, data, ['front'])
+        outputIssues = labelOutputIssues(doc, data, ['front'], validation.checks)
+        validateLabelRunContent(doc, data, ['front'])
+      }
     } catch (error) {
       setBlock = (error as Error).message
     }
@@ -241,7 +251,7 @@ export function LabelPreviewDialog({
                 layout,
                 selectedPrinter,
                 printingMethod,
-                issues,
+                issues: outputIssues,
                 reviewed,
               })
             : null)
@@ -421,12 +431,13 @@ export function LabelPreviewDialog({
         type: 'print',
         doc,
         source,
+        standardIngredientOutput: standardOutput.value,
         brandId,
         copies,
         layout,
         selectedPrinter,
         printingMethod,
-        issues,
+        issues: outputIssues,
         reviewed,
         customFonts,
         parts,
@@ -699,7 +710,7 @@ export function LabelPreviewDialog({
               />
               <FormErrorNotice
                 message={
-                  issues.some((i) => i.includes(ingredientOverflowMessage))
+                  outputIssues.some((i) => i.includes(ingredientOverflowMessage))
                     ? ingredientOverflowMessage
                     : ''
                 }
@@ -716,7 +727,7 @@ export function LabelPreviewDialog({
                 layout={layout}
                 setLayout={setLayout}
               />
-              {issues.length > 0 && (
+              {outputIssues.length > 0 && (
                 <label className="studio-review">
                   <input
                     type="checkbox"
@@ -738,7 +749,9 @@ export function LabelPreviewDialog({
               Printing blocked: {printBlocked}
             </p>
           )}
-          <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} />
+          {printUsage.ingredients && <LabelMergeReview workspace={w} source={source} data={data} onStandard={canEdit ? standardOutput.standard : undefined} onStandardAll={canEdit ? standardOutput.standardAll : undefined} onOpenSource={canEdit ? onOpenSource : undefined} />}
+          {standardOutput.value && <p>Using the selected standard format for this output only. <button type="button" className="btn secondary" onClick={standardOutput.reset}>Restore saved format</button></p>}
+          {printUsage.allergens && <LabelSourceAllergenReview workspace={w} source={source} data={data} mutate={canEdit ? onReviewAllergens : undefined} onOpenSource={onOpenSource} onChangeBatchSource={canEdit && doc ? () => onEditLabel(doc.id) : undefined} />}
         </div>
       </div>
     )

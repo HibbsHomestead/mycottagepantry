@@ -125,21 +125,50 @@ export function labelSetPlan(
   }
 }
 
-/** A populated set must not emit an empty side when its bindings/conditions resolve away. */
+export function labelRunDeclarations(
+  document: LabelDocument,
+  data: LabelData,
+  sides: LabelSide[],
+) {
+  const elements = [...new Set(sides)].flatMap((side) => labelSide(document, side).elements).filter(
+    (element) => !element.hidden && element.type === 'text' &&
+      (element.condition !== 'batch' || data.values['batch.number']),
+  )
+  const ingredients = elements.some((element) => element.binding === 'recipe.ingredients' &&
+    (element.condition !== 'allergens' || data.allergens.length || data.allergenReview?.status !== 'confirmed'))
+  return {
+    ingredients,
+    allergens: !data.nonFood && (ingredients || elements.some((element) =>
+      ['recipe.allergens', 'recipe.allergenAdvisory'].includes(element.binding || '') ||
+      (!element.binding && /\b(?:ingredients|contains)\s*:/i.test(element.text)),
+    )),
+  }
+}
+
+export function mergePrintIssue(data: LabelData) {
+  const merge = data.ingredientMerge
+  if (merge?.mode !== 'merged' || merge.merged) return ''
+  const why = merge.issues.join(' ') || 'There is no verified merged statement.'
+  const action = merge.compounds.some((compound) => compound.issue)
+    ? 'Choose Enter percentages or Print with the standard format for this ingredient.'
+    : 'Choose Use the standard format for all ingredients, or correct the listed sources.'
+  return `Merged ingredient order is unconfirmed. ${why} ${action}`
+}
+
 export function validateLabelRunContent(
   document: LabelDocument,
   data: LabelData,
   sides: LabelSide[],
 ) {
-  const outputUsesFoodDeclarations = sides.some((side) => labelSide(document, side).elements.some((element) =>
-    !element.hidden && (['recipe.ingredients', 'recipe.allergens', 'recipe.allergenAdvisory'].includes(element.binding || '') || (!element.binding && element.type === 'text' && /\b(?:ingredients|contains)\s*:/i.test(element.text))),
-  ))
-  if (outputUsesFoodDeclarations) {
-    if (data.ingredientMerge?.mode === 'merged' && !data.ingredientMerge.merged)
-      throw new Error('Merged ingredient order is unconfirmed. Verify component weights or use the parenthetical statement before printing.')
-    if ((data.allergenReview && data.allergenReview.status !== 'confirmed') || (data.supplierLabelSource && (!data.supplierLabelSource.reviewed || (!data.supplierLabelSource.contains && !data.supplierLabelSource.noMajorAllergens))))
-      throw new Error('Allergen information not confirmed. Review the product source before printing a food declaration.')
-  }
+  const usage = labelRunDeclarations(document, data, sides)
+  const name = [...new Set([
+    data.values['product.displayName'] || data.values['product.name'] || document.name,
+    data.values['product.flavor'] || data.values['product.variant'],
+  ].filter(Boolean))].join(' · ')
+  const mergeIssue = usage.ingredients && mergePrintIssue(data)
+  if (mergeIssue) throw new Error(`${name}: ${mergeIssue}`)
+  if (usage.allergens && ((data.allergenReview && data.allergenReview.status !== 'confirmed') || (data.supplierLabelSource && (!data.supplierLabelSource.reviewed || (!data.supplierLabelSource.contains && !data.supplierLabelSource.noMajorAllergens)))))
+    throw new Error(`${name}: Allergen information not confirmed. Open allergen review below, resolve any incomplete sources and confirm the declaration.`)
   if (document.format !== 'front-back') return
   for (const side of new Set(sides)) {
     const layout = labelSide(document, side)

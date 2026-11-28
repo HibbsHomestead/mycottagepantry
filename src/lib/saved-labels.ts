@@ -58,6 +58,8 @@ export function duplicateSavedLabel(
   copy.workflowVersion = 1
   copy.source = structuredClone(source)
   copy.productId = sourceProductId(source) || undefined
+  if (copy.ingredientMerge && copy.ingredientMerge.productId !== copy.productId)
+    delete copy.ingredientMerge
   // An unknown legacy source cannot establish that its static product text was reviewed.
   if (!document.source || sourceKey(document.source) !== sourceKey(source))
     delete copy.manualTextReviewedFor
@@ -88,6 +90,8 @@ export function validateSavedLabelContext(
     throw new Error('The saved product link does not match this label.')
   if (productId && !w.products.some((p) => p.id === productId))
     throw new Error('Choose a product from this business.')
+  if (document.ingredientMerge && document.ingredientMerge.productId !== productId)
+    throw new Error('Choose merge settings for the product this design uses.')
   if (
     source.kind === 'batch' &&
     productId &&

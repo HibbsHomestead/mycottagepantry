@@ -95,6 +95,31 @@ it('keeps one, two, and three flavor declarations separate, including subingredi
   ).toThrow(/intended/)
 })
 
+it('approves an isolated component before the outer label, even when another flavor is blocked', async () => {
+  const { workspace, spec, flavors, basket } = assortmentFixture()
+  Object.assign(flavors[0], { labelIngredientMode: 'merged', allergenReview: undefined })
+  const packages = {
+    ...spec, expectedLoose: 0, expectedPackages: 4,
+    productId: basket.id, batchId: 'fixture-run', group: 'Morning', mode: 'variable' as const,
+    lines: spec.lines.slice(0, 2).map((line) => ({ ...line, unit: 'package' as const })),
+  }
+  const outer = assortmentLabel(workspace, packages).snapshot
+  expect(outer.warnings).toEqual(expect.arrayContaining([
+    expect.stringContaining('Blueberry muffins: Merged ingredient order is unconfirmed'),
+    expect.stringContaining('Blueberry muffins: Allergen information not confirmed'),
+  ]))
+  const individualSpec = { ...packages, componentId: flavors[1].id }
+  const individual = assortmentLabel(workspace, individualSpec).snapshot
+  expect(individual.warnings).toEqual([])
+  expect(individual.sections.map((section) => section.productId)).toEqual([flavors[1].id])
+  await handleAssortmentLabel(workspace, { op: 'approve', spec: individualSpec, reviewed: true, signature: assortmentSignature(individual) }, 'fixture-owner', async (_, job) => { workspace.label_print_jobs.push(job) })
+  const approved = workspace.label_print_jobs.at(-1)!
+  const frozen = structuredClone(approved)
+  flavors[0].ingredient.subingredients += ', sugar'
+  expect(assortmentJobCurrent(workspace, approved)).toBe(true)
+  expect(approved).toEqual(frozen)
+})
+
 it('uses the fixed basket’s whole selling packages and keeps reviewed supplier allergens separate from cross-contact', () => {
   const { workspace, spec, basket } = assortmentFixture()
   const selection = {

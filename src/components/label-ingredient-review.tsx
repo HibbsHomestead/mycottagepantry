@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { mergePrintIssue } from '@/lib/label-sets'
 import { allergens, type Item, type Workspace } from '@/lib/domain'
 import {
   resolveLabelData,
   type LabelData,
   type LabelSource,
+  type StandardIngredientOutput,
 } from '@/lib/label-studio'
 import {
   componentSources,
@@ -20,54 +22,30 @@ import {
 export function ComponentWeightFields({
   draft,
   change,
+  open = false,
 }: {
   draft: Item
   change: (key: string, value: unknown) => void
+  open?: boolean
 }) {
   const text = String(draft.subingredients || '').trim()
   if (!text) return null
   const nodes = componentSources(text)
   const sourceRef = componentWeightSource(draft)
-  const shares =
+  const shares: Record<string, string> =
     draft.labelComponentWeights?.text === text &&
     (draft.labelComponentWeights.sourceRef || '') === sourceRef
       ? draft.labelComponentWeights.shares
       : {}
-  function fields(rows: ComponentSource[]) {
-    return rows.map((row) => (
-      <div key={row.key} className="label-review-component">
-        <label>
-          {row.name} · % by weight
-          <input
-            type="text"
-            inputMode="decimal"
-            maxLength={11}
-            placeholder="Unknown"
-            value={shares[row.key] || ''}
-            onChange={(event) =>
-              change('labelComponentWeights', {
-                text,
-                sourceRef,
-                shares: { ...shares, [row.key]: event.target.value },
-              })
-            }
-          />
-        </label>
-        {!!row.children.length && (
-          <div className="label-review-nested">{fields(row.children)}</div>
-        )}
-      </div>
-    ))
-  }
   return (
-    <details className="product-ingredients-source">
-      <summary>Supplier component weights for merged labels</summary>
+    <details className="product-ingredients-source" open={open || undefined}>
+      <summary data-label-component-weights>Supplier component weights for merged labels (optional)</summary>
       <p>
         Use documented percentages by weight only. Each level must total 100%.
-        Leave an unknown percentage blank; merged labels stay unconfirmed.
+        Leave unknown values blank. They are not needed for the standard format.
       </p>
       {nodes ? (
-        fields(nodes)
+        <WeightGroup rows={nodes} shares={shares} save={(patch) => change('labelComponentWeights', { text, sourceRef, shares: { ...shares, ...patch } })} />
       ) : (
         <p>
           This source text cannot safely be split. Keep the parenthetical
@@ -75,6 +53,132 @@ export function ComponentWeightFields({
         </p>
       )}
     </details>
+  )
+}
+
+function WeightGroup({ rows, shares, save }: {
+  rows: ComponentSource[]
+  shares: Record<string, string>
+  save: (patch: Record<string, string>) => void
+}) {
+  const [bulk, setBulk] = useState('')
+  const [error, setError] = useState('')
+  const total = rows.reduce((sum, row) => sum + (Number(shares[row.key]) || 0), 0)
+  const unknown = rows.filter((row) => !shares[row.key]?.trim()).length
+  return (
+    <div className="label-review-weight-group">
+      <p aria-live="polite">{unknown === rows.length ? 'No percentages entered' : `${Number(total.toFixed(6))}% entered`}{unknown ? ` · ${unknown} unknown` : ''} · Total must equal 100%</p>
+      {rows.map((row) => (
+        <div key={row.key} className="label-review-component">
+          <label>{row.name} · % by weight
+            <input inputMode="decimal" maxLength={11} placeholder="Unknown" value={shares[row.key] || ''} onChange={(event) => save({ [row.key]: event.target.value })} />
+          </label>
+          {!!row.children.length && <details className="label-review-nested">
+            <summary>{row.name} components</summary>
+            <WeightGroup rows={row.children} shares={shares} save={save} />
+          </details>}
+        </div>
+      ))}
+      <details>
+        <summary>Paste percentages for this level</summary>
+        <label>In the order listed above, separated by commas; leave unknown entries blank.
+          <input value={bulk} onChange={(event) => setBulk(event.target.value)} />
+        </label>
+        <button type="button" className="btn secondary" onClick={() => {
+          const values = bulk.split(',').map((value) => value.trim())
+          if (values.length !== rows.length || values.some((value) => value && (!/^(?:\d{1,3}(?:\.\d{1,6})?|\.\d{1,6})$/.test(value) || Number(value) > 100))) {
+            setError(`Enter ${rows.length} slots with percentages from 0 to 100 or blanks.`)
+            return
+          }
+          save(Object.fromEntries(rows.flatMap((row, index) => values[index] ? [[row.key, values[index]]] : [])))
+          setBulk('')
+          setError('')
+        }}>Apply known values</button>
+        {error && <p role="alert">{error}</p>}
+      </details>
+    </div>
+  )
+}
+
+export function MergeCompoundChoices({ preview, change }: {
+  preview: NonNullable<LabelData['ingredientMerge']>
+  change: (ids: string[]) => void
+}) {
+  if (preview.mode !== 'merged') return null
+  return preview.compounds.map((compound) => (
+    <label className="field" key={compound.id}>
+      <span>{compound.name} · Show as</span>
+      <select value={preview.standardIds.includes(compound.id) ? 'standard' : 'merge'} onChange={(event) => change(event.target.value === 'standard' ? [...preview.standardIds, compound.id] : preview.standardIds.filter((id) => id !== compound.id))}>
+        <option value="standard">Mix (parts)</option>
+        <option value="merge">Merge into main list</option>
+      </select>
+    </label>
+  ))
+}
+
+export function useLabelStandardOutput(key: string) {
+  const [choice, setChoice] = useState<{ key: string; value: StandardIngredientOutput }>()
+  const value = choice?.key === key ? choice.value : undefined
+  return {
+    value,
+    standard: (id: string) => setChoice((previous) => ({ key, value: {
+      ingredientIds: [...new Set([...(previous?.key === key ? previous.value.ingredientIds : []), id])],
+    } })),
+    standardAll: () => setChoice({ key, value: { all: true, ingredientIds: [] } }),
+    reset: () => setChoice(undefined),
+  }
+}
+
+export function LabelMergeReview({ workspace, source, data = resolveLabelData(workspace, source), onStandard, onStandardAll, mutate, onOpenSource }: {
+  workspace: Workspace
+  source: LabelSource
+  data?: LabelData
+  onStandard?: (id: string) => void
+  onStandardAll?: () => void
+  mutate?: ReviewMutation
+  onOpenSource?: (kind: string, item?: Item) => void
+}) {
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const issue = mergePrintIssue(data)
+  if (!issue) return null
+  const productId = source.kind === 'product' ? source.id : source.productId
+  const product = workspace.products.find((item) => item.id === productId)
+  async function standard(ingredientId?: string) {
+    if (ingredientId && onStandard) return onStandard(ingredientId)
+    if (!ingredientId && onStandardAll) return onStandardAll()
+    if (busy || !mutate || !product) return
+    setBusy(true)
+    setError('')
+    try {
+      await mutate('labelProductStandardFormat', 'products', { id: product.id, ingredientId })
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'The ingredient format was not changed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section aria-label="Merge requirements" className="label-review-section">
+      <h4>{[product?.name || data.values['product.name'], product?.flavor || product?.variant].filter(Boolean).join(' · ')}: merged ingredient list blocked</h4>
+      {mutate && !onStandard && <p>Choosing the standard format here updates only this flavor’s product setting. Saved print jobs are unchanged.</p>}
+      <ul>{data.ingredientMerge?.issues.map((message) => <li key={message}>{message}</li>)}</ul>
+      {data.ingredientMerge?.compounds.filter((compound) => compound.issue).map((compound) => (
+        <div key={compound.id} className="label-review-component">
+          <strong>{compound.name}</strong>
+          <div className="button-row">
+            {onOpenSource && <button type="button" className="btn secondary" onClick={() => {
+              const ingredient = workspace.ingredients.find((item) => item.id === compound.id)
+              if (ingredient) onOpenSource('ingredient-detail', { ...ingredient, startEditing: true, openComponentWeights: true })
+            }}>Enter percentages</button>}
+            {(onStandard || mutate) && <button disabled={busy} type="button" className="btn secondary" onClick={() => void standard(compound.id)}>Print with the standard format for this ingredient</button>}
+          </div>
+        </div>
+      ))}
+      {(onStandardAll || mutate) && <button disabled={busy} type="button" className="btn secondary" onClick={() => void standard()}>Use the standard format for all ingredients</button>}
+      {!onStandardAll && !mutate && <p>Ask an Owner or Manager to enter supplier percentages or choose the standard format.</p>}
+      {error && <p role="alert">{error}</p>}
+    </section>
   )
 }
 
@@ -91,7 +195,7 @@ export function IngredientModeReview({
       {change && (
         <>
           <label className="field">
-            <span>Product’s label ingredient mode</span>
+            <span>Merge compound ingredients</span>
             <select
               value={preview.mode}
               onChange={(event) =>
@@ -99,14 +203,15 @@ export function IngredientModeReview({
               }
             >
               <option value="parenthetical">
-                Show compound ingredient with sub-ingredients in parentheses
+                Off · Mix (parts)
               </option>
               <option value="merged">
-                Merge into a single ingredient list
+                On · Merge by verified weight
               </option>
             </select>
           </label>
-          <label>
+          <MergeCompoundChoices preview={preview} change={(ids) => change('labelStandardIngredientIds', ids)} />
+          {preview.mode === 'merged' && <label>
             <input
               type="checkbox"
               checked={preview.groupSmall}
@@ -115,7 +220,7 @@ export function IngredientModeReview({
               }
             />{' '}
             Group ingredients below 2% when verified
-          </label>
+          </label>}
         </>
       )}
       <div className="label-review-comparison">
@@ -123,13 +228,13 @@ export function IngredientModeReview({
           <h5>Parenthetical</h5>
           <p>{preview.parenthetical || 'Source statement unavailable.'}</p>
         </div>
-        <div>
+        {preview.mode === 'merged' && <div>
           <h5>Merged by verified weight</h5>
           <p>
             {preview.merged ||
               'Unconfirmed — use the parenthetical statement until verified.'}
           </p>
-        </div>
+        </div>}
       </div>
       {!!preview.issues.length && (
         <ul>
@@ -296,6 +401,7 @@ export function LabelSourceAllergenReview({
   mutate,
   onOpenSource,
   actionLabel,
+  onChangeBatchSource,
 }: {
   workspace: Workspace
   source: LabelSource
@@ -303,6 +409,7 @@ export function LabelSourceAllergenReview({
   mutate?: ReviewMutation
   onOpenSource?: (kind: string, item?: Item) => void
   actionLabel?: string
+  onChangeBatchSource?: () => void
 }) {
   const product = workspace.products.find(
     (entry) =>
@@ -419,7 +526,7 @@ export function LabelSourceAllergenReview({
       {productNeedsReview && batchHasDifferentEvidence && (
         <p>
           The recorded batch ingredients differ from the current product source.
-          A product review cannot confirm this batch’s declaration.
+          A product review cannot confirm this batch’s declaration. Choose a source that matches what is actually being labeled.
         </p>
       )}
       {productNeedsReview && !product && (
@@ -428,6 +535,10 @@ export function LabelSourceAllergenReview({
           its allergens.
         </p>
       )}
+      {productNeedsReview && (batchHasDifferentEvidence || !product) && onChangeBatchSource && (
+        <button type="button" className="btn secondary" onClick={onChangeBatchSource}>Choose a matching label source</button>
+      )}
+      {(productNeedsReview || sourceIssues.length > 0) && !mutate && <p>Ask an Owner or Manager to verify the source and confirm the declaration.</p>}
     </section>
   )
 }
@@ -513,6 +624,7 @@ export function ProductAllergenReview({
         before declaring an allergen present or absent. This review does not
         infer cross-contact.
       </p>
+      {mutate && <p>Mark an allergen present to add it to the declaration. To dismiss a suggestion, mark it absent and record why. Save the review to confirm the declaration.</p>}
       {!!review.changed.length && (
         <p>Changed sources: {review.changed.join('; ')}</p>
       )}
